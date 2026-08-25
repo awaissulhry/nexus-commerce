@@ -52,15 +52,15 @@ export function CsvImportModal({ open, onClose, title, endpoint, templateUrl, co
   return (
     <Modal open={open} onClose={close} title={title} size="lg">
       <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ fontSize: 12, color: "var(--h10-text-2)" }}>
-          <a href={templateUrl} style={{ color: "var(--h10-text-link)" }}>Download the template</a> · columns: {columnsHelp}
+        <div style={{ fontSize: 12, color: "var(--nds-text-2)" }}>
+          <a href={templateUrl} style={{ color: "var(--nds-text-link)" }}>Download the template</a> · columns: {columnsHelp}
         </div>
         <textarea
           value={csv}
           onChange={(e) => { setCsv(e.target.value); setResult(null); }}
           placeholder="Paste CSV here…"
           rows={7}
-          style={{ width: "100%", font: "12px var(--font-mono), monospace", border: "1px solid var(--h10-border)", borderRadius: 8, padding: 10, background: "var(--h10-surface)", color: "var(--h10-text)", resize: "vertical" }}
+          style={{ width: "100%", font: "12px var(--font-mono), monospace", border: "1px solid var(--nds-border)", borderRadius: 8, padding: 10, background: "var(--nds-surface)", color: "var(--nds-text)", resize: "vertical" }}
         />
         <div style={{ display: "flex", gap: 8 }}>
           <Button onClick={() => void run(true)} disabled={!csv.trim() || busy}>{busy ? "Working…" : "Dry-run"}</Button>
@@ -69,7 +69,7 @@ export function CsvImportModal({ open, onClose, title, endpoint, templateUrl, co
         {result && (
           <>
             {result.parseErrors.length > 0 && (
-              <div style={{ fontSize: 12.5, color: "var(--h10-danger)" }}>
+              <div style={{ fontSize: 12.5, color: "var(--nds-danger)" }}>
                 {result.parseErrors.map((e) => <div key={e.row}>Row {e.row}: {e.error}</div>)}
               </div>
             )}

@@ -66,9 +66,9 @@
    without this the dashboard legend rendered unstyled ("Ad feesAd sales"
    run together; caught on prod). Identical values ⇒ no effect on pages that
    do load the DS sheet. */
-.h10-ds-chart-legend { display: flex; justify-content: center; gap: 18px; margin-top: 8px; font-size: 12px; color: #5b6573; }
-.h10-ds-chart-legend .sw { display: inline-flex; align-items: center; gap: 6px; }
-.h10-ds-chart-legend .ln { width: 18px; height: 2px; border-radius: 2px; }
+.nds-chart-legend { display: flex; justify-content: center; gap: 18px; margin-top: 8px; font-size: 12px; color: #5b6573; }
+.nds-chart-legend .sw { display: inline-flex; align-items: center; gap: 6px; }
+.nds-chart-legend .ln { width: 18px; height: 2px; border-radius: 2px; }
 
 /* EV1 — eb-goalcard retired (D6): mode cards ride the shared .h10-cb-card.
    eBay-scoped modifiers below (ebay.css loads on eBay pages only). */

@@ -43,7 +43,7 @@ export interface AppShellProps {
 const isGroup = (e: ShellNavEntry): e is ShellNavGroup => 'items' in e
 
 function SubItem({ item }: { item: ShellSubItem }) {
-  const cls = ['h10-ds-subitem', item.active ? 'on' : ''].filter(Boolean).join(' ')
+  const cls = ['nds-subitem', item.active ? 'on' : ''].filter(Boolean).join(' ')
   return item.href ? (
     <a className={cls} href={item.href} aria-current={item.active ? 'page' : undefined}>
       {item.label}
@@ -74,25 +74,25 @@ export function AppShell({ brand, nav, footer, children, className }: AppShellPr
     })
 
   return (
-    <div className={`h10-ds-shell${className ? ` ${className}` : ''}`}>
-      <aside className="h10-ds-rail">
-        <div className="h10-ds-brand">
+    <div className={`nds-shell${className ? ` ${className}` : ''}`}>
+      <aside className="nds-rail">
+        <div className="nds-brand">
           <span className="mark">{brand.mark}</span>
           <span className="name">{brand.name}</span>
         </div>
-        <nav className="h10-ds-nav">
+        <nav className="nds-nav">
           {nav.map((entry) => {
             if (isGroup(entry)) {
               const isOpen = open.has(entry.id)
               return (
-                <div className="h10-ds-group" key={entry.id}>
-                  <button type="button" className="h10-ds-navitem" onClick={() => toggle(entry.id)} aria-expanded={isOpen}>
+                <div className="nds-group" key={entry.id}>
+                  <button type="button" className="nds-navitem" onClick={() => toggle(entry.id)} aria-expanded={isOpen}>
                     <span className="ico">{entry.icon}</span>
                     <span className="lbl">{entry.label}</span>
                     <ChevronDown size={15} className={['chev', isOpen ? 'open' : ''].filter(Boolean).join(' ')} aria-hidden />
                   </button>
                   {isOpen && (
-                    <div className="h10-ds-sub">
+                    <div className="nds-sub">
                       {entry.items.map((sub) => (
                         <SubItem key={sub.id} item={sub} />
                       ))}
@@ -101,12 +101,12 @@ export function AppShell({ brand, nav, footer, children, className }: AppShellPr
                 </div>
               )
             }
-            const cls = ['h10-ds-navitem', entry.active ? 'on' : ''].filter(Boolean).join(' ')
+            const cls = ['nds-navitem', entry.active ? 'on' : ''].filter(Boolean).join(' ')
             const inner = (
               <>
                 <span className="ico">{entry.icon}</span>
                 <span className="lbl">{entry.label}</span>
-                {entry.badge != null && <span className="h10-ds-navbadge">{entry.badge}</span>}
+                {entry.badge != null && <span className="nds-navbadge">{entry.badge}</span>}
               </>
             )
             return entry.href ? (
@@ -120,9 +120,9 @@ export function AppShell({ brand, nav, footer, children, className }: AppShellPr
             )
           })}
         </nav>
-        {footer != null && <div className="h10-ds-railft">{footer}</div>}
+        {footer != null && <div className="nds-railft">{footer}</div>}
       </aside>
-      <main className="h10-ds-main">{children}</main>
+      <main className="nds-main">{children}</main>
     </div>
   )
 }

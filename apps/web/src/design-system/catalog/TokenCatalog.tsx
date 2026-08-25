@@ -5,7 +5,7 @@
  * actual token objects (`@/design-system/tokens`) so it can never drift from the
  * source of truth. Components are added here as Phases 3–5 land.
  *
- * Chrome uses `var(--h10-*)` (so the dark toggle exercises the CSS layer +
+ * Chrome uses `var(--nds-*)` (so the dark toggle exercises the CSS layer +
  * dark-readiness); swatches show the literal primitive/semantic values. This is
  * both the documentation surface and the screenshot-diff harness target
  * (.analysis/ds-catalog-verify.mjs captures it @2x).
@@ -108,7 +108,7 @@ function Section({ title, desc, children }: { title: string; desc?: string; chil
   return (
     <section style={{ marginBottom: 40 }}>
       <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>{title}</h2>
-      {desc && <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>{desc}</p>}
+      {desc && <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>{desc}</p>}
       <div style={{ marginTop: desc ? 0 : 12 }}>{children}</div>
     </section>
   )
@@ -118,11 +118,11 @@ function Card({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        background: 'var(--h10-surface)',
-        border: '1px solid var(--h10-border-subtle)',
+        background: 'var(--nds-surface)',
+        border: '1px solid var(--nds-border-subtle)',
         borderRadius: 12,
         padding: 18,
-        boxShadow: 'var(--h10-shadow-card)',
+        boxShadow: 'var(--nds-shadow-card)',
       }}
     >
       {children}
@@ -138,11 +138,11 @@ function Swatch({ name, value }: { name: string; value: string }) {
           height: 52,
           borderRadius: 8,
           background: value,
-          border: '1px solid var(--h10-border-subtle)',
+          border: '1px solid var(--nds-border-subtle)',
         }}
       />
       <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-      <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--h10-text-3)' }}>{value}</div>
+      <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--nds-text-3)' }}>{value}</div>
     </div>
   )
 }
@@ -357,19 +357,19 @@ export function TokenCatalog() {
     <div
       className={dark ? 'dark' : undefined}
       style={{
-        background: 'var(--h10-bg)',
-        color: 'var(--h10-text)',
+        background: 'var(--nds-bg)',
+        color: 'var(--nds-text)',
         minHeight: '100vh',
-        fontFamily: 'var(--h10-font-sans)',
+        fontFamily: 'var(--nds-font-sans)',
         WebkitFontSmoothing: 'auto',
         padding: '32px 36px 64px',
       }}
     >
       <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--h10-text-3)' }}>Nexus Design System · H10</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--nds-text-3)' }}>Nexus Design System · H10</div>
           <h1 style={{ fontSize: 27, fontWeight: 800, letterSpacing: '-0.02em', margin: '2px 0 0' }}>Token Catalog</h1>
-          <p style={{ fontSize: 13, color: 'var(--h10-text-2)', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 13, color: 'var(--nds-text-2)', margin: '4px 0 0' }}>
             Phase 2 — the living style guide + verify harness target. Every value below is driven by{' '}
             <code style={{ fontFamily: mono }}>@/design-system/tokens</code>.
           </p>
@@ -379,9 +379,9 @@ export function TokenCatalog() {
           style={{
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--h10-text)',
-            background: 'var(--h10-surface)',
-            border: '1px solid var(--h10-border)',
+            color: 'var(--nds-text)',
+            background: 'var(--nds-surface)',
+            border: '1px solid var(--nds-border)',
             borderRadius: 8,
             padding: '8px 13px',
             cursor: 'pointer',
@@ -395,7 +395,7 @@ export function TokenCatalog() {
         <Card>
           {ramps.map(([label, ramp]) => (
             <div key={label} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 8 }}>
                 {label}
               </div>
               <SwatchGrid>
@@ -426,13 +426,13 @@ export function TokenCatalog() {
 
       <section data-cat="primitives" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Primitives <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 3 · Wave 1</span>
+          Primitives <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 3 · Wave 1</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           Real components from <code style={{ fontFamily: mono }}>@/design-system/primitives</code>, tokenized to the H10 spec.
         </p>
         <Card>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Button</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Button</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <Button variant="primary">Primary</Button>
             <Button variant="secondary">Secondary</Button>
@@ -443,14 +443,14 @@ export function TokenCatalog() {
             <Button variant="secondary" disabled>Disabled</Button>
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Status pill</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Status pill</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Pill tone="success">Active</Pill>
             <Pill tone="warning">Paused</Pill>
             <Pill tone="neutral">Archived</Pill>
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Badge program="sp">SP</Badge>
             <Badge program="sd">SD</Badge>
@@ -461,7 +461,7 @@ export function TokenCatalog() {
         </Card>
 
         <Card>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Input</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Input</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <Input placeholder="Plain input" />
             <Input leadingIcon={<Search size={15} />} placeholder="Search campaigns" />
@@ -469,21 +469,21 @@ export function TokenCatalog() {
             <Input suffix="%" placeholder="0" size={4} />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Select</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Select</div>
           <Select defaultValue="all">
             <option value="all">All campaigns</option>
             <option value="sp">Sponsored Products</option>
             <option value="sb">Sponsored Brands</option>
           </Select>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Checkbox</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Checkbox</div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Checkbox defaultChecked label="Checked" />
             <Checkbox label="Unchecked" />
             <Checkbox disabled label="Disabled" />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Toggle</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Toggle</div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Toggle checked />
             <Toggle checked={false} />
@@ -492,46 +492,46 @@ export function TokenCatalog() {
         </Card>
 
         <Card>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Radio</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Radio</div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Radio name="opt" defaultChecked label="Option A" />
             <Radio name="opt" label="Option B" />
             <Radio name="opt" disabled label="Disabled" />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Radio card</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Radio card</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <RadioCard name="tgt" defaultChecked selected title="Automatic" description="Amazon targets relevant searches" />
             <RadioCard name="tgt" title="Manual" description="You choose keywords & products" />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Tooltip</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Tooltip</div>
           <Tooltip label="Helpful hint shown on hover">
             <Button size="sm">Hover me</Button>
           </Tooltip>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Spinner</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Spinner</div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Spinner />
             <Spinner size={22} />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Skeleton</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Skeleton</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 240 }}>
             <Skeleton width={200} height={12} />
             <Skeleton width={140} height={12} />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Kbd</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Kbd</div>
           <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
             <Kbd>⌘</Kbd>
             <Kbd>K</Kbd>
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Divider</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Divider</div>
           <Divider />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Segmented control</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Segmented control</div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <SegmentedControl
               options={[
@@ -566,13 +566,13 @@ export function TokenCatalog() {
 
       <section data-cat="feedback" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Banner · Stepper · FileDropzone <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · Wave 6</span>
+          Banner · Stepper · FileDropzone <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · Wave 6</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           Inline status callouts, a multi-step progress indicator, and a generic file picker.
         </p>
         <DSCard padded elevated>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Banner</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Banner</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Banner variant="info" title="Sandbox mode" action={<Button size="sm">Learn more</Button>} onDismiss={() => {}}>
               Changes here won&apos;t push to live marketplaces until you publish.
@@ -584,7 +584,7 @@ export function TokenCatalog() {
             </Banner>
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Stepper</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Stepper</div>
           <Stepper
             current={2}
             steps={[
@@ -596,12 +596,12 @@ export function TokenCatalog() {
             ]}
           />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>FileDropzone</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>FileDropzone</div>
           <div style={{ maxWidth: 420 }}>
             <FileDropzone accept=".csv,.tsv,.xlsx,.xls,.json" maxBytes={10 * 1024 * 1024} onFiles={() => {}} />
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>ImageUpload</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>ImageUpload</div>
           <div style={{ maxWidth: 180 }}>
             <ImageUpload value={null} onChange={() => {}} onUpload={demoUpload} />
           </div>
@@ -610,18 +610,18 @@ export function TokenCatalog() {
 
       <section data-cat="components" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Components <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · Wave 1</span>
+          Components <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · Wave 1</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           Composite components from <code style={{ fontFamily: mono }}>@/design-system/components</code>.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 14 }}>
           <DSCard header="Card with header" headerAction={<Button size="sm">Action</Button>}>
-            <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Bordered surface with a header row and a padded body.</div>
+            <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>Bordered surface with a header row and a padded body.</div>
           </DSCard>
           <DSCard padded elevated>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Padded + elevated</div>
-            <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>A plain padded card with the resting shadow.</div>
+            <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>A plain padded card with the resting shadow.</div>
           </DSCard>
           <DSCard>
             <EmptyState
@@ -637,7 +637,7 @@ export function TokenCatalog() {
           </DSCard>
         </div>
         <DSCard padded elevated>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Tabs</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Tabs</div>
           <Tabs
             tabs={[
               { id: 'overview', label: 'Overview' },
@@ -648,10 +648,10 @@ export function TokenCatalog() {
             onChange={setTab}
           />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Pagination</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Pagination</div>
           <Pagination page={pg} pageCount={12} onPage={setPg} />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Progress</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Progress</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>
             <ProgressBar value={64} />
             <ProgressBar indeterminate />
@@ -659,7 +659,7 @@ export function TokenCatalog() {
         </DSCard>
 
         <DSCard padded elevated>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Overlays</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Overlays</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button variant="primary" onClick={() => setModalOpen(true)}>
               Open modal
@@ -677,7 +677,7 @@ export function TokenCatalog() {
         </DSCard>
 
         <DSCard padded elevated>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Multi-select</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Multi-select</div>
           <MultiSelect
             options={[
               { value: 'sp', label: 'Sponsored Products' },
@@ -688,7 +688,7 @@ export function TokenCatalog() {
             onChange={setMsVal}
           />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Combobox</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Combobox</div>
           <Combobox
             options={[
               { value: 'it', label: 'Amazon Italy' },
@@ -701,12 +701,12 @@ export function TokenCatalog() {
             placeholder="Search marketplace…"
           />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Toast</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Toast</div>
           <ToastDemo />
         </DSCard>
 
         <DSCard padded elevated>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Metric strip</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Metric strip</div>
           <MetricStrip
             metrics={[
               { label: 'Spend', value: '€1,284', delta: { value: '▲ 12%', positive: true } },
@@ -716,19 +716,19 @@ export function TokenCatalog() {
             ]}
           />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Date range</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Date range</div>
           <DateRangePicker value={dateRange} onChange={setDateRange} />
 
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>Hover card</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Hover card</div>
           <HoverCard
             card={
               <div>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>Sponsored Products · Auto</div>
-                <div style={{ fontSize: 12, color: 'var(--h10-text-3)' }}>Created 12 Mar 2026 · 3 ad groups · €1,284 spend</div>
+                <div style={{ fontSize: 12, color: 'var(--nds-text-3)' }}>Created 12 Mar 2026 · 3 ad groups · €1,284 spend</div>
               </div>
             }
           >
-            <span style={{ color: 'var(--h10-primary)', fontWeight: 600, borderBottom: '1px dashed var(--h10-primary-ghost-border)' }}>Hover for details</span>
+            <span style={{ color: 'var(--nds-primary)', fontWeight: 600, borderBottom: '1px dashed var(--nds-primary-ghost-border)' }}>Hover for details</span>
           </HoverCard>
         </DSCard>
 
@@ -765,14 +765,14 @@ export function TokenCatalog() {
 
       <section data-cat="charts" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Charts <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · Wave 5</span>
+          Charts <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · Wave 5</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           Recharts dual-axis graph + intensity heatmap, tokenized.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <DSCard padded elevated>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Performance · dual-axis</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Performance · dual-axis</div>
             <PerformanceGraph
               data={CHART_DATA}
               xKey="day"
@@ -781,7 +781,7 @@ export function TokenCatalog() {
             />
           </DSCard>
           <DSCard padded elevated>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>Heatmap · dayparting</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Heatmap · dayparting</div>
             <Heatmap data={HEAT_DATA} rowLabels={DAYS} colLabels={HOURS} format={(v) => `${v}`} />
           </DSCard>
         </div>
@@ -789,9 +789,9 @@ export function TokenCatalog() {
 
       <section data-cat="datagrid" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 4 · finale</span>
+          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · finale</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           The universal grid — sortable headers, row selection, a pinned Campaign column, and a sticky totals row.
         </p>
         <DataGrid
@@ -808,13 +808,13 @@ export function TokenCatalog() {
 
       <section data-cat="patterns" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Patterns <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 5 · Wave 1</span>
+          Patterns <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 5 · Wave 1</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           Page-level organisms — the app shell + headers that every section adopts.
         </p>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>PageHeader</div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>PageHeader</div>
         <DSCard padded elevated>
           <PageHeader
             eyebrow="Campaigns"
@@ -829,7 +829,7 @@ export function TokenCatalog() {
           />
         </DSCard>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>DetailHeader</div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>DetailHeader</div>
         <DSCard padded elevated>
           <DetailHeader
             backLabel="Back to Ad Manager"
@@ -840,10 +840,10 @@ export function TokenCatalog() {
           />
         </DSCard>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
           AppShell <span style={{ textTransform: 'none', fontWeight: 500 }}>· hover the rail to expand</span>
         </div>
-        <div style={{ height: 360, border: '1px solid var(--h10-border)', borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ height: 360, border: '1px solid var(--nds-border)', borderRadius: 12, overflow: 'hidden', position: 'relative' }}>
           <AppShell
             brand={{ mark: 'N', name: 'Nexus Ads' }}
             nav={[
@@ -870,20 +870,20 @@ export function TokenCatalog() {
               subtitle="The rail collapses to icons; hover to expand it."
               actions={<Button variant="primary" size="sm">New</Button>}
             />
-            <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Main content scrolls independently of the rail.</div>
+            <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>Main content scrolls independently of the rail.</div>
           </AppShell>
         </div>
       </section>
 
       <section data-cat="filters" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Filters &amp; action bars <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 5 · Wave 2</span>
+          Filters &amp; action bars <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 5 · Wave 2</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           The grid-adjacent patterns — a collapsible filter panel and the sticky selection / edit bars.
         </p>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', marginBottom: 10 }}>FilterPanel</div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>FilterPanel</div>
         <FilterPanel
           presets={
             <>
@@ -935,15 +935,15 @@ export function TokenCatalog() {
           </FilterField>
         </FilterPanel>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
           FilterBar <span style={{ textTransform: 'none', fontWeight: 500 }}>· config-driven (pass `dimensions`); the grid-workspace bar</span>
         </div>
         <FilterBarDemo />
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
-          GridToolbar <span style={{ textTransform: 'none', fontWeight: 500 }}>· seated in `.h10-ds-gridcard` above a grid</span>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
+          GridToolbar <span style={{ textTransform: 'none', fontWeight: 500 }}>· seated in `.nds-gridcard` above a grid</span>
         </div>
-        <div className="h10-ds-gridcard">
+        <div className="nds-gridcard">
           <GridToolbar
             count={<>Viewing <b>1–16</b> of 16 products</>}
             right={
@@ -954,10 +954,10 @@ export function TokenCatalog() {
               </>
             }
           />
-          <div style={{ padding: 24, fontSize: 13, color: 'var(--h10-text-3)', textAlign: 'center' }}>DataGrid renders here (borderless inside the card).</div>
+          <div style={{ padding: 24, fontSize: 13, color: 'var(--nds-text-3)', textAlign: 'center' }}>DataGrid renders here (borderless inside the card).</div>
         </div>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>BulkActionBar</div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>BulkActionBar</div>
         <BulkActionBar count={3} onClear={() => {}}>
           <Button size="sm">Set status</Button>
           <Button size="sm">Adjust bids</Button>
@@ -966,15 +966,15 @@ export function TokenCatalog() {
           </Button>
         </BulkActionBar>
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>EditModeBar</div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>EditModeBar</div>
         <EditModeBar count={2} onDiscard={() => {}} onApply={() => {}} />
       </section>
 
       <section data-cat="builders" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          Builder &amp; ColumnCustomizer <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--h10-text-3)' }}>· Phase 5 · finale</span>
+          Builder &amp; ColumnCustomizer <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 5 · finale</span>
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--h10-text-3)', margin: '0 0 14px' }}>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           Full-screen wizard with a scroll-spy nav, and the column visibility/reorder modal.
         </p>
         <DSCard padded elevated>
@@ -1005,14 +1005,14 @@ export function TokenCatalog() {
                 </Select>
               ),
             },
-            { id: 'criteria', label: 'Criteria', title: 'Criteria', content: <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>IF ACOS &gt; 30% over the last 14 days…</div> },
-            { id: 'action', label: 'Action', title: 'Action', content: <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>THEN lower the bid by 15%.</div> },
-            { id: 'review', label: 'Review', title: 'Review', content: <div style={{ fontSize: 13, color: 'var(--h10-text-2)' }}>Confirm and create the rule.</div> },
+            { id: 'criteria', label: 'Criteria', title: 'Criteria', content: <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>IF ACOS &gt; 30% over the last 14 days…</div> },
+            { id: 'action', label: 'Action', title: 'Action', content: <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>THEN lower the bid by 15%.</div> },
+            { id: 'review', label: 'Review', title: 'Review', content: <div style={{ fontSize: 13, color: 'var(--nds-text-2)' }}>Confirm and create the rule.</div> },
           ]}
         />
         <ColumnCustomizer open={colCustOpen} onClose={() => setColCustOpen(false)} columns={colCustCols} onApply={setColCustCols} />
 
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)', margin: '18px 0 10px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
           PreferencesModal <span style={{ textTransform: 'none', fontWeight: 500 }}>· two-panel Customise (sticky cols · reorder · sort)</span>
         </div>
         <PreferencesModalDemo />
@@ -1035,8 +1035,8 @@ export function TokenCatalog() {
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">
         <Card>
           {Object.entries(fontSize).map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 16, padding: '5px 0', borderBottom: '1px solid var(--h10-border-subtle)' }}>
-              <code style={{ fontFamily: mono, fontSize: 12, color: 'var(--h10-text-3)', width: 120, flexShrink: 0 }}>
+            <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 16, padding: '5px 0', borderBottom: '1px solid var(--nds-border-subtle)' }}>
+              <code style={{ fontFamily: mono, fontSize: 12, color: 'var(--nds-text-3)', width: 120, flexShrink: 0 }}>
                 {k} · {v}
               </code>
               <span style={{ fontSize: v, fontWeight: fontWeight.semibold }}>The quick brown fox</span>
@@ -1049,7 +1049,7 @@ export function TokenCatalog() {
               </span>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--h10-text-3)', fontFamily: mono }}>
+          <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--nds-text-3)', fontFamily: mono }}>
             {Object.entries(letterSpacing).map(([k, v]) => (
               <span key={k}>
                 {k}: {v}
@@ -1063,13 +1063,13 @@ export function TokenCatalog() {
         <Card>
           {Object.entries(space).map(([k, v]) => (
             <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '3px 0' }}>
-              <code style={{ fontFamily: mono, fontSize: 12, color: 'var(--h10-text-3)', width: 90, flexShrink: 0 }}>
+              <code style={{ fontFamily: mono, fontSize: 12, color: 'var(--nds-text-3)', width: 90, flexShrink: 0 }}>
                 {k} · {v}
               </code>
-              <div style={{ height: 12, width: v, background: 'var(--h10-primary)', borderRadius: 3 }} />
+              <div style={{ height: 12, width: v, background: 'var(--nds-primary)', borderRadius: 3 }} />
             </div>
           ))}
-          <div style={{ fontSize: 12, color: 'var(--h10-text-3)', fontFamily: mono, marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--nds-text-3)', fontFamily: mono, marginTop: 10 }}>
             structural: rail {size.railCollapsed}→{size.railExpanded} · nav row {size.rowNav} · icon zone {size.iconZone}
           </div>
         </Card>
@@ -1080,8 +1080,8 @@ export function TokenCatalog() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
             {Object.entries(radius).map(([k, v]) => (
               <div key={k} style={{ textAlign: 'center' }}>
-                <div style={{ width: 64, height: 64, background: 'var(--h10-wash-primary)', border: '1px solid var(--h10-primary-ghost-border)', borderRadius: v === '999px' ? '999px' : v }} />
-                <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--h10-text-3)', marginTop: 6 }}>
+                <div style={{ width: 64, height: 64, background: 'var(--nds-wash-primary)', border: '1px solid var(--nds-primary-ghost-border)', borderRadius: v === '999px' ? '999px' : v }} />
+                <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--nds-text-3)', marginTop: 6 }}>
                   {k}·{v}
                 </div>
               </div>
@@ -1095,13 +1095,13 @@ export function TokenCatalog() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 26 }}>
             {Object.entries(shadow).map(([k, v]) => (
               <div key={k} style={{ textAlign: 'center' }}>
-                <div style={{ width: 132, height: 64, background: 'var(--h10-surface)', borderRadius: 10, boxShadow: v }} />
-                <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--h10-text-3)', marginTop: 10 }}>{k}</div>
+                <div style={{ width: 132, height: 64, background: 'var(--nds-surface)', borderRadius: 10, boxShadow: v }} />
+                <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--nds-text-3)', marginTop: 10 }}>{k}</div>
               </div>
             ))}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ width: 132, height: 64, background: 'var(--h10-surface)', borderRadius: 8, boxShadow: focusRing, border: '1px solid var(--h10-primary)' }} />
-              <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--h10-text-3)', marginTop: 10 }}>focus ring</div>
+              <div style={{ width: 132, height: 64, background: 'var(--nds-surface)', borderRadius: 8, boxShadow: focusRing, border: '1px solid var(--nds-primary)' }} />
+              <div style={{ fontSize: 11, fontFamily: mono, color: 'var(--nds-text-3)', marginTop: 10 }}>focus ring</div>
             </div>
           </div>
         </Card>
@@ -1109,7 +1109,7 @@ export function TokenCatalog() {
 
       <Section title="Motion · z-index · breakpoints">
         <Card>
-          <div style={{ fontFamily: mono, fontSize: 12, color: 'var(--h10-text-2)', lineHeight: 1.9 }}>
+          <div style={{ fontFamily: mono, fontSize: 12, color: 'var(--nds-text-2)', lineHeight: 1.9 }}>
             <div>motion: {Object.entries(duration).map(([k, v]) => `${k} ${v}`).join(' · ')}</div>
             <div>z-index: {Object.entries(zIndex).map(([k, v]) => `${k} ${v}`).join(' · ')}</div>
             <div>breakpoints: {Object.entries(breakpoint).map(([k, v]) => `${k} ${v}`).join(' · ')}</div>

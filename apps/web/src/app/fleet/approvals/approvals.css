@@ -820,7 +820,7 @@
   color: #3a4658;
 }
 .aq-outfailed > svg {
-  color: var(--h10-danger-strong);
+  color: var(--nds-danger-strong);
 }
 .aq-outfailed strong {
   color: #1c2530;
@@ -846,8 +846,8 @@
    already correct. Only .aq-card.r-high changed MEANING. */
 .aq-outside-card {
   margin: 14px 0 0;
-  border-color: var(--h10-danger-soft);
-  border-left: 3px solid var(--h10-danger-strong);
+  border-color: var(--nds-danger-soft);
+  border-left: 3px solid var(--nds-danger-strong);
 }
 /* S5.3 — a heading, not a button. No `cursor: pointer`, no `font: inherit`
    reset, no full-width hit area: nothing here is clickable, because the one
@@ -876,7 +876,7 @@
   color: #1c2530;
 }
 .aq-outhead > svg {
-  color: var(--h10-danger-strong);
+  color: var(--nds-danger-strong);
 }
 .aq-outhead svg {
   flex: 0 0 auto;
@@ -988,10 +988,10 @@
  * that is true of everything belongs.
  */
 .aq-card.can-run {
-  border-color: var(--h10-danger-soft);
+  border-color: var(--nds-danger-soft);
   /* 3px #e5484d on white = 3.91:1 — a graphic needs 3:1, and the consequence
      sentence plus the ack tick carry the same meaning in words (WCAG 1.4.1). */
-  border-left: 3px solid var(--h10-danger);
+  border-left: 3px solid var(--nds-danger);
   background: #fffdf9;
 }
 

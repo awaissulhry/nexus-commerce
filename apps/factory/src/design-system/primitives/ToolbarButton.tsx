@@ -88,7 +88,7 @@ export function ToolbarButton({
     </button>
   )
 
-  return <Tooltip label={autoTooltip} className="h10-ds-tooltip--light">{btn}</Tooltip>
+  return <Tooltip label={autoTooltip} className="nds-tooltip--light">{btn}</Tooltip>
 }
 
 // ── ToolbarDivider ─────────────────────────────────────────────────────────

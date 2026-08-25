@@ -18,9 +18,9 @@ import { parseAmountToCents } from "@/lib/financials/money-ux";
 import { romeYear } from "@/lib/financials/rome-time";
 import type { FinancialDetail, InvoiceRow } from "./types";
 
-const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
-const consequence: React.CSSProperties = { fontSize: 12.5, color: "var(--h10-text-2)", lineHeight: 1.5 };
-const errBox: React.CSSProperties = { fontSize: 12.5, color: "var(--h10-danger)", background: "var(--h10-wash-danger, rgba(220,38,38,0.06))", border: "1px solid var(--h10-danger)", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 };
+const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 };
+const consequence: React.CSSProperties = { fontSize: 12.5, color: "var(--nds-text-2)", lineHeight: 1.5 };
+const errBox: React.CSSProperties = { fontSize: 12.5, color: "var(--nds-danger)", background: "var(--nds-wash-danger, rgba(220,38,38,0.06))", border: "1px solid var(--nds-danger)", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 };
 
 export function NewInvoiceModal({ detail, open, onClose, onDone }: { detail: FinancialDetail | null; open: boolean; onClose: () => void; onDone: (number: string) => void }) {
   const [amount, setAmount] = useState("");
@@ -72,7 +72,7 @@ export function NewInvoiceModal({ detail, open, onClose, onDone }: { detail: Fin
         <div>
           <div style={lbl}>Amount (€)</div>
           <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" aria-label="Invoice amount in EUR" />
-          {cents != null && <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 3 }}>= {eur(cents)}</div>}
+          {cents != null && <div style={{ fontSize: 11, color: "var(--nds-text-3)", marginTop: 3 }}>= {eur(cents)}</div>}
         </div>
         {error && (
           <div style={errBox} data-testid="invoice-error">
@@ -117,7 +117,7 @@ export function MarkPaidModal({ target, open, onClose, onDone }: { target: { inv
   return (
     <Modal open={open} onClose={onClose} title={overpay ? `Overpay ${orderNumber}?` : `Mark ${inv.number} paid?`} size="sm"
       footer={overpay ? (
-        <><Button onClick={onClose} disabled={busy}>Cancel</Button><Button onClick={() => void send(true)} disabled={busy} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>Record overpayment</Button></>
+        <><Button onClick={onClose} disabled={busy}>Cancel</Button><Button onClick={() => void send(true)} disabled={busy} style={{ background: "var(--nds-danger)", color: "#fff", borderColor: "var(--nds-danger)" }}>Record overpayment</Button></>
       ) : (
         <><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" onClick={() => void send(false)} disabled={busy}>Mark paid</Button></>
       )}>

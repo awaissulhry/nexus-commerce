@@ -21,5 +21,5 @@ export interface TagProps {
 
 export function Tag({ tone = 'neutral', className, children }: TagProps) {
   const t = tone === 'positive' ? 'success' : tone   // normalize legacy
-  return <span className={`h10-ds-tag ${t}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-tag ${t}${className ? ` ${className}` : ''}`}>{children}</span>
 }

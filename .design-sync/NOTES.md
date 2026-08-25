@@ -111,7 +111,7 @@ breaks, check the module paths first.
 ## ✅ Two components used to depend on the consuming app's Tailwind build
 
 `ToolbarButton` / `ToolbarDivider` (and part of `ColumnGroupModal`) are styled with **Tailwind
-utilities**, not the DS's `.h10-ds-*` convention. They therefore render unstyled anywhere the
+utilities**, not the DS's `.nds-*` convention. They therefore render unstyled anywhere the
 host app's Tailwind build is absent — which is every design produced from this bundle.
 Without the shim: ToolbarButton is raw UA button chrome and **ToolbarDivider is an invisible
 dimensionless div** (`<div class="mx-1 h-4 w-px flex-shrink-0 bg-slate-200">`).
@@ -132,8 +132,8 @@ normally come from preflight — without those, `[TOKENS_MISSING]` fires and the
 transition utilities resolve to nothing.
 
 **FIXED IN THE REPO, 2026-08-24** (commit alongside the DS `[CONFORMANCE]` changelog entry).
-`ToolbarButton` / `ToolbarDivider` / `ColumnGroupModal` now carry `.h10-ds-tbtn*`,
-`.h10-ds-tdivider` and `.h10-ds-cgm-*` classes in the DS stylesheets, tokens throughout.
+`ToolbarButton` / `ToolbarDivider` / `ColumnGroupModal` now carry `.nds-tbtn*`,
+`.nds-tdivider` and `.nds-cgm-*` classes in the DS stylesheets, tokens throughout.
 `token-guard.mjs` bans raw Tailwind palette classes in DS `.tsx` and is enforced in
 `.githooks/pre-push`, so this cannot come back. The `content` globs were deliberately NOT
 widened — the DS depends on nothing outside itself, which is the stronger guarantee.
@@ -166,7 +166,7 @@ of component discovery (`^[A-Z][A-Za-z0-9]*$`), so it never becomes a card or a 
   the DS `primitives/Input.tsx` takes none of them. Same trap for `AppShell`, `FilterPanel`,
   `FilterBar`, `BulkActionBar` — the app has local twins. Grepping `apps/web/src/app` finds the
   WRONG component for those. `TokenCatalog.tsx` is the only true call site for several patterns.
-- **No `error`/`invalid` affordance exists on any field.** There is no `.h10-ds-field.invalid`
+- **No `error`/`invalid` affordance exists on any field.** There is no `.nds-field.invalid`
   rule. The DS's honest answer is composition: label above, message below in
   `var(--status-danger-strong)`, `aria-invalid` on the control (`Input.CampaignForm` shows it).
 - **`Pill tone="success"` is BLUE; `Tag tone="success"` is GREEN** — different token families,
@@ -197,8 +197,8 @@ of component discovery (`^[A-Z][A-Za-z0-9]*$`), so it never becomes a card or a 
   never shows it because its own ImageUpload demo passes `value={null}`. Anyone reusing the
   constant gets a black square.
 - **CONFIRMED — `Tabs` at `size="md"` has no icon/count spacing.** `components.css:77` is the
-  base `.h10-ds-tab`; the inline-flex + `gap:7px` treatment is at `:113`, scoped to
-  `.h10-ds-tabs.lg`. A `md` tab with an icon renders the glyph flush against the label.
+  base `.nds-tab`; the inline-flex + `gap:7px` treatment is at `:113`, scoped to
+  `.nds-tabs.lg`. A `md` tab with an icon renders the glyph flush against the label.
 - **CONFIRMED — `PerformanceGraph` takes `left` and `right` as two SEPARATE series props**, not
   a `ChartSeries[]`. (The batch brief said otherwise and was wrong.)
 - **CONFIRMED — `AccountsPanel`/`AccountSwitcher` channel keys are UPPERCASE.** `CHANNEL_LABEL`
@@ -224,8 +224,8 @@ of component discovery (`^[A-Z][A-Za-z0-9]*$`), so it never becomes a card or a 
 - `AccountsPanel` has no `initialData` seam although `AccountSwitcher` does — its preview has to
   stub `window.fetch` to reach loaded/degraded/failed states.
 - `DateField` / `DateRangePicker` keep `open` private with no `defaultOpen`, so the month grid,
-  presets rail and `.h10-ds-dp-day` styling are unreachable from any static card.
-- `ToolbarButton` / `ToolbarDivider` / `ColumnGroupModal`'s grip should get `.h10-ds-*` classes
+  presets rail and `.nds-dp-day` styling are unreachable from any static card.
+- `ToolbarButton` / `ToolbarDivider` / `ColumnGroupModal`'s grip should get `.nds-*` classes
   so they stop depending on the consuming app's Tailwind build (see the 🔴 section above).
 
 ## Overlay components — how their cards were made to render
@@ -263,8 +263,8 @@ document. Always open the default card before declaring an overlay component don
 ## Re-sync risks — what can silently go stale
 
 - **🔴 This bundle was built from a working tree containing another session's UNCOMMITTED DS
-  changes.** At upload time (2026-08-24) the `.h10-ds-tbtn*` / `.h10-ds-tdivider` /
-  `.h10-ds-cgm-*` conformance work existed only as unstaged edits to `ToolbarButton.tsx`,
+  changes.** At upload time (2026-08-24) the `.nds-tbtn*` / `.nds-tdivider` /
+  `.nds-cgm-*` conformance work existed only as unstaged edits to `ToolbarButton.tsx`,
   `ColumnGroupModal.tsx`, `AccountSwitcher.tsx`, `BurnDownChart.tsx`, `primitives.css`,
   `components.css`, `tokens.css`, `colors.ts` and `css-vars.ts`. The five affected components
   were re-captured and re-graded against that state, and the uploaded bundle matches it exactly
@@ -288,9 +288,9 @@ document. Always open the default card before declaring an overlay component don
 `.ds-cell` in the generated card HTML (`lib/emit.mjs`) is `{overflow:hidden; transform:translateZ(0)}`
 and the page is `body{padding:24px}`. Any overlay escaping its trigger's box was sliced off.
 **Only `InfoTip` survives natively** — it portals to `<body>`; every other DS overlay is in-flow:
-`.h10-ds-tooltip > .tip` and `.h10-ds-hovercard > .hc` open ABOVE; `.h10-ds-menu`,
-`.h10-ds-ms-pop`, `.h10-ds-combo-pop`, `.h10-ds-dp-pop`, `.h10-ds-taginput-menu`,
-`.h10-ds-acct-panel` open BELOW. **`cardMode:"single"` does NOT help** — it still uses `.ds-cell`.
+`.nds-tooltip > .tip` and `.nds-hovercard > .hc` open ABOVE; `.nds-menu`,
+`.nds-ms-pop`, `.nds-combo-pop`, `.nds-dp-pop`, `.nds-taginput-menu`,
+`.nds-acct-panel` open BELOW. **`cardMode:"single"` does NOT help** — it still uses `.ds-cell`.
 
 🔴 **Do not fix this per component.** The first attempt patched the eleven "overlay components"
 and the operator immediately found more: `ToolbarDivider` clips because its story composes
@@ -382,7 +382,7 @@ Three component-specific gotchas worth keeping:
   trigger sits near a page edge — `overflow:visible` cannot help. Indent the trigger.
 - `ToolbarButton` has a **closed prop list** with no rest spread, so `autoFocus` is silently
   dropped. Its tip is revealed by the DS's own `:focus-within`, so its preview focuses the button
-  on mount (`ref.current?.querySelector('button.h10-ds-tbtn')?.focus()`).
+  on mount (`ref.current?.querySelector('button.nds-tbtn')?.focus()`).
 - Only **one** element per document can hold focus, so in a composite card only the first
   `autoFocus` story shows its overlay — `Tooltip.OpenBubble` is the known case, and its per-story
   capture does show the bubble.

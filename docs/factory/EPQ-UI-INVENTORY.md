@@ -22,9 +22,9 @@ Rendered when there is **no** `?q=` param. Wrapped in `<Suspense fallback={null}
 | Surface | Element | Label (exact) | Visibility / enablement | Handler → API → server effect → events → feedback |
 |---|---|---|---|---|
 | page | PageHeader (static) | eyebrow `Factory OS`, title `Quotes`, subtitle `The RFQ pipeline: configure, price with margin, send into the thread, track to won or lost.` | always | none (display) |
-| page · counter | stat tile | `Drafts` + `data.counters.drafts` | always; value 0 until load | display only; value = `prisma.quote.count({state:"DRAFT"})`. Tone `--h10-text`. |
-| page · counter | stat tile | `Awaiting approval` + `data.counters.awaiting` | always | display; value = count of `state:"SENT"`. Tone `--h10-primary`. |
-| page · counter | stat tile | `Overdue` + `data.counters.overdue` | always | display; value = count of `state ∈ {DRAFT,SENT}` AND `validUntilAt < now`. Tone `--h10-danger` iff `overdue>0`, else `--h10-text-3`. **No affordance** — clicking does nothing (see gaps). |
+| page · counter | stat tile | `Drafts` + `data.counters.drafts` | always; value 0 until load | display only; value = `prisma.quote.count({state:"DRAFT"})`. Tone `--nds-text`. |
+| page · counter | stat tile | `Awaiting approval` + `data.counters.awaiting` | always | display; value = count of `state:"SENT"`. Tone `--nds-primary`. |
+| page · counter | stat tile | `Overdue` + `data.counters.overdue` | always | display; value = count of `state ∈ {DRAFT,SENT}` AND `validUntilAt < now`. Tone `--nds-danger` iff `overdue>0`, else `--nds-text-3`. **No affordance** — clicking does nothing (see gaps). |
 | page | anchor link | `Export CSV` | always visible (NOT client-gated) | `GET /api/exports/quotes` → server-gated by `FEATURES.exportsRun`; returns `quotes.csv` (columns: number, party, state, net, [margin_pct if `marginsView`/owner], deposit_pct, valid_until, updated) over whole table. Plain `<a>` navigation, **no toast** on 403. |
 | page | Button `variant=primary` | `New quote` (with `Plus` icon) | only if `canCreate` (`quotes.create`) | `onClick=startCreate` → `GET /api/parties-lite` (BRAND+CUSTOMER, archivedAt null) into `parties`, opens New-quote modal (`creating=true`). Errors swallowed (`catch {}`) → modal opens with empty list. |
 
@@ -32,7 +32,7 @@ Rendered when there is **no** `?q=` param. Wrapped in `<Suspense fallback={null}
 
 | Surface | Element | Label | Visibility / enablement | Handler → effect |
 |---|---|---|---|---|
-| page · tab | button | `All` | always; active bg `--h10-primary`/white | `setState("all")` → reload. No count badge (all tab suppressed). |
+| page · tab | button | `All` | always; active bg `--nds-primary`/white | `setState("all")` → reload. No count badge (all tab suppressed). |
 | page · tab | button | `Draft` | always | `setState("draft")`; shows count badge `data.counts.DRAFT` if >0. |
 | page · tab | button | `Sent` | always | `setState("sent")`; badge `counts.SENT`. |
 | page · tab | button | `Accepted` | always | `setState("accepted")`; badge `counts.ACCEPTED`. |
@@ -45,7 +45,7 @@ Grid is **not** sortable (no `sortable`/`sortValue` on any column), not selectab
 
 | Column key | Header | Render logic | Permission gate |
 |---|---|---|---|
-| `number` | `Quote` | `<button>` styled as link (`--h10-text-link`, bold) → `openEditor(r.id)` (rewrites URL to `/quotes?q=<id>` via `history.replaceState` + synthetic `popstate`). | — |
+| `number` | `Quote` | `<button>` styled as link (`--nds-text-link`, bold) → `openEditor(r.id)` (rewrites URL to `/quotes?q=<id>` via `history.replaceState` + synthetic `popstate`). | — |
 | `party` | `Party` | `r.party.name` (plain text). | — |
 | `state` | `State` | `<Pill tone={STATE_TONE[r.state]}>{r.state}</Pill>`; if `r.convertedOrderId` also `<Pill tone="success">order</Pill>`. | — |
 | `net` | `Net` (right) | `r.lineCount ? eur(r.netCents) : "—"`. | — |

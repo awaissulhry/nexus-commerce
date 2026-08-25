@@ -8,7 +8,7 @@ export interface SpinnerProps {
 export function Spinner({ size = 16, className }: SpinnerProps) {
   return (
     <span
-      className={['h10-ds-spinner', className ?? ''].filter(Boolean).join(' ')}
+      className={['nds-spinner', className ?? ''].filter(Boolean).join(' ')}
       style={{ width: size, height: size }}
       role="status"
       aria-label="Loading"

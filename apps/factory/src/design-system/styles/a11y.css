@@ -6,8 +6,8 @@
 
 /* Honor reduced-motion: neutralize DS animations + transitions. */
 @media (prefers-reduced-motion: reduce) {
-  [class*='h10-ds-'],
-  [class*='h10-ds-'] * {
+  [class*='nds-'],
+  [class*='nds-'] * {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -16,11 +16,11 @@
 }
 
 /* Visible keyboard focus for interactive patterns that don't already ring. */
-.h10-ds-navitem:focus-visible,
-.h10-ds-tab:focus-visible,
-.h10-ds-pgbtn:focus-visible,
-.h10-ds-fpanel-toggle:focus-visible,
-.h10-ds-builder-navitem:focus-visible {
+.nds-navitem:focus-visible,
+.nds-tab:focus-visible,
+.nds-pgbtn:focus-visible,
+.nds-fpanel-toggle:focus-visible,
+.nds-builder-navitem:focus-visible {
   outline: none;
-  box-shadow: var(--h10-focus-ring);
+  box-shadow: var(--nds-focus-ring);
 }

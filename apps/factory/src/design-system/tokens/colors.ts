@@ -11,7 +11,7 @@
  * Frequencies in comments are occurrences across the four ads CSS files.
  *
  * Kept in sync with ../styles/tokens.css (same values as CSS vars). JS consumers
- * that need a real color (e.g. Recharts) import from here; CSS uses var(--h10-*).
+ * that need a real color (e.g. Recharts) import from here; CSS uses var(--nds-*).
  * TODO(Phase 7): generate tokens.css from this file to remove the hand-sync.
  */
 

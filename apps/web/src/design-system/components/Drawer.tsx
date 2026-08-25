@@ -139,10 +139,10 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
 
   return createPortal(
     <>
-      <div className="h10-ds-drawer-bd" onClick={onClose} />
+      <div className="nds-drawer-bd" onClick={onClose} />
       <div
         ref={panel}
-        className={`h10-ds-drawer${className ? ` ${className}` : ''}`}
+        className={`nds-drawer${className ? ` ${className}` : ''}`}
         role="dialog"
         aria-modal="true"
         // The panel itself is the initial focus target, so a screen reader
@@ -152,18 +152,18 @@ export function Drawer({ open, onClose, title, subtitle, footer, children, class
         aria-labelledby={title != null ? titleId : undefined}
         style={width != null ? { width: typeof width === 'number' ? `${width}px` : width } : undefined}
       >
-        <div className="h10-ds-drawer-h">
-          <div className="h10-ds-drawer-ht">
+        <div className="nds-drawer-h">
+          <div className="nds-drawer-ht">
             <span className="t" id={title != null ? titleId : undefined}>{title}</span>
             {subtitle != null && <span className="st">{subtitle}</span>}
           </div>
-          <button type="button" className="h10-ds-modal-x" onClick={onClose} aria-label="Close">
+          <button type="button" className="nds-modal-x" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
-        <div className="h10-ds-drawer-b">{children}</div>
-        {footer != null && <div className="h10-ds-drawer-f">{footer}</div>}
-        {overlay != null && <div className="h10-ds-drawer-ov">{overlay}</div>}
+        <div className="nds-drawer-b">{children}</div>
+        {footer != null && <div className="nds-drawer-f">{footer}</div>}
+        {overlay != null && <div className="nds-drawer-ov">{overlay}</div>}
       </div>
     </>,
     document.body,

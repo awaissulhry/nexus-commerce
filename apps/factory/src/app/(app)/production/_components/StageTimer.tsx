@@ -20,6 +20,6 @@ export function StageTimer({ cur }: { cur: CurrentStage }) {
   }, [cur.status]);
   const timing: StageTiming = { startedAt: cur.startedAt, pausedMs: cur.pausedMs, pausedAt: cur.pausedAt, finishedAt: null };
   const active = elapsedMs(timing, Date.now());
-  const color = cur.status === "running" ? "var(--h10-primary)" : cur.status === "paused" ? "var(--h10-warning, #9a6700)" : "var(--h10-text-3)";
+  const color = cur.status === "running" ? "var(--nds-primary)" : cur.status === "paused" ? "var(--nds-warning, #9a6700)" : "var(--nds-text-3)";
   return <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 700, color }}>{cur.status === "not_started" ? "—" : fmt(active)}</span>;
 }

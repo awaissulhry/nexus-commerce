@@ -45,13 +45,13 @@ export function ToolbarButton({
 }: ToolbarButtonProps) {
   const autoTooltip: ReactNode =
     tooltipContent ?? (
-      <div className="h10-ds-tbtn-tip">
-        <div className="h10-ds-tbtn-tip-head">
-          <span className="h10-ds-tbtn-tip-label">{label}</span>
-          {shortcut && <Kbd className="h10-ds-tbtn-kbd">{shortcut}</Kbd>}
+      <div className="nds-tbtn-tip">
+        <div className="nds-tbtn-tip-head">
+          <span className="nds-tbtn-tip-label">{label}</span>
+          {shortcut && <Kbd className="nds-tbtn-kbd">{shortcut}</Kbd>}
         </div>
         {description && (
-          <span className="h10-ds-tbtn-tip-desc">{description}</span>
+          <span className="nds-tbtn-tip-desc">{description}</span>
         )}
       </div>
     )
@@ -63,13 +63,13 @@ export function ToolbarButton({
       disabled={disabled}
       aria-label={label}
       aria-pressed={active}
-      className={cx('h10-ds-tbtn', className)}
+      className={cx('nds-tbtn', className)}
     >
       {icon}
       {badge != null && badge > 0 && (
         <span
           aria-hidden
-          className="h10-ds-tbtn-badge"
+          className="nds-tbtn-badge"
         >
           {badge > 99 ? '99+' : badge}
         </span>
@@ -77,7 +77,7 @@ export function ToolbarButton({
     </button>
   )
 
-  return <Tooltip label={autoTooltip} className="h10-ds-tooltip--light">{btn}</Tooltip>
+  return <Tooltip label={autoTooltip} className="nds-tooltip--light">{btn}</Tooltip>
 }
 
 // ── ToolbarDivider ─────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ export function ToolbarDivider() {
   return (
     <div
       aria-hidden
-      className="h10-ds-tdivider"
+      className="nds-tdivider"
     />
   )
 }

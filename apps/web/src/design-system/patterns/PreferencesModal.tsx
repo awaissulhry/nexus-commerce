@@ -144,20 +144,20 @@ export function PreferencesModal({
       size="xl"
       footer={
         <>
-          <Button variant="ghost" onClick={resetAll} className="h10-ds-prefs-reset">Reset to default</Button>
+          <Button variant="ghost" onClick={resetAll} className="nds-prefs-reset">Reset to default</Button>
           <span className="grow" />
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={handleConfirm}>Save</Button>
         </>
       }
     >
-      <div className="h10-ds-prefs">
+      <div className="nds-prefs">
         {/* ── Left: page-level preferences ── */}
-        <div className="h10-ds-prefs-col">
+        <div className="nds-prefs-col">
           {pageSizeChoices.length > 0 && (
-            <fieldset className="h10-ds-prefs-set">
+            <fieldset className="nds-prefs-set">
               <legend>Rows per page</legend>
-              <div className="h10-ds-prefs-radios">
+              <div className="nds-prefs-radios">
                 {pageSizeChoices.map((n) => (
                   <label key={n}>
                     <input
@@ -174,10 +174,10 @@ export function PreferencesModal({
           )}
 
           {showSticky && (
-            <fieldset className="h10-ds-prefs-set">
+            <fieldset className="nds-prefs-set">
               <legend>Sticky columns</legend>
-              <p className="h10-ds-prefs-help">Keep the first / last column pinned while scrolling sideways.</p>
-              <label className="h10-ds-prefs-check">
+              <p className="nds-prefs-help">Keep the first / last column pinned while scrolling sideways.</p>
+              <label className="nds-prefs-check">
                 <input
                   type="checkbox"
                   checked={draft.stickyFirstColumn}
@@ -185,7 +185,7 @@ export function PreferencesModal({
                 />
                 <span>Pin first column</span>
               </label>
-              <label className="h10-ds-prefs-check">
+              <label className="nds-prefs-check">
                 <input
                   type="checkbox"
                   checked={draft.stickyLastColumn}
@@ -199,11 +199,11 @@ export function PreferencesModal({
           {workspaceSlot}
 
           {sortFieldOptions.length > 0 && (
-            <fieldset className="h10-ds-prefs-set">
+            <fieldset className="nds-prefs-set">
               <legend>Sort order</legend>
-              <div className="h10-ds-prefs-sort">
+              <div className="nds-prefs-sort">
                 <select
-                  className="h10-ds-select"
+                  className="nds-select"
                   value={draft.sortBy}
                   onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value }))}
                 >
@@ -212,7 +212,7 @@ export function PreferencesModal({
                   ))}
                 </select>
                 <select
-                  className="h10-ds-select"
+                  className="nds-select"
                   value={draft.sortDir}
                   onChange={(e) => setDraft((d) => ({ ...d, sortDir: e.target.value as 'asc' | 'desc' }))}
                 >
@@ -225,12 +225,12 @@ export function PreferencesModal({
         </div>
 
         {/* ── Right: column visibility + drag-reorder ── */}
-        <div className="h10-ds-prefs-col">
-          <div className="h10-ds-prefs-set">
+        <div className="nds-prefs-col">
+          <div className="nds-prefs-set">
             <legend>Columns</legend>
-            <p className="h10-ds-prefs-help">Drag to reorder · toggle to show or hide.</p>
+            <p className="nds-prefs-help">Drag to reorder · toggle to show or hide.</p>
           </div>
-          <div className="h10-ds-prefs-cols">
+          <div className="nds-prefs-cols">
             {orderedForDisplay.map((c) => {
               const isLocked = !!c.locked
               const isVisible = isLocked || draft.visibleColumns.includes(c.key)
@@ -238,15 +238,15 @@ export function PreferencesModal({
               return (
                 <div
                   key={c.key}
-                  className={['h10-ds-prefs-row', draggable ? 'draggable' : '', dragKey === c.key ? 'dragging' : '', isLocked ? 'locked' : ''].filter(Boolean).join(' ')}
+                  className={['nds-prefs-row', draggable ? 'draggable' : '', dragKey === c.key ? 'dragging' : '', isLocked ? 'locked' : ''].filter(Boolean).join(' ')}
                   draggable={draggable}
                   onDragStart={draggable ? (e) => { setDragKey(c.key); e.dataTransfer.effectAllowed = 'move' } : undefined}
                   onDragOver={draggable ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
                   onDrop={draggable ? onDrop(c.key) : undefined}
                 >
-                  <GripVertical size={14} className="h10-ds-prefs-grip" aria-hidden />
-                  <span className="h10-ds-prefs-lbl">{c.label}</span>
-                  {isLocked && <span className="h10-ds-prefs-locked">Locked</span>}
+                  <GripVertical size={14} className="nds-prefs-grip" aria-hidden />
+                  <span className="nds-prefs-lbl">{c.label}</span>
+                  {isLocked && <span className="nds-prefs-locked">Locked</span>}
                   <Toggle
                     checked={isVisible}
                     disabled={isLocked}

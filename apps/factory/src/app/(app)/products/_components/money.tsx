@@ -43,13 +43,13 @@ export function DeltaInput({
         style={{
           display: "inline-flex",
           alignItems: "center",
-          border: "1px solid var(--h10-border)",
+          border: "1px solid var(--nds-border)",
           borderRadius: 7,
-          background: "var(--h10-surface)",
+          background: "var(--nds-surface)",
           overflow: "hidden",
         }}
       >
-        {mode === "ABSOLUTE" && <span style={{ padding: "3px 5px", fontSize: 12, color: "var(--h10-text-3)", background: "var(--h10-surface-sunken)" }}>€</span>}
+        {mode === "ABSOLUTE" && <span style={{ padding: "3px 5px", fontSize: 12, color: "var(--nds-text-3)", background: "var(--nds-surface-sunken)" }}>€</span>}
         <input
           type="number"
           step={mode === "ABSOLUTE" ? "0.01" : "0.1"}
@@ -62,21 +62,21 @@ export function DeltaInput({
             if (next !== value) onChange({ mode, value: next });
           }}
           onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-          style={{ width: 82, border: "none", outline: "none", font: "12.5px var(--font-mono), monospace", padding: "3px 5px", background: "transparent", color: "var(--h10-text)", textAlign: "right" }}
+          style={{ width: 82, border: "none", outline: "none", font: "12.5px var(--font-mono), monospace", padding: "3px 5px", background: "transparent", color: "var(--nds-text)", textAlign: "right" }}
         />
-        {mode === "PERCENT" && <span style={{ padding: "3px 5px", fontSize: 12, color: "var(--h10-text-3)", background: "var(--h10-surface-sunken)" }}>%</span>}
+        {mode === "PERCENT" && <span style={{ padding: "3px 5px", fontSize: 12, color: "var(--nds-text-3)", background: "var(--nds-surface-sunken)" }}>%</span>}
       </span>
       <button
         type="button"
         disabled={disabled}
         title="Toggle € / %"
         onClick={() => onChange({ mode: mode === "ABSOLUTE" ? "PERCENT" : "ABSOLUTE", value: 0 })}
-        style={{ border: "1px solid var(--h10-border)", borderRadius: 7, background: "var(--h10-surface)", cursor: disabled ? "default" : "pointer", fontSize: 11, padding: "3px 6px", color: "var(--h10-text-2)", minWidth: 26 }}
+        style={{ border: "1px solid var(--nds-border)", borderRadius: 7, background: "var(--nds-surface)", cursor: disabled ? "default" : "pointer", fontSize: 11, padding: "3px 6px", color: "var(--nds-text-2)", minWidth: 26 }}
       >
         {mode === "ABSOLUTE" ? "€" : "%"}
       </button>
       {resolvedPct != null && baseCents != null && (
-        <span style={{ fontSize: 10.5, color: "var(--h10-text-3)" }}>→ {signedEur(resolvedPct)}</span>
+        <span style={{ fontSize: 10.5, color: "var(--nds-text-3)" }}>→ {signedEur(resolvedPct)}</span>
       )}
     </span>
   );
@@ -96,8 +96,8 @@ export function EuroInput({
   width?: number;
 }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--h10-border)", borderRadius: 7, overflow: "hidden", background: "var(--h10-surface)" }}>
-      <span style={{ padding: "4px 6px", fontSize: 12, color: "var(--h10-text-3)", background: "var(--h10-surface-sunken)" }}>€</span>
+    <span style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--nds-border)", borderRadius: 7, overflow: "hidden", background: "var(--nds-surface)" }}>
+      <span style={{ padding: "4px 6px", fontSize: 12, color: "var(--nds-text-3)", background: "var(--nds-surface-sunken)" }}>€</span>
       <input
         type="number"
         step="0.01"
@@ -110,7 +110,7 @@ export function EuroInput({
           if (next !== cents) onCommit(next);
         }}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        style={{ width, border: "none", outline: "none", font: "12.5px var(--font-mono), monospace", padding: "4px 6px", background: "transparent", color: "var(--h10-text)", textAlign: "right" }}
+        style={{ width, border: "none", outline: "none", font: "12.5px var(--font-mono), monospace", padding: "4px 6px", background: "transparent", color: "var(--nds-text)", textAlign: "right" }}
       />
     </span>
   );

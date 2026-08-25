@@ -31,22 +31,22 @@ export interface TabsProps {
 /** Underline tab bar (active = primary text + primary indicator). Controlled. */
 export function Tabs({ tabs, active, onChange, className, size = 'md' }: TabsProps) {
   return (
-    <div className={['h10-ds-tabs', size === 'lg' ? 'lg' : '', className ?? ''].filter(Boolean).join(' ')} role="tablist">
+    <div className={['nds-tabs', size === 'lg' ? 'lg' : '', className ?? ''].filter(Boolean).join(' ')} role="tablist">
       {tabs.map((t) => (
         <button
           key={t.id}
           type="button"
           role="tab"
           aria-selected={t.id === active}
-          className={['h10-ds-tab', t.id === active ? 'on' : ''].filter(Boolean).join(' ')}
+          className={['nds-tab', t.id === active ? 'on' : ''].filter(Boolean).join(' ')}
           disabled={t.disabled}
           aria-disabled={t.disabled || undefined}
           onClick={() => { if (!t.disabled) onChange(t.id) }}
         >
-          {t.icon ? <span className="h10-ds-tab-ic" aria-hidden>{t.icon}</span> : null}
+          {t.icon ? <span className="nds-tab-ic" aria-hidden>{t.icon}</span> : null}
           {t.label}
-          {t.badge ? <span className="h10-ds-tab-badge">{t.badge}</span> : null}
-          {t.count != null ? <span className="h10-ds-tab-count">{t.count}</span> : null}
+          {t.badge ? <span className="nds-tab-badge">{t.badge}</span> : null}
+          {t.count != null ? <span className="nds-tab-count">{t.count}</span> : null}
         </button>
       ))}
     </div>

@@ -202,12 +202,12 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
     await mutate(a.id, '/disconnect', { method: 'POST' }, `${a.label} disconnected.`)
   }
 
-  if (loading) return <div className={`h10-ds-acctp${className ? ` ${className}` : ''}`}><span className="h10-ds-acct-skeleton" aria-hidden /></div>
+  if (loading) return <div className={`nds-acctp${className ? ` ${className}` : ''}`}><span className="nds-acct-skeleton" aria-hidden /></div>
 
   if (error) {
     return (
-      <div className={`h10-ds-acctp${className ? ` ${className}` : ''}`}>
-        <p className="h10-ds-acctp-empty">Accounts unavailable — {error}</p>
+      <div className={`nds-acctp${className ? ` ${className}` : ''}`}>
+        <p className="nds-acctp-empty">Accounts unavailable — {error}</p>
       </div>
     )
   }
@@ -220,8 +220,8 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
   for (const c of Object.keys(onConnect ?? {})) if (!byChannel.has(c)) byChannel.set(c, [])
 
   return (
-    <div className={`h10-ds-acctp${className ? ` ${className}` : ''}`}>
-      <div className="h10-ds-acctp-head">
+    <div className={`nds-acctp${className ? ` ${className}` : ''}`}>
+      <div className="nds-acctp-head">
         <h3>Accounts</h3>
         <p>
           Each channel can hold more than one seller account. The primary is the one ambient work uses
@@ -230,27 +230,27 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
       </div>
 
       {notice && (
-        <p className="h10-ds-acctp-notice" data-tone={notice.tone} role="status">
+        <p className="nds-acctp-notice" data-tone={notice.tone} role="status">
           {notice.text}
         </p>
       )}
 
       {[...byChannel.entries()].map(([channel, rows]) => (
-        <section key={channel} className="h10-ds-acctp-group">
+        <section key={channel} className="nds-acctp-group">
           <header>
-            <span className="h10-ds-acctp-ch">{channelName(channel)}</span>
-            <span className="h10-ds-acctp-count">{rows.length}</span>
+            <span className="nds-acctp-ch">{channelName(channel)}</span>
+            <span className="nds-acctp-count">{rows.length}</span>
           </header>
 
-          {rows.length === 0 && <p className="h10-ds-acctp-empty">No account connected yet.</p>}
+          {rows.length === 0 && <p className="nds-acctp-empty">No account connected yet.</p>}
 
           {rows.map((a) => (
-            <div key={a.id} className="h10-ds-acctp-row" data-busy={busyId === a.id || undefined}>
-              <span className="h10-ds-acct-dot" data-health={a.health} aria-hidden />
-              <div className="h10-ds-acctp-main">
+            <div key={a.id} className="nds-acctp-row" data-busy={busyId === a.id || undefined}>
+              <span className="nds-acct-dot" data-health={a.health} aria-hidden />
+              <div className="nds-acctp-main">
                 {editing === a.id ? (
                   <input
-                    className="h10-ds-acctp-input"
+                    className="nds-acctp-input"
                     autoFocus
                     value={draftLabel}
                     placeholder={a.label}
@@ -263,20 +263,20 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
                     aria-label={`Name for this ${channelName(a.channel)} account`}
                   />
                 ) : (
-                  <span className="h10-ds-acctp-name">
+                  <span className="nds-acctp-name">
                     {a.label}
-                    {a.isPrimary && <span className="h10-ds-acctp-badge">Primary</span>}
-                    {a.managedBy === 'env' && <span className="h10-ds-acct-tag">env-managed</span>}
+                    {a.isPrimary && <span className="nds-acctp-badge">Primary</span>}
+                    {a.managedBy === 'env' && <span className="nds-acct-tag">env-managed</span>}
                   </span>
                 )}
-                <span className="h10-ds-acctp-sub">
+                <span className="nds-acctp-sub">
                   {HEALTH_TEXT[a.health] ?? a.health}
                   {a.healthReason ? ` · ${a.healthReason}` : ''}
                   {a.labelIsPlaceholder && ' · no name from the channel — rename it'}
                   {!a.externalAccountId && (
                     <>
                       {' · '}
-                      <span className="h10-ds-acctp-warn">
+                      <span className="nds-acctp-warn">
                         identity unavailable — reconnect to enable multi-account
                       </span>
                     </>
@@ -287,12 +287,12 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
               {/* A fixed palette, not a colour picker: identity has to read the
                   same on every surface, and an arbitrary hex can land unreadable
                   against one of the two themes. */}
-              <div className="h10-ds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
+              <div className="nds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
                 {ACCOUNT_COLORS.map((c) => (
                   <button
                     key={c.hex}
                     type="button"
-                    className="h10-ds-acctp-swatch"
+                    className="nds-acctp-swatch"
                     style={{ background: c.hex }}
                     aria-label={c.name}
                     aria-pressed={a.accountColor === c.hex}
@@ -303,7 +303,7 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
                 {a.accountColor && (
                   <button
                     type="button"
-                    className="h10-ds-acctp-swatch is-clear"
+                    className="nds-acctp-swatch is-clear"
                     aria-label="Clear colour"
                     disabled={busyId === a.id}
                     onClick={() => void setColor(a, null)}
@@ -313,7 +313,7 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
                 )}
               </div>
 
-              <div className="h10-ds-acctp-actions">
+              <div className="nds-acctp-actions">
                 <button
                   type="button"
                   disabled={busyId === a.id}
@@ -345,7 +345,7 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
                     would be written where nobody can read it — and a disabled
                     control's colours are dim enough to fail contrast besides. */}
                 {a.managedBy === 'env' ? (
-                  <span className="h10-ds-acctp-note">Set by environment — no grant to revoke</span>
+                  <span className="nds-acctp-note">Set by environment — no grant to revoke</span>
                 ) : (
                   <button
                     type="button"
@@ -361,7 +361,7 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
           ))}
 
           {onConnect?.[channel] && (
-            <button type="button" className="h10-ds-acctp-add" onClick={() => void onConnect[channel]!()}>
+            <button type="button" className="nds-acctp-add" onClick={() => void onConnect[channel]!()}>
               + Connect {rows.length > 0 ? 'another ' : ''}
               {channelName(channel)} account
             </button>

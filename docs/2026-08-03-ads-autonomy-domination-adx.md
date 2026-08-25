@@ -403,7 +403,7 @@ From `apps/web/src/design-system` only:
 - `Drawer` for per-lever detail — **with confirms passed through the `overlay=` slot** (Drawer is z-61, Modal z-50; a confirm opened normally renders behind it — `StudioConfirm` is the reference).
 - `MetricStrip` for the autonomy header, `Heatmap` for the hour-of-day coverage grid, `Banner` for kill-switch state, `Toast` for action feedback.
 
-Known traps to respect: grid cards clip dropdown last-options (`.h10-ds-gridcard` `overflow:hidden`); menus inside sticky grid cells must portal to `document.body`; DataGrid needs scoped `table-layout:fixed` via a plain global class; the DS guard greps comments, so don't write a select element's tag name in a comment.
+Known traps to respect: grid cards clip dropdown last-options (`.nds-gridcard` `overflow:hidden`); menus inside sticky grid cells must portal to `document.body`; DataGrid needs scoped `table-layout:fixed` via a plain global class; the DS guard greps comments, so don't write a select element's tag name in a comment.
 
 ---
 

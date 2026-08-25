@@ -17,7 +17,7 @@ export function ComingSoon({ pageId }: { pageId: string }) {
       <PageHeader eyebrow="Factory OS" title={page.label} subtitle={page.purpose} />
       <Card padded>
         <span className="fp-chip">Arrives in {page.fp} — spec first, then build</span>
-        <div style={{ fontSize: 13, color: "var(--h10-text)" }}>What this page will do:</div>
+        <div style={{ fontSize: 13, color: "var(--nds-text)" }}>What this page will do:</div>
         <ul>
           {page.bullets.map((b) => (
             <li key={b}>{b}</li>

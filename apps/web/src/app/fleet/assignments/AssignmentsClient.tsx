@@ -575,7 +575,7 @@ export function AssignmentsClient() {
            a toolbar and a header row above nothing is chrome around nothing. */
         <EmptyState onCreate={() => setCreating(true)} />
       ) : (
-        <div className="h10-ds-gridcard as-gridcard">
+        <div className="nds-gridcard as-gridcard">
           <GridToolbar
             count={
               selected.size > 0 ? (

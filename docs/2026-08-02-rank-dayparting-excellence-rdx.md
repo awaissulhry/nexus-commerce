@@ -169,7 +169,7 @@ The standing rule is *new UI from `apps/web/src/design-system` only*. DPS gated 
 | status pills / chips | `h10-pill`, `h10-rg-chip` |
 | detail panel | a right-side drawer in console chrome |
 
-**Gotchas already paid for, to be honoured:** `AdsDataGrid` needs scoped `table-layout: fixed` via a plain global class (never auto + nowrap); `.h10-ds-gridcard` clips a dropdown's last option — hit-test, don't trust the DOM; the pre-push DS ratchet greps *comments*, so never write a bare `<select` in a comment.
+**Gotchas already paid for, to be honoured:** `AdsDataGrid` needs scoped `table-layout: fixed` via a plain global class (never auto + nowrap); `.nds-gridcard` clips a dropdown's last option — hit-test, don't trust the DOM; the pre-push DS ratchet greps *comments*, so never write a bare `<select` in a comment.
 
 ---
 

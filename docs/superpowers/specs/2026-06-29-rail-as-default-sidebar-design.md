@@ -100,16 +100,16 @@ Clear separation of concerns — presentational rail vs data/chrome container vs
 ## Theming
 
 - **Tokenize** the rail colour rules in `ads.css` (`.h10-rail`, `.h10-item`, `.h10-sub*`,
-  `.h10-brand`, the new `.h10-subsub*`) from hardcoded hex to `var(--h10-*)`. Mapping:
-  surface `#f1f3f5`→`--h10-rail-bg`; line `#e3e7ec`→`--h10-rail-border`; strong text
-  `#1c2530`→`--h10-text`; item text `#4a5462`→`--h10-text-2`; icon `#8a93a1`→`--h10-text-3`;
-  active `#1f6fde`→`--h10-primary` (blue fill + white text works in both themes).
+  `.h10-brand`, the new `.h10-subsub*`) from hardcoded hex to `var(--nds-*)`. Mapping:
+  surface `#f1f3f5`→`--nds-rail-bg`; line `#e3e7ec`→`--nds-rail-border`; strong text
+  `#1c2530`→`--nds-text`; item text `#4a5462`→`--nds-text-2`; icon `#8a93a1`→`--nds-text-3`;
+  active `#1f6fde`→`--nds-primary` (blue fill + white text works in both themes).
 - **Add** rail-specific tokens with **both** `:root` and `.dark` values:
-  `--h10-rail-item-hover` (`#e6eaf0` / a dark slate), `--h10-rail-chip-bg`,
-  `--h10-rail-chip-active-bg` (+ fg). The market code chip uses these.
-- **Fill `.dark` gaps:** `--h10-text-strong` and `--h10-surface-hover` are not currently
+  `--nds-rail-item-hover` (`#e6eaf0` / a dark slate), `--nds-rail-chip-bg`,
+  `--nds-rail-chip-active-bg` (+ fg). The market code chip uses these.
+- **Fill `.dark` gaps:** `--nds-text-strong` and `--nds-surface-hover` are not currently
   overridden in `.dark`; the rail must avoid them or add overrides.
-- **Protect the light surfaces:** pin `.h10-shell` to light token values (re-scope `--h10-*`
+- **Protect the light surfaces:** pin `.h10-shell` to light token values (re-scope `--nds-*`
   there) so the ads cockpit and `/products/next` — both wrap in `.h10-shell` — stay light
   regardless of `.dark`. Only the app-wide rail (in `AppShell`, not `.h10-shell`) follows the
   theme. (`/products/next`'s `.productsNextLight` pin becomes redundant but harmless.)

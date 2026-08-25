@@ -96,7 +96,7 @@ export function PreviewPanel({ template }: { template: TemplateDetail }) {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 16 }}>
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "var(--h10-text-2)" }}>Price list:</span>
+          <span style={{ fontSize: 12, color: "var(--nds-text-2)" }}>Price list:</span>
           <Listbox
             ariaLabel="Price list"
             options={[{ value: "", label: "Listino base (default)" }, ...lists.filter((l) => l.kind !== "DEFAULT").map((l) => ({ value: l.id, label: l.name }))]}
@@ -104,14 +104,14 @@ export function PreviewPanel({ template }: { template: TemplateDetail }) {
             onChange={setListId}
           />
         </div>
-        {template.optionGroups.length === 0 && <div style={{ fontSize: 13, color: "var(--h10-text-3)" }}>Add option groups first.</div>}
+        {template.optionGroups.length === 0 && <div style={{ fontSize: 13, color: "var(--nds-text-3)" }}>Add option groups first.</div>}
         {template.optionGroups.map((g) => {
           const maxOne = g.maxSelect === 1;
           const ids = g.options.map((o) => o.id);
           return (
             <div key={g.id}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>
-                {g.name} <span style={{ fontWeight: 400, color: "var(--h10-text-3)" }}>· pick {g.minSelect}–{g.maxSelect}</span>
+                {g.name} <span style={{ fontWeight: 400, color: "var(--nds-text-3)" }}>· pick {g.minSelect}–{g.maxSelect}</span>
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 {g.options.map((o) =>
@@ -138,17 +138,17 @@ export function PreviewPanel({ template }: { template: TemplateDetail }) {
           <Banner key={`w${i}`} tone="warning" title="Heads up">{v.message}</Banner>
         ))}
 
-        <div style={{ border: "1px solid var(--h10-border)", borderRadius: 12, background: "var(--h10-surface)", padding: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--h10-text-3)", marginBottom: 8 }}>Price waterfall</div>
+        <div style={{ border: "1px solid var(--nds-border)", borderRadius: 12, background: "var(--nds-surface)", padding: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--nds-text-3)", marginBottom: 8 }}>Price waterfall</div>
           {hasCost && <WaterRow label="Cost" value={eur(result!.costCents!)} muted />}
           <WaterRow label="List price" value={result ? eur(result.listPriceCents!) : "—"} />
           <WaterRow label="Adjustment" value={result ? eur(result.appliedAdjustmentCents ?? result.adjustmentCents ?? 0) : "—"} muted />
-          <div style={{ borderTop: "1px solid var(--h10-border-subtle)", margin: "6px 0" }} />
+          <div style={{ borderTop: "1px solid var(--nds-border-subtle)", margin: "6px 0" }} />
           <WaterRow label="Net price" value={result ? eur(result.netPriceCents!) : "—"} strong />
           {hasMargin && (
             <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--h10-text-2)" }}>Margin</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: result!.marginNegative ? "var(--h10-danger)" : "var(--h10-success, #15a34a)" }}>
+              <span style={{ fontSize: 12, color: "var(--nds-text-2)" }}>Margin</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: result!.marginNegative ? "var(--nds-danger)" : "var(--nds-success, #15a34a)" }}>
                 {eur(result!.marginCents!)} · {result!.marginPct!.toFixed(1)}%
               </span>
             </div>
@@ -156,8 +156,8 @@ export function PreviewPanel({ template }: { template: TemplateDetail }) {
         </div>
 
         {hasMargin && (
-          <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12, display: "grid", gap: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)" }}>Goal-seek</div>
+          <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12, display: "grid", gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)" }}>Goal-seek</div>
             <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
               Target net €
               <input type="number" step="0.01" value={goalNet} placeholder="—" onChange={(e) => { setGoalNet(e.target.value); setGoalMargin(""); }} onBlur={(e) => e.target.value && void compose({ by: "net", value: Math.round(parseFloat(e.target.value) * 100) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} style={gsInput} />
@@ -166,17 +166,17 @@ export function PreviewPanel({ template }: { template: TemplateDetail }) {
               Target margin %
               <input type="number" step="0.1" value={goalMargin} placeholder="—" onChange={(e) => { setGoalMargin(e.target.value); setGoalNet(""); }} onBlur={(e) => e.target.value && void compose({ by: "margin", value: parseFloat(e.target.value) })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} style={gsInput} />
             </label>
-            <span style={{ fontSize: 10.5, color: "var(--h10-text-3)" }}>Sets the quote adjustment to hit your target; the waterfall updates.</span>
+            <span style={{ fontSize: 10.5, color: "var(--nds-text-3)" }}>Sets the quote adjustment to hit your target; the waterfall updates.</span>
           </div>
         )}
 
         {result && result.materials.length > 0 && (
-          <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Materials consumed</div>
+          <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)", marginBottom: 6 }}>Materials consumed</div>
             {result.materials.map((m) => (
               <div key={`${m.materialId}:${m.unit}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                 <span>{m.name}</span>
-                <span style={{ color: "var(--h10-text-2)", fontFamily: "var(--font-mono)" }}>{m.qty} {m.unit}</span>
+                <span style={{ color: "var(--nds-text-2)", fontFamily: "var(--font-mono)" }}>{m.qty} {m.unit}</span>
               </div>
             ))}
           </div>
@@ -198,10 +198,10 @@ function OptLabel({ name, source }: { name: string; source?: string }) {
 function WaterRow({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2px 0" }}>
-      <span style={{ fontSize: 12, color: muted ? "var(--h10-text-3)" : "var(--h10-text-2)" }}>{label}</span>
-      <span style={{ fontSize: strong ? 15 : 13, fontWeight: strong ? 800 : 600, fontFamily: "var(--font-mono)", color: "var(--h10-text)" }}>{value}</span>
+      <span style={{ fontSize: 12, color: muted ? "var(--nds-text-3)" : "var(--nds-text-2)" }}>{label}</span>
+      <span style={{ fontSize: strong ? 15 : 13, fontWeight: strong ? 800 : 600, fontFamily: "var(--font-mono)", color: "var(--nds-text)" }}>{value}</span>
     </div>
   );
 }
 
-const gsInput: React.CSSProperties = { marginLeft: "auto", width: 90, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono), monospace", textAlign: "right", background: "var(--h10-surface)", color: "var(--h10-text)" };
+const gsInput: React.CSSProperties = { marginLeft: "auto", width: 90, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono), monospace", textAlign: "right", background: "var(--nds-surface)", color: "var(--nds-text)" };

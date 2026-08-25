@@ -17,7 +17,7 @@ forms, so 289 DS declarations are discarded by the browser on every page inside
 `--surface-*`, `--border-*`, `--color-primary`, `--status-*` — as **colours**:
 
 ```css
-:root { --surface-card: var(--h10-surface); }   /* → #fff */
+:root { --surface-card: var(--nds-surface); }   /* → #fff */
 ```
 
 `globals.css:33` and `ads.css:93` define the **same names** as **space-separated RGB
@@ -66,13 +66,13 @@ Uses of the contested names across `styles/{primitives,components,patterns,a11y}
 | `--text-link` · `--surface-canvas` | 4 | | | |
 | **subtotal** | **289** | | **subtotal** | **109** |
 
-For comparison, the same stylesheets already make **271** collision-free `var(--h10-*)`
+For comparison, the same stylesheets already make **271** collision-free `var(--nds-*)`
 references. The DS is most of the way there; this finishes it.
 
 **Known casualties of this exact mechanism, already paid for:**
 `reporting.css` 155 of 155 declarations dead (fixed 2026-08-19) · the SGX2 page-level tab
 bar, 3 declarations including the separator the operator reported as a styling complaint ·
-`.h10-ds-burn-tip`, transparent for months behind a `var(--x, #fff)` fallback that could
+`.nds-burn-tip`, transparent for months behind a `var(--x, #fff)` fallback that could
 never fire (fixed 2026-08-24).
 
 ## 3. Why the obvious fixes do not work
@@ -86,28 +86,28 @@ never fire (fixed 2026-08-24).
 
 ## 4. The fix
 
-**DS stylesheets consume `--h10-*` only, and the platform-alias tier is deleted.**
+**DS stylesheets consume `--nds-*` only, and the platform-alias tier is deleted.**
 
-`--h10-*` is DS-owned. No other stylesheet redefines it, it is a real colour in every
+`--nds-*` is DS-owned. No other stylesheet redefines it, it is a real colour in every
 scope, and `.dark` already overrides it — so a DS component renders identically regardless
 of what else is on the page. This is the same fix the SGX2 tab bar landed on independently
-(`--h10-text-2` instead of `--text-secondary`), generalised.
+(`--nds-text-2` instead of `--text-secondary`), generalised.
 
 The mapping already exists in `tokens.css` and is **1:1 for 24 of 25**:
 
 ```
---text-primary → --h10-text          --surface-card   → --h10-surface
---text-secondary → --h10-text-2      --surface-sunken → --h10-surface-sunken
---text-tertiary → --h10-text-3       --surface-canvas → --h10-bg
---text-disabled → --h10-text-disabled  --border-default → --h10-border
---text-link → --h10-text-link        --border-subtle  → --h10-border-subtle
---color-primary → --h10-primary      --border-strong  → --h10-border-strong
---status-{success,warning,danger}-{soft,line,strong} → --h10-{…}
+--text-primary → --nds-text          --surface-card   → --nds-surface
+--text-secondary → --nds-text-2      --surface-sunken → --nds-surface-sunken
+--text-tertiary → --nds-text-3       --surface-canvas → --nds-bg
+--text-disabled → --nds-text-disabled  --border-default → --nds-border
+--text-link → --nds-text-link        --border-subtle  → --nds-border-subtle
+--color-primary → --nds-primary      --border-strong  → --nds-border-strong
+--status-{success,warning,danger}-{soft,line,strong} → --nds-{…}
 ```
 
-🔴 **The one exception:** `--status-info-strong: var(--h10-blue-700)` maps to a **numbered
+🔴 **The one exception:** `--status-info-strong: var(--nds-blue-700)` maps to a **numbered
 ramp**, which `token-guard` check B bans in component stylesheets. It needs a real
-component token (`--h10-info-strong`) created first — step 1 below.
+component token (`--nds-info-strong`) created first — step 1 below.
 
 ## 4b. Step-2 audit — RESULT (run 24 Aug 2026, static pass)
 
@@ -149,7 +149,7 @@ these render inside a shell *today* — runs against the dev server before step 
 
 | # | step | gate |
 |---|---|---|
-| 1 | Add `--h10-info-strong` to `css-vars.ts`; `npm run tokens:gen` | `tokens:check` |
+| 1 | Add `--nds-info-strong` to `css-vars.ts`; `npm run tokens:gen` | `tokens:check` |
 | 2 | **Audit** which of the 289 actually render inside a shell today, by computed-value probe on the catalog + 3 ads surfaces + `/products/next`. Records what will *change*, does not gate the fix | probe output recorded in the PR |
 | 3 | Substitute, **one stylesheet per commit**: `primitives.css` → `components.css` → `patterns.css` → `a11y.css` | `token-guard` + `tsc` after each |
 | 4 | Delete the platform-alias tier from `css-vars.ts`; regenerate | `tokens:check`; zero contested names left in DS CSS |
@@ -185,7 +185,7 @@ step wants its own visual review before push.
 depends on the DS publishing the alias tier as colours:
 `app/fulfillment/stock/sync-control/styles.module.css:30` uses `var(--border-default)`,
 renders at `:root` (no shell), and imports DS `tokens.css` — so today it wins the source-order
-race and gets a colour. Step 4 would silently kill it. It changes to `var(--h10-border)` in the
+race and gets a colour. Step 4 would silently kill it. It changes to `var(--nds-border)` in the
 same commit: one line, same bug class. Every other app consumer is either inside `.h10-shell`
 (already channels, unaffected) or re-pins the aliases itself (`/products/next`).
 
@@ -222,7 +222,7 @@ stylesheet is its own commit.
 
 ## 11. Execution record (2026-08-24)
 
-**Done as planned:** step 1 (`--h10-info-strong` created; `--status-info-strong` repointed at
+**Done as planned:** step 1 (`--nds-info-strong` created; `--status-info-strong` repointed at
 it so the two cannot drift) · step 3 (**394** substitutions — 285 contested + 109 DS-only —
 across `primitives.css` 100, `components.css` 226, `patterns.css` 68, `a11y.css` 0) ·
 step 5 (check D) · step 6 (verification).

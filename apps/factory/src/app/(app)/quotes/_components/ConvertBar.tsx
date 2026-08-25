@@ -45,7 +45,7 @@ export function ConvertBar({ quote, onChanged }: { quote: QuoteDetail; onChanged
         <Banner tone="success" title="Converted to an order">
           This quote became an order.{" "}
           {/* EPQ.2 — the backlink the inventory called a dead end (gap 3) */}
-          <a href={`/orders?o=${quote.convertedOrderId}`} style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>Open the order ↗</a>
+          <a href={`/orders?o=${quote.convertedOrderId}`} style={{ color: "var(--nds-text-link)", fontWeight: 600 }}>Open the order ↗</a>
         </Banner>
       </div>
     );
@@ -63,11 +63,11 @@ export function ConvertBar({ quote, onChanged }: { quote: QuoteDetail; onChanged
     );
   }
   if (quote.state === "REJECTED") {
-    return <div style={{ marginBottom: 12 }}><Banner tone="danger" title="Declined / changes requested">{quote.lostReason ? `“${quote.lostReason}”` : "The customer didn't proceed."} {canCreate && <button type="button" onClick={() => patchState("DRAFT", undefined, "Quote revised — back to draft")} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer" }}>Revise</button>}</Banner></div>;
+    return <div style={{ marginBottom: 12 }}><Banner tone="danger" title="Declined / changes requested">{quote.lostReason ? `“${quote.lostReason}”` : "The customer didn't proceed."} {canCreate && <button type="button" onClick={() => patchState("DRAFT", undefined, "Quote revised — back to draft")} style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer" }}>Revise</button>}</Banner></div>;
   }
   // EPQ.1 — the worker sweeps lapsed SENT quotes here; Revise is the only way out
   if (quote.state === "EXPIRED") {
-    return <div style={{ marginBottom: 12 }}><Banner tone="warning" title="Expired — validity lapsed">{quote.lostReason ? `“${quote.lostReason}”` : "The offer aged past its valid-until date without a decision."} {canCreate && <button type="button" onClick={() => patchState("DRAFT", undefined, "Quote revised — back to draft")} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer" }}>Revise</button>}</Banner></div>;
+    return <div style={{ marginBottom: 12 }}><Banner tone="warning" title="Expired — validity lapsed">{quote.lostReason ? `“${quote.lostReason}”` : "The offer aged past its valid-until date without a decision."} {canCreate && <button type="button" onClick={() => patchState("DRAFT", undefined, "Quote revised — back to draft")} style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer" }}>Revise</button>}</Banner></div>;
   }
   if (quote.state === "SENT" && canCreate) {
     return (
@@ -75,7 +75,7 @@ export function ConvertBar({ quote, onChanged }: { quote: QuoteDetail; onChanged
         <Banner tone="info" title="Sent — awaiting the customer">
           {rejecting ? (
             <div style={{ display: "grid", gap: 8, marginTop: 4 }}>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What did they want changed? (optional)" style={{ border: "1px solid var(--h10-border)", borderRadius: 7, padding: "5px 9px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What did they want changed? (optional)" style={{ border: "1px solid var(--nds-border)", borderRadius: 7, padding: "5px 9px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" }} />
               <div style={{ display: "flex", gap: 8 }}><Button onClick={() => patchState("REJECTED", reason || undefined, `${quote.number} marked rejected`)} disabled={busy}>Mark rejected</Button><Button onClick={() => setRejecting(false)}>Cancel</Button></div>
             </div>
           ) : (

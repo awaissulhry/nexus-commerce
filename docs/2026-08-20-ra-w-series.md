@@ -105,7 +105,7 @@ semantics (a write-only column today), **precedence** among the five `dailyBudge
 `design-system/primitives/InfoTip.tsx`, exported from the barrel; the old
 `campaigns/InfoTip.tsx` re-exports it, so the 27 relative imports are untouched. Its
 `.h10-tip`/`.h10-tipwrap` styles moved to `design-system/styles/primitives.css`, and the ads
-layout imports tokens+primitives tree-wide (primitives.css verified fully `.h10-ds-*`-namespaced
+layout imports tokens+primitives tree-wide (primitives.css verified fully `.nds-*`-namespaced
 first, so non-DS pages are visually untouched). Verified: computed bubble identical
 (fixed · #28313d · z-1000 · 290px · portal'd to body), cursor stays default.
 

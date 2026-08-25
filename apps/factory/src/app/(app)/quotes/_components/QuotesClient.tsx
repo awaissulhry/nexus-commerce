@@ -55,15 +55,15 @@ const partyLoader: SearchLoader = async (q, cursor) => {
 
 function Counter({ label, value, tone, onClick, active }: { label: string; value: number; tone: string; onClick?: () => void; active?: boolean }) {
   const box: React.CSSProperties = {
-    border: `1px solid ${active ? "var(--h10-primary)" : "var(--h10-border-subtle)"}`,
+    border: `1px solid ${active ? "var(--nds-primary)" : "var(--nds-border-subtle)"}`,
     borderRadius: 10, padding: "8px 14px", minWidth: 120,
-    background: active ? "var(--h10-wash-primary)" : "transparent",
+    background: active ? "var(--nds-wash-primary)" : "transparent",
     textAlign: "left",
   };
   const body = (
     <>
       <div style={{ fontSize: 22, fontWeight: 800, color: tone }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>{label}</div>
     </>
   );
   // EPQ.2 — a counter with an onClick is a real filter affordance, not a tile
@@ -159,19 +159,19 @@ function PipelineInner() {
     <div className="factory-page factory-grid-grow-2">
       <PageHeader eyebrow="Factory OS" title="Quotes" subtitle="The RFQ pipeline: configure, price with margin, send into the thread, track to won or lost." />
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-        <Counter label="Drafts" value={data?.counters.drafts ?? 0} tone="var(--h10-text)" />
-        <Counter label="Awaiting approval" value={data?.counters.awaiting ?? 0} tone="var(--h10-primary)" />
+        <Counter label="Drafts" value={data?.counters.drafts ?? 0} tone="var(--nds-text)" />
+        <Counter label="Awaiting approval" value={data?.counters.awaiting ?? 0} tone="var(--nds-primary)" />
         {/* EPQ.2 — clickable: filters the grid to SENT quotes expiring within the pre-expiry window (gap 15) */}
         <Counter
           label="Expiring soon"
           value={data?.counters.expiringSoon ?? 0}
-          tone={data && data.counters.expiringSoon > 0 ? "var(--h10-danger)" : "var(--h10-text-3)"}
+          tone={data && data.counters.expiringSoon > 0 ? "var(--nds-danger)" : "var(--nds-text-3)"}
           onClick={() => setState((s) => (s === "expiring" ? "all" : "expiring"))}
           active={state === "expiring"}
         />
         <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
           {canSend && <ComplianceGear />} {/* EPQ.5 — CGV + bank details */}
-          {canExport && <a href="/api/exports/quotes" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>}
+          {canExport && <a href="/api/exports/quotes" style={{ fontSize: 12, color: "var(--nds-text-link)" }}>Export CSV</a>}
           {canCreate && <Button variant="primary" onClick={startCreate}><Plus size={13} /> New quote</Button>}
         </div>
       </div>
@@ -187,12 +187,12 @@ function PipelineInner() {
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
           <div style={{ display: "flex", gap: 4 }}>
             {TABS.map((t) => (
-              <button key={t.id} type="button" onClick={() => setState(t.id)} style={{ border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: "5px 10px", borderRadius: 8, background: state === t.id ? "var(--h10-primary)" : "transparent", color: state === t.id ? "#fff" : "var(--h10-text-2)" }}>
+              <button key={t.id} type="button" onClick={() => setState(t.id)} style={{ border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: "5px 10px", borderRadius: 8, background: state === t.id ? "var(--nds-primary)" : "transparent", color: state === t.id ? "#fff" : "var(--nds-text-2)" }}>
                 {t.label}{t.id !== "all" && data?.counts[t.id.toUpperCase()] ? <span style={{ marginLeft: 5, fontSize: 10.5, opacity: 0.85 }}>{data.counts[t.id.toUpperCase()]}</span> : null}
               </button>
             ))}
           </div>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" style={{ marginLeft: "auto", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 220 }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search number or party…" style={{ marginLeft: "auto", border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)", minWidth: 220 }} />
         </div>
         {/* EPQ.3 (FS3) — height-bound windowed grid; take-200 today, bounded DOM at any scale */}
         <VirtualDataGrid
@@ -200,7 +200,7 @@ function PipelineInner() {
           columns={[
             // EPQ.1 — selection for bulk Mark lost (only states where a loss makes sense)
             { key: "select", label: "", render: (r: QuoteRow) => canMarkLost(r) ? <Checkbox checked={selected.has(r.id)} onChange={() => toggleSelected(r.id)} aria-label={`Select ${r.number}`} /> : null },
-            { key: "number", label: "Quote", render: (r: QuoteRow) => <button type="button" onClick={() => openEditor(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
+            { key: "number", label: "Quote", render: (r: QuoteRow) => <button type="button" onClick={() => openEditor(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.number}</button> },
             { key: "party", label: "Party", render: (r: QuoteRow) => r.party.name },
             { key: "state", label: "State", render: (r: QuoteRow) => <span style={{ display: "inline-flex", gap: 5 }}><Pill tone={STATE_TONE[r.state]}>{r.state}</Pill>{r.convertedOrderId && <Pill tone="success">order</Pill>}</span> },
             { key: "net", label: "Net", align: "right" as const, render: (r: QuoteRow) => (r.lineCount ? eur(r.netCents) : "—") },
@@ -229,14 +229,14 @@ function PipelineInner() {
       {/* EPQ.1 — one reason for the whole selection */}
       <Modal open={markingLost} onClose={() => !bulkBusy && setMarkingLost(false)} title={`Mark ${selected.size} quote${selected.size === 1 ? "" : "s"} lost`} size="sm" footer={<><Button onClick={() => setMarkingLost(false)} disabled={bulkBusy}>Cancel</Button><Button variant="primary" onClick={markLost} disabled={bulkBusy}>{bulkBusy ? "Marking…" : "Mark lost"}</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Sent quotes become <b>Rejected</b>; expired quotes keep their state — all take this reason (it feeds win/loss).</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>Sent quotes become <b>Rejected</b>; expired quotes keep their state — all take this reason (it feeds win/loss).</div>
           <Input value={lostReason} onChange={(e) => setLostReason(e.target.value)} placeholder="Why was it lost? (optional)" aria-label="Lost reason" />
         </div>
       </Modal>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="New quote" size="sm" footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" onClick={create} disabled={!partyId || busy}>Create</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Who is this quote for?</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>Who is this quote for?</div>
           {/* EPQ.3 (FS3) — server-paged typeahead over /api/parties-lite?q= */}
           <AsyncCombobox
             ariaLabel="Party"

@@ -242,10 +242,10 @@ export function Lightbox({
         ) : kind === "pdf" ? (
           <iframe title={item.filename} src={inlineUrl} style={{ width: "88%", height: "94%", border: "none", borderRadius: 8, background: "#fff" }} />
         ) : (
-          <div style={{ background: "var(--h10-surface)", borderRadius: 12, padding: "22px 28px", display: "grid", gap: 10, justifyItems: "center", maxWidth: 420 }}>
-            <FileIcon size={28} style={{ color: "var(--h10-text-3)" }} />
+          <div style={{ background: "var(--nds-surface)", borderRadius: 12, padding: "22px 28px", display: "grid", gap: 10, justifyItems: "center", maxWidth: 420 }}>
+            <FileIcon size={28} style={{ color: "var(--nds-text-3)" }} />
             <b style={{ fontSize: 13, wordBreak: "break-all", textAlign: "center" }}>{item.filename}</b>
-            <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>
+            <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>
               {item.mimeType ?? "unknown type"} · {kb(item.sizeBytes)} — no in-app preview for this type
             </span>
             <span style={{ display: "flex", gap: 8 }}>

@@ -84,7 +84,7 @@ export function ConversationList({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
-      <div style={{ padding: "10px 12px", display: "grid", gap: 8, borderBottom: "1px solid var(--h10-border-subtle)" }}>
+      <div style={{ padding: "10px 12px", display: "grid", gap: 8, borderBottom: "1px solid var(--nds-border-subtle)" }}>
         <div style={{ display: "flex", gap: 4 }}>
           {TABS.map((t) => {
             const active = state === t.key;
@@ -103,8 +103,8 @@ export function ConversationList({
                   fontWeight: 600,
                   padding: "5px 10px",
                   borderRadius: 8,
-                  background: active ? "var(--h10-primary)" : "transparent",
-                  color: active ? "#fff" : "var(--h10-text-2)",
+                  background: active ? "var(--nds-primary)" : "transparent",
+                  color: active ? "#fff" : "var(--nds-text-2)",
                 }}
               >
                 {t.label}
@@ -120,25 +120,25 @@ export function ConversationList({
               alignItems: "center",
               gap: 6,
               flex: 1,
-              border: "1px solid var(--h10-border)",
+              border: "1px solid var(--nds-border)",
               borderRadius: 8,
               padding: "5px 8px",
-              background: "var(--h10-surface)",
+              background: "var(--nds-surface)",
             }}
           >
-            <Search size={13} style={{ color: "var(--h10-text-3)" }} />
+            <Search size={13} style={{ color: "var(--nds-text-3)" }} />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search sender, subject, contact…"
-              style={{ border: "none", outline: "none", flex: 1, font: "12.5px var(--font-sans), sans-serif", background: "transparent", color: "var(--h10-text)" }}
+              style={{ border: "none", outline: "none", flex: 1, font: "12.5px var(--font-sans), sans-serif", background: "transparent", color: "var(--nds-text)" }}
             />
           </span>
           <button
             type="button"
             onClick={() => setMine(!mine)}
             title="Assigned to me"
-            style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, cursor: "pointer", background: mine ? "var(--h10-primary-soft, var(--h10-wash-primary))" : "var(--h10-surface)", color: mine ? "var(--h10-primary)" : "var(--h10-text-2)" }}
+            style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, cursor: "pointer", background: mine ? "var(--nds-primary-soft, var(--nds-wash-primary))" : "var(--nds-surface)", color: mine ? "var(--nds-primary)" : "var(--nds-text-2)" }}
           >
             Mine
           </button>
@@ -146,7 +146,7 @@ export function ConversationList({
             type="button"
             onClick={() => setUnmatched(!unmatched)}
             title="Threads without a matched contact"
-            style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, cursor: "pointer", background: unmatched ? "var(--h10-primary-soft, var(--h10-wash-primary))" : "var(--h10-surface)", color: unmatched ? "var(--h10-primary)" : "var(--h10-text-2)" }}
+            style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "4px 8px", fontSize: 11.5, cursor: "pointer", background: unmatched ? "var(--nds-primary-soft, var(--nds-wash-primary))" : "var(--nds-surface)", color: unmatched ? "var(--nds-primary)" : "var(--nds-text-2)" }}
           >
             Unmatched
           </button>
@@ -160,8 +160,8 @@ export function ConversationList({
               margin: 10,
               padding: "8px 10px",
               borderRadius: 8,
-              border: "1px solid var(--h10-danger-soft, var(--h10-border))",
-              background: "var(--h10-danger-soft, var(--h10-surface-raised))",
+              border: "1px solid var(--nds-danger-soft, var(--nds-border))",
+              background: "var(--nds-danger-soft, var(--nds-surface-raised))",
               display: "flex",
               gap: 8,
               alignItems: "center",
@@ -177,7 +177,7 @@ export function ConversationList({
             <Skeleton /> <Skeleton /> <Skeleton /> <Skeleton />
           </div>
         ) : items.length === 0 && !error ? (
-          <div style={{ padding: 24, fontSize: 12.5, color: "var(--h10-text-3)", textAlign: "center" }}>
+          <div style={{ padding: 24, fontSize: 12.5, color: "var(--nds-text-3)", textAlign: "center" }}>
             {q || mine || unmatched
               ? "Nothing matches these filters."
               : connected
@@ -205,9 +205,9 @@ export function ConversationList({
                   gap: 8,
                   padding: "9px 12px",
                   cursor: "pointer",
-                  borderBottom: "1px solid var(--h10-border-subtle)",
-                  background: isFocus ? "var(--h10-wash-primary)" : isCursor ? "var(--h10-surface-hover)" : "transparent",
-                  boxShadow: isCursor ? "inset 2px 0 0 var(--h10-primary)" : undefined,
+                  borderBottom: "1px solid var(--nds-border-subtle)",
+                  background: isFocus ? "var(--nds-wash-primary)" : isCursor ? "var(--nds-surface-hover)" : "transparent",
+                  boxShadow: isCursor ? "inset 2px 0 0 var(--nds-primary)" : undefined,
                 }}
               >
                 <span onClick={(e) => e.stopPropagation()} style={{ paddingTop: 2 }}>
@@ -218,9 +218,9 @@ export function ConversationList({
                     <b style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                       {item.subject ?? "(no subject)"}
                     </b>
-                    <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", flexShrink: 0 }}>{ago(item.lastMessageAt)}</span>
+                    <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", flexShrink: 0 }}>{ago(item.lastMessageAt)}</span>
                   </span>
-                  <span style={{ display: "block", fontSize: 12.5, color: "var(--h10-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ display: "block", fontSize: 12.5, color: "var(--nds-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {last?.direction === "OUTBOUND" ? "You: " : ""}
                     {last?.snippet ?? last?.fromAddress ?? ""}
                   </span>
@@ -231,17 +231,17 @@ export function ConversationList({
                       <Pill tone="neutral">unmatched</Pill>
                     )}
                     {item.assignee && (
-                      <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", display: "inline-flex", gap: 3, alignItems: "center" }}>
+                      <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", display: "inline-flex", gap: 3, alignItems: "center" }}>
                         <CircleUserRound size={11} /> {item.assignee.displayName}
                       </span>
                     )}
                     {item.snoozeUntil && (
-                      <span style={{ fontSize: 11.5, color: "var(--h10-warning, #b87503)", display: "inline-flex", gap: 3, alignItems: "center" }}>
+                      <span style={{ fontSize: 11.5, color: "var(--nds-warning, #b87503)", display: "inline-flex", gap: 3, alignItems: "center" }}>
                         <AlarmClock size={11} /> {new Date(item.snoozeUntil).toLocaleDateString()}
                       </span>
                     )}
                     {item.followUpAt && (
-                      <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", display: "inline-flex", gap: 3, alignItems: "center" }}>
+                      <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", display: "inline-flex", gap: 3, alignItems: "center" }}>
                         <BellRing size={11} /> follow-up {new Date(item.followUpAt).toLocaleDateString()}
                       </span>
                     )}
@@ -258,13 +258,13 @@ export function ConversationList({
         )}
       </div>
 
-      <div style={{ padding: "6px 12px", borderTop: "1px solid var(--h10-border-subtle)", fontSize: 11.5, color: "var(--h10-text-3)" }}>
+      <div style={{ padding: "6px 12px", borderTop: "1px solid var(--nds-border-subtle)", fontSize: 11.5, color: "var(--nds-text-3)" }}>
         {connected ? (
           `Mail synced ${ago(data?.sync?.lastSyncAt ?? null)} ago · label ${data?.sync?.labelName ?? "—"}`
         ) : (
           <>
             Gmail not connected —{" "}
-            <a href="/settings" style={{ color: "var(--h10-text-link)" }}>
+            <a href="/settings" style={{ color: "var(--nds-text-link)" }}>
               Settings › Integrations
             </a>
           </>

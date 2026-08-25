@@ -37,13 +37,13 @@ DS across the app, **without ever forking**.
   (colours vs RGB channels), so **289 DS declarations are discarded** on every
   page inside `.h10-shell`. Not a cascade-order bug — ancestor scope beats source
   order — and not fixable by flipping `globals.css` (Tailwind needs the channels).
-- Fix: DS stylesheets consume `--h10-*` only; the platform-alias tier is deleted
+- Fix: DS stylesheets consume `--nds-*` only; the platform-alias tier is deleted
   and a `token-guard` check D keeps it out.
 - **Blocks 9.2 and 9.3**, which would otherwise amplify the ambiguity across ~290
   pages. Full plan, measurements and gates in the linked doc.
 
 ### 9.1 — Tokenize `ads.css` (keystone — the deferred Phase 1 rewrite)
-- Rewrite `ads.css` to reference `var(--h10-*)` instead of hardcoded hex,
+- Rewrite `ads.css` to reference `var(--nds-*)` instead of hardcoded hex,
   canonicalizing the 251→~70 drift per `studies/01-color-drift.md`.
 - Import `styles/tokens.css` in the ads layout.
 - **Gate:** every ads screen pixel-identical vs the 9.0 baseline (drift-collapse

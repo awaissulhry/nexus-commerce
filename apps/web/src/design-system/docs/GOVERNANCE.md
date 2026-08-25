@@ -19,17 +19,17 @@ reconciled, not merged.
 
 ## Token tiers
 
-1. **Primitive** — raw scale values (`--h10-blue-600: #1f6fde`). No semantics.
-2. **Semantic role** — role-based, kept under `--h10-*` (`--h10-text`,
-   `--h10-surface`, `--h10-border`, `--h10-success-strong`, `--h10-primary`).
+1. **Primitive** — raw scale values (`--nds-blue-600: #1f6fde`). No semantics.
+2. **Semantic role** — role-based, kept under `--nds-*` (`--nds-text`,
+   `--nds-surface`, `--nds-border`, `--nds-success-strong`, `--nds-primary`).
    **This is the tier component CSS consumes.**
 3. **Component** — DS-only knobs the role layer doesn't express, also under
-   `--h10-*` (radius/shadow/focus/pill/badge/targeting/rail/structural-dim).
+   `--nds-*` (radius/shadow/focus/pill/badge/targeting/rail/structural-dim).
 4. **Platform alias** — the platform's own names (`--text-primary`,
    `--surface-card`, `--border-default`, `--status-*`, `--color-primary`),
    published in `tokens.css` **for app CSS only**.
 
-Components reference tier 2 or 3 — never the raw `--h10-*-NNN` ramps, never raw
+Components reference tier 2 or 3 — never the raw `--nds-*-NNN` ramps, never raw
 hex, and **never tier 4**.
 
 🔴 **Why components must not touch tier 4** (Phase 9.0b, 2026-08-24). Eleven of
@@ -112,8 +112,8 @@ concurrent sessions.
 - **Contract intent (not yet a script).** The consistency contract (see
   `docs/AUDIT.md` §0, spec §3) extends the hex guard to two further rules that are
   enforced by review today and slated for lint: **(a) no raw ramp** — a
-  `var(--h10-{grey,blue,green,red,amber,purple,cyan}-NNN)` reach in component CSS
-  is a defect (use the `--h10-*` role token instead); **(b) no raw Tailwind palette**
+  `var(--nds-{grey,blue,green,red,amber,purple,cyan}-NNN)` reach in component CSS
+  is a defect (use the `--nds-*` role token instead); **(b) no raw Tailwind palette**
   in DS `.tsx`. A planned `tools/api-guard.mjs` will assert **barrel-export
   completeness** (every component re-exports its public Props/types) and that the
   `Tone`/`Size` unions conform — until then, the barrels in
@@ -122,7 +122,7 @@ concurrent sessions.
 - **Visual regression** — `catalog/verify.mjs` @2x-captures the catalog + every
   overlay; commit baselines and diff in CI to automate the screenshot-diff rule.
 - **Contrast** — body text uses `--text-primary` / `--text-secondary`
-  (`--h10-text` / `--h10-text-2`); `--h10-text-3` is secondary/large-only (see
+  (`--nds-text` / `--nds-text-2`); `--nds-text-3` is secondary/large-only (see
   `studies/02-contrast-audit.md`).
 - **CODEOWNERS** — deferred for a solo operator (a self-review request adds
   friction with no second reviewer); add when a team forms.

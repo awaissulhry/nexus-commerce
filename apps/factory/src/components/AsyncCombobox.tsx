@@ -4,7 +4,7 @@
  * S-16 scale-growing pickers. Debounce 200ms, cursor paging ("Load more" +
  * auto-page when ArrowDown walks off the end), full keyboard nav
  * (↑/↓/Enter/Escape), loading + "No matches" states. Markup reuses the DS
- * Combobox classes (`.h10-ds-combo*`) for visual parity; the DS tree itself
+ * Combobox classes (`.nds-combo*`) for visual parity; the DS tree itself
  * stays untouched (PROVENANCE rule 2).
  */
 "use client";
@@ -138,12 +138,12 @@ export function AsyncCombobox({
 
   return (
     <div
-      className={`h10-ds-combo${className ? ` ${className}` : ""}`}
+      className={`nds-combo${className ? ` ${className}` : ""}`}
       ref={ref}
       onKeyDown={onKeyDown}
     >
       <input
-        className="h10-ds-combo-in"
+        className="nds-combo-in"
         value={shownLabel}
         placeholder={placeholder}
         disabled={disabled}
@@ -160,18 +160,18 @@ export function AsyncCombobox({
         }}
       />
       {search.loading || search.loadingMore ? (
-        <Loader2 size={15} className="chev" style={{ animation: "h10-ds-spin 0.8s linear infinite" }} aria-hidden />
+        <Loader2 size={15} className="chev" style={{ animation: "nds-spin 0.8s linear infinite" }} aria-hidden />
       ) : (
         <ChevronDown size={15} className="chev" aria-hidden />
       )}
       {open && (
-        <div className="h10-ds-combo-pop" role="listbox" ref={popRef}>
+        <div className="nds-combo-pop" role="listbox" ref={popRef}>
           {search.error ? (
-            <div className="h10-ds-combo-empty">{search.error}</div>
+            <div className="nds-combo-empty">{search.error}</div>
           ) : search.loading ? (
-            <div className="h10-ds-combo-empty">Searching…</div>
+            <div className="nds-combo-empty">Searching…</div>
           ) : search.options.length === 0 ? (
-            <div className="h10-ds-combo-empty">{emptyText}</div>
+            <div className="nds-combo-empty">{emptyText}</div>
           ) : (
             <>
               {search.options.map((o, i) => (
@@ -181,7 +181,7 @@ export function AsyncCombobox({
                   role="option"
                   aria-selected={o.value === value}
                   className={[o.value === value ? "on" : "", i === active ? "hover" : ""].filter(Boolean).join(" ") || undefined}
-                  style={i === active ? { background: "var(--h10-surface-hover)" } : undefined}
+                  style={i === active ? { background: "var(--nds-surface-hover)" } : undefined}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => pick(o)}
                 >
@@ -190,7 +190,7 @@ export function AsyncCombobox({
                 </button>
               ))}
               {search.nextCursor && (
-                <button type="button" onClick={() => controller.loadMore()} disabled={search.loadingMore} style={{ color: "var(--h10-primary)", fontWeight: 600 }}>
+                <button type="button" onClick={() => controller.loadMore()} disabled={search.loadingMore} style={{ color: "var(--nds-primary)", fontWeight: 600 }}>
                   {search.loadingMore ? "Loading…" : "Load more"}
                 </button>
               )}

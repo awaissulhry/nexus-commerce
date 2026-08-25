@@ -13,7 +13,7 @@ canonical design language for the **entire** platform.
 > `npm run tokens:check` is the CI staleness guard), so CSS can't drift from the
 > source. The **platform-semantic alias layer is live**: components consume
 > `--text-*` / `--surface-*` / `--border-*` / `--status-*` / `--color-primary`,
-> with `--h10-*` as the raw ramp + DS-only component-token tier underneath. The
+> with `--nds-*` as the raw ramp + DS-only component-token tier underneath. The
 > public API runs on **one `Tone` vocabulary** (`neutral · info · success ·
 > warning · danger`). See `CHANGELOG.md`, `docs/AUDIT.md` (the full map), and the
 > phase plan below. Still pending: the `.h10-*`→`.nx-*` rename + the ~290-page
@@ -75,9 +75,9 @@ import { DataGrid, Modal } from '@/design-system/components'
 import { tokens } from '@/design-system/tokens'
 ```
 
-CSS lives behind tokens — components render via `.h10-ds-*` classes that resolve
+CSS lives behind tokens — components render via `.nds-*` classes that resolve
 through the **semantic** aliases (`--text-*` / `--surface-*` / `--border-*` /
-`--status-*` / `--color-primary`), never raw hex and never a raw `--h10-*-NNN`
+`--status-*` / `--color-primary`), never raw hex and never a raw `--nds-*-NNN`
 ramp.
 
 ## Phase plan

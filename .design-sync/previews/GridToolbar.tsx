@@ -32,11 +32,11 @@ const COLS: Column<Row>[] = [
   { key: 'price', label: 'Price', align: 'right', render: (r) => `€${r.price.toLocaleString('en-IE')}` },
 ]
 
-/** The canonical seat: `.h10-ds-gridcard` wraps the toolbar and the grid into one rectangle. */
+/** The canonical seat: `.nds-gridcard` wraps the toolbar and the grid into one rectangle. */
 export const AboveTheGrid = () => {
   const [density, setDensity] = useState('cosy')
   return (
-    <div className="h10-ds-gridcard">
+    <div className="nds-gridcard">
       <GridToolbar
         count={<>Viewing <b>1–3</b> of <b>1,284</b> products</>}
         right={
@@ -63,7 +63,7 @@ export const AboveTheGrid = () => {
 
 /** The left slot swaps with context — here the count reports a selection and the actions act on it. */
 export const SelectionActions = () => (
-  <div className="h10-ds-gridcard">
+  <div className="nds-gridcard">
     <GridToolbar
       count={<>Selected <b>12</b> products</>}
       right={

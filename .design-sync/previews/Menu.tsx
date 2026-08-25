@@ -53,7 +53,7 @@ export const Trigger = () => (
     <Button variant="primary" size="sm">Apply 41 bids</Button>
     <Menu
       label={<>Actions {chev}</>}
-      triggerProps={{ className: 'h10-ds-btn sm' }}
+      triggerProps={{ className: 'nds-btn sm' }}
       items={[
         { id: 'edit', label: 'Edit campaign' },
         { id: 'dup', label: 'Duplicate' },
@@ -62,7 +62,7 @@ export const Trigger = () => (
     />
     <Menu
       label={<>Export {chev}</>}
-      triggerProps={{ className: 'h10-ds-btn sm' }}
+      triggerProps={{ className: 'nds-btn sm' }}
       items={[
         { id: 'csv', label: 'Download CSV' },
         { id: 'bulk', label: 'Bulksheet' },

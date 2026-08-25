@@ -30,14 +30,14 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
   const toggleAll = () => onChange(allChecked ? [] : options.map((o) => o.value))
 
   return (
-    <div className={`h10-ds-ms${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
-      <button type="button" className="h10-ds-ms-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+    <div className={`nds-ms${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+      <button type="button" className="nds-ms-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className={value.length === 0 ? 'ph' : ''}>{label}</span>
         <ChevronDown size={15} aria-hidden />
       </button>
       {open && (
-        <div className="h10-ds-ms-pop" role="listbox" aria-multiselectable="true">
-          <label className="h10-ds-ms-opt all">
+        <div className="nds-ms-pop" role="listbox" aria-multiselectable="true">
+          <label className="nds-ms-opt all">
             <input
               type="checkbox"
               checked={allChecked}
@@ -49,7 +49,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
             <span>Select all</span>
           </label>
           {options.map((o) => (
-            <label key={o.value} className={['h10-ds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}>
+            <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}>
               <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} />
               <span>{o.label}</span>
             </label>

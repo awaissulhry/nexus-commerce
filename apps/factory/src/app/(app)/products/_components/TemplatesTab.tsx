@@ -74,7 +74,7 @@ export function TemplatesTab() {
     <Card padded>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <div style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Product templates</div>
-        {canPrice && <a href="/api/exports/pricing-model" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export model CSV</a>}
+        {canPrice && <a href="/api/exports/pricing-model" style={{ fontSize: 12, color: "var(--nds-text-link)" }}>Export model CSV</a>}
         {canManage && (
           <>
             <Button onClick={starter} disabled={busy}><Sparkles size={13} /> Starter structure</Button>
@@ -83,16 +83,16 @@ export function TemplatesTab() {
         )}
       </div>
       {loading ? (
-        <div style={{ fontSize: 13, color: "var(--h10-text-3)" }}>Loading…</div>
+        <div style={{ fontSize: 13, color: "var(--nds-text-3)" }}>Loading…</div>
       ) : rows.length === 0 ? (
-        <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--h10-text-3)" }}>
+        <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--nds-text-3)" }}>
           No templates yet. Start from the <b>Starter structure</b> (Custom Cowhide Suit, zero-priced) or create a blank one.
         </div>
       ) : (
         <DataGrid
           columns={[
             { key: "name", label: "Template", render: (r: TemplateRow) => (
-              <button type="button" onClick={() => setOpenId(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)", textAlign: "left" }}>{r.name}</button>
+              <button type="button" onClick={() => setOpenId(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)", textAlign: "left" }}>{r.name}</button>
             ) },
             { key: "groups", label: "Groups", align: "right" as const, render: (r: TemplateRow) => r.groupCount },
             { key: "options", label: "Options", align: "right" as const, render: (r: TemplateRow) => r.optionCount },

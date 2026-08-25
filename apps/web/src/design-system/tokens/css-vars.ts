@@ -28,165 +28,165 @@ const kebab = (k: string): string =>
 
 const spacingVars: ReadonlyArray<CssVar> = Object.entries(space).map(([k, v], i) => ({
   ...(i === 0 ? { section: 'Dimension: spacing (scale lives in tokens/spacing.ts)' } : {}),
-  name: `--h10-space-${kebab(k)}`,
+  name: `--nds-space-${kebab(k)}`,
   value: v,
 }))
 
 const typeVars: ReadonlyArray<CssVar> = [
   ...Object.entries(fontSize).map(([k, v], i) => ({
     ...(i === 0 ? { section: 'Dimension: type scale (tokens/typography.ts)' } : {}),
-    name: `--h10-font-size-${kebab(k)}`,
+    name: `--nds-font-size-${kebab(k)}`,
     value: v,
   })),
   ...Object.entries(fontWeight).map(([k, v], i) => ({
     ...(i === 0 ? { section: 'Dimension: type weight' } : {}),
-    name: `--h10-font-weight-${kebab(k)}`,
+    name: `--nds-font-weight-${kebab(k)}`,
     value: String(v),
   })),
 ]
 
 export const cssVars: ReadonlyArray<CssVar> = [
   // ── Tier 1: primitive ramps ──────────────────────────────────────
-  { section: 'Tier 1: primitive ramps', name: '--h10-white', value: palette.white },
+  { section: 'Tier 1: primitive ramps', name: '--nds-white', value: palette.white },
 
-  { name: '--h10-blue-50', value: palette.blue[50] },
-  { name: '--h10-blue-100', value: palette.blue[100] },
-  { name: '--h10-blue-200', value: palette.blue[200] },
-  { name: '--h10-blue-600', value: palette.blue[600] },
-  { name: '--h10-blue-700', value: palette.blue[700] },
-  { name: '--h10-blue-800', value: palette.blue[800] },
-  { name: '--h10-blue-900', value: palette.blue[900] },
+  { name: '--nds-blue-50', value: palette.blue[50] },
+  { name: '--nds-blue-100', value: palette.blue[100] },
+  { name: '--nds-blue-200', value: palette.blue[200] },
+  { name: '--nds-blue-600', value: palette.blue[600] },
+  { name: '--nds-blue-700', value: palette.blue[700] },
+  { name: '--nds-blue-800', value: palette.blue[800] },
+  { name: '--nds-blue-900', value: palette.blue[900] },
 
-  { name: '--h10-grey-25', value: palette.grey[25] },
-  { name: '--h10-grey-50', value: palette.grey[50] },
-  { name: '--h10-grey-75', value: palette.grey[75] },
-  { name: '--h10-grey-100', value: palette.grey[100] },
-  { name: '--h10-grey-150', value: palette.grey[150] },
-  { name: '--h10-grey-200', value: palette.grey[200] },
-  { name: '--h10-grey-300', value: palette.grey[300] },
-  { name: '--h10-grey-400', value: palette.grey[400] },
-  { name: '--h10-grey-450', value: palette.grey[450] },
-  { name: '--h10-grey-500', value: palette.grey[500] },
-  { name: '--h10-grey-600', value: palette.grey[600] },
-  { name: '--h10-grey-700', value: palette.grey[700] },
-  { name: '--h10-grey-800', value: palette.grey[800] },
-  { name: '--h10-grey-900', value: palette.grey[900] },
+  { name: '--nds-grey-25', value: palette.grey[25] },
+  { name: '--nds-grey-50', value: palette.grey[50] },
+  { name: '--nds-grey-75', value: palette.grey[75] },
+  { name: '--nds-grey-100', value: palette.grey[100] },
+  { name: '--nds-grey-150', value: palette.grey[150] },
+  { name: '--nds-grey-200', value: palette.grey[200] },
+  { name: '--nds-grey-300', value: palette.grey[300] },
+  { name: '--nds-grey-400', value: palette.grey[400] },
+  { name: '--nds-grey-450', value: palette.grey[450] },
+  { name: '--nds-grey-500', value: palette.grey[500] },
+  { name: '--nds-grey-600', value: palette.grey[600] },
+  { name: '--nds-grey-700', value: palette.grey[700] },
+  { name: '--nds-grey-800', value: palette.grey[800] },
+  { name: '--nds-grey-900', value: palette.grey[900] },
 
-  { name: '--h10-rail-surface', value: palette.railBg },
-  { name: '--h10-rail-line', value: palette.railBorder },
+  { name: '--nds-rail-surface', value: palette.railBg },
+  { name: '--nds-rail-line', value: palette.railBorder },
 
   // Rail-specific colours, dedicated so the app-wide rail can follow theme
-  // without shifting the general --h10-text-* roles used elsewhere. Light
+  // without shifting the general --nds-text-* roles used elsewhere. Light
   // values; the dark block overrides them, and .h10-shell pins them light for
   // the deliberately-light standalone shells (ads cockpit + /products/next).
   // Hand-lived in tokens.css from 2026-06-29 (99746dbe8) until TECH_DEBT #62
   // ported them here — hex literals like the ImageUpload washes below.
-  { section: 'Rail palette (theme-following; .h10-shell pins light)', name: '--h10-rail-text', value: '#4a5462' },
-  { name: '--h10-rail-text-2', value: '#5b6573' },
-  { name: '--h10-rail-text-strong', value: '#1c2530' },
-  { name: '--h10-rail-icon', value: '#8a93a1' },
-  { name: '--h10-rail-chev', value: '#98a2b3' },
-  { name: '--h10-rail-item-hover', value: '#e6eaf0' },
-  { name: '--h10-rail-item-hover-2', value: '#f1f4f8' },
-  { name: '--h10-rail-chip-bg', value: '#e8ebf0' },
-  { name: '--h10-rail-chip-active-bg', value: '#dce8fb' },
-  { name: '--h10-rail-chip-active-fg', value: '#1f6fde' },
-  { name: '--h10-rail-ft', value: '#aeb6c2' },
+  { section: 'Rail palette (theme-following; .h10-shell pins light)', name: '--nds-rail-text', value: '#4a5462' },
+  { name: '--nds-rail-text-2', value: '#5b6573' },
+  { name: '--nds-rail-text-strong', value: '#1c2530' },
+  { name: '--nds-rail-icon', value: '#8a93a1' },
+  { name: '--nds-rail-chev', value: '#98a2b3' },
+  { name: '--nds-rail-item-hover', value: '#e6eaf0' },
+  { name: '--nds-rail-item-hover-2', value: '#f1f4f8' },
+  { name: '--nds-rail-chip-bg', value: '#e8ebf0' },
+  { name: '--nds-rail-chip-active-bg', value: '#dce8fb' },
+  { name: '--nds-rail-chip-active-fg', value: '#1f6fde' },
+  { name: '--nds-rail-ft', value: '#aeb6c2' },
 
-  { name: '--h10-green-soft', value: palette.green.soft },
-  { name: '--h10-green-500', value: palette.green[500] },
-  { name: '--h10-green-600', value: palette.green[600] },
-  { name: '--h10-green-700', value: palette.green[700] },
-  { name: '--h10-red-soft', value: palette.red.soft },
-  { name: '--h10-red-500', value: palette.red[500] },
-  { name: '--h10-red-600', value: palette.red[600] },
-  { name: '--h10-red-700', value: palette.red[700] },
-  { name: '--h10-amber-soft', value: palette.amber.soft },
-  { name: '--h10-amber-600', value: palette.amber[600] },
-  { name: '--h10-amber-700', value: palette.amber[700] },
-  { name: '--h10-amber-text', value: palette.amber.text },
-  { name: '--h10-purple-bg', value: palette.purple.bg },
-  { name: '--h10-purple-600', value: palette.purple[600] },
-  { name: '--h10-purple-700', value: palette.purple[700] },
-  { name: '--h10-cyan-bg', value: palette.cyan.bg },
-  { name: '--h10-cyan-700', value: palette.cyan[700] },
-  { name: '--h10-amazon', value: palette.amazon },
+  { name: '--nds-green-soft', value: palette.green.soft },
+  { name: '--nds-green-500', value: palette.green[500] },
+  { name: '--nds-green-600', value: palette.green[600] },
+  { name: '--nds-green-700', value: palette.green[700] },
+  { name: '--nds-red-soft', value: palette.red.soft },
+  { name: '--nds-red-500', value: palette.red[500] },
+  { name: '--nds-red-600', value: palette.red[600] },
+  { name: '--nds-red-700', value: palette.red[700] },
+  { name: '--nds-amber-soft', value: palette.amber.soft },
+  { name: '--nds-amber-600', value: palette.amber[600] },
+  { name: '--nds-amber-700', value: palette.amber[700] },
+  { name: '--nds-amber-text', value: palette.amber.text },
+  { name: '--nds-purple-bg', value: palette.purple.bg },
+  { name: '--nds-purple-600', value: palette.purple[600] },
+  { name: '--nds-purple-700', value: palette.purple[700] },
+  { name: '--nds-cyan-bg', value: palette.cyan.bg },
+  { name: '--nds-cyan-700', value: palette.cyan[700] },
+  { name: '--nds-amazon', value: palette.amazon },
 
-  { name: '--h10-shadow-rgb', value: '20 28 38' },
-  { name: '--h10-focus-rgb', value: '31 111 222' },
+  { name: '--nds-shadow-rgb', value: '20 28 38' },
+  { name: '--nds-focus-rgb', value: '31 111 222' },
 
   // ── Tier 2: semantic roles (components consume these) ─────────────
-  { section: 'Tier 2: semantic roles', name: '--h10-text', value: 'var(--h10-grey-900)' },
-  { name: '--h10-text-2', value: 'var(--h10-grey-600)' },
-  { name: '--h10-text-3', value: 'var(--h10-grey-500)' },
-  { name: '--h10-text-strong', value: 'var(--h10-grey-700)' },
-  { name: '--h10-text-disabled', value: 'var(--h10-grey-400)' },
-  { name: '--h10-text-inverse', value: 'var(--h10-white)' },
-  { name: '--h10-text-link', value: 'var(--h10-blue-600)' },
+  { section: 'Tier 2: semantic roles', name: '--nds-text', value: 'var(--nds-grey-900)' },
+  { name: '--nds-text-2', value: 'var(--nds-grey-600)' },
+  { name: '--nds-text-3', value: 'var(--nds-grey-500)' },
+  { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
+  { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
+  { name: '--nds-text-inverse', value: 'var(--nds-white)' },
+  { name: '--nds-text-link', value: 'var(--nds-blue-600)' },
 
-  { name: '--h10-bg', value: 'var(--h10-grey-50)' },
-  { name: '--h10-surface', value: 'var(--h10-white)' },
-  { name: '--h10-surface-raised', value: 'var(--h10-grey-25)' },
-  { name: '--h10-surface-sunken', value: 'var(--h10-grey-100)' },
-  { name: '--h10-surface-hover', value: 'var(--h10-grey-75)' },
-  { name: '--h10-wash-primary', value: 'var(--h10-blue-50)' },
-  { name: '--h10-rail-bg', value: 'var(--h10-rail-surface)' },
+  { name: '--nds-bg', value: 'var(--nds-grey-50)' },
+  { name: '--nds-surface', value: 'var(--nds-white)' },
+  { name: '--nds-surface-raised', value: 'var(--nds-grey-25)' },
+  { name: '--nds-surface-sunken', value: 'var(--nds-grey-100)' },
+  { name: '--nds-surface-hover', value: 'var(--nds-grey-75)' },
+  { name: '--nds-wash-primary', value: 'var(--nds-blue-50)' },
+  { name: '--nds-rail-bg', value: 'var(--nds-rail-surface)' },
 
-  { name: '--h10-border', value: 'var(--h10-grey-200)' },
-  { name: '--h10-border-subtle', value: 'var(--h10-grey-150)' },
-  { name: '--h10-border-strong', value: 'var(--h10-grey-300)' },
-  { name: '--h10-rail-border', value: 'var(--h10-rail-line)' },
+  { name: '--nds-border', value: 'var(--nds-grey-200)' },
+  { name: '--nds-border-subtle', value: 'var(--nds-grey-150)' },
+  { name: '--nds-border-strong', value: 'var(--nds-grey-300)' },
+  { name: '--nds-rail-border', value: 'var(--nds-rail-line)' },
 
-  { name: '--h10-primary', value: 'var(--h10-blue-600)' },
-  { name: '--h10-primary-hover', value: 'var(--h10-blue-700)' },
-  { name: '--h10-primary-dark', value: 'var(--h10-blue-800)' },
-  { name: '--h10-primary-soft', value: 'var(--h10-blue-100)' },
-  { name: '--h10-primary-ghost-border', value: 'var(--h10-blue-200)' },
+  { name: '--nds-primary', value: 'var(--nds-blue-600)' },
+  { name: '--nds-primary-hover', value: 'var(--nds-blue-700)' },
+  { name: '--nds-primary-dark', value: 'var(--nds-blue-800)' },
+  { name: '--nds-primary-soft', value: 'var(--nds-blue-100)' },
+  { name: '--nds-primary-ghost-border', value: 'var(--nds-blue-200)' },
 
-  { name: '--h10-success-soft', value: 'var(--h10-green-soft)' },
-  { name: '--h10-success', value: 'var(--h10-green-600)' },
-  { name: '--h10-success-strong', value: 'var(--h10-green-700)' },
-  { name: '--h10-live', value: 'var(--h10-green-500)' },
-  { name: '--h10-danger-soft', value: 'var(--h10-red-soft)' },
-  { name: '--h10-danger', value: 'var(--h10-red-500)' },
-  { name: '--h10-danger-strong', value: 'var(--h10-red-700)' },
-  { name: '--h10-warning-soft', value: 'var(--h10-amber-soft)' },
-  { name: '--h10-warning', value: 'var(--h10-amber-600)' },
-  { name: '--h10-warning-strong', value: 'var(--h10-amber-700)' },
-  { name: '--h10-info-soft', value: 'var(--h10-blue-100)' },
-  { name: '--h10-info', value: 'var(--h10-blue-600)' },
+  { name: '--nds-success-soft', value: 'var(--nds-green-soft)' },
+  { name: '--nds-success', value: 'var(--nds-green-600)' },
+  { name: '--nds-success-strong', value: 'var(--nds-green-700)' },
+  { name: '--nds-live', value: 'var(--nds-green-500)' },
+  { name: '--nds-danger-soft', value: 'var(--nds-red-soft)' },
+  { name: '--nds-danger', value: 'var(--nds-red-500)' },
+  { name: '--nds-danger-strong', value: 'var(--nds-red-700)' },
+  { name: '--nds-warning-soft', value: 'var(--nds-amber-soft)' },
+  { name: '--nds-warning', value: 'var(--nds-amber-600)' },
+  { name: '--nds-warning-strong', value: 'var(--nds-amber-700)' },
+  { name: '--nds-info-soft', value: 'var(--nds-blue-100)' },
+  { name: '--nds-info', value: 'var(--nds-blue-600)' },
   // The info tone had soft + line but no `strong`: `--status-info-strong` reached past the
-  // semantic tier straight to the ramp (`--h10-blue-700`), which is the one thing component
+  // semantic tier straight to the ramp (`--nds-blue-700`), which is the one thing component
   // CSS may not do (token-guard check B). Named here so the tone family is complete and the
   // 9.0b substitution has a legal target, like every other tone.
-  { name: '--h10-info-strong', value: 'var(--h10-blue-700)' },
+  { name: '--nds-info-strong', value: 'var(--nds-blue-700)' },
 
   // status pills
-  { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--h10-pill-success-fg', value: 'var(--h10-blue-900)' },
-  { name: '--h10-pill-success-bg', value: pill.ok.bg },
-  { name: '--h10-pill-warning-fg', value: 'var(--h10-amber-text)' },
-  { name: '--h10-pill-warning-bg', value: 'var(--h10-amber-soft)' },
-  { name: '--h10-pill-neutral-fg', value: pill.arch.fg },
-  { name: '--h10-pill-neutral-bg', value: 'var(--h10-grey-100)' },
-  { name: '--h10-pill-danger-fg', value: 'var(--h10-danger-strong)' },
-  { name: '--h10-pill-danger-bg', value: 'var(--h10-danger-soft)' },
+  { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
+  { name: '--nds-pill-success-bg', value: pill.ok.bg },
+  { name: '--nds-pill-warning-fg', value: 'var(--nds-amber-text)' },
+  { name: '--nds-pill-warning-bg', value: 'var(--nds-amber-soft)' },
+  { name: '--nds-pill-neutral-fg', value: pill.arch.fg },
+  { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
+  { name: '--nds-pill-danger-fg', value: 'var(--nds-danger-strong)' },
+  { name: '--nds-pill-danger-bg', value: 'var(--nds-danger-soft)' },
 
   // ── Tier 3: program / targeting chips ────────────────────────────
-  { section: 'Tier 3: program / targeting chips', name: '--h10-badge-sp-fg', value: 'var(--h10-purple-700)' },
-  { name: '--h10-badge-sp-bg', value: 'var(--h10-purple-bg)' },
-  { name: '--h10-badge-sd-fg', value: 'var(--h10-cyan-700)' },
-  { name: '--h10-badge-sd-bg', value: 'var(--h10-cyan-bg)' },
-  { name: '--h10-badge-sb-fg', value: 'var(--h10-amber-700)' },
-  { name: '--h10-badge-sb-bg', value: badge.sb.bg },
-  { name: '--h10-targeting-auto', value: 'var(--h10-blue-800)' },
-  { name: '--h10-targeting-manual', value: 'var(--h10-purple-600)' },
+  { section: 'Tier 3: program / targeting chips', name: '--nds-badge-sp-fg', value: 'var(--nds-purple-700)' },
+  { name: '--nds-badge-sp-bg', value: 'var(--nds-purple-bg)' },
+  { name: '--nds-badge-sd-fg', value: 'var(--nds-cyan-700)' },
+  { name: '--nds-badge-sd-bg', value: 'var(--nds-cyan-bg)' },
+  { name: '--nds-badge-sb-fg', value: 'var(--nds-amber-700)' },
+  { name: '--nds-badge-sb-bg', value: badge.sb.bg },
+  { name: '--nds-targeting-auto', value: 'var(--nds-blue-800)' },
+  { name: '--nds-targeting-manual', value: 'var(--nds-purple-600)' },
 
   // ImageUpload component tokens (bespoke washes — exact legacy values, were raw hex)
-  { name: '--h10-imgup-surface', value: '#f7faff' },
-  { name: '--h10-imgup-hover', value: '#f0f6ff' },
-  { name: '--h10-imgup-drag', value: '#e9f2ff' },
-  { name: '--h10-imgup-spin-track', value: '#cdd5df' },
-  { name: '--h10-imgup-err', value: '#cc1100' },
+  { name: '--nds-imgup-surface', value: '#f7faff' },
+  { name: '--nds-imgup-hover', value: '#f0f6ff' },
+  { name: '--nds-imgup-drag', value: '#e9f2ff' },
+  { name: '--nds-imgup-spin-track', value: '#cdd5df' },
+  { name: '--nds-imgup-err', value: '#cc1100' },
 
   // Tooltip bubbles. Both are deliberately THEME-INVARIANT — they point at the
   // raw ramps, which the `.dark` block never redefines, so a tip keeps its own
@@ -194,41 +194,41 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // foreign Tailwind slate hexes (#1e293b / #e2e8f0 / #28313d) hardcoded in
   // primitives.css; snapped onto the nearest H10 ramp step 2026-08-24 (max
   // delta 4/255 per channel — below a JND, and on-system).
-  { name: '--h10-tooltip-light-bg', value: 'var(--h10-white)' },
-  { name: '--h10-tooltip-light-fg', value: 'var(--h10-grey-900)' },
-  { name: '--h10-tooltip-light-border', value: 'var(--h10-grey-150)' },
-  { name: '--h10-tooltip-light-fg-2', value: 'var(--h10-grey-600)' },
-  { name: '--h10-tip-bg', value: 'var(--h10-grey-800)' },
-  { name: '--h10-tip-fg', value: 'var(--h10-white)' },
+  { name: '--nds-tooltip-light-bg', value: 'var(--nds-white)' },
+  { name: '--nds-tooltip-light-fg', value: 'var(--nds-grey-900)' },
+  { name: '--nds-tooltip-light-border', value: 'var(--nds-grey-150)' },
+  { name: '--nds-tooltip-light-fg-2', value: 'var(--nds-grey-600)' },
+  { name: '--nds-tip-bg', value: 'var(--nds-grey-800)' },
+  { name: '--nds-tip-fg', value: 'var(--nds-white)' },
 
   // ── Radius ───────────────────────────────────────────────────────
-  { section: 'Radius', name: '--h10-radius-pill', value: '4px' },
-  { name: '--h10-radius-sm', value: '6px' },
-  { name: '--h10-radius-md', value: '7px' },
-  { name: '--h10-radius-lg', value: '8px' },
-  { name: '--h10-radius-xl', value: '10px' },
-  { name: '--h10-radius-2xl', value: '12px' },
-  { name: '--h10-radius-3xl', value: '14px' },
-  { name: '--h10-radius-round', value: '999px' },
+  { section: 'Radius', name: '--nds-radius-pill', value: '4px' },
+  { name: '--nds-radius-sm', value: '6px' },
+  { name: '--nds-radius-md', value: '7px' },
+  { name: '--nds-radius-lg', value: '8px' },
+  { name: '--nds-radius-xl', value: '10px' },
+  { name: '--nds-radius-2xl', value: '12px' },
+  { name: '--nds-radius-3xl', value: '14px' },
+  { name: '--nds-radius-round', value: '999px' },
 
   // ── Elevation + focus ────────────────────────────────────────────
-  { section: 'Elevation + focus', name: '--h10-shadow-card', value: '0 6px 22px rgb(var(--h10-shadow-rgb) / 0.16)' },
-  { name: '--h10-shadow-menu', value: '0 12px 30px rgb(var(--h10-shadow-rgb) / 0.16)' },
-  { name: '--h10-shadow-pop', value: '0 16px 40px rgb(var(--h10-shadow-rgb) / 0.2)' },
-  { name: '--h10-shadow-modal', value: '0 18px 48px rgb(var(--h10-shadow-rgb) / 0.28)' },
-  { name: '--h10-shadow-rail', value: '8px 0 30px rgb(var(--h10-shadow-rgb) / 0.13)' },
-  { name: '--h10-shadow-tip', value: '0 10px 26px rgb(var(--h10-shadow-rgb) / 0.3)' },
-  { name: '--h10-focus-ring', value: '0 0 0 2px rgb(var(--h10-focus-rgb) / 0.12)' },
+  { section: 'Elevation + focus', name: '--nds-shadow-card', value: '0 6px 22px rgb(var(--nds-shadow-rgb) / 0.16)' },
+  { name: '--nds-shadow-menu', value: '0 12px 30px rgb(var(--nds-shadow-rgb) / 0.16)' },
+  { name: '--nds-shadow-pop', value: '0 16px 40px rgb(var(--nds-shadow-rgb) / 0.2)' },
+  { name: '--nds-shadow-modal', value: '0 18px 48px rgb(var(--nds-shadow-rgb) / 0.28)' },
+  { name: '--nds-shadow-rail', value: '8px 0 30px rgb(var(--nds-shadow-rgb) / 0.13)' },
+  { name: '--nds-shadow-tip', value: '0 10px 26px rgb(var(--nds-shadow-rgb) / 0.3)' },
+  { name: '--nds-focus-ring', value: '0 0 0 2px rgb(var(--nds-focus-rgb) / 0.12)' },
 
   // ── Structural dimensions ────────────────────────────────────────
-  { section: 'Structural dimensions', name: '--h10-rail-collapsed', value: '66px' },
-  { name: '--h10-rail-expanded', value: '344px' },
-  { name: '--h10-row-nav', value: '46px' },
-  { name: '--h10-icon-zone', value: '50px' },
+  { section: 'Structural dimensions', name: '--nds-rail-collapsed', value: '66px' },
+  { name: '--nds-rail-expanded', value: '344px' },
+  { name: '--nds-row-nav', value: '46px' },
+  { name: '--nds-icon-zone', value: '50px' },
 
   // ── Type ─────────────────────────────────────────────────────────
-  { section: 'Type', name: '--h10-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
-  { name: '--h10-font-smoothing', value: 'auto' },
+  { section: 'Type', name: '--nds-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
+  { name: '--nds-font-smoothing', value: 'auto' },
 
   // ── Platform-semantic aliases ────────────────────────────────────────
   //
@@ -242,7 +242,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // those definitions shadow these and `background: var(--surface-card)` becomes
   // `background: 255 255 255` — invalid at computed-value time, silently dropped.
   // 285 DS declarations were dead that way until Phase 9.0b moved every one of
-  // them onto the DS-owned `--h10-*` tier (docs/PHASE-9-0B-TOKEN-FORM.md).
+  // them onto the DS-owned `--nds-*` tier (docs/PHASE-9-0B-TOKEN-FORM.md).
   //
   // The tier is KEPT rather than deleted: --color-primary and the --status-*
   // family are NOT contested (nothing else defines them) and app stylesheets
@@ -253,36 +253,36 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // If you add a name here, first `grep -rn -- "--<name>:" apps/web/src/app`.
   // If globals.css or ads.css already defines it, adding it is a landmine, not a
   // fix — that is why --surface-raised is deliberately absent.
-  { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--h10-text)' },
-  { name: '--text-secondary', value: 'var(--h10-text-2)' },
-  { name: '--text-tertiary', value: 'var(--h10-text-3)' },
-  { name: '--text-disabled', value: 'var(--h10-text-disabled)' },
-  { name: '--text-link', value: 'var(--h10-text-link)' },
-  { name: '--surface-canvas', value: 'var(--h10-bg)' },
-  { name: '--surface-card', value: 'var(--h10-surface)' },
-  { name: '--surface-sunken', value: 'var(--h10-surface-sunken)' },
-  { name: '--border-default', value: 'var(--h10-border)' },
-  { name: '--border-subtle', value: 'var(--h10-border-subtle)' },
-  { name: '--border-strong', value: 'var(--h10-border-strong)' },
-  { name: '--color-primary', value: 'var(--h10-primary)' },
-  { name: '--color-primary-soft', value: 'var(--h10-primary-soft)' },
-  { name: '--status-success-soft', value: 'var(--h10-success-soft)' },
-  { name: '--status-success-line', value: 'var(--h10-success)' },
-  { name: '--status-success-strong', value: 'var(--h10-success-strong)' },
-  { name: '--status-warning-soft', value: 'var(--h10-warning-soft)' },
-  { name: '--status-warning-line', value: 'var(--h10-warning)' },
-  { name: '--status-warning-strong', value: 'var(--h10-warning-strong)' },
-  { name: '--status-danger-soft', value: 'var(--h10-danger-soft)' },
-  { name: '--status-danger-line', value: 'var(--h10-danger)' },
-  { name: '--status-danger-strong', value: 'var(--h10-danger-strong)' },
-  { name: '--status-info-soft', value: 'var(--h10-info-soft)' },
-  { name: '--status-info-line', value: 'var(--h10-info)' },
-  { name: '--status-info-strong', value: 'var(--h10-info-strong)' },
+  { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--nds-text)' },
+  { name: '--text-secondary', value: 'var(--nds-text-2)' },
+  { name: '--text-tertiary', value: 'var(--nds-text-3)' },
+  { name: '--text-disabled', value: 'var(--nds-text-disabled)' },
+  { name: '--text-link', value: 'var(--nds-text-link)' },
+  { name: '--surface-canvas', value: 'var(--nds-bg)' },
+  { name: '--surface-card', value: 'var(--nds-surface)' },
+  { name: '--surface-sunken', value: 'var(--nds-surface-sunken)' },
+  { name: '--border-default', value: 'var(--nds-border)' },
+  { name: '--border-subtle', value: 'var(--nds-border-subtle)' },
+  { name: '--border-strong', value: 'var(--nds-border-strong)' },
+  { name: '--color-primary', value: 'var(--nds-primary)' },
+  { name: '--color-primary-soft', value: 'var(--nds-primary-soft)' },
+  { name: '--status-success-soft', value: 'var(--nds-success-soft)' },
+  { name: '--status-success-line', value: 'var(--nds-success)' },
+  { name: '--status-success-strong', value: 'var(--nds-success-strong)' },
+  { name: '--status-warning-soft', value: 'var(--nds-warning-soft)' },
+  { name: '--status-warning-line', value: 'var(--nds-warning)' },
+  { name: '--status-warning-strong', value: 'var(--nds-warning-strong)' },
+  { name: '--status-danger-soft', value: 'var(--nds-danger-soft)' },
+  { name: '--status-danger-line', value: 'var(--nds-danger)' },
+  { name: '--status-danger-strong', value: 'var(--nds-danger-strong)' },
+  { name: '--status-info-soft', value: 'var(--nds-info-soft)' },
+  { name: '--status-info-line', value: 'var(--nds-info)' },
+  { name: '--status-info-strong', value: 'var(--nds-info-strong)' },
 
   // ── Dimension: spacing + type ────────────────────────────────────
   // Derived from ./spacing and ./typography rather than restated here, so each
-  // scale is still defined exactly once: `px12` -> `--h10-space-12`,
-  // `xsPlus` -> `--h10-font-size-xs-plus`.
+  // scale is still defined exactly once: `px12` -> `--nds-space-12`,
+  // `xsPlus` -> `--nds-font-size-xs-plus`.
   //
   // These are theme-invariant, so they are emitted to :root only and never to
   // the .dark block — a padding does not change with the canvas.
@@ -292,47 +292,47 @@ export const cssVars: ReadonlyArray<CssVar> = [
 
 /** Dark-mode overrides (the `.dark` block). Provisional inversions; their only home. */
 export const cssVarsDark: ReadonlyArray<CssVar> = [
-  { name: '--h10-text', value: '#e7ebf1' },
-  { name: '--h10-text-2', value: '#aab6c2' },
-  { name: '--h10-text-3', value: '#8a94a6' },
-  { name: '--h10-text-disabled', value: '#5b6b7b' },
-  { name: '--h10-text-inverse', value: '#14223a' },
+  { name: '--nds-text', value: '#e7ebf1' },
+  { name: '--nds-text-2', value: '#aab6c2' },
+  { name: '--nds-text-3', value: '#8a94a6' },
+  { name: '--nds-text-disabled', value: '#5b6b7b' },
+  { name: '--nds-text-inverse', value: '#14223a' },
 
-  { name: '--h10-bg', value: '#14223a' },
-  { name: '--h10-surface', value: '#18263b' },
-  { name: '--h10-surface-raised', value: '#1f2c3d' },
-  { name: '--h10-surface-sunken', value: '#1a2330' },
-  { name: '--h10-rail-bg', value: '#18263b' },
+  { name: '--nds-bg', value: '#14223a' },
+  { name: '--nds-surface', value: '#18263b' },
+  { name: '--nds-surface-raised', value: '#1f2c3d' },
+  { name: '--nds-surface-sunken', value: '#1a2330' },
+  { name: '--nds-rail-bg', value: '#18263b' },
 
-  { name: '--h10-border', value: '#2f3a4a' },
-  { name: '--h10-border-subtle', value: '#26323f' },
-  { name: '--h10-border-strong', value: '#46505f' },
-  { name: '--h10-rail-border', value: '#26323f' },
+  { name: '--nds-border', value: '#2f3a4a' },
+  { name: '--nds-border-subtle', value: '#26323f' },
+  { name: '--nds-border-strong', value: '#46505f' },
+  { name: '--nds-rail-border', value: '#26323f' },
 
-  // Tone + link roles on a dark canvas. The light values (--h10-amber-700 /
-  // --h10-red-700 / --h10-green-700 / --h10-blue-600) measure 2.94:1 - 3.18:1
+  // Tone + link roles on a dark canvas. The light values (--nds-amber-700 /
+  // --nds-red-700 / --nds-green-700 / --nds-blue-600) measure 2.94:1 - 3.18:1
   // against the dark surfaces — all below AA. Measured in-browser 2026-08-19;
-  // every value below measures >= 4.5:1 on --h10-surface / --h10-surface-raised.
-  // These lived as `.dark .h10-ds-acct*` hex overrides in components.css until
+  // every value below measures >= 4.5:1 on --nds-surface / --nds-surface-raised.
+  // These lived as `.dark .nds-acct*` hex overrides in components.css until
   // 2026-08-24: a DS-wide gap patched per-component, so any NEW component
   // inherited the sub-AA value. Fixed at the token tier, which is its only home.
-  { section: 'Dark tone + link roles (AA on the dark canvas)', name: '--h10-success-strong', value: '#6ee7a8' },
-  { name: '--h10-warning-strong', value: '#f0b46a' },
-  { name: '--h10-danger-strong', value: '#f79289' },
-  { name: '--h10-text-link', value: '#8ab6f0' },
+  { section: 'Dark tone + link roles (AA on the dark canvas)', name: '--nds-success-strong', value: '#6ee7a8' },
+  { name: '--nds-warning-strong', value: '#f0b46a' },
+  { name: '--nds-danger-strong', value: '#f79289' },
+  { name: '--nds-text-link', value: '#8ab6f0' },
 
   // Dark rail palette (consumed only when the rail is NOT under .h10-shell —
   // i.e. the app-wide rail; standalone shells pin these light).
-  { section: 'Dark rail palette (app-wide rail only; shells pin light)', name: '--h10-rail-text', value: '#aab6c2' },
-  { name: '--h10-rail-text-2', value: '#97a3b1' },
-  { name: '--h10-rail-text-strong', value: '#e7ebf1' },
-  { name: '--h10-rail-icon', value: '#8a94a6' },
-  { name: '--h10-rail-chev', value: '#6f7b8b' },
-  { name: '--h10-rail-item-hover', value: '#223247' },
-  { name: '--h10-rail-item-hover-2', value: '#1d2a3c' },
-  { name: '--h10-rail-chip-bg', value: '#243345' },
-  { name: '--h10-rail-chip-active-bg', value: '#1d3a5f' },
-  { name: '--h10-rail-chip-active-fg', value: '#cfe1fb' },
-  { name: '--h10-rail-ft', value: '#6f7b8b' },
+  { section: 'Dark rail palette (app-wide rail only; shells pin light)', name: '--nds-rail-text', value: '#aab6c2' },
+  { name: '--nds-rail-text-2', value: '#97a3b1' },
+  { name: '--nds-rail-text-strong', value: '#e7ebf1' },
+  { name: '--nds-rail-icon', value: '#8a94a6' },
+  { name: '--nds-rail-chev', value: '#6f7b8b' },
+  { name: '--nds-rail-item-hover', value: '#223247' },
+  { name: '--nds-rail-item-hover-2', value: '#1d2a3c' },
+  { name: '--nds-rail-chip-bg', value: '#243345' },
+  { name: '--nds-rail-chip-active-bg', value: '#1d3a5f' },
+  { name: '--nds-rail-chip-active-fg', value: '#cfe1fb' },
+  { name: '--nds-rail-ft', value: '#6f7b8b' },
 
 ]

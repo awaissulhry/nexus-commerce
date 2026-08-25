@@ -32,7 +32,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
     onChange(options[next].value)
     // shift focus to the newly-selected segment so keyboard nav stays on the active option
     requestAnimationFrame(() => {
-      ref.current?.querySelectorAll<HTMLButtonElement>('.h10-ds-seg-opt')[next]?.focus()
+      ref.current?.querySelectorAll<HTMLButtonElement>('.nds-seg-opt')[next]?.focus()
     })
   }
 
@@ -42,7 +42,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
   }
 
-  const cls = ['h10-ds-seg', size, disabled ? 'disabled' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-seg', size, disabled ? 'disabled' : '', className ?? ''].filter(Boolean).join(' ')
 
   return (
     <div ref={ref} className={cls} role="radiogroup" onKeyDown={onKeyDown}>
@@ -55,11 +55,11 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
             role="radio"
             aria-checked={active}
             tabIndex={active ? 0 : -1}
-            className={`h10-ds-seg-opt ${active ? 'on' : ''}`}
+            className={`nds-seg-opt ${active ? 'on' : ''}`}
             disabled={disabled}
             onClick={() => onChange(opt.value)}
           >
-            {opt.icon && <span className="h10-ds-seg-icon">{opt.icon}</span>}
+            {opt.icon && <span className="nds-seg-icon">{opt.icon}</span>}
             {opt.label}
           </button>
         )

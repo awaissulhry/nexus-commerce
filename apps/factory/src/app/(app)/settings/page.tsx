@@ -53,7 +53,7 @@ export default function SettingsPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{s.title}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 4 }}>{s.body}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginTop: 4 }}>{s.body}</div>
                 </div>
                 <span
                   className="fp-chip"

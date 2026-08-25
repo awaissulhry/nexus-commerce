@@ -18,7 +18,7 @@ Two exceptions:
 
 **This DS has no utility-class system.** Do not write `flex gap-2 text-sm
 bg-white` — those class names resolve to nothing here. Components carry their
-own internal `.h10-ds-*` classes; you never write one. Style a component
+own internal `.nds-*` classes; you never write one. Style a component
 through its **props**, and style your own layout glue with **inline styles
 using the CSS variables below**.
 

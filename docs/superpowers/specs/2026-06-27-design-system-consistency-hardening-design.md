@@ -26,10 +26,10 @@ inconsistencies. The good parts first, as the baseline we must not regress:
 
 | # | Severity | Finding | Evidence |
 |---|---|---|---|
-| 1 | Structural | **Semantic tier exists but is `--h10-`-named, not platform-named.** `NAMING.md`, `GOVERNANCE.md`, `TOKEN-RECONCILIATION.md` say components consume the platform's semantic names (`--text-primary`, `--surface-card`, `--status-*`). Reality: an internal semantic Tier 2 exists (`--h10-text`, `--h10-bg`, `--h10-border`, `--h10-primary`, `--h10-success-soft`…) and components mostly consume *that* — so "consume semantic, not primitive" is largely honored — but under the `--h10-` prefix, never the platform names. Convergence with the ~290 platform pages is therefore not wired. | `styles/tokens.css` `:root` is explicitly 3-tiered (ramps → semantic roles → component tokens); **124 distinct `--h10-*`** are consumed by component CSS; **0** platform-semantic names are. |
-| 1b | Mechanical | **~13 genuine raw-ramp reaches.** A handful of component CSS rules skip the semantic tier and consume Tier-1 ramps directly — e.g. `.h10-ds-tag.{neutral,info,positive,danger}` use `var(--h10-green-700)`, `var(--h10-blue-700)`, `var(--h10-grey-700)` (`primitives.css:147-151`), plus ~8 more `var(--h10-grey-NNN)` reaches in `primitives/components/patterns.css`. *This* is the real "consume primitive" violation to fix. | 13 hits across the 3 component stylesheets. |
+| 1 | Structural | **Semantic tier exists but is `--nds-`-named, not platform-named.** `NAMING.md`, `GOVERNANCE.md`, `TOKEN-RECONCILIATION.md` say components consume the platform's semantic names (`--text-primary`, `--surface-card`, `--status-*`). Reality: an internal semantic Tier 2 exists (`--nds-text`, `--nds-bg`, `--nds-border`, `--nds-primary`, `--nds-success-soft`…) and components mostly consume *that* — so "consume semantic, not primitive" is largely honored — but under the `--nds-` prefix, never the platform names. Convergence with the ~290 platform pages is therefore not wired. | `styles/tokens.css` `:root` is explicitly 3-tiered (ramps → semantic roles → component tokens); **124 distinct `--nds-*`** are consumed by component CSS; **0** platform-semantic names are. |
+| 1b | Mechanical | **~13 genuine raw-ramp reaches.** A handful of component CSS rules skip the semantic tier and consume Tier-1 ramps directly — e.g. `.nds-tag.{neutral,info,positive,danger}` use `var(--nds-green-700)`, `var(--nds-blue-700)`, `var(--nds-grey-700)` (`primitives.css:147-151`), plus ~8 more `var(--nds-grey-NNN)` reaches in `primitives/components/patterns.css`. *This* is the real "consume primitive" violation to fix. | 13 hits across the 3 component stylesheets. |
 | 2 | Structural | **Two parallel token sources, no generator.** `tokens/*.ts` (JS API) and `styles/tokens.css` (render source) are hand-maintained separately; governance claims "TS generates CSS". | No generator exists (only a lint). Values agree today (`#1f6fde` both) but nothing enforces it. |
-| 3 | Mechanical | **One outlier component.** `TagInput.tsx` bypasses the system — raw Tailwind palette + hand-rolled `dark:`, no `.h10-ds-*`. | 8 raw-palette hits (`bg-blue-100`, `text-slate-800`…), 7 `dark:` variants; it is the *only* such file. |
+| 3 | Mechanical | **One outlier component.** `TagInput.tsx` bypasses the system — raw Tailwind palette + hand-rolled `dark:`, no `.nds-*`. | 8 raw-palette hits (`bg-blue-100`, `text-slate-800`…), 7 `dark:` variants; it is the *only* such file. |
 | 4 | Mechanical | **Status/color-role API uses three value vocabularies + a mislabeled component.** | Pill `ok\|warn\|arch\|err`, Tag `neutral\|info\|positive\|warning\|danger`, Toast `info\|success\|error`, Banner `info\|warning\|error\|success`. Badge `BadgeTone = sp\|sd\|sb\|auto\|manual` is the **ad-program badge**, not a tone. `Kbd` exported without its type. `size` scales differ. |
 | 5 | Mechanical | **Docs drift from reality.** README says *"Phase 0 — No runtime code yet"* and tags folders "Built in Phase 1–8" (future tense). | CHANGELOG shows P0–P8 **complete**; 47 runtime components exist. |
 
@@ -42,8 +42,8 @@ so breaking changes are cheapest now.
 ## 2. Decisions (locked)
 
 1. **Token tier → alias + migrate.** Add the semantic layer as *value-preserving*
-   aliases over the existing `--h10-*` scale, then repoint all 47 components onto
-   the semantic names. `--h10-*` survives as the raw tier. No color values move,
+   aliases over the existing `--nds-*` scale, then repoint all 47 components onto
+   the semantic names. `--nds-*` survives as the raw tier. No color values move,
    so the catalog screenshot-diff is a no-op — that is the safety net.
 2. **Source of truth → generate CSS from TS.** `tokens/*.ts` becomes the single
    source (enriched to hold light + dark + the semantic aliases). A small build
@@ -65,8 +65,8 @@ forces it.
 Every primitive / component / pattern MUST satisfy — and, where feasible, this
 becomes lint:
 
-- **C1 — Styling:** rendered via `.h10-ds-*` classes only; resolves through
-  **semantic** tokens. No raw hex, no raw Tailwind palette classes, no `--h10-*`
+- **C1 — Styling:** rendered via `.nds-*` classes only; resolves through
+  **semantic** tokens. No raw hex, no raw Tailwind palette classes, no `--nds-*`
   consumed directly in component CSS.
 - **C2 — Prop vocabulary:** `tone` (semantic color role), `size`, and `variant`
   (emphasis) used with one canonical meaning and value set across the system.
@@ -82,23 +82,23 @@ becomes lint:
 ## 4. Workstream A — Token architecture (keystone)
 
 - **A1. Semantic alias layer.** Add the platform's semantic names, each aliasing
-  today's `--h10-*` value — e.g. `--text-secondary: var(--h10-text-2)`,
-  `--surface-canvas: var(--h10-bg)`, `--status-danger-soft: var(--h10-danger-soft)`.
+  today's `--nds-*` value — e.g. `--text-secondary: var(--nds-text-2)`,
+  `--surface-canvas: var(--nds-bg)`, `--status-danger-soft: var(--nds-danger-soft)`.
   Names follow the existing `TOKEN-RECONCILIATION.md` tables (text / surface /
   border / status / `--color-primary`). **No value changes.**
-- **A2. Repoint components.** Flip every `.h10-ds-*` rule in
+- **A2. Repoint components.** Flip every `.nds-*` rule in
   `primitives.css` (93), `components.css` (214), `patterns.css` (93) off
-  `--h10-*` onto the semantic names, per the mapping table produced in Phase 0.
-  `--h10-*` values with no semantic role (ad-program badge colors, focus-ring
+  `--nds-*` onto the semantic names, per the mapping table produced in Phase 0.
+  `--nds-*` values with no semantic role (ad-program badge colors, focus-ring
   composite) become explicit, named **component tokens**.
 - **A3. TS as the one source.** Enrich `tokens/*.ts` so it carries the complete
   truth — light + dark + semantic aliases + component tokens. Author a generator
   (`tools/generate-tokens-css.mjs`) that emits the `:root{}` and `.dark{}` blocks
-  of `styles/tokens.css`. The hand-written `.h10-ds-*` component classes are out
+  of `styles/tokens.css`. The hand-written `.nds-*` component classes are out
   of generator scope and stay as-is.
 - **A4.** Fix the governance text that claims generation already happens.
 
-`/marketing/ads` is untouched and safe — it reads `--h10-*`, which we keep.
+`/marketing/ads` is untouched and safe — it reads `--nds-*`, which we keep.
 
 ---
 
@@ -118,7 +118,7 @@ becomes lint:
 - **B4. Standardize `size`** to one scale (`sm|md|lg` baseline; `xl` only where
   justified, e.g. Modal). **Export `Kbd`'s type.** Align ref + `className`
   forwarding and controlled/uncontrolled patterns across primitives.
-- **B5. Rebuild `TagInput`** to match siblings — `.h10-ds-*` + semantic tokens,
+- **B5. Rebuild `TagInput`** to match siblings — `.nds-*` + semantic tokens,
   dropping the raw Tailwind palette and hand-rolled `dark:` (dark comes free from
   the token flip).
 - **B6. Sweep the 25 consumers** in the same change set so nothing breaks;
@@ -144,8 +144,8 @@ becomes lint:
 Extend `tools/token-guard.mjs` and CI:
 
 - **D1.** Fail on **raw-ramp** usage inside component CSS —
-  `var(--h10-{grey,blue,green,red,amber,purple,cyan}-NNN)` — forcing the semantic
-  or platform tier. DS-specific `--h10-*` component tokens (radius/shadow/focus/
+  `var(--nds-{grey,blue,green,red,amber,purple,cyan}-NNN)` — forcing the semantic
+  or platform tier. DS-specific `--nds-*` component tokens (radius/shadow/focus/
   pill/badge/rail) remain allowed; this guard targets only the numbered ramps.
 - **D2.** Fail on raw Tailwind palette classes in DS `.tsx` (would have caught
   TagInput).
@@ -160,9 +160,9 @@ Extend `tools/token-guard.mjs` and CI:
 
 | Phase | Work | Gate |
 |---|---|---|
-| **0 — Map** | `docs/AUDIT.md` inventory + inconsistency register + the exact `--h10-*→semantic` mapping + the per-value tone remap for sign-off | Read-only; no risk |
+| **0 — Map** | `docs/AUDIT.md` inventory + inconsistency register + the exact `--nds-*→semantic` mapping + the per-value tone remap for sign-off | Read-only; no risk |
 | **1 — Token source + semantic layer** | Enrich TS, add semantic aliases, write generator, generate `tokens.css` | Screenshot-diff = **no-op** |
-| **2 — Repoint components** | Flip `.h10-ds-*` rules onto semantic tokens | Per-component screenshot-diff |
+| **2 — Repoint components** | Flip `.nds-*` rules onto semantic tokens | Per-component screenshot-diff |
 | **3 — API harmonize** | tone/size/Kbd/Badge/ref/className + TagInput rebuild + 25-consumer sweep | `tsc` + `next build` clean |
 | **4 — Guardrails + docs** | Extend token-guard, CI screenshot-diff, reconcile docs | Lints green |
 | **5 — Catalog/a11y completeness** | Every component in catalog in every state; a11y + contrast verified | Contrast lint + catalog review |
@@ -178,7 +178,7 @@ screenshot-diff → human visual review → commit & push`. Commit with
 - **Value drift during migration.** Mitigated by the value-preserving alias
   approach — Phases 1–2 must screenshot-diff to a no-op; any visible diff is a
   bug to fix, not to accept.
-- **`/marketing/ads` regression.** Out of the change path (`--h10-*` retained);
+- **`/marketing/ads` regression.** Out of the change path (`--nds-*` retained);
   verified by the ads-surface screenshot-diff in the gate.
 - **Breaking the 25 consumers.** Bounded and updated in the same PR as the API
   change; `tsc` + build catch the rest.
@@ -214,8 +214,8 @@ screenshot-diff → human visual review → commit & push`. Commit with
   where feasible.
 - One token source (TS); `tokens.css` generated; zero possible drift.
 - Components consume **platform-semantic** names for the core color roles
-  (text/surface/border/status/primary); **never the raw ramps** (`--h10-*-NNN`)
-  directly; DS-specific `--h10-*` component tokens (radius/shadow/focus/pill/
+  (text/surface/border/status/primary); **never the raw ramps** (`--nds-*-NNN`)
+  directly; DS-specific `--nds-*` component tokens (radius/shadow/focus/pill/
   badge/rail) remain legitimate. Zero raw Tailwind palette in DS `.tsx`.
 - One `tone` vocabulary; Badge correctly named; `size` standardized; all types
   exported.

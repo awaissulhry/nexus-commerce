@@ -73,7 +73,7 @@ function BurnTooltip({ active, payload, label, format }: {
     ['Planned', at('expected'), INK_REFERENCE],
   ]
   return (
-    <div className="h10-ds-burn-tip">
+    <div className="nds-burn-tip">
       <b>Day {label}</b>
       {rows.filter(([, v]) => v != null).map(([k, v, c]) => (
         <span key={k}>
@@ -96,7 +96,7 @@ export function BurnDownChart({
   const top = Math.max(...values, capValue ?? 0, 1)
 
   return (
-    <div className={`h10-ds-burn${className ? ` ${className}` : ''}`}>
+    <div className={`nds-burn${className ? ` ${className}` : ''}`}>
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={GRID} vertical={false} />
@@ -152,7 +152,7 @@ export function BurnDownChart({
       {/* 🔴 The hue goes in as a custom property, NOT as `background`. The shorthand resets
           `background-image`, which is what draws the dash — so an inline `background` made every
           swatch solid and left "Spent" and "Projected" (which share a hue by design) identical. */}
-      <div className="h10-ds-burn-key">
+      <div className="nds-burn-key">
         <span><i className="ln solid" style={{ '--c': HUE_ACTUAL } as CSSProperties} aria-hidden="true" />Spent</span>
         <span><i className="ln dash" style={{ '--c': HUE_ACTUAL } as CSSProperties} aria-hidden="true" />Projected</span>
         <span><i className="ln dash" style={{ '--c': INK_REFERENCE } as CSSProperties} aria-hidden="true" />Planned pace</span>

@@ -46,7 +46,7 @@ const bar: React.CSSProperties = {
   padding: '5px 8px',
   background: 'var(--surface-card)',
   border: '1px solid var(--border-default)',
-  borderRadius: 'var(--h10-radius-lg)',
+  borderRadius: 'var(--nds-radius-lg)',
 }
 
 /**

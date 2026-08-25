@@ -77,7 +77,7 @@ The debt is concentrated in six classes:
 | **EV2** | Listing picker + thumbnails everywhere | `imageUrl` migration + sync parse (GalleryURL — free in responses we already fetch); `.h10-spw-ps` adoption for ListingsStep; thumbnails on the Products page rows + PromoteModal (spec: EV0-BUILDER-SPEC.md) |
 | **EV3** | Builder content + advanced settings | Targeting/Rates/Keywords/Budget/Review rebuilt on the section pattern; Advanced sections per the gap map (scheduled start, key-based DYNAMIC, wizard bid suggestions, name grammar); suggested-value chips in the Amazon "Suggested · Use" idiom |
 | **EV4** | Detail + hub tab interiors | Replace the 8 hand-rolled row lists + raw tables (D1) with AdsDataGrid/shared skins; AutomationTab rebuild (35 inline styles → classes); Activity/Drift rows; WhyModal/CriterionCard tables |
-| **EV5** | Console-wide consistency | New shared surface tokens (`--h10-text/-muted/-border/-divider` — additive to ads.css, unused by Amazon until adopted) + de-inline the 58 font-sizes/81 hexes; tooltip fill (D4); skeleton fill (D5); title=→InfoTip on controls |
+| **EV5** | Console-wide consistency | New shared surface tokens (`--nds-text/-muted/-border/-divider` — additive to ads.css, unused by Amazon until adopted) + de-inline the 58 font-sizes/81 hexes; tooltip fill (D4); skeleton fill (D5); title=→InfoTip on controls |
 | **EV-QA** | Final sweep | Side-by-side at 3 viewports, a11y/keyboard, tooltip + skeleton coverage checks, scorecard + changelog |
 
 Amazon-gated touches anticipated: ONLY the additive token block in EV5 (new variables,

@@ -5,71 +5,71 @@
 .aiad-page { display: flex; flex-direction: column; gap: 16px; }
 
 /* KPI strip — the Proposals tile deep-links to Suggestions. */
-.aiad-metric-link { color: var(--h10-primary); text-decoration: none; }
+.aiad-metric-link { color: var(--nds-primary); text-decoration: none; }
 .aiad-metric-link:hover { text-decoration: underline; }
 
 /* Goal (first column) cell */
 .aiad-goal { display: flex; flex-direction: column; min-width: 0; }
-.aiad-goal .sub { font-size: 11px; font-weight: 400; color: var(--h10-text-3); margin-top: 1px; }
+.aiad-goal .sub { font-size: 11px; font-weight: 400; color: var(--nds-text-3); margin-top: 1px; }
 
 /* Status chip (dot + word). The launch button sits beside it for unmaterialized goals. */
 .aiad-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #15803d; white-space: nowrap; }
 .aiad-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #15803d; flex: none; }
 .aiad-status.warn { color: #9a6b00; }
 .aiad-status.warn::before { background: #e8a800; }
-.aiad-status.muted { color: var(--h10-text-3); }
+.aiad-status.muted { color: var(--nds-text-3); }
 .aiad-status.muted::before { background: #c3cbd6; }
 .aiad-status-wrap { display: inline-flex; align-items: center; gap: 10px; }
 .aiad-launch.h10-am-btn { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
 
 /* AI Control cell — the plan's autonomy, one vocabulary with the Control Room. */
 .aiad-ctl { font-size: 12.5px; font-weight: 600; }
-.aiad-ctl.propose { color: var(--h10-primary); }
+.aiad-ctl.propose { color: var(--nds-primary); }
 .aiad-ctl.auto { color: #15803d; }
-.aiad-ctl.off { color: var(--h10-text-3); font-weight: 400; }
+.aiad-ctl.off { color: var(--nds-text-3); font-weight: 400; }
 
 /* Budget-utilization bar */
 .aiad-util { display: inline-flex; align-items: center; gap: 8px; min-width: 110px; }
 .aiad-util .bar { flex: 1; min-width: 56px; height: 6px; border-radius: 4px; background: #edf1f6; overflow: hidden; }
-.aiad-util .bar i { display: block; height: 100%; border-radius: 4px; background: var(--h10-primary); }
+.aiad-util .bar i { display: block; height: 100%; border-radius: 4px; background: var(--nds-primary); }
 .aiad-util.hot .bar i { background: #e8a800; }
-.aiad-util .pct { font-size: 12px; color: var(--h10-text-2); min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+.aiad-util .pct { font-size: 12px; color: var(--nds-text-2); min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Goal drawer ─────────────────────────────────────────────────────────── */
 .aiad-dw { display: flex; flex-direction: column; gap: 18px; }
-.aiad-dw h4 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--h10-text-3); }
+.aiad-dw h4 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-text-3); }
 .aiad-dw-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
 .aiad-dw-facts .f { display: flex; flex-direction: column; gap: 2px; }
-.aiad-dw-facts .k { font-size: 11px; color: var(--h10-text-3); }
-.aiad-dw-facts .v { font-size: 13px; font-weight: 600; color: var(--h10-text); }
+.aiad-dw-facts .k { font-size: 11px; color: var(--nds-text-3); }
+.aiad-dw-facts .v { font-size: 13px; font-weight: 600; color: var(--nds-text); }
 
-.aiad-auto { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--h10-border); border-radius: 10px; background: #f8fafc; }
+.aiad-auto { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--nds-border); border-radius: 10px; background: #f8fafc; }
 .aiad-auto .t { flex: 1; min-width: 0; }
-.aiad-auto .t b { display: block; font-size: 13px; color: var(--h10-text); }
-.aiad-auto .t span { display: block; font-size: 11.5px; color: var(--h10-text-2); margin-top: 1px; }
+.aiad-auto .t b { display: block; font-size: 13px; color: var(--nds-text); }
+.aiad-auto .t span { display: block; font-size: 11.5px; color: var(--nds-text-2); margin-top: 1px; }
 
-.aiad-dw-camp { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--h10-border); }
+.aiad-dw-camp { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--nds-border); }
 .aiad-dw-camp:last-child { border-bottom: 0; }
 .aiad-dw-camp .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.aiad-dw-camp .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--h10-primary); text-decoration: none; }
+.aiad-dw-camp .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--nds-primary); text-decoration: none; }
 .aiad-dw-camp .nm:hover { text-decoration: underline; }
-.aiad-dw-camp .perf { font-size: 11px; color: var(--h10-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.aiad-dw-camp .bud { font-size: 12px; color: var(--h10-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.aiad-dw-camp .sync { font-size: 11px; color: var(--h10-text-3); white-space: nowrap; }
+.aiad-dw-camp .perf { font-size: 11px; color: var(--nds-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.aiad-dw-camp .bud { font-size: 12px; color: var(--nds-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.aiad-dw-camp .sync { font-size: 11px; color: var(--nds-text-3); white-space: nowrap; }
 .aiad-dw-camp .sync.on { color: #15803d; }
 
-.aiad-feed { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; border: 1px solid var(--h10-border); border-radius: 10px; }
-.aiad-feed-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--h10-border); }
+.aiad-feed { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; border: 1px solid var(--nds-border); border-radius: 10px; }
+.aiad-feed-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--nds-border); }
 .aiad-feed-row:last-child { border-bottom: 0; }
-.aiad-feed-row .when { font-size: 11px; color: var(--h10-text-3); white-space: nowrap; min-width: 74px; font-variant-numeric: tabular-nums; }
+.aiad-feed-row .when { font-size: 11px; color: var(--nds-text-3); white-space: nowrap; min-width: 74px; font-variant-numeric: tabular-nums; }
 .aiad-feed-row .what { flex: 1; min-width: 0; }
-.aiad-feed-row .what .rsn { font-size: 12px; color: var(--h10-text); line-height: 1.4; overflow-wrap: anywhere; }
-.aiad-feed-empty { padding: 16px 12px; font-size: 12.5px; color: var(--h10-text-3); text-align: center; }
-.aiad-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--h10-text-3); }
+.aiad-feed-row .what .rsn { font-size: 12px; color: var(--nds-text); line-height: 1.4; overflow-wrap: anywhere; }
+.aiad-feed-empty { padding: 16px 12px; font-size: 12.5px; color: var(--nds-text-3); text-align: center; }
+.aiad-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--nds-text-3); }
 .aiad-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #c3cbd6; }
 .aiad-live.on { color: #15803d; }
 .aiad-live.on::before { background: #15803d; }
 
 .aiad-dw-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.aiad-dw-note { font-size: 12.5px; color: var(--h10-text-2); }
-.aiad-dw-note.err { color: var(--h10-danger); }
+.aiad-dw-note { font-size: 12.5px; color: var(--nds-text-2); }
+.aiad-dw-note.err { color: var(--nds-danger); }

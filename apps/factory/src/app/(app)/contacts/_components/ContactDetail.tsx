@@ -17,8 +17,8 @@ import { ContactMeasurements } from "./ContactMeasurements";
 import { ContactHistory } from "./ContactHistory";
 import { KIND_LABEL, KIND_TONE, type ContactDetailResponse } from "./types";
 
-const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "7px 9px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
-const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
+const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--nds-border)", borderRadius: 8, padding: "7px 9px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" };
+const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div style={lbl}>{label}</div>{children}</div>;
@@ -89,9 +89,9 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
         ) : undefined}
       />
 
-      <div style={{ display: "flex", gap: 4, margin: "6px 0 14px", borderBottom: "1px solid var(--h10-border-subtle)" }}>
+      <div style={{ display: "flex", gap: 4, margin: "6px 0 14px", borderBottom: "1px solid var(--nds-border-subtle)" }}>
         {([["overview", "Overview"], ["measurements", `Measurements${c.measurements.length ? ` (${new Set(c.measurements.map((m) => m.garmentType)).size})` : ""}`], ["history", "History"]] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "8px 12px", color: tab === id ? "var(--h10-primary)" : "var(--h10-text-2)", borderBottom: tab === id ? "2px solid var(--h10-primary)" : "2px solid transparent", marginBottom: -1 }}>{label}</button>
+          <button key={id} type="button" onClick={() => setTab(id)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "8px 12px", color: tab === id ? "var(--nds-primary)" : "var(--nds-text-2)", borderBottom: tab === id ? "2px solid var(--nds-primary)" : "2px solid transparent", marginBottom: -1 }}>{label}</button>
         ))}
       </div>
 
@@ -114,17 +114,17 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Emails</div>
                 <div style={{ display: "grid", gap: 6 }}>
                   {c.emails.map((em) => (
-                    <div key={em.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--h10-border-subtle)" }}>
-                      <span style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{em.email}{em.label ? <span style={{ color: "var(--h10-text-3)" }}> · {em.label}</span> : null}</span>
+                    <div key={em.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--nds-border-subtle)" }}>
+                      <span style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{em.email}{em.label ? <span style={{ color: "var(--nds-text-3)" }}> · {em.label}</span> : null}</span>
                       <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flex: "0 0 auto" }}>
-                        <label style={{ fontSize: 11.5, color: "var(--h10-text-3)", display: "inline-flex", gap: 4, alignItems: "center", cursor: canManage ? "pointer" : "default" }} title="Match any sender at this email's domain to this contact">
+                        <label style={{ fontSize: 11.5, color: "var(--nds-text-3)", display: "inline-flex", gap: 4, alignItems: "center", cursor: canManage ? "pointer" : "default" }} title="Match any sender at this email's domain to this contact">
                           <input type="checkbox" checked={em.matchDomain} disabled={!canManage} onChange={(e) => void patchEmail(em.id, { matchDomain: e.target.checked })} /> match domain
                         </label>
-                        {canManage && <button type="button" onClick={() => void removeEmail(em.id)} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--h10-text-3)", display: "grid", placeItems: "center" }}><X size={14} /></button>}
+                        {canManage && <button type="button" onClick={() => void removeEmail(em.id)} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--nds-text-3)", display: "grid", placeItems: "center" }}><X size={14} /></button>}
                       </span>
                     </div>
                   ))}
-                  {c.emails.length === 0 && <div style={{ fontSize: 12, color: "var(--h10-text-3)" }}>No emails yet.</div>}
+                  {c.emails.length === 0 && <div style={{ fontSize: 12, color: "var(--nds-text-3)" }}>No emails yet.</div>}
                   {canManage && (
                     <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                       <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="add email…" onKeyDown={(e) => { if (e.key === "Enter") void addEmail(); }} />
@@ -141,20 +141,20 @@ export function ContactDetail({ contactId, onBack }: { contactId: string; onBack
 
         <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
           <Card padded>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Price list</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--nds-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Price list</div>
             <Listbox ariaLabel="Price list" options={[{ value: "", label: "Listino base" }, ...priceLists.map((l) => ({ value: l.id, label: l.name }))]} value={c.priceListId ?? ""} onChange={(v) => canManage && void patch({ priceListId: v || null })} />
             {(canTerms || canDeposit) && (
               <div style={{ marginTop: 10, display: "grid", gap: 3 }}>
-                {canTerms && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "var(--h10-text-3)" }}>Terms</span><span style={{ fontWeight: 600 }}>{c.paymentTerms || "—"}</span></div>}
-                {canDeposit && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "var(--h10-text-3)" }}>Deposit</span><span style={{ fontWeight: 600 }}>{c.depositDefaultPct != null ? `${c.depositDefaultPct}%` : "—"}</span></div>}
+                {canTerms && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "var(--nds-text-3)" }}>Terms</span><span style={{ fontWeight: 600 }}>{c.paymentTerms || "—"}</span></div>}
+                {canDeposit && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: "var(--nds-text-3)" }}>Deposit</span><span style={{ fontWeight: 600 }}>{c.depositDefaultPct != null ? `${c.depositDefaultPct}%` : "—"}</span></div>}
               </div>
             )}
           </Card>
           <Card padded>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Relationship</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--nds-text-3)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Relationship</div>
             <div style={{ display: "grid", gap: 3, fontSize: 12.5 }}>
               {([["Conversations", d.counts.conversations], ["Quotes", d.counts.quotes], ["Orders", d.counts.orders], ["Reviews", d.counts.reviews]] as const).map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--h10-text-3)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
+                <div key={k} style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--nds-text-3)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
               ))}
             </div>
           </Card>

@@ -288,14 +288,14 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
         }
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <a href={`/api/quotes/${quoteId}/pdf`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><FileDown size={13} /> PDF</a>
+            <a href={`/api/quotes/${quoteId}/pdf`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--nds-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><FileDown size={13} /> PDF</a>
             {/* EPQ.1 — EXPIRED is reversible by Revise (the only edge out of it) */}
             {(quote.state === "SENT" || quote.state === "EXPIRED") && <Button onClick={revise}>Revise</Button>}
             {(quote.state === "DRAFT" || quote.state === "SENT") && <Button variant="primary" onClick={() => setSending(true)} disabled={quote.lines.length === 0}><Send size={13} /> Send</Button>}
           </div>
         }
       />
-      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: "var(--nds-text-3)", marginBottom: 10 }}>
         {quote.party.name}{quote.conversation ? ` · from thread “${quote.conversation.subject ?? ""}”` : ""}{quote.party.priceList ? ` · list: ${quote.party.priceList.name}` : " · Listino base"}
       </div>
 
@@ -304,7 +304,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
         <div style={{ marginBottom: 10 }}>
           <Banner tone="warning" title="Possible duplicate">
             {duplicate.number} is already open for this party with a similar configuration.{" "}
-            <button type="button" onClick={() => goToQuote(duplicate.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--h10-text-link)" }}>
+            <button type="button" onClick={() => goToQuote(duplicate.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--nds-text-link)" }}>
               Open {duplicate.number} ↗
             </button>
           </Banner>
@@ -318,7 +318,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
           {/* line tabs */}
           <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
             {quote.lines.map((l, i) => (
-              <button key={l.id} type="button" onClick={() => setActiveLineId(l.id)} style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", background: l.id === activeLineId ? "var(--h10-wash-primary)" : "var(--h10-surface)", color: l.id === activeLineId ? "var(--h10-primary)" : "var(--h10-text-2)" }}>
+              <button key={l.id} type="button" onClick={() => setActiveLineId(l.id)} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", background: l.id === activeLineId ? "var(--nds-wash-primary)" : "var(--nds-surface)", color: l.id === activeLineId ? "var(--nds-primary)" : "var(--nds-text-2)" }}>
                 {l.template?.name ?? `Line ${i + 1}`}
               </button>
             ))}
@@ -326,27 +326,27 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
           </div>
 
           {!activeLine ? (
-            <div style={{ fontSize: 13, color: "var(--h10-text-3)" }}>{quote.lines.length === 0 ? "Add a line to start configuring." : "Select a line."}</div>
+            <div style={{ fontSize: 13, color: "var(--nds-text-3)" }}>{quote.lines.length === 0 ? "Add a line to start configuring." : "Select a line."}</div>
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 12, color: "var(--h10-text-2)" }}>Product:</span>
+                <span style={{ fontSize: 12, color: "var(--nds-text-2)" }}>Product:</span>
                 <Listbox ariaLabel="Template" options={[{ value: "", label: "Choose a product…" }, ...templates.map((t) => ({ value: t.id, label: t.name }))]} value={activeLine.templateId ?? ""} onChange={(v) => { void patchLine({ templateId: v || null, selections: [], sizeRun: null }); }} disabled={!isDraft} />
-                {isDraft && quote.lines.length > 1 && <button type="button" onClick={() => deleteLine(activeLine.id)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--h10-danger)", display: "inline-flex", padding: 2 }}><Trash2 size={14} /></button>}
+                {isDraft && quote.lines.length > 1 && <button type="button" onClick={() => deleteLine(activeLine.id)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--nds-danger)", display: "inline-flex", padding: 2 }}><Trash2 size={14} /></button>}
               </div>
 
               {/* EPQ.4 — recall hint: the party's last produced run of this garment, real cost included; dismissible */}
               {isDraft && canCost && recall && activeLine.templateId && !recallDismissed.has(activeLine.templateId) && (
-                <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, color: "var(--h10-text-2)", background: "var(--h10-wash-primary)", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "6px 10px" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, color: "var(--nds-text-2)", background: "var(--nds-wash-primary)", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: "6px 10px" }}>
                   <span>
                     Last time ({recall.orderNumber}): sold <strong style={{ fontFamily: "var(--font-mono)" }}>{eur(recall.soldNetCents ?? 0)}</strong> · actual cost <strong style={{ fontFamily: "var(--font-mono)" }}>{eur(recall.actualCostCents)}</strong>
-                    {recall.estCostCents !== recall.actualCostCents ? <span style={{ color: "var(--h10-text-3)" }}> (est was {eur(recall.estCostCents)})</span> : null}
+                    {recall.estCostCents !== recall.actualCostCents ? <span style={{ color: "var(--nds-text-3)" }}> (est was {eur(recall.estCostCents)})</span> : null}
                   </span>
                   <button
                     type="button"
                     aria-label="Dismiss recall hint"
                     onClick={() => setRecallDismissed((prev) => new Set(prev).add(activeLine.templateId!))}
-                    style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--h10-text-3)", padding: 2, fontSize: 13 }}
+                    style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--nds-text-3)", padding: 2, fontSize: 13 }}
                   >
                     ×
                   </button>
@@ -361,7 +361,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                 const ids = g.options.map((o) => o.id);
                 return (
                   <div key={g.id}>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{g.name} <span style={{ fontWeight: 400, color: "var(--h10-text-3)" }}>· pick {g.minSelect}–{g.maxSelect}</span></div>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{g.name} <span style={{ fontWeight: 400, color: "var(--nds-text-3)" }}>· pick {g.minSelect}–{g.maxSelect}</span></div>
                     <div style={{ display: "grid", gap: 6 }}>
                       {g.options.map((o) => maxOne ? (
                         <RadioCard key={o.id} name={g.id} checked={selected.has(o.id)} selected={selected.has(o.id)} onChange={() => toggleOption(true, ids, o.id)} title={o.name} disabled={!isDraft} />
@@ -376,23 +376,23 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
               })}
 
               {activeLine.templateId && (
-                <div style={{ display: "grid", gap: 8, borderTop: "1px solid var(--h10-border-subtle)", paddingTop: 10 }}>
+                <div style={{ display: "grid", gap: 8, borderTop: "1px solid var(--nds-border-subtle)", paddingTop: 10 }}>
                   <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-                    <label style={{ fontSize: 12, color: "var(--h10-text-2)", display: "inline-flex", gap: 6, alignItems: "center" }}>Qty
-                      <input type="number" min={1} defaultValue={activeLine.qty} key={`${activeLine.qty}:${activeSizeRun ? "run" : "free"}`} onBlur={(e) => Number(e.target.value) !== activeLine.qty && patchLine({ qty: Math.max(1, Number(e.target.value)) })} disabled={!isDraft || activeSizeRun != null} title={activeSizeRun ? "Derived from the size run" : undefined} style={{ width: 54, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "3px 6px", font: "12.5px var(--font-mono)", textAlign: "center", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+                    <label style={{ fontSize: 12, color: "var(--nds-text-2)", display: "inline-flex", gap: 6, alignItems: "center" }}>Qty
+                      <input type="number" min={1} defaultValue={activeLine.qty} key={`${activeLine.qty}:${activeSizeRun ? "run" : "free"}`} onBlur={(e) => Number(e.target.value) !== activeLine.qty && patchLine({ qty: Math.max(1, Number(e.target.value)) })} disabled={!isDraft || activeSizeRun != null} title={activeSizeRun ? "Derived from the size run" : undefined} style={{ width: 54, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "3px 6px", font: "12.5px var(--font-mono)", textAlign: "center", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
                     </label>
                     {/* EPQ.3 — size-run matrix (B2B): sizes × qty as ONE line; qty = Σ */}
                     {quote.party.kind === "BRAND" && (isDraft || activeSizeRun) && (
-                      <button type="button" onClick={() => isDraft && setSizeRunOpen(true)} style={{ background: "none", border: "none", padding: 0, cursor: isDraft ? "pointer" : "default", fontSize: 11.5, color: "var(--h10-text-link)", whiteSpace: "nowrap" }}>
+                      <button type="button" onClick={() => isDraft && setSizeRunOpen(true)} style={{ background: "none", border: "none", padding: 0, cursor: isDraft ? "pointer" : "default", fontSize: 11.5, color: "var(--nds-text-link)", whiteSpace: "nowrap" }}>
                         {activeSizeRun ? "Edit size run" : "+ Size run"}
                       </button>
                     )}
-                    <label style={{ fontSize: 12, color: "var(--h10-text-2)", display: "inline-flex", gap: 6, alignItems: "center" }}>Adjustment
+                    <label style={{ fontSize: 12, color: "var(--nds-text-2)", display: "inline-flex", gap: 6, alignItems: "center" }}>Adjustment
                       <EuroInput cents={activeLine.adjustmentCents} onCommit={(c) => patchLine({ adjustmentCents: c })} ariaLabel="Adjustment" width={78} disabled={!isDraft} />
                     </label>
                   </div>
                   {activeSizeRun && (
-                    <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Size run: {formatSizeRun(activeSizeRun)} · Σ {sizeRunTotal(activeSizeRun)}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Size run: {formatSizeRun(activeSizeRun)} · Σ {sizeRunTotal(activeSizeRun)}</div>
                   )}
                   {activeLine.adjustmentCents !== 0 && (
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -404,7 +404,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                         onChange={(v) => { void patchLine({ adjustmentReasonCode: (v || null) as AdjustmentReasonCode | null }); }}
                         disabled={!isDraft}
                       />
-                      <input ref={reasonRef} defaultValue={activeLine.adjustmentReason ?? ""} key={activeLine.adjustmentReason ?? ""} placeholder="reason for the adjustment" onBlur={(e) => e.target.value !== (activeLine.adjustmentReason ?? "") && patchLine({ adjustmentReason: e.target.value || null })} disabled={!isDraft} style={{ flex: 1, minWidth: 160, border: "1px solid var(--h10-border-subtle)", borderRadius: 7, padding: "4px 8px", fontSize: 12, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+                      <input ref={reasonRef} defaultValue={activeLine.adjustmentReason ?? ""} key={activeLine.adjustmentReason ?? ""} placeholder="reason for the adjustment" onBlur={(e) => e.target.value !== (activeLine.adjustmentReason ?? "") && patchLine({ adjustmentReason: e.target.value || null })} disabled={!isDraft} style={{ flex: 1, minWidth: 160, border: "1px solid var(--nds-border-subtle)", borderRadius: 7, padding: "4px 8px", fontSize: 12, outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
                     </div>
                   )}
                 </div>
@@ -415,29 +415,29 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
 
         {/* rail */}
         <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
-          <div style={{ border: "1px solid var(--h10-border)", borderRadius: 12, background: "var(--h10-surface)", padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--h10-text-3)", marginBottom: 8 }}>Quote total</div>
+          <div style={{ border: "1px solid var(--nds-border)", borderRadius: 12, background: "var(--nds-surface)", padding: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--nds-text-3)", marginBottom: 8 }}>Quote total</div>
             {canCost && totals && <Row label="Cost" value={eur(totals.costCents)} muted />}
             <Row label="Net total" value={totals ? eur(totals.netCents) : "—"} strong />
             {canMargin && totals && (
               <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 12, color: "var(--h10-text-2)" }}>Margin</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: totals.marginCents < 0 ? "var(--h10-danger)" : "var(--h10-success, #15a34a)" }}>{eur(totals.marginCents)} · {totals.marginPct.toFixed(1)}%</span>
+                <span style={{ fontSize: 12, color: "var(--nds-text-2)" }}>Margin</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: totals.marginCents < 0 ? "var(--nds-danger)" : "var(--nds-success, #15a34a)" }}>{eur(totals.marginCents)} · {totals.marginPct.toFixed(1)}%</span>
               </div>
             )}
-            {belowFloor && <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--h10-danger)" }}>Below your {floorPct}% margin floor.</div>}
+            {belowFloor && <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--nds-danger)" }}>Below your {floorPct}% margin floor.</div>}
 
             {/* EPQ.3 — goal-seek (S7): type where the quote should land; the
                 active line's adjustment is solved by the engine and persisted
                 through the normal patch; the reason field takes focus after. */}
             {isDraft && canCreate && activeLine?.templateId && totals && (
-              <div style={{ marginTop: 10, borderTop: "1px solid var(--h10-border-subtle)", paddingTop: 8, display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--h10-text-3)" }}>Goal-seek · adjusts “{activeLine.template?.name ?? "this line"}”</div>
-                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--h10-text-2)" }}>Target net
+              <div style={{ marginTop: 10, borderTop: "1px solid var(--nds-border-subtle)", paddingTop: 8, display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--nds-text-3)" }}>Goal-seek · adjusts “{activeLine.template?.name ?? "this line"}”</div>
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--nds-text-2)" }}>Target net
                   <TargetNetInput key={`tn:${totals.netCents}`} currentCents={totals.netCents} onSeek={(cents) => void goalSeek("net", cents)} />
                 </label>
                 {canMargin && (
-                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--h10-text-2)" }}>Target margin %
+                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--nds-text-2)" }}>Target margin %
                     <input
                       type="number"
                       step="0.1"
@@ -446,7 +446,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                       aria-label="Target margin %"
                       onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && Math.abs(v - totals.marginPct) > 0.05) void goalSeek("margin", v); }}
                       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                      style={{ width: 78, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", textAlign: "right", background: "var(--h10-surface)", color: "var(--h10-text)" }}
+                      style={{ width: 78, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", textAlign: "right", background: "var(--nds-surface)", color: "var(--nds-text)" }}
                     />
                   </label>
                 )}
@@ -455,15 +455,15 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
           </div>
 
           {activeLine?.templateId && result && canCost && (
-            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>This line</div>
+            <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)", marginBottom: 6 }}>This line</div>
               {/* EPQ.1 — four-row waterfall (spec parity): the adjustment is a visible signed step, not folded into Net */}
               <Row label="Cost" value={eur(result.costCents ?? 0)} muted />
               {/* EPQ.4 — structured cost breakdown: each term a labeled row ("Material (2.4 m² +8% waste)" …) */}
               {result.structuredCost && costRows.map((l, i) => (
                 <div key={`c${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "1px 0 1px 12px" }}>
-                  <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{l.label}</span>
-                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--h10-text-3)" }}>{eur(l.costCents ?? 0)}</span>
+                  <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>{l.label}</span>
+                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--nds-text-3)" }}>{eur(l.costCents ?? 0)}</span>
                 </div>
               ))}
               <Row label="List" value={eur(preDisciplineListCents)} muted />
@@ -473,7 +473,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
               ))}
               <Row label="Adjustment" value={signedEur(activeLine.adjustmentCents)} muted={activeLine.adjustmentCents === 0} />
               {activeLine.adjustmentCents !== 0 && (activeLine.adjustmentReason || activeLine.adjustmentReasonCode) ? (
-                <div style={{ fontSize: 11, color: "var(--h10-text-3)", margin: "-1px 0 3px", textAlign: "right" }}>
+                <div style={{ fontSize: 11, color: "var(--nds-text-3)", margin: "-1px 0 3px", textAlign: "right" }}>
                   {activeLine.adjustmentReasonCode ? REASON_CODE_LABEL[activeLine.adjustmentReasonCode as AdjustmentReasonCode] ?? activeLine.adjustmentReasonCode : null}
                   {activeLine.adjustmentReasonCode && activeLine.adjustmentReason ? " — " : null}
                   {activeLine.adjustmentReason ? `“${activeLine.adjustmentReason}”` : null}
@@ -486,19 +486,19 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
           {/* EPQ.4 — quote-vs-actual: the converted order's REAL (ledger) cost
               beside the estimate — only once it shipped, only with the grain */}
           {canCost && orderActual && (
-            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Order actuals · {orderActual.orderNumber}</div>
+            <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)", marginBottom: 6 }}>Order actuals · {orderActual.orderNumber}</div>
               <Row label="Actual cost" value={eur(orderActual.actualCostCents)} />
               <Row label="Estimated" value={eur(orderActual.estCostCents)} muted />
-              <div style={{ fontSize: 11.5, marginTop: 3, textAlign: "right", color: orderActual.actualCostCents > orderActual.estCostCents ? "var(--h10-danger)" : "var(--h10-success, #15a34a)" }}>
+              <div style={{ fontSize: 11.5, marginTop: 3, textAlign: "right", color: orderActual.actualCostCents > orderActual.estCostCents ? "var(--nds-danger)" : "var(--nds-success, #15a34a)" }}>
                 {actualDeltaText(orderActual.actualCostCents, orderActual.estCostCents)}
               </div>
             </div>
           )}
 
-          <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
+          <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12, display: "grid", gap: 10 }}>
             {/* EPQ.5 — tax mode snapshot (party default at create; DRAFT-editable) */}
-            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Tax mode
+            <label style={{ fontSize: 11.5, color: "var(--nds-text-2)", display: "grid", gap: 3 }}>Tax mode
               <Listbox
                 ariaLabel="Tax mode"
                 options={TAX_MODES.map((m) => ({ value: m, label: TAX_MODE_LABEL[m] }))}
@@ -510,7 +510,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
             {railTaxMode === "EU_B2B" && (
               <div style={{ display: "grid", gap: 6 }}>
                 {partyViesOk ? (
-                  <div style={{ fontSize: 11.5, color: "var(--h10-success, #15a34a)" }}>
+                  <div style={{ fontSize: 11.5, color: "var(--nds-success, #15a34a)" }}>
                     VIES ✓ {quote.party.vatNumber} · {quote.party.viesCheckedAt ? new Date(quote.party.viesCheckedAt).toLocaleDateString() : ""} · id {quote.party.viesRequestId}
                   </div>
                 ) : (
@@ -525,18 +525,18 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                     key={quote.party.vatNumber ?? ""}
                     placeholder="VAT (e.g. DE123456789)"
                     aria-label="VAT number"
-                    style={{ flex: 1, minWidth: 0, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 8px", font: "12px var(--font-mono)", background: "var(--h10-surface)", color: "var(--h10-text)", outline: "none" }}
+                    style={{ flex: 1, minWidth: 0, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 8px", font: "12px var(--font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)", outline: "none" }}
                   />
                   <Button onClick={() => void checkVies()} disabled={viesBusy}>{viesBusy ? "Checking…" : "Check VIES"}</Button>
                 </div>
               </div>
             )}
             <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-              <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Deposit %
-                <input type="number" min={0} max={100} defaultValue={quote.depositPct ?? 0} key={quote.depositPct ?? 0} onBlur={(e) => Number(e.target.value) !== (quote.depositPct ?? 0) && patchQuote({ depositPct: Number(e.target.value) || null })} disabled={!isDraft} style={{ width: 70, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              <label style={{ fontSize: 11.5, color: "var(--nds-text-2)", display: "grid", gap: 3 }}>Deposit %
+                <input type="number" min={0} max={100} defaultValue={quote.depositPct ?? 0} key={quote.depositPct ?? 0} onBlur={(e) => Number(e.target.value) !== (quote.depositPct ?? 0) && patchQuote({ depositPct: Number(e.target.value) || null })} disabled={!isDraft} style={{ width: 70, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
               </label>
               {/* EPQ.5 — the deposit's LEGAL character (acconto vs caparra, art. 1385) */}
-              <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3, flex: 1, minWidth: 150 }}>Deposit kind
+              <label style={{ fontSize: 11.5, color: "var(--nds-text-2)", display: "grid", gap: 3, flex: 1, minWidth: 150 }}>Deposit kind
                 <Listbox
                   ariaLabel="Deposit kind"
                   options={DEPOSIT_KINDS.map((k) => ({ value: k, label: DEPOSIT_KIND_LABEL[k] }))}
@@ -546,12 +546,12 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                 />
               </label>
             </div>
-            <div style={{ fontSize: 10.5, color: "var(--h10-text-3)" }}>{DEPOSIT_KIND_HINT[railDepositKind]}</div>
-            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Valid until
+            <div style={{ fontSize: 10.5, color: "var(--nds-text-3)" }}>{DEPOSIT_KIND_HINT[railDepositKind]}</div>
+            <label style={{ fontSize: 11.5, color: "var(--nds-text-2)", display: "grid", gap: 3 }}>Valid until
               <DateField ariaLabel="Valid until" value={isoDate(quote.validUntilAt)} onChange={(v) => patchQuote({ validUntilAt: v ? new Date(`${v}T23:59:00`).toISOString() : null })} disabled={!isDraft} />
             </label>
             {/* EPQ.5 — validity wording: revocable vs firm offer (art. 1329 c.c.) */}
-            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Validity wording
+            <label style={{ fontSize: 11.5, color: "var(--nds-text-2)", display: "grid", gap: 3 }}>Validity wording
               <Listbox
                 ariaLabel="Validity wording"
                 options={VALIDITY_WORDINGS.map((w) => ({ value: w, label: VALIDITY_WORDING_LABEL[w] }))}
@@ -560,15 +560,15 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                 disabled={!isDraft}
               />
             </label>
-            <div style={{ fontSize: 10.5, color: "var(--h10-text-3)", fontStyle: "italic" }}>
+            <div style={{ fontSize: 10.5, color: "var(--nds-text-3)", fontStyle: "italic" }}>
               “{validityLine(railValidityWording, quote.validUntilAt ? new Date(quote.validUntilAt).toLocaleDateString("it-IT") : "{data}")}”
             </div>
-            <label style={{ fontSize: 11.5, color: "var(--h10-text-2)", display: "grid", gap: 3 }}>Promise date <span style={{ fontSize: 10, color: "var(--h10-text-3)" }}>(estimate; real lead time in FP6)</span>
+            <label style={{ fontSize: 11.5, color: "var(--nds-text-2)", display: "grid", gap: 3 }}>Promise date <span style={{ fontSize: 10, color: "var(--nds-text-3)" }}>(estimate; real lead time in FP6)</span>
               <DateField ariaLabel="Promise date" value={isoDate(quote.promiseDateAt)} onChange={(v) => patchQuote({ promiseDateAt: v ? new Date(`${v}T12:00:00`).toISOString() : null })} disabled={!isDraft} />
               {/* EPQ.4 — CTP-lite suggestion with its terms spelled out; Apply
                   writes through the normal PATCH — the field NEVER auto-fills */}
               {promiseSuggest && (
-                <span style={{ fontSize: 10.5, color: "var(--h10-text-3)", display: "inline-flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10.5, color: "var(--nds-text-3)", display: "inline-flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
                   <span>
                     suggested: {new Date(promiseSuggest.dateISO).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} ({promiseSuggest.formula})
                   </span>
@@ -576,7 +576,7 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                     <button
                       type="button"
                       onClick={() => patchQuote({ promiseDateAt: new Date(`${isoDate(promiseSuggest.dateISO)}T12:00:00`).toISOString() })}
-                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--h10-text-link)" }}
+                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--nds-text-link)" }}
                     >
                       Apply
                     </button>
@@ -588,8 +588,8 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
 
           {/* EPQ.2 — customer views: the public page records every open */}
           {quote.sentAt && (
-            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Customer views</div>
+            <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)", marginBottom: 6 }}>Customer views</div>
               {quote.viewCount > 0 ? (
                 <>
                   <Row label="Views" value={`${quote.viewCount}×`} />
@@ -597,43 +597,43 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
                   <Row label="Last" value={quote.lastViewedAt ? new Date(quote.lastViewedAt).toLocaleString() : "—"} muted />
                 </>
               ) : (
-                <div style={{ fontSize: 12, color: "var(--h10-text-3)" }}>Not viewed yet — the link in the email records every open.</div>
+                <div style={{ fontSize: 12, color: "var(--nds-text-3)" }}>Not viewed yet — the link in the email records every open.</div>
               )}
               {quote.lastNudgeAt && (
-                <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 4 }}>Last follow-up sent {new Date(quote.lastNudgeAt).toLocaleDateString()}.</div>
+                <div style={{ fontSize: 11, color: "var(--nds-text-3)", marginTop: 4 }}>Last follow-up sent {new Date(quote.lastNudgeAt).toLocaleDateString()}.</div>
               )}
             </div>
           )}
 
           {quote.versions.length > 0 && (
-            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Sent versions (frozen)</div>
+            <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)", marginBottom: 6 }}>Sent versions (frozen)</div>
               {quote.versions.map((v) => (
                 <div key={v.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
                   <span>v{v.version}</span>
-                  <span style={{ color: "var(--h10-text-3)" }}>{new Date(v.sentAt).toLocaleDateString()}{v.pdfRef ? <a href={`/api/quotes/${quoteId}/pdf?version=${v.version}`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 6, color: "var(--h10-text-link)" }}>PDF</a> : null}</span>
+                  <span style={{ color: "var(--nds-text-3)" }}>{new Date(v.sentAt).toLocaleDateString()}{v.pdfRef ? <a href={`/api/quotes/${quoteId}/pdf?version=${v.version}`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 6, color: "var(--nds-text-link)" }}>PDF</a> : null}</span>
                 </div>
               ))}
             </div>
           )}
 
           {similar.length > 0 && (
-            <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--h10-text-3)", marginBottom: 6 }}>Similar past quotes</div>
+            <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--nds-text-3)", marginBottom: 6 }}>Similar past quotes</div>
               {similar.map((s) => (
                 // EPQ.3 — rows OPEN the quote (inventory gap 7: they were inert); "repeat" = it was produced
                 <div key={s.id}>
                   <button type="button" onClick={() => goToQuote(s.id)} title={`Open ${s.number}`} style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, padding: "2px 0", background: "none", border: "none", cursor: "pointer", font: "inherit", textAlign: "left" }}>
                     <span style={{ display: "inline-flex", gap: 5, alignItems: "baseline" }}>
-                      <span style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>{s.number}</span>
+                      <span style={{ color: "var(--nds-text-link)", fontWeight: 600 }}>{s.number}</span>
                       <Pill tone={s.state === "ACCEPTED" ? "success" : "danger"}>{s.state === "ACCEPTED" ? "won" : "lost"}</Pill>
                       {s.wasProduced && <Pill tone="info">repeat</Pill>}
                     </span>
-                    <span style={{ color: "var(--h10-text-2)", fontFamily: "var(--font-mono)" }}>{eur(s.netCents)}</span>
+                    <span style={{ color: "var(--nds-text-2)", fontFamily: "var(--font-mono)" }}>{eur(s.netCents)}</span>
                   </button>
                   {/* EPQ.4 — the quote-vs-actual line: what the produced run REALLY cost */}
                   {canCost && s.actual && (
-                    <div style={{ fontSize: 11, color: "var(--h10-text-3)", padding: "0 0 3px", lineHeight: 1.35 }}>
+                    <div style={{ fontSize: 11, color: "var(--nds-text-3)", padding: "0 0 3px", lineHeight: 1.35 }}>
                       won at {eur(s.netCents)} · actual cost {eur(s.actual.actualCostCents)} vs est {eur(s.actual.estCostCents)}
                     </div>
                   )}
@@ -665,8 +665,8 @@ export function QuoteEditor({ quoteId, onBack }: { quoteId: string; onBack: () =
 /** EPQ.3 — target-net input: EuroInput look, commit-on-blur, only fires when changed. */
 function TargetNetInput({ currentCents, onSeek }: { currentCents: number; onSeek: (cents: number) => void }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--h10-border)", borderRadius: 7, overflow: "hidden", background: "var(--h10-surface)" }}>
-      <span style={{ padding: "4px 6px", fontSize: 12, color: "var(--h10-text-3)", background: "var(--h10-surface-sunken)" }}>€</span>
+    <span style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--nds-border)", borderRadius: 7, overflow: "hidden", background: "var(--nds-surface)" }}>
+      <span style={{ padding: "4px 6px", fontSize: 12, color: "var(--nds-text-3)", background: "var(--nds-surface-sunken)" }}>€</span>
       <input
         type="number"
         step="0.01"
@@ -674,7 +674,7 @@ function TargetNetInput({ currentCents, onSeek }: { currentCents: number; onSeek
         aria-label="Target net"
         onBlur={(e) => { const cents = euroStrToCents(e.target.value); if (cents !== currentCents) onSeek(cents); }}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        style={{ width: 90, border: "none", outline: "none", font: "12.5px var(--font-mono), monospace", padding: "4px 6px", background: "transparent", color: "var(--h10-text)", textAlign: "right" }}
+        style={{ width: 90, border: "none", outline: "none", font: "12.5px var(--font-mono), monospace", padding: "4px 6px", background: "transparent", color: "var(--nds-text)", textAlign: "right" }}
       />
     </span>
   );
@@ -720,12 +720,12 @@ function SizeRunModal({ initial, suggestedSizes, onClose, onSave }: {
       }
     >
       <div style={{ display: "grid", gap: 6 }}>
-        <div style={{ fontSize: 12, color: "var(--h10-text-2)" }}>One line, one matrix: quantity per size. The line qty becomes the sum; production explodes per size at Start production.</div>
+        <div style={{ fontSize: 12, color: "var(--nds-text-2)" }}>One line, one matrix: quantity per size. The line qty becomes the sum; production explodes per size at Start production.</div>
         {rows.map((r, i) => (
           <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input value={r.size} onChange={(e) => setRows((prev) => prev.map((p, j) => (j === i ? { ...p, size: e.target.value } : p)))} placeholder="Size (e.g. 48)" aria-label={`Size ${i + 1}`} style={{ width: 110, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 8px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
-            <input type="number" min={0} value={r.qty} onChange={(e) => setRows((prev) => prev.map((p, j) => (j === i ? { ...p, qty: e.target.value } : p)))} placeholder="Qty" aria-label={`Qty for size ${i + 1}`} style={{ width: 70, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 8px", font: "12.5px var(--font-mono)", textAlign: "center", outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
-            <button type="button" onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))} aria-label={`Remove size row ${i + 1}`} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--h10-text-3)", padding: 2 }}>×</button>
+            <input value={r.size} onChange={(e) => setRows((prev) => prev.map((p, j) => (j === i ? { ...p, size: e.target.value } : p)))} placeholder="Size (e.g. 48)" aria-label={`Size ${i + 1}`} style={{ width: 110, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 8px", fontSize: 12.5, outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+            <input type="number" min={0} value={r.qty} onChange={(e) => setRows((prev) => prev.map((p, j) => (j === i ? { ...p, qty: e.target.value } : p)))} placeholder="Qty" aria-label={`Qty for size ${i + 1}`} style={{ width: 70, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 8px", font: "12.5px var(--font-mono)", textAlign: "center", outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+            <button type="button" onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))} aria-label={`Remove size row ${i + 1}`} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--nds-text-3)", padding: 2 }}>×</button>
           </div>
         ))}
         <div>
@@ -750,8 +750,8 @@ function actualDeltaText(actualCents: number, estCents: number): string {
 function Row({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2px 0" }}>
-      <span style={{ fontSize: 12, color: muted ? "var(--h10-text-3)" : "var(--h10-text-2)" }}>{label}</span>
-      <span style={{ fontSize: strong ? 15 : 13, fontWeight: strong ? 800 : 600, fontFamily: "var(--font-mono)", color: "var(--h10-text)" }}>{value}</span>
+      <span style={{ fontSize: 12, color: muted ? "var(--nds-text-3)" : "var(--nds-text-2)" }}>{label}</span>
+      <span style={{ fontSize: strong ? 15 : 13, fontWeight: strong ? 800 : 600, fontFamily: "var(--font-mono)", color: "var(--nds-text)" }}>{value}</span>
     </div>
   );
 }

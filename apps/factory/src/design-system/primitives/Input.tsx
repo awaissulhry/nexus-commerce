@@ -17,7 +17,7 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
  * shaded €/% unit adornments. Requires `styles/primitives.css`.
  */
 export function Input({ leadingIcon, prefix, suffix, fieldClassName, disabled, ...rest }: InputProps) {
-  const cls = ['h10-ds-field', disabled ? 'disabled' : '', fieldClassName ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-field', disabled ? 'disabled' : '', fieldClassName ?? ''].filter(Boolean).join(' ')
   return (
     <span className={cls}>
       {prefix != null && <span className="ad pre">{prefix}</span>}

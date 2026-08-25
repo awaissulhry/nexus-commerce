@@ -1297,7 +1297,7 @@ export function WorkersClient() {
         </span>
       </div>
 
-      <div className="h10-ds-gridcard sbw-gridcard">
+      <div className="nds-gridcard sbw-gridcard">
         <GridToolbar
           count={
             selectedRows.length > 0 ? (

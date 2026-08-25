@@ -166,7 +166,7 @@ if (mode === '--check') {
   const amazonPalette = new Set((adsCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))
   const offPalette = [...new Set((ebayCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))].filter((h) => !amazonPalette.has(h))
   // 🔴 This check compares literal hex SETS. Phase 9.1 rewrites ads.css to
-  // var(--h10-*), at which point the Amazon palette empties and every ebay.css
+  // var(--nds-*), at which point the Amazon palette empties and every ebay.css
   // colour would "match" an empty set — the check would pass while enforcing
   // nothing. Fail loudly instead, so the tokenization forces a real decision
   // (resolve both sides through tokens.css, or retire this check) rather than
@@ -199,7 +199,7 @@ if (mode === '--check') {
           m === 'legacyKit'
             ? '   Import from @/design-system, not @/components/ui — see /DESIGN.md.'
             : m === 'rawColor'
-              ? '   Raw Tailwind palette classes bypass the token system — use a DS component or an --h10-* token.'
+              ? '   Raw Tailwind palette classes bypass the token system — use a DS component or an --nds-* token.'
               : '   Use the design-system component instead (Select/DateRangePicker/type classes).',
         )
         console.error(`   Offenders: node scripts/ds-conformance-guard.mjs --manifest ${section}`)

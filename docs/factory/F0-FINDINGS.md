@@ -24,7 +24,7 @@ Root `package.json` declares react **^19.2.5** (hoisted install currently 19.2.6
 
 ## 6. Design-system token drift — the generated file is the truth
 
-11 `--h10-rail-*` variables exist only in the **generated** `styles/tokens.css` (added directly by commit `99746dbe`) and in scoped `ads.css` blocks — `tokens/css-vars.ts` does not list them. Copying css-vars.ts alone would lose the rail palette. Also upstream: a pending `.h10-*` → `.nx-*` class rename (DS Phase 9) will eventually land — the parity script treats it as a re-sync event. **Encoded in:** F0-DESIGN-BRIDGE copy table + parity checklist, FD12.
+11 `--nds-rail-*` variables exist only in the **generated** `styles/tokens.css` (added directly by commit `99746dbe`) and in scoped `ads.css` blocks — `tokens/css-vars.ts` does not list them. Copying css-vars.ts alone would lose the rail palette. Also upstream: a pending `.h10-*` → `.nx-*` class rename (DS Phase 9) will eventually land — the parity script treats it as a re-sync event. **Encoded in:** F0-DESIGN-BRIDGE copy table + parity checklist, FD12.
 
 ## 7. Comments/@mentions: Nexus has the bones, not the system — build-new is validated
 

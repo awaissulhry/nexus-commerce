@@ -75,9 +75,9 @@ export default function ImportExportPage() {
       <div style={{ display: "grid", gap: 14 }}>
         <Card padded header="Import parties (CSV)">
           <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+            <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>
               Start from the exact shape:{" "}
-              <a href="/api/imports/parties/template" style={{ color: "var(--h10-text-link)" }}>
+              <a href="/api/imports/parties/template" style={{ color: "var(--nds-text-link)" }}>
                 download the template
               </a>{" "}
               · columns: kind (BRAND|CUSTOMER|SUPPLIER), name, email, currency, payment_terms, notes.
@@ -94,11 +94,11 @@ export default function ImportExportPage() {
               style={{
                 width: "100%",
                 font: "12px var(--font-mono), monospace",
-                border: "1px solid var(--h10-border)",
+                border: "1px solid var(--nds-border)",
                 borderRadius: 8,
                 padding: 10,
-                background: "var(--h10-surface)",
-                color: "var(--h10-text)",
+                background: "var(--nds-surface)",
+                color: "var(--nds-text)",
                 resize: "vertical",
               }}
             />
@@ -118,7 +118,7 @@ export default function ImportExportPage() {
             {result && (
               <>
                 {result.parseErrors.length > 0 && (
-                  <div style={{ fontSize: 12.5, color: "var(--h10-danger)" }}>
+                  <div style={{ fontSize: 12.5, color: "var(--nds-danger)" }}>
                     {result.parseErrors.map((e) => (
                       <div key={e.row}>
                         Row {e.row}: {e.error}
@@ -168,7 +168,7 @@ export default function ImportExportPage() {
         >
           <div style={{ display: "grid", gap: 6, fontSize: 12.5 }}>
             <div>
-              <a href="/api/exports/parties" style={{ color: "var(--h10-text-link)" }}>
+              <a href="/api/exports/parties" style={{ color: "var(--nds-text-link)" }}>
                 parties.csv
               </a>{" "}
               — round-trips with the import. Financial columns are stripped unless your role holds the
@@ -176,14 +176,14 @@ export default function ImportExportPage() {
             </div>
             {/* FS5 — the two append-only archival exports (full-table, streamed) */}
             <div>
-              <a href="/api/exports/ledger" style={{ color: "var(--h10-text-link)" }}>
+              <a href="/api/exports/ledger" style={{ color: "var(--nds-text-link)" }}>
                 ledger.csv
               </a>{" "}
               — the FULL movement ledger, streamed (append-only forever; this export is the archival
               path — nothing is ever deleted).
             </div>
             <div>
-              <a href="/api/exports/audit" style={{ color: "var(--h10-text-link)" }}>
+              <a href="/api/exports/audit" style={{ color: "var(--nds-text-link)" }}>
                 audit.csv
               </a>{" "}
               — the FULL audit trail, streamed, with before/after as JSON cells.

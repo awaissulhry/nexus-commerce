@@ -67,7 +67,7 @@ export function NotificationBell() {
           background: "none",
           border: "none",
           cursor: "pointer",
-          color: "var(--h10-rail-icon)",
+          color: "var(--nds-rail-icon)",
           display: "inline-flex",
           padding: 2,
         }}
@@ -82,7 +82,7 @@ export function NotificationBell() {
               minWidth: 14,
               height: 14,
               borderRadius: 7,
-              background: "var(--h10-danger)",
+              background: "var(--nds-danger)",
               color: "#fff",
               fontSize: 9,
               fontWeight: 800,
@@ -97,7 +97,7 @@ export function NotificationBell() {
       </button>
       <Drawer open={open} onClose={() => setOpen(false)} title="Notifications">
         {items.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--h10-text-3)", padding: 8 }}>
+          <div style={{ fontSize: 13, color: "var(--nds-text-3)", padding: 8 }}>
             Nothing yet. Mentions, assignments and state changes land here.
           </div>
         ) : (
@@ -107,15 +107,15 @@ export function NotificationBell() {
                 key={i.id}
                 href={i.href ?? "#"}
                 style={{
-                  border: "1px solid var(--h10-border-subtle)",
+                  border: "1px solid var(--nds-border-subtle)",
                   borderRadius: 8,
                   padding: "8px 10px",
-                  background: i.readAt ? "var(--h10-surface)" : "var(--h10-wash-primary)",
+                  background: i.readAt ? "var(--nds-surface)" : "var(--nds-wash-primary)",
                 }}
               >
                 <div style={{ fontSize: 12.5, fontWeight: 600 }}>{i.title}</div>
-                {i.body && <div style={{ fontSize: 12, color: "var(--h10-text-2)" }}>{i.body}</div>}
-                <div style={{ fontSize: 10.5, color: "var(--h10-text-3)", marginTop: 2 }}>
+                {i.body && <div style={{ fontSize: 12, color: "var(--nds-text-2)" }}>{i.body}</div>}
+                <div style={{ fontSize: 10.5, color: "var(--nds-text-3)", marginTop: 2 }}>
                   {new Date(i.createdAt).toLocaleString()}
                 </div>
               </a>

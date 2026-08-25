@@ -952,7 +952,7 @@ the same reason.
   `.fleet-surface` already pins the DS tokens the `productsNextLight` way —
   copy that, never `.h10-shell` (`reference_ds_token_triplet_collision`).
 - DS `DataGrid` + `GridToolbar` + `FilterBar` + `Pagination` inside
-  `h10-ds-gridcard` for any table, all four DS stylesheets imported. Settled by
+  `nds-gridcard` for any table, all four DS stylesheets imported. Settled by
   Workers STUDY 0.
 - **Zero native `<select>` under `app/fleet`** — the DS ratchet checks the
   working tree, so one offender blocks every session's push.
@@ -2208,7 +2208,7 @@ in place, and that it is re-checked by the same code that produced the original 
 which is what AQ.8 built and proved on production.
 
 **No `<Term>` inside the drawer**, and the reason is checkable rather than
-stylistic: `.h10-ds-drawer-b` is `overflow-y: auto`, and `.acr-term-tip` is an
+stylistic: `.nds-drawer-b` is `overflow-y: auto`, and `.acr-term-tip` is an
 absolutely-positioned box that opens *upward* out of its line — so a tooltip in a
 drawer is clipped by its own scroll container. `HowAssignmentsWork` imports no
 `Term` either. The drawer *is* the long-form definition surface; tooltips serve
@@ -2409,7 +2409,7 @@ silently absorbed into an S1 commit.
   and I am not asking you to do it on my timetable.** Nothing in S1.a–S1.c
   depends on it.
 - **For every stream: a `<Term>` inside a DS `Drawer` is clipped.**
-  `.h10-ds-drawer-b` is `overflow-y: auto` and `.acr-term-tip` opens upward out
+  `.nds-drawer-b` is `overflow-y: auto` and `.acr-term-tip` opens upward out
   of its line. `assignments/HowAssignmentsWork.tsx` already avoids this (no
   `Term` import); now it is written down rather than folklore.
 - **For every stream: the shared `<Term>` fails two of WCAG 1.4.13's three
@@ -3087,7 +3087,7 @@ Three reasons, in order of weight:
    exactly as Activity does** — no new palette, no claim on a shared file.
 3. **The DS status ramp is available and dark-safe, and I checked rather than
    assumed.** `--status-warning-*` / `--status-danger-*` resolve through
-   `--h10-amber-*` / `--h10-red-*`, and **tokens.css's single `.dark` block never
+   `--nds-amber-*` / `--nds-red-*`, and **tokens.css's single `.dark` block never
    redefines those ramps** — so they are whole colours in both themes with no pin
    needed. They are the right tool the day S2 needs a second tone. It does not
    need one now, and inventing a use for an available token is how a fourth
@@ -4626,11 +4626,11 @@ Not risk tier, which is high on everything and therefore says nothing.
 | Where | Today | Proposed | Measured |
 |---|---|---|---|
 | `.aq-card.r-high` left border | `#c53030` on every card | **removed**; border keyed to `canExecute` instead | — |
-| A card that can execute | (indistinguishable) | `3px solid var(--h10-danger)` `#e5484d` | **3.91:1** vs white — graphic, needs 3:1 ✓ |
-| Danger text / glyph | `#c53030` ad-hoc | `var(--h10-danger-strong)` `#c0392b` | **5.44:1** vs white ✓ (today's `#c53030` measures 5.47 — a visually identical swap) |
-| `.aq-outwhy` panel | `#fdf7f7` bg / `#f0dcdc` border | `var(--h10-danger-soft)` `#fde8e8` | body `#3a4658` on it = **8.14:1** ✓ |
-| "switched off" state in the empty line | — | `var(--h10-amber-text)` `#9a6700` | **4.50:1** on canvas `#f4f6f9` ✓ (exactly at the line — verified composited before shipping) |
-| `.aq-outside-card` border | `#f0c9c9` | `var(--h10-danger-soft)` | decorative |
+| A card that can execute | (indistinguishable) | `3px solid var(--nds-danger)` `#e5484d` | **3.91:1** vs white — graphic, needs 3:1 ✓ |
+| Danger text / glyph | `#c53030` ad-hoc | `var(--nds-danger-strong)` `#c0392b` | **5.44:1** vs white ✓ (today's `#c53030` measures 5.47 — a visually identical swap) |
+| `.aq-outwhy` panel | `#fdf7f7` bg / `#f0dcdc` border | `var(--nds-danger-soft)` `#fde8e8` | body `#3a4658` on it = **8.14:1** ✓ |
+| "switched off" state in the empty line | — | `var(--nds-amber-text)` `#9a6700` | **4.50:1** on canvas `#f4f6f9` ✓ (exactly at the line — verified composited before shipping) |
+| `.aq-outside-card` border | `#f0c9c9` | `var(--nds-danger-soft)` | decorative |
 
 Four ad-hoc hexes retired to DS tokens. **`#c53030`'s other four call sites are
 out of scope for S5** — `.aq-err` and `.aq-gateunknown` are genuine error states

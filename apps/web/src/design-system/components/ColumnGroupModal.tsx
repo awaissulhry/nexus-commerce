@@ -45,23 +45,23 @@ function SortableRow({ group, onToggle, canHide }: SortableRowProps) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-      className="h10-ds-cgm-row"
+      className="nds-cgm-row"
     >
       <button
         {...attributes}
         {...listeners}
         tabIndex={0}
         aria-label={`Drag to reorder ${group.label}`}
-        className="h10-ds-cgm-grip"
+        className="nds-cgm-grip"
       >
         <GripVertical size={16} />
       </button>
-      <span className="h10-ds-cgm-dot" data-color={group.color} aria-hidden />
-      <div className="h10-ds-cgm-main">
-        <span className="h10-ds-cgm-label" data-hidden={visible ? undefined : ''}>
+      <span className="nds-cgm-dot" data-color={group.color} aria-hidden />
+      <div className="nds-cgm-main">
+        <span className="nds-cgm-label" data-hidden={visible ? undefined : ''}>
           {group.label}
         </span>
-        <span className="h10-ds-cgm-count">
+        <span className="nds-cgm-count">
           {group.columns.length} {group.columns.length === 1 ? 'column' : 'columns'}
         </span>
       </div>
@@ -116,12 +116,12 @@ export function ColumnGroupModal({ open, onClose, groups, onGroupsChange }: Colu
       subtitle="Show, hide, and reorder groups. Drag the handle to reorder."
       size="md"
       footer={
-        <div className="h10-ds-cgm-foot">
-          <Button variant="ghost" size="sm" onClick={handleReset} className="h10-ds-cgm-reset">
+        <div className="nds-cgm-foot">
+          <Button variant="ghost" size="sm" onClick={handleReset} className="nds-cgm-reset">
             <RotateCcw size={14} />
             Reset to default
           </Button>
-          <div className="h10-ds-cgm-foot-actions">
+          <div className="nds-cgm-foot-actions">
             <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
             <Button variant="primary" size="sm" onClick={handleApply}>Apply</Button>
           </div>
@@ -130,7 +130,7 @@ export function ColumnGroupModal({ open, onClose, groups, onGroupsChange }: Colu
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={localGroups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
-          <div className="h10-ds-cgm-list">
+          <div className="nds-cgm-list">
             {localGroups.map((group) => (
               <SortableRow
                 key={group.id}
@@ -143,7 +143,7 @@ export function ColumnGroupModal({ open, onClose, groups, onGroupsChange }: Colu
         </SortableContext>
       </DndContext>
       {!canHide && (
-        <p className="h10-ds-cgm-note">
+        <p className="nds-cgm-note">
           At least one group must remain visible.
         </p>
       )}

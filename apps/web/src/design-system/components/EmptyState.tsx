@@ -12,7 +12,7 @@ export interface EmptyStateProps {
 /** No-data state — centred icon + title + description + optional CTA. */
 export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
   return (
-    <div className={`h10-ds-empty${className ? ` ${className}` : ''}`}>
+    <div className={`nds-empty${className ? ` ${className}` : ''}`}>
       {icon != null && <div className="ico">{icon}</div>}
       <div className="t">{title}</div>
       {description != null && <div className="d">{description}</div>}

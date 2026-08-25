@@ -148,10 +148,10 @@ describe('SCT.2 — page sizes', () => {
   })
 
   it('beats the DS card rule on specificity, not on stylesheet order', () => {
-    // .sc-card-pop alone TIES .h10-ds-gridcard, and the prod bundle loads
+    // .sc-card-pop alone TIES .nds-gridcard, and the prod bundle loads
     // patterns.css last — the un-compounded selector shipped as a no-op.
     const css = readFileSync(join(DIR, 'styles.module.css'), 'utf8')
-    expect(css).toMatch(/:global\(\.h10-ds-gridcard\.sc-card-pop\)/)
+    expect(css).toMatch(/:global\(\.nds-gridcard\.sc-card-pop\)/)
     expect(css, 'un-compounded .sc-card-pop loses to the DS rule in prod')
       .not.toMatch(/:global\(\.sc-card-pop\)/)
   })

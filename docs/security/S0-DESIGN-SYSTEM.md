@@ -96,7 +96,7 @@ Canonical shared vocab: `type Tone = 'neutral'|'info'|'success'|'warning'|'dange
 | DetailHeader | back + badge + h1 + actions | backLabel, onBack, badge, title, actions |
 | FilterPanel + FilterField | collapsible labelled filter grid | title, presets, onReset, onApply, footerExtra, defaultOpen; FilterField: label, wide |
 | FilterBar | **declarative** ads-manager filter panel (6-col grid) | dimensions(FilterDimension[]: kind multiselect\|select\|range\|toggle), presets, onClear, activeCount, defaultOpen |
-| GridToolbar | count-left / actions / right-actions toolbar row | count, children(left), right — pair with `.h10-ds-gridcard` |
+| GridToolbar | count-left / actions / right-actions toolbar row | count, children(left), right — pair with `.nds-gridcard` |
 | PreferencesModal | two-panel "Customise" (columns/sticky/pageSize/sort) | open, onClose, value/onConfirm(PreferencesValue), allColumns, defaultVisible, sortFieldOptions, pageSizeChoices, showSticky, workspaceSlot |
 | BulkActionBar | selected-N action bar (hides at 0) | count, children, onClear, noun |
 | EditModeBar | dirty-state Apply/Discard bar | message, count, onDiscard, onApply, applyLabel, busy |
@@ -108,11 +108,11 @@ AUDIT.md deltas: FilterBar, GridToolbar, PreferencesModal (patterns), ColumnGrou
 ## 3. Tokens / theming
 
 - **TS-first, generated CSS**: `tokens/*.ts` (palette/typography/spacing/radius/shadow/motion/zindex/breakpoints) → ordered `tokens/css-vars.ts` → `tools/generate-tokens-css.ts` emits `styles/tokens.css` (`npm run tokens:gen`; `npm run tokens:check` = CI staleness guard). Header of tokens.css says "GENERATED — do not edit".
-- **116 `--h10-*` vars, 3 tiers**: Tier 1 primitive ramps (blue/grey/green/red/amber/purple/cyan stops), Tier 2 semantic roles, Tier 3 component tokens (pill/badge/radius/shadow/focus/rail/type).
+- **116 `--nds-*` vars, 3 tiers**: Tier 1 primitive ramps (blue/grey/green/red/amber/purple/cyan stops), Tier 2 semantic roles, Tier 3 component tokens (pill/badge/radius/shadow/focus/rail/type).
 - **Platform-semantic alias layer is live**: components consume `--text-{primary,secondary,tertiary,disabled,link}`, `--surface-{canvas,card,sunken}`, `--border-{default,subtle,strong}`, `--color-primary(-soft)`, `--status-{success,warning,danger,info}-{soft,line,strong}` (mapping table in AUDIT.md §2).
 - **Dark theme**: `.dark` class block in tokens.css:192-220 re-declares text/surface/border/rail roles (Tailwind `darkMode:'class'`). `.h10-shell` pins standalone shells (ads cockpit, /products/next) light deliberately.
 - **JS access**: `import { tokens } from '@/design-system/tokens'` → `tokens.color.*`, `tokens.space`, `tokens.radius`, `tokens.shadow`, `tokens.zIndex`…
-- Components style via `.h10-ds-*` classes in `styles/{primitives,components,patterns}.css`; raw hex/Tailwind palette in DS components is a lint defect (`tools/token-guard.mjs`). The app's `tailwind.config.ts` also bridges `surface`/`status` colors onto CSS vars for the legacy pages.
+- Components style via `.nds-*` classes in `styles/{primitives,components,patterns}.css`; raw hex/Tailwind palette in DS components is a lint defect (`tools/token-guard.mjs`). The app's `tailwind.config.ts` also bridges `surface`/`status` colors onto CSS vars for the legacy pages.
 
 ## 4. Team & Access needs vs exists
 
@@ -150,7 +150,7 @@ AUDIT.md deltas: FilterBar, GridToolbar, PreferencesModal (patterns), ColumnGrou
 **A. DS-first page recipe** (the pattern to follow — `app/products/next/ProductsNextClient.tsx`, flagship; `app/marketing/ads/portfolios/PortfoliosClient.tsx`, newest 2026-07-01):
 1. `'use client'` client component; export wrapper = `<ToastProvider><Inner/></ToastProvider>` (ProductsNextClient.tsx:1597, PortfoliosClient.tsx:336).
 2. Explicit DS CSS imports at top: tokens/primitives/components/patterns.css + one page-local CSS file (`portfolios.css`, `styles.module.css`) for page-specific glue only.
-3. Vertical order: `PageHeader` (title/subtitle/actions=sm Buttons w/ lucide icons at 13-14px) → optional Banner/mode strip → KPI tiles (page CSS, click-to-filter) → `FilterBar` → **`.h10-ds-gridcard`** div containing `GridToolbar` (count `Viewing <b>N</b> of <b>M</b>`, left slot swaps search⇄selection actions, right slot: density/Customise/Export) + `DataGrid` → `PreferencesModal` + feature `Modal`s at the end (ProductsNextClient.tsx:1390-1590).
+3. Vertical order: `PageHeader` (title/subtitle/actions=sm Buttons w/ lucide icons at 13-14px) → optional Banner/mode strip → KPI tiles (page CSS, click-to-filter) → `FilterBar` → **`.nds-gridcard`** div containing `GridToolbar` (count `Viewing <b>N</b> of <b>M</b>`, left slot swaps search⇄selection actions, right slot: density/Customise/Export) + `DataGrid` → `PreferencesModal` + feature `Modal`s at the end (ProductsNextClient.tsx:1390-1590).
 4. Server `page.tsx` is thin (7 lines in portfolios); data fetched client-side with `getBackendUrl()`, or server-fetched + passed as `initial*` props (settings pattern).
 5. Confirmations = dedicated small Modals with Cancel(secondary)+Action(primary) footer and explicit consequence copy per mode (PortfoliosClient.tsx:285-331).
 

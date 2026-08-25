@@ -1468,13 +1468,13 @@ whole, the shorthand becomes `1px solid 203 213 225`, which is invalid, so the e
 dropped and Tailwind's `border: 0px` preflight wins.
 
 Meanwhile `tokens.css` and `products-next-shell.css` define the **same names as full colours**
-(`--surface-card: var(--h10-surface)` → `#fff`). So one set of names carries two incompatible
+(`--surface-card: var(--nds-surface)` → `#fff`). So one set of names carries two incompatible
 conventions and which one wins depends on which stylesheet loaded last on that page.
 
 | token | globals.css / ads.css | tokens.css / products-next-shell.css |
 |---|---|---|
-| `--surface-card` | `255 255 255` | `var(--h10-surface)` → `#fff` |
-| `--border-default` | `203 213 225` | `var(--h10-border)` → `#d8dde4` |
+| `--surface-card` | `255 255 255` | `var(--nds-surface)` → `#fff` |
+| `--border-default` | `203 213 225` | `var(--nds-border)` → `#d8dde4` |
 
 **Scope: ~164 declarations** across `primitives.css` + `components.css` use tokens in that colliding
 set (`surface-card` 30, `text-primary` 32, `border-subtle` 28, `text-tertiary` 26, `text-secondary`
@@ -1484,7 +1484,7 @@ This also explains a habit visible throughout the console and never questioned: 
 hand-rolling literal hex over DS buttons (`.pf-btn-danger`, `.rec-btn-live`). Those are not style
 preferences — they are workarounds for a base style that never applied.
 
-**Not fixed here.** The obvious repair is to have `primitives.css` use the DS's own `--h10-*`
+**Not fixed here.** The obvious repair is to have `primitives.css` use the DS's own `--nds-*`
 namespace, which resolves to real colours everywhere and is what the triplet tokens were derived
 from. That is provably equivalent where the DS currently works — but it changes the effective
 appearance of ~164 declarations everywhere else, and deciding what those should look like belongs to

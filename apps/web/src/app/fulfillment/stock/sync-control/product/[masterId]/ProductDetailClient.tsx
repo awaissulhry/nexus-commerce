@@ -468,7 +468,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
 
       {notice && <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">{notice}</div>}
 
-      <div className="h10-ds-gridcard sc-card-pop">
+      <div className="nds-gridcard sc-card-pop">
         <GridToolbar
           count={selected.size > 0 ? <>Selected <b>{selected.size}</b> {selected.size === 1 ? 'listing' : 'listings'}</> : <>{children.length} listings</>}
           right={

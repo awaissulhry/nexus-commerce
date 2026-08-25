@@ -27,8 +27,8 @@ warning. A border becomes `0px`, a background becomes transparent, a colour inhe
 console its channel definitions shadow the DS's. Reordering imports cannot fix it. 285 design-system
 declarations were dead this way for months.
 
-**The rule that avoids all of it: in design-system code, use `--h10-*` and nothing else.**
-`--h10-*` is DS-owned, no other stylesheet redefines it, it is a real colour in every scope, and
+**The rule that avoids all of it: in design-system code, use `--nds-*` and nothing else.**
+`--nds-*` is DS-owned, no other stylesheet redefines it, it is a real colour in every scope, and
 `.dark` already overrides it. `token-guard` check D enforces this. Full account:
 `design-system/docs/PHASE-9-0B-TOKEN-FORM.md`.
 
@@ -48,31 +48,31 @@ The root layout loads the whole DS (`tokens-global.css` + `primitives` + `compon
 
 Three tiers. **Components consume tier 2. Only tier 2 may reference tier 1.**
 
-**Tier 1 — primitive ramps** (122 tokens): `--h10-white`, `--h10-grey-{25…900}`,
-`--h10-blue-{50…900}`, `--h10-green-*`, `--h10-red-*`, `--h10-amber-*`, `--h10-purple-*`,
-`--h10-cyan-*`. Numbered ramps are **banned in component CSS** (`token-guard` check B) — go
+**Tier 1 — primitive ramps** (122 tokens): `--nds-white`, `--nds-grey-{25…900}`,
+`--nds-blue-{50…900}`, `--nds-green-*`, `--nds-red-*`, `--nds-amber-*`, `--nds-purple-*`,
+`--nds-cyan-*`. Numbered ramps are **banned in component CSS** (`token-guard` check B) — go
 through a tier-2 role.
 
 **Tier 2 — semantic roles.** These are what you write:
 
 | role | tokens |
 |---|---|
-| text | `--h10-text` `--h10-text-2` `--h10-text-3` `--h10-text-strong` `--h10-text-disabled` `--h10-text-inverse` `--h10-text-link` |
-| surface | `--h10-bg` `--h10-surface` `--h10-surface-raised` `--h10-surface-sunken` `--h10-surface-hover` |
-| border | `--h10-border` `--h10-border-subtle` `--h10-border-strong` |
-| brand | `--h10-primary` `--h10-primary-hover` `--h10-primary-dark` `--h10-primary-soft` |
-| status | `--h10-{success,warning,danger,info}` and `-soft` / `-strong` per tone |
+| text | `--nds-text` `--nds-text-2` `--nds-text-3` `--nds-text-strong` `--nds-text-disabled` `--nds-text-inverse` `--nds-text-link` |
+| surface | `--nds-bg` `--nds-surface` `--nds-surface-raised` `--nds-surface-sunken` `--nds-surface-hover` |
+| border | `--nds-border` `--nds-border-subtle` `--nds-border-strong` |
+| brand | `--nds-primary` `--nds-primary-hover` `--nds-primary-dark` `--nds-primary-soft` |
+| status | `--nds-{success,warning,danger,info}` and `-soft` / `-strong` per tone |
 
 **Tier 3 — component tokens**: pills, program badges, tooltips, the rail palette.
 
 **Charts are the exception.** Recharts takes colour as a **prop**, so an SVG presentation attribute
-cannot resolve `var(--h10-*)`. Import literals from `tokens/colors.ts` → `chart` (`actual`, `cap`,
+cannot resolve `var(--nds-*)`. Import literals from `tokens/colors.ts` → `chart` (`actual`, `cap`,
 `reference`, `axis`, `grid`, `cursor`).
 
 ## Spacing — 23 steps
 
 ```
---h10-space-1  2  3  4  5  6  7  8  9  10  11  12  14  16  18  20  22  24  26  30  32  40  48
+--nds-space-1  2  3  4  5  6  7  8  9  10  11  12  14  16  18  20  22  24  26  30  32  40  48
 ```
 
 Not a 4px grid, on purpose. This console is dense and the odd steps are load-bearing: 5px and 9px
@@ -83,9 +83,9 @@ leave it literal.
 ## Type
 
 ```
---h10-font-size-micro 10 · xs 11 · xs-plus 11.5 · sm 12 · sm-plus 12.5
+--nds-font-size-micro 10 · xs 11 · xs-plus 11.5 · sm 12 · sm-plus 12.5
                       base 13 · base-plus 13.5 · md 15 · lg 18 · xl 22 · 2xl 27
---h10-font-weight-medium 500 · semibold 600 · bold 700 · extrabold 800
+--nds-font-weight-medium 500 · semibold 600 · bold 700 · extrabold 800
 ```
 
 The half-steps are deliberate density tuning and carry 1,741 declarations — do not "tidy" them
@@ -94,12 +94,12 @@ into integers. Body/table/control text is `base` (13px).
 ## Radius
 
 ```
---h10-radius-pill 4 · sm 6 · md 7 · lg 8 · xl 10 · 2xl 12 · 3xl 14 · round 999
+--nds-radius-pill 4 · sm 6 · md 7 · lg 8 · xl 10 · 2xl 12 · 3xl 14 · round 999
 ```
 
 ## Elevation
 
-`--h10-shadow-{card,menu,pop,modal,rail,tip}` · `--h10-focus-ring`
+`--nds-shadow-{card,menu,pop,modal,rail,tip}` · `--nds-focus-ring`
 
 ---
 

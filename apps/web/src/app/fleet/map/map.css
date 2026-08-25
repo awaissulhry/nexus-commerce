@@ -1532,7 +1532,7 @@
 
 /*
  * The table-layout trap, recorded by the Workers stream and inherited here:
- * `.h10-ds-grid` is `table-layout: auto` with `white-space: nowrap` on every
+ * `.nds-grid` is `table-layout: auto` with `white-space: nowrap` on every
  * cell, so a declared column width is only a hint and long content wins —
  * a worker's name or an adjacency list expands its column and overruns the
  * ones to its right. Pin the table to `fixed` so widths are honoured, and let
@@ -1542,16 +1542,16 @@
  * `undefined` at render in this repo before. Verify with
  * `getComputedStyle(table).tableLayout === 'fixed'`.
  */
-.sbm-listwrapper .h10-ds-grid {
+.sbm-listwrapper .nds-grid {
   table-layout: fixed;
   width: 100%;
 }
-.sbm-listwrapper .h10-ds-grid th,
-.sbm-listwrapper .h10-ds-grid td {
+.sbm-listwrapper .nds-grid th,
+.sbm-listwrapper .nds-grid td {
   overflow: hidden;
   vertical-align: top;
 }
-.sbm-listwrapper .h10-ds-grid td .sbm-listwrap {
+.sbm-listwrapper .nds-grid td .sbm-listwrap {
   white-space: normal;
   line-height: 1.4;
 }

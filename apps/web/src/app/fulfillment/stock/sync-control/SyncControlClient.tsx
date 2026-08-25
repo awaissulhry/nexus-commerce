@@ -562,7 +562,7 @@ export default function SyncControlClient() {
           onSearch={setQLive}
         />
       ) : (
-      <div className="h10-ds-gridcard sc-card-pop">
+      <div className="nds-gridcard sc-card-pop">
         <GridToolbar
           count={
             selected.size > 0 ? (

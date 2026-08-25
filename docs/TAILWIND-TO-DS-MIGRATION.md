@@ -60,7 +60,7 @@ the largest concepts:
   (`program: AdProgram`); the legacy one is a generic label with 246 uses. Its real equivalent is
   `Tag` or `Pill` — both already exist.
 - **`Input`**: the DS has **no error affordance at all** — no `error` prop, no
-  `.h10-ds-field.invalid` rule — while the legacy one carries label/error/hint/charLimit across 38
+  `.nds-field.invalid` rule — while the legacy one carries label/error/hint/charLimit across 38
   files.
 
 Beyond those, three gaps have no DS equivalent at all:

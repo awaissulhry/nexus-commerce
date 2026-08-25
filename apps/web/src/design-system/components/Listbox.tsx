@@ -34,14 +34,14 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
   const selected = options.find((o) => o.value === value)
 
   return (
-    <div className={`h10-ds-listbox${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
-      <button type="button" className="h10-ds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
+    <div className={`nds-listbox${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+      <button type="button" className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
         onClick={() => setOpen((o) => !o)}>
         <span className={selected ? undefined : 'ph'}>{selected?.label ?? placeholder}</span>
         <ChevronDown size={15} className="chev" aria-hidden />
       </button>
       {open && (
-        <div className="h10-ds-combo-pop" role="listbox">
+        <div className="nds-combo-pop" role="listbox">
           {options.map((o) => (
             <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
               className={o.value === value ? 'on' : undefined}

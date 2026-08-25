@@ -3130,7 +3130,7 @@ export default function FlatFileGrid({
                           // a completed drag suppresses the click.
                           onMouseDown={() => { canDragRef.current = true; setArmedDragRowId(row._rowId) }} onMouseUp={() => { canDragRef.current = false; setArmedDragRowId(null) }}>
                           {pushedOk ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
-                          : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="h10-ds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
+                          : row._status === 'error'   ? <Tooltip label={<span className="text-xs">{String(row._feedMessage ?? 'Push error')}</span>} className="nds-tooltip--light"><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></Tooltip>
                           : row._status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
                           : <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600" checked={isRowSel} draggable={false}
                               aria-label={`Select row ${rowNum + 1}${row.sku ? ` (${row.sku})` : ''}`}

@@ -1,7 +1,7 @@
 /**
  * /products/next — page-scoped styles.
  * All colours are DS token variables; no raw hex values.
- * Composed alongside DS class names (h10-ds-*) which live in
+ * Composed alongside DS class names (nds-*) which live in
  * the four design-system style sheets imported in the client component.
  */
 
@@ -10,13 +10,13 @@
   padding: 18px 24px 28px;
   min-height: 100vh;
   /*
-   * DS success tone renders blue (--h10-pill-success-bg is #d2e6fc,
-   * --h10-pill-success-fg is --h10-blue-900). Override to green locally
+   * DS success tone renders blue (--nds-pill-success-bg is #d2e6fc,
+   * --nds-pill-success-fg is --nds-blue-900). Override to green locally
    * so the Active status pill reads as green on this page.
    * Promote to DS success token when coordinating with the DS session.
    */
-  --h10-pill-success-bg: var(--h10-green-soft);
-  --h10-pill-success-fg: var(--h10-green-700);
+  --nds-pill-success-bg: var(--nds-green-soft);
+  --nds-pill-success-fg: var(--nds-green-700);
 }
 
 /* ── Header actions row ──────────────────────────────────── */
@@ -37,10 +37,10 @@
 .kpiTile {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
-  border-radius: var(--h10-radius-2xl);
+  border-radius: var(--nds-radius-2xl);
   padding: 13px 15px;
-  box-shadow: 0 1px 2px rgb(var(--h10-shadow-rgb) / 0.06),
-              0 1px 3px rgb(var(--h10-shadow-rgb) / 0.04);
+  box-shadow: 0 1px 2px rgb(var(--nds-shadow-rgb) / 0.06),
+              0 1px 3px rgb(var(--nds-shadow-rgb) / 0.04);
   cursor: pointer;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
   user-select: none;
@@ -52,7 +52,7 @@
 }
 
 .kpiTile:focus-visible {
-  box-shadow: var(--h10-focus-ring);
+  box-shadow: var(--nds-focus-ring);
 }
 
 .kpiTileActive {
@@ -93,7 +93,7 @@
   margin-top: 1px;
 }
 
-/* ── Toolbar (inside .h10-ds-gridcard) ───────────────────── */
+/* ── Toolbar (inside .nds-gridcard) ───────────────────── */
 .searchField {
   flex: 1;
   min-width: 220px;
@@ -130,8 +130,8 @@
   gap: 7px;
   height: 30px;
   padding: 0 11px;
-  border-radius: var(--h10-radius-round);
-  background: var(--h10-success-soft);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-success-soft);
   color: var(--status-success-strong);
   font-weight: 650;
   font-size: 12px;
@@ -141,7 +141,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--h10-live);
+  background: var(--nds-live);
 }
 
 /* ── Filter bar wrapper (DS FilterBar spacing) ───────────── */
@@ -150,12 +150,12 @@
 }
 
 /* ── Grid density wrapper ────────────────────────────────── */
-.densityCompact :global(.h10-ds-grid tbody td) {
+.densityCompact :global(.nds-grid tbody td) {
   padding-top: 5px;
   padding-bottom: 5px;
 }
 
-.densitySpacious :global(.h10-ds-grid tbody td) {
+.densitySpacious :global(.nds-grid tbody td) {
   padding-top: 15px;
   padding-bottom: 15px;
 }
@@ -180,9 +180,9 @@
 }
 
 .chOn {
-  background: var(--h10-success-soft);
+  background: var(--nds-success-soft);
   color: var(--status-success-strong);
-  border-color: var(--h10-green-soft);
+  border-color: var(--nds-green-soft);
 }
 
 .chOff {
@@ -191,9 +191,9 @@
 }
 
 .chIss {
-  background: var(--h10-warning-soft);
-  color: var(--h10-amber-text);
-  border-color: var(--h10-amber-soft);
+  background: var(--nds-warning-soft);
+  color: var(--nds-amber-text);
+  border-color: var(--nds-amber-soft);
 }
 
 /* ── Centered SVG checkbox ───────────────────────────────── */
@@ -228,13 +228,13 @@
 
 .ckb:focus-visible {
   outline: none;
-  box-shadow: var(--h10-focus-ring);
+  box-shadow: var(--nds-focus-ring);
 }
 
 .ckbOn {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--h10-grey-25);
+  color: var(--nds-grey-25);
 }
 
 /* ── Product column cell ─────────────────────────────────── */
@@ -329,7 +329,7 @@
 .typeTag {
   background: var(--surface-sunken);
   color: var(--text-secondary);
-  border-radius: var(--h10-radius-round);
+  border-radius: var(--nds-radius-round);
   padding: 1px 8px;
   font-size: 10.5px;
   font-weight: 600;
@@ -384,7 +384,7 @@
 }
 
 .editLink:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 
 .menuTrigger {
@@ -413,13 +413,13 @@
 }
 
 .expandBtn:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
   color: var(--text-primary);
 }
 
 .expandBtn:focus-visible {
   outline: none;
-  box-shadow: var(--h10-focus-ring);
+  box-shadow: var(--nds-focus-ring);
 }
 
 /* Invisible placeholder keeps column alignment on non-parent rows */
@@ -495,11 +495,11 @@
   text-align: left;
 }
 .invCellBtn:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 .invCellBtn:focus-visible {
   outline: none;
-  box-shadow: var(--h10-focus-ring);
+  box-shadow: var(--nds-focus-ring);
 }
 .invSplit {
   display: flex;
@@ -526,19 +526,19 @@
 }
 
 /* ── LocationQtyInput — editable on-hand control ─────────────── */
-/* Tokens substituted: --surface-subtle→--h10-grey-25, --border-subtle→--border-default,
+/* Tokens substituted: --surface-subtle→--nds-grey-25, --border-subtle→--border-default,
    --surface-base→--surface-card, --border-focus→--color-primary              */
 .invRoLevel { display: inline-flex; align-items: center; gap: 4px; }
 .invSynced { composes: invTag; }
 .invQtyBtn {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 6px; min-width: 40px;
-  background: var(--h10-grey-25); border: 1px solid var(--border-default);
+  background: var(--nds-grey-25); border: 1px solid var(--border-default);
   border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums;
 }
 .invQtyBtn:hover { border-color: var(--border-strong); }
 .invQtyBtn:disabled { opacity: 0.6; cursor: default; }
-/* DS Input inside a matrix/list cell: the .h10-ds-field wrapper owns the
+/* DS Input inside a matrix/list cell: the .nds-field wrapper owns the
    border/background/focus; we only constrain width and align the numerals. */
 .invQtyField { width: 76px; }
 .invQtyInput { width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
@@ -578,5 +578,5 @@
 .gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
 .gridSkelThumb { width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0; }
 .gridSkelBar { height: 11px; border-radius: 6px; }
-.gridSkelThumb, .gridSkelBar { background: var(--h10-grey-25); animation: gridSkelPulse 1.25s ease-in-out infinite; }
+.gridSkelThumb, .gridSkelBar { background: var(--nds-grey-25); animation: gridSkelPulse 1.25s ease-in-out infinite; }
 @keyframes gridSkelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }

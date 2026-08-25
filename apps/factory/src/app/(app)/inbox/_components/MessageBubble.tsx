@@ -95,11 +95,11 @@ export function MessageBubble({
 
   const chip = (att: ThreadMessage["attachments"][number], muted = false) => {
     const canPreview = onPreview && previewKind(att.mimeType) !== "none";
-    const nameStyle = { display: "inline-flex", alignItems: "center", gap: 5, color: "var(--h10-text)" } as const;
+    const nameStyle = { display: "inline-flex", alignItems: "center", gap: 5, color: "var(--nds-text)" } as const;
     const inner = (
       <>
         {att.filename}
-        <span style={{ color: "var(--h10-text-3)" }}>{kb(att.sizeBytes)}</span>
+        <span style={{ color: "var(--nds-text-3)" }}>{kb(att.sizeBytes)}</span>
       </>
     );
     return (
@@ -110,10 +110,10 @@ export function MessageBubble({
         alignItems: "center",
         gap: 6,
         fontSize: 12.5,
-        border: "1px solid var(--h10-border)",
+        border: "1px solid var(--nds-border)",
         borderRadius: 8,
         padding: "4px 8px",
-        background: "var(--h10-surface-raised)",
+        background: "var(--nds-surface-raised)",
         opacity: muted ? 0.7 : 1,
       }}
     >
@@ -134,12 +134,12 @@ export function MessageBubble({
       <a
         href={`/api/inbox/${conversationId}/attachments/${att.id}`}
         title="Download"
-        style={{ display: "inline-flex", color: "var(--h10-text-3)" }}
+        style={{ display: "inline-flex", color: "var(--nds-text-3)" }}
       >
         <Download size={12} />
       </a>
       {att.webViewLink ? (
-        <a href={att.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: "var(--h10-text-link)", fontSize: 11.5 }}>
+        <a href={att.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: "var(--nds-text-link)", fontSize: 11.5 }}>
           in Drive
         </a>
       ) : (
@@ -148,7 +148,7 @@ export function MessageBubble({
           onClick={() => void saveToDrive(att.id)}
           disabled={savingId === att.id}
           title="Save to Drive"
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-link)", display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, padding: 0 }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-link)", display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, padding: 0 }}
         >
           <HardDriveUpload size={12} />
           {savingId === att.id ? "Saving…" : "Drive"}
@@ -162,9 +162,9 @@ export function MessageBubble({
     <div
       data-msg={message.id} // EPI2.3 — scroll anchor for the rail Files panel
       style={{
-        border: "1px solid var(--h10-border-subtle)",
+        border: "1px solid var(--nds-border-subtle)",
         borderRadius: 12,
-        background: outbound ? "var(--h10-wash-primary)" : "var(--h10-surface)",
+        background: outbound ? "var(--nds-wash-primary)" : "var(--nds-surface)",
         overflow: "hidden",
       }}
     >
@@ -174,12 +174,12 @@ export function MessageBubble({
           gap: 8,
           alignItems: "baseline",
           padding: "8px 14px",
-          borderBottom: "1px solid var(--h10-border-subtle)",
+          borderBottom: "1px solid var(--nds-border-subtle)",
           fontSize: 11.5,
         }}
       >
         <b style={{ fontSize: 12.5 }}>{outbound ? "You" : message.fromAddress}</b>
-        <span style={{ color: "var(--h10-text-3)" }}>
+        <span style={{ color: "var(--nds-text-3)" }}>
           {new Date(message.sentAt).toLocaleString()} · {ago(message.sentAt)} ago
         </span>
       </div>
@@ -191,9 +191,9 @@ export function MessageBubble({
             alignItems: "center",
             padding: "6px 14px",
             fontSize: 11.5,
-            color: "var(--h10-text-3)",
-            background: "var(--h10-surface-raised)",
-            borderBottom: "1px solid var(--h10-border-subtle)",
+            color: "var(--nds-text-3)",
+            background: "var(--nds-surface-raised)",
+            borderBottom: "1px solid var(--nds-border-subtle)",
           }}
         >
           <ImageOff size={12} />
@@ -210,12 +210,12 @@ export function MessageBubble({
           style={{ width: "100%", height, border: "none", display: "block", background: "#fff" }}
         />
       ) : (
-        <div style={{ padding: "10px 14px", fontSize: 13, color: "var(--h10-text-2)", whiteSpace: "pre-wrap" }}>
+        <div style={{ padding: "10px 14px", fontSize: 13, color: "var(--nds-text-2)", whiteSpace: "pre-wrap" }}>
           {message.bodyText ?? message.snippet ?? "(empty message)"}
         </div>
       )}
       {message.attachments.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "8px 14px", borderTop: "1px solid var(--h10-border-subtle)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "8px 14px", borderTop: "1px solid var(--nds-border-subtle)" }}>
           {freshImages.map((att) => (
             // EPI2.2 — image attachments render as lazy 72px thumbnails; click = lightbox
             <button
@@ -223,7 +223,7 @@ export function MessageBubble({
               type="button"
               onClick={() => onPreview?.(att.id)}
               title={`${att.filename} · ${kb(att.sizeBytes)}`}
-              style={{ padding: 0, border: "1px solid var(--h10-border)", borderRadius: 8, overflow: "hidden", width: 72, height: 72, cursor: "zoom-in", background: "var(--h10-surface-raised)" }}
+              style={{ padding: 0, border: "1px solid var(--nds-border)", borderRadius: 8, overflow: "hidden", width: 72, height: 72, cursor: "zoom-in", background: "var(--nds-surface-raised)" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -239,7 +239,7 @@ export function MessageBubble({
             <button
               type="button"
               onClick={() => setShowRepeats(true)}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-3)", padding: 0 }}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "var(--nds-text-3)", padding: 0 }}
             >
               {repeats.length} file{repeats.length === 1 ? "" : "s"} repeated from earlier · show
             </button>

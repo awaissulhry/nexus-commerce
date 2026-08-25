@@ -2,7 +2,7 @@
 // W6 (2026-08-20) — the DS token + primitive sheets load tree-wide, BEFORE ads.css, so the
 // promoted InfoTip's `.h10-tip` styles (now in primitives.css) reach every ads page exactly as
 // they did when ads.css carried them — and page styles keep the last word (source order).
-// primitives.css is fully `.h10-ds-*`-namespaced (checked before this import), so pages that
+// primitives.css is fully `.nds-*`-namespaced (checked before this import), so pages that
 // never opted into the DS sheets are visually untouched by this.
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'

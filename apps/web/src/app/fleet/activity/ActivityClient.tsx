@@ -2374,14 +2374,14 @@ export function ActivityClient() {
 
         {/* ── the list ─────────────────────────────────────────────────────── */}
         {loading && !shown ? (
-          <section className="h10-ds-gridcard sba-list">
+          <section className="nds-gridcard sba-list">
             <div className="acr-pg-empty">
               <strong>Reading the fleet’s history…</strong>
               Every run, every finding and every decision, newest first.
             </div>
           </section>
         ) : events.length === 0 ? (
-          <section className="h10-ds-gridcard sba-list">
+          <section className="nds-gridcard sba-list">
             {anyNarrowing ? (
               /* Filters hid everything. Never a dead end — offer the way back. */
               <div className="acr-pg-empty">
@@ -2433,7 +2433,7 @@ export function ActivityClient() {
                 saying "across 7 runs": one fact, three statements, ~500px apart.
                 S3's toolbar above already carries the controls, so the card
                 holds the grid and nothing else. */}
-            <div className="h10-ds-gridcard sba-gridcard">
+            <div className="nds-gridcard sba-gridcard">
               <DataGrid
                 customizable
                 storageKey="fleet.activity.columns"
@@ -2446,7 +2446,7 @@ export function ActivityClient() {
             <ListFooter bare allShownWord="That is every run on record." />
           </>
         ) : (
-          <section className="h10-ds-gridcard sba-list">
+          <section className="nds-gridcard sba-list">
             {days.map((d) => (
               <div className="sba-day" key={d.key}>
                 <h3 className="sba-dayhead">

@@ -7,7 +7,7 @@ import "./globals.css";
  *
  * Until now these arrived only where an individual file imported them: `primitives.css`
  * reached 46 files and `a11y.css` reached ONE, so a DS component rendered unstyled on any
- * route where nothing happened to pull its stylesheet in — `.h10-ds-btn` did not resolve on
+ * route where nothing happened to pull its stylesheet in — `.nds-btn` did not resolve on
  * /design at all. Styling that works by coincidence of import graph is the same defect as the
  * Tailwind content-glob gap, and it blocked every remaining 9.3 tranche.
  *

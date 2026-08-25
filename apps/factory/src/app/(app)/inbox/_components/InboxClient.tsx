@@ -417,9 +417,9 @@ function InboxInner() {
         display: "grid",
         gridTemplateColumns: `${panes.widths[0]}px 6px minmax(0, 1fr) 6px ${railCol}`,
         gridTemplateRows: "minmax(0, 1fr)",
-        border: "1px solid var(--h10-border)",
+        border: "1px solid var(--nds-border)",
         borderRadius: 12,
-        background: "var(--h10-surface)",
+        background: "var(--nds-surface)",
         overflow: "hidden",
       }}
     >
@@ -466,7 +466,7 @@ function InboxInner() {
         label="Resize context rail"
         onToggle={wide ? toggleRail : () => setRailDrawer(true)}
       />
-      <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--h10-surface-raised)" }}>
+      <div style={{ minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--nds-surface-raised)" }}>
         {railShown ? (
           <ContextRail thread={thread} onMutated={refresh} onFileOpen={(fid) => window.history.replaceState(null, "", urlFor(focusId, fid))} />
         ) : (
@@ -476,7 +476,7 @@ function InboxInner() {
               onClick={() => (wide ? toggleRail() : setRailDrawer(true))}
               title="Show details"
               aria-label="Show details"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-2)", padding: 6 }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-2)", padding: 6 }}
             >
               <PanelRightOpen size={16} />
             </button>

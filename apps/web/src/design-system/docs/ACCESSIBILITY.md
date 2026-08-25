@@ -5,7 +5,7 @@ The standards every DS component meets. Cross-cutting motion + focus live in
 
 ## Focus
 - Every interactive element shows a visible `:focus-visible` ring
-  (`--h10-focus-ring`). Patterns without their own ring inherit it via
+  (`--nds-focus-ring`). Patterns without their own ring inherit it via
   `a11y.css`.
 - Focus order follows DOM order; overlays (Modal/Drawer/Builder) trap visually
   via the backdrop and close on Esc.
@@ -31,8 +31,8 @@ Combobox) · `progressbar` + `aria-valuenow/min/max` (ProgressBar) · `status`
 
 ## Contrast — WCAG AA
 Target 4.5:1 body / 3:1 large+UI. The H10 palette mostly passes; the audit
-(`../studies/02-contrast-audit.md`) flags **`--h10-text-3` (~3.2:1)** as
-secondary/large-only — **use `--h10-text-2` for body copy**. Phase 7 lint encodes
+(`../studies/02-contrast-audit.md`) flags **`--nds-text-3` (~3.2:1)** as
+secondary/large-only — **use `--nds-text-2` for body copy**. Phase 7 lint encodes
 this rule.
 
 ## Targets

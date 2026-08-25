@@ -76,7 +76,7 @@ node scripts/ds-conformance-guard.mjs --check || {
 # (`.h10-shell` pins the text/surface/border tier to CHANNELS; every other scope, and the whole
 # status/brand tier, is WHOLE COLOURS), so a blanket sweep is as dangerous as the bug — one was
 # shipped in deef67686 and reverted in the next commit. This checks BOTH directions.
-# The DS SUPPLIES 206 --h10-* tokens and its own sheets are 100% tokenized (token-guard enforces
+# The DS SUPPLIES 206 --nds-* tokens and its own sheets are 100% tokenized (token-guard enforces
 # it). The app CONSUMES ~10% — 10,343 raw hex against 1,170 token references, with
 # rules-automation.css (3,674) and ads.css (2,144) the heaviest. token-guard does not reach app
 # CSS, so those could grow while a conversion ran: converting into a bucket still filling. Frozen

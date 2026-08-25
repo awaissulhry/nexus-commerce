@@ -10,5 +10,5 @@ export interface PillProps {
 
 /** Status pill — matches the H10 `.h10-pill`. */
 export function Pill({ tone, className, children }: PillProps) {
-  return <span className={`h10-ds-pill ${tone}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-pill ${tone}${className ? ` ${className}` : ''}`}>{children}</span>
 }

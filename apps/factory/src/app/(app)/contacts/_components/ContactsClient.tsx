@@ -76,26 +76,26 @@ function PipelineInner() {
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 4 }}>
             {TABS.map((t) => (
-              <button key={t.id} type="button" onClick={() => setTab(t.id)} style={{ border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: "5px 10px", borderRadius: 8, background: tab === t.id ? "var(--h10-primary)" : "transparent", color: tab === t.id ? "#fff" : "var(--h10-text-2)" }}>
+              <button key={t.id} type="button" onClick={() => setTab(t.id)} style={{ border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: "5px 10px", borderRadius: 8, background: tab === t.id ? "var(--nds-primary)" : "transparent", color: tab === t.id ? "#fff" : "var(--nds-text-2)" }}>
                 {t.label}{t.kind && data?.counts[t.kind] ? <span style={{ marginLeft: 5, fontSize: 10.5, opacity: 0.85 }}>{data.counts[t.kind]}</span> : null}
               </button>
             ))}
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
-            <a href="/api/exports/parties" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
+            <a href="/api/exports/parties" style={{ fontSize: 12, color: "var(--nds-text-link)" }}>Export CSV</a>
             {canCompare && <Button onClick={() => setComparing(true)}>Compare pricing</Button>}
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 220 }} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email…" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)", minWidth: 220 }} />
             {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New contact</Button>}
           </div>
         </div>
         <VirtualDataGrid
           height="calc(100dvh - 300px)"
           columns={[
-            { key: "name", label: "Name", render: (r: ContactRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.name}</button> },
+            { key: "name", label: "Name", render: (r: ContactRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.name}</button> },
             { key: "kind", label: "Kind", render: (r: ContactRow) => <Pill tone={KIND_TONE[r.kind]}>{KIND_LABEL[r.kind]}</Pill> },
             { key: "emails", label: "Emails", align: "right" as const, render: (r: ContactRow) => (r.emailCount ? r.emailCount : "—") },
-            { key: "list", label: "Price list", render: (r: ContactRow) => r.priceList?.name ?? <span style={{ color: "var(--h10-text-3)" }}>base</span> },
-            ...(canTerms ? [{ key: "terms", label: "Terms", render: (r: ContactRow) => r.paymentTerms || <span style={{ color: "var(--h10-text-3)" }}>—</span> }] : []),
+            { key: "list", label: "Price list", render: (r: ContactRow) => r.priceList?.name ?? <span style={{ color: "var(--nds-text-3)" }}>base</span> },
+            ...(canTerms ? [{ key: "terms", label: "Terms", render: (r: ContactRow) => r.paymentTerms || <span style={{ color: "var(--nds-text-3)" }}>—</span> }] : []),
             ...(canDeposit ? [{ key: "deposit", label: "Deposit", align: "right" as const, render: (r: ContactRow) => (r.depositDefaultPct != null ? `${r.depositDefaultPct}%` : "—") }] : []),
             { key: "quotes", label: "Quotes", align: "right" as const, render: (r: ContactRow) => (r.quoteCount ? r.quoteCount : "—") },
             { key: "orders", label: "Orders", align: "right" as const, render: (r: ContactRow) => (r.orderCount ? r.orderCount : "—") },
@@ -111,15 +111,15 @@ function PipelineInner() {
         footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" onClick={create} disabled={!form.name.trim() || busy}>Create</Button></>}>
         <div style={{ display: "grid", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Kind</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 }}>Kind</div>
             <Listbox ariaLabel="Kind" options={[{ value: "CUSTOMER", label: "Customer" }, { value: "SUPPLIER", label: "Supplier" }, { value: "BRAND", label: "Brand" }]} value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v as PartyKind }))} />
           </div>
           <div>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Name</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 }}>Name</div>
             <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Bartoccetti Moto SRL" />
           </div>
           <div>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Email (optional)</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 }}>Email (optional)</div>
             <Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="orders@brand.it" />
           </div>
         </div>

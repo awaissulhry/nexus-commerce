@@ -49,9 +49,9 @@ export function SendModal({ quote, totals, floorPct, belowFloor, onClose, onSent
     >
       <div style={{ display: "grid", gap: 10, fontSize: 13 }}>
         <div>To <b>{quote.party.name}</b>{quote.conversation ? <> — replies into the thread “{quote.conversation.subject ?? ""}”.</> : <> — a new email (no linked thread).</>}</div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--h10-text-2)" }}>Net total</span><b>{totals ? eur(totals.netCents) : "—"}</b></div>
-        {quote.depositPct ? <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--h10-text-2)" }}>Deposit ({quote.depositPct}%)</span><b>{eur(depositCents)}</b></div> : null}
-        <div style={{ fontSize: 12, color: "var(--h10-text-3)" }}>A PDF is attached; the customer can accept it with a link. This send is frozen as a version.</div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--nds-text-2)" }}>Net total</span><b>{totals ? eur(totals.netCents) : "—"}</b></div>
+        {quote.depositPct ? <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--nds-text-2)" }}>Deposit ({quote.depositPct}%)</span><b>{eur(depositCents)}</b></div> : null}
+        <div style={{ fontSize: 12, color: "var(--nds-text-3)" }}>A PDF is attached; the customer can accept it with a link. This send is frozen as a version.</div>
         {belowFloor && (
           <Banner tone="danger" title={`Below your ${floorPct}% margin floor`}>
             <label style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 4, fontSize: 12.5 }}>

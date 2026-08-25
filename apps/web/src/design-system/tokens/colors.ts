@@ -11,7 +11,7 @@
  * Frequencies in comments are occurrences across the four ads CSS files.
  *
  * Kept in sync with ../styles/tokens.css (same values as CSS vars). JS consumers
- * that need a real color (e.g. Recharts) import from here; CSS uses var(--h10-*).
+ * that need a real color (e.g. Recharts) import from here; CSS uses var(--nds-*).
  * TODO(Phase 7): generate tokens.css from this file to remove the hand-sync.
  */
 
@@ -108,7 +108,7 @@ export const accountIdentity = [
 
 /**
  * Chart inks. Recharts takes colour as a prop, not a class, so an SVG
- * presentation attribute cannot resolve `var(--h10-*)` — these must reach the
+ * presentation attribute cannot resolve `var(--nds-*)` — these must reach the
  * component as literals. Four are exact ramp steps; `cap` and `reference` are
  * chart-only hues with no ramp counterpart, pinned at their measured values.
  */

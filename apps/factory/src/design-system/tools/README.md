@@ -5,7 +5,7 @@ Automated guardrails (run from the repo root).
 ## `token-guard.mjs`
 Fails if a raw hex color appears in **shipped** DS code — primitives, components,
 patterns, and the tokenized stylesheets. Everything must resolve through a token
-(`var(--h10-*)` in CSS, or an import from `tokens/` in TS). `styles/tokens.css`
+(`var(--nds-*)` in CSS, or an import from `tokens/` in TS). `styles/tokens.css`
 is excepted (it *defines* the palette); `catalog/` is out of scope (a demo).
 
 ```bash

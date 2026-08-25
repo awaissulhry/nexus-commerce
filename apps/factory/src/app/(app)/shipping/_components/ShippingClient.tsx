@@ -18,8 +18,8 @@ import { apiJson } from "@/lib/api-client";
 import { usePermission } from "@/lib/auth/client";
 import { type Address, type InflightRow, type ParcelPreset, type Rate, type RatesResponse, type ReadyRow, type ShipmentDetail, type ShipmentDetailResponse, type ShippingResponse, SHIP_LABEL, SHIP_TONE } from "./types";
 
-const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
-const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
+const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" };
+const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 };
 const emptyAddr = (): Address => ({ name: "", street: "", city: "", postalCode: "", country: "IT", phone: "" });
 const dmy = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : "—");
 
@@ -60,14 +60,14 @@ export function ShippingClient() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Truck size={18} /> Shipping</h1>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Buy a label, share the tracking, and let the order move to delivered.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginTop: 2 }}>Buy a label, share the tracking, and let the order move to delivered.</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           {data && (data.carrier.connected
             ? <Pill tone="success">Connected · {data.carrier.label ?? data.carrier.name}</Pill>
             : <Pill tone="warning">No carrier connected · test mode</Pill>)}
           <Button onClick={() => setDaySheet(true)}><ClipboardList size={13} /> Day-sheet</Button>
-          <a href="/api/exports/shipments" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={13} /> Export</a>
+          <a href="/api/exports/shipments" className="nds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={13} /> Export</a>
         </div>
       </div>
 
@@ -93,13 +93,13 @@ export function ShippingClient() {
         <VirtualDataGrid
           height="min(48dvh, 520px)"
           columns={[
-            { key: "order", label: "Order", render: (r: InflightRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.orderNumber}</button> },
+            { key: "order", label: "Order", render: (r: InflightRow) => <button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.orderNumber}</button> },
             { key: "party", label: "Customer", render: (r: InflightRow) => r.partyName },
             { key: "carrier", label: "Carrier", render: (r: InflightRow) => r.service ?? "—" },
-            { key: "tracking", label: "Tracking", render: (r: InflightRow) => (r.trackingUrl ? <a href={r.trackingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}>{r.trackingNumber} <ExternalLink size={11} /></a> : (r.trackingNumber ?? "—")) },
+            { key: "tracking", label: "Tracking", render: (r: InflightRow) => (r.trackingUrl ? <a href={r.trackingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--nds-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}>{r.trackingNumber} <ExternalLink size={11} /></a> : (r.trackingNumber ?? "—")) },
             { key: "state", label: "Status", render: (r: InflightRow) => <Pill tone={SHIP_TONE[r.state]}>{SHIP_LABEL[r.state]}</Pill> },
             ...(canCost ? [{ key: "cost", label: "Cost", align: "right" as const, render: (r: InflightRow) => (r.costCents != null ? eur(r.costCents) : "—") }] : []),
-            { key: "label", label: "", align: "right" as const, render: (r: InflightRow) => <a href={`/api/shipping/${r.id}/label`} target="_blank" rel="noreferrer" style={{ color: "var(--h10-text-link)", fontSize: 12, display: "inline-flex", gap: 4, alignItems: "center" }}><Printer size={12} /> Label</a> },
+            { key: "label", label: "", align: "right" as const, render: (r: InflightRow) => <a href={`/api/shipping/${r.id}/label`} target="_blank" rel="noreferrer" style={{ color: "var(--nds-text-link)", fontSize: 12, display: "inline-flex", gap: 4, alignItems: "center" }}><Printer size={12} /> Label</a> },
           ]}
           rows={data?.inflight ?? []}
           rowKey={(r: InflightRow) => r.id}
@@ -129,18 +129,18 @@ function DaySheet({ open, carrierConnected, canBook, onClose }: { open: boolean;
       <div style={{ display: "grid", gap: 14 }}>
         <div>
           <div style={lbl}>Today's manifest</div>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 8 }}>A printable list of every parcel shipped today, for the driver handover.</div>
-          <a href="/api/shipping/manifest" target="_blank" rel="noreferrer" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Printer size={13} /> Print day-sheet</a>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginBottom: 8 }}>A printable list of every parcel shipped today, for the driver handover.</div>
+          <a href="/api/shipping/manifest" target="_blank" rel="noreferrer" className="nds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Printer size={13} /> Print day-sheet</a>
         </div>
-        <div style={{ borderTop: "1px solid var(--h10-border-subtle)", paddingTop: 12 }}>
+        <div style={{ borderTop: "1px solid var(--nds-border-subtle)", paddingTop: 12 }}>
           <div style={lbl}>Pickup</div>
           {carrierConnected ? (
             <>
-              <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 8 }}>Record a pickup for today's parcels (booked with your carrier where supported, otherwise noted as arranged directly).</div>
+              <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginBottom: 8 }}>Record a pickup for today's parcels (booked with your carrier where supported, otherwise noted as arranged directly).</div>
               {canBook && <Button variant="primary" onClick={recordPickup} disabled={busy}><Truck size={13} /> Record pickup</Button>}
             </>
           ) : (
-            <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>Connect a carrier in Settings › Integrations to record a pickup.</div>
+            <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>Connect a carrier in Settings › Integrations to record a pickup.</div>
           )}
         </div>
       </div>
@@ -175,38 +175,38 @@ function ShipmentDrawer({ id, detail, canVoid, onClose, onChanged }: { id: strin
   return (
     <Drawer open={!!id} onClose={onClose} title={d ? `Shipment · ${d.orderNumber}` : "Shipment"} footer={d ? (
       <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "center" }}>
-        {d.hasLabel && <a href={d.labelUrl ?? "#"} target="_blank" rel="noreferrer" className="h10-ds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Printer size={13} /> Label</a>}
+        {d.hasLabel && <a href={d.labelUrl ?? "#"} target="_blank" rel="noreferrer" className="nds-btn" style={{ textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Printer size={13} /> Label</a>}
         {d.hasThread && <Button variant="primary" onClick={share} disabled={busy}><Send size={13} /> Share tracking</Button>}
-        {canVoid && d.voidable && <Button onClick={voidLabel} disabled={busy} style={{ marginLeft: "auto", color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}><Ban size={13} /> Void</Button>}
+        {canVoid && d.voidable && <Button onClick={voidLabel} disabled={busy} style={{ marginLeft: "auto", color: "var(--nds-danger)", borderColor: "var(--nds-danger)" }}><Ban size={13} /> Void</Button>}
       </div>
     ) : undefined}>
       {d && (
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
             <Pill tone={SHIP_TONE[d.state]}>{SHIP_LABEL[d.state]}</Pill>
-            {d.service && <span style={{ color: "var(--h10-text-2)" }}>{d.service}</span>}
-            {d.trackingUrl && d.trackingNumber && <a href={d.trackingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}>{d.trackingNumber} <ExternalLink size={11} /></a>}
+            {d.service && <span style={{ color: "var(--nds-text-2)" }}>{d.service}</span>}
+            {d.trackingUrl && d.trackingNumber && <a href={d.trackingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--nds-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}>{d.trackingNumber} <ExternalLink size={11} /></a>}
           </div>
 
           {d.shipToJson && (
-            <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", display: "flex", gap: 6 }}>
+            <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", display: "flex", gap: 6 }}>
               <MapPin size={14} style={{ marginTop: 1, flexShrink: 0 }} />
               <span>{[d.shipToJson.name, d.shipToJson.street, `${d.shipToJson.postalCode} ${d.shipToJson.city}`, d.shipToJson.country].filter(Boolean).join(", ")}</span>
             </div>
           )}
-          {!d.hasThread && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>No linked email thread — copy the tracking to the customer manually.</div>}
+          {!d.hasThread && <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>No linked email thread — copy the tracking to the customer manually.</div>}
 
           <div>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 6 }}>Tracking</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 6 }}>Tracking</div>
             {d.events.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No tracking events yet — they arrive as the carrier scans the parcel.</div>
+              <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No tracking events yet — they arrive as the carrier scans the parcel.</div>
             ) : (
               <div style={{ display: "grid", gap: 0 }}>
                 {d.events.map((e) => (
-                  <div key={e.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 0", borderBottom: "1px solid var(--h10-border-subtle)" }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 8, background: "var(--h10-primary)", flexShrink: 0, transform: "translateY(3px)" }} />
+                  <div key={e.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 0", borderBottom: "1px solid var(--nds-border-subtle)" }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 8, background: "var(--nds-primary)", flexShrink: 0, transform: "translateY(3px)" }} />
                     <span style={{ fontSize: 12.5, flex: 1 }}>{e.message ?? e.status}</span>
-                    <span style={{ fontSize: 11, color: "var(--h10-text-3)", fontVariantNumeric: "tabular-nums" }}>{new Date(e.occurredAt).toLocaleString()}</span>
+                    <span style={{ fontSize: 11, color: "var(--nds-text-3)", fontVariantNumeric: "tabular-nums" }}>{new Date(e.occurredAt).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -220,8 +220,8 @@ function ShipmentDrawer({ id, detail, canVoid, onClose, onChanged }: { id: strin
 
 function SectionHeading({ icon, title, count }: { icon: React.ReactNode; title: string; count?: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontSize: 13, fontWeight: 700, color: "var(--h10-text)" }}>
-      {icon}<span>{title}</span>{count != null && <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--h10-text-3)", background: "var(--h10-surface-2)", borderRadius: 20, padding: "1px 8px" }}>{count}</span>}
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontSize: 13, fontWeight: 700, color: "var(--nds-text)" }}>
+      {icon}<span>{title}</span>{count != null && <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--nds-text-3)", background: "var(--nds-surface-2)", borderRadius: 20, padding: "1px 8px" }}>{count}</span>}
     </div>
   );
 }
@@ -311,9 +311,9 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
               </div>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--h10-text-2)" }}>Boxes</span>
+              <span style={{ fontSize: 12, color: "var(--nds-text-2)" }}>Boxes</span>
               <input type="number" min="1" max="20" value={boxes} onChange={(e) => setBoxes(e.target.value)} style={{ ...inp, width: 68 }} />
-              {count > 1 && <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{count} labels — one per box (size-run)</span>}
+              {count > 1 && <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>{count} labels — one per box (size-run)</span>}
             </div>
           </div>
 
@@ -336,14 +336,14 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
 
           {rates && (
             <div>
-              <div style={lbl}>Rate {rates.length > 0 && <span style={{ color: "var(--h10-text-3)" }}>· cheapest pre-selected</span>}</div>
+              <div style={lbl}>Rate {rates.length > 0 && <span style={{ color: "var(--nds-text-3)" }}>· cheapest pre-selected</span>}</div>
               <div style={{ display: "grid", gap: 6 }}>
                 {rates.map((r) => {
                   const cheapest = rates.every((x) => (x.costCents ?? Infinity) >= (r.costCents ?? Infinity));
                   return (
-                    <label key={r.code} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${rateCode === r.code ? "var(--h10-primary)" : "var(--h10-border)"}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", background: rateCode === r.code ? "var(--h10-primary-subtle)" : "var(--h10-surface)" }}>
-                      <input type="radio" name="rate" checked={rateCode === r.code} onChange={() => setRateCode(r.code)} style={{ accentColor: "var(--h10-primary)" }} />
-                      <span style={{ fontSize: 12.5 }}><b>{r.carrier}</b> · {r.service}{r.estDays ? <span style={{ color: "var(--h10-text-3)" }}> · ~{r.estDays}d</span> : null}</span>
+                    <label key={r.code} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${rateCode === r.code ? "var(--nds-primary)" : "var(--nds-border)"}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", background: rateCode === r.code ? "var(--nds-primary-subtle)" : "var(--nds-surface)" }}>
+                      <input type="radio" name="rate" checked={rateCode === r.code} onChange={() => setRateCode(r.code)} style={{ accentColor: "var(--nds-primary)" }} />
+                      <span style={{ fontSize: 12.5 }}><b>{r.carrier}</b> · {r.service}{r.estDays ? <span style={{ color: "var(--nds-text-3)" }}> · ~{r.estDays}d</span> : null}</span>
                       <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6, alignItems: "center" }}>
                         {cheapest && r.costCents === 0 && <Pill tone="success">free</Pill>}
                         {canCost && r.costCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{eur(r.costCents)}</span>}
@@ -352,7 +352,7 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
                   );
                 })}
               </div>
-              <button type="button" onClick={() => { setRates(null); setRateCode(""); }} style={{ marginTop: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)" }}>← change parcel or address</button>
+              <button type="button" onClick={() => { setRates(null); setRateCode(""); }} style={{ marginTop: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--nds-text-link)" }}>← change parcel or address</button>
             </div>
           )}
         </div>

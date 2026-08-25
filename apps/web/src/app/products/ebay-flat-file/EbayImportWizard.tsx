@@ -4,7 +4,7 @@
  * EbayImportWizard — dynamic file-import wizard for the eBay flat file.
  * Steps: Upload · Map · Review listings (block files only) · Preview.
  * Built ENTIRELY from the H10 design system: zero hand-rolled raw-Tailwind
- * colour/border classes. Layout is plain divs with inline `var(--h10-*)`
+ * colour/border classes. Layout is plain divs with inline `var(--nds-*)`
  * token styles; everything visible is a DS component/primitive.
  *
  * EI.1 — typed coercion (importCoerce.pure) + market-aware mapping: per-market
@@ -161,11 +161,11 @@ function toCell(value: unknown): string {
 
 // ── Wizard type scale (named styles, not ad-hoc sizes) ────────────────
 const T = {
-  caption: { fontSize: 11.5, color: 'var(--h10-text-3)' } as const,
-  label: { fontSize: 12, fontWeight: 600, color: 'var(--h10-text-2)' } as const,
-  body: { fontSize: 12.5, color: 'var(--h10-text-2)' } as const,
-  value: { fontSize: 12.5, color: 'var(--h10-text)' } as const,
-  micro: { fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--h10-text-3)' } as const,
+  caption: { fontSize: 11.5, color: 'var(--nds-text-3)' } as const,
+  label: { fontSize: 12, fontWeight: 600, color: 'var(--nds-text-2)' } as const,
+  body: { fontSize: 12.5, color: 'var(--nds-text-2)' } as const,
+  value: { fontSize: 12.5, color: 'var(--nds-text)' } as const,
+  micro: { fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)' } as const,
   note: { fontSize: 11.5 } as const,
   small: { fontSize: 13 } as const,
 } as const
@@ -582,7 +582,7 @@ export function EbayImportWizard({
             justifyContent: 'center',
             gap: 12,
             padding: '48px 0',
-            color: 'var(--h10-text-2)',
+            color: 'var(--nds-text-2)',
           }}
         >
           <Spinner size={28} />
@@ -604,9 +604,9 @@ export function EbayImportWizard({
           <div
             style={{ display: 'flex', alignItems: 'center', gap: 10, ...T.micro }}
           >
-            <span style={{ flex: 1, height: 1, background: 'var(--h10-border-subtle)' }} />
+            <span style={{ flex: 1, height: 1, background: 'var(--nds-border-subtle)' }} />
             or paste data
-            <span style={{ flex: 1, height: 1, background: 'var(--h10-border-subtle)' }} />
+            <span style={{ flex: 1, height: 1, background: 'var(--nds-border-subtle)' }} />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -646,7 +646,7 @@ export function EbayImportWizard({
       label: 'Source column',
       render: (row) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
-          <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{row.header}</span>
+          <span style={{ fontWeight: 600, color: 'var(--nds-text)' }}>{row.header}</span>
           <span
             style={{ ...T.caption, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}
             title={row.sample}
@@ -744,10 +744,10 @@ export function EbayImportWizard({
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6, ...T.body }}
         >
-          <Wand2 size={14} aria-hidden style={{ color: 'var(--h10-primary)' }} />
-          <strong style={{ color: 'var(--h10-text)' }}>{mapping.length}</strong> columns ·{' '}
-          <strong style={{ color: 'var(--h10-text)' }}>{mappedHeaders.length}</strong> mapped ·{' '}
-          <strong style={{ color: 'var(--h10-text)' }}>{skippedCount}</strong> skipped
+          <Wand2 size={14} aria-hidden style={{ color: 'var(--nds-primary)' }} />
+          <strong style={{ color: 'var(--nds-text)' }}>{mapping.length}</strong> columns ·{' '}
+          <strong style={{ color: 'var(--nds-text)' }}>{mappedHeaders.length}</strong> mapped ·{' '}
+          <strong style={{ color: 'var(--nds-text)' }}>{skippedCount}</strong> skipped
         </div>
       </div>
       {fileMarket !== marketplace && (
@@ -780,7 +780,7 @@ export function EbayImportWizard({
       label: 'Listing',
       render: (b) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 180 }}>
-          <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{b.parentSku}</span>
+          <span style={{ fontWeight: 600, color: 'var(--nds-text)' }}>{b.parentSku}</span>
           {b.title && (
             <span
               style={{ ...T.caption, maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
@@ -798,7 +798,7 @@ export function EbayImportWizard({
       render: (b) =>
         b.itemId ? (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...T.value }}>
-            <Link2 size={12} aria-hidden style={{ color: 'var(--h10-primary)' }} />
+            <Link2 size={12} aria-hidden style={{ color: 'var(--nds-primary)' }} />
             {b.itemId}
           </span>
         ) : (
@@ -841,7 +841,7 @@ export function EbayImportWizard({
             {b.issues.map((i, idx) => (
               <span
                 key={idx}
-                style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 5, ...T.note, color: i.level === 'error' ? 'var(--h10-danger)' : 'var(--h10-warning)', maxWidth: 320 }}
+                style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 5, ...T.note, color: i.level === 'error' ? 'var(--nds-danger)' : 'var(--nds-warning)', maxWidth: 320 }}
               >
                 <AlertTriangle size={11} aria-hidden style={{ marginTop: 2, flexShrink: 0 }} />
                 {i.message}
@@ -935,11 +935,11 @@ export function EbayImportWizard({
             verticalAlign: 'bottom',
             color: issue
               ? issue.level === 'error'
-                ? 'var(--h10-danger)'
-                : 'var(--h10-warning)'
+                ? 'var(--nds-danger)'
+                : 'var(--nds-warning)'
               : v
-              ? 'var(--h10-text)'
-              : 'var(--h10-text-3)',
+              ? 'var(--nds-text)'
+              : 'var(--nds-text-3)',
             fontWeight: issue ? 600 : undefined,
           }}
           title={issue ? `${issue.message}` : v}
@@ -991,7 +991,7 @@ export function EbayImportWizard({
           <span style={{ ...T.caption, textDecoration: 'line-through', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={c.from}>
             {c.from || '—'}
           </span>
-          <ArrowRight size={11} aria-hidden style={{ color: 'var(--h10-text-3)', flexShrink: 0 }} />
+          <ArrowRight size={11} aria-hidden style={{ color: 'var(--nds-text-3)', flexShrink: 0 }} />
           <span style={{ ...T.value, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={c.to}>
             {c.to}
           </span>

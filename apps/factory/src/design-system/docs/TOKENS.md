@@ -1,7 +1,7 @@
 # Tokens
 
 > **Phase 1 shipped the values.** The canonical palette lives in `../tokens/*.ts`
-> (TS, for JS consumers) and `../styles/tokens.css` (the `--h10-*` CSS vars). This
+> (TS, for JS consumers) and `../styles/tokens.css` (the `--nds-*` CSS vars). This
 > document defines the *model*; the values are in those files, and the 251→~70
 > canonicalization is documented in `../studies/01-color-drift.md`. See
 > `TOKEN-RECONCILIATION.md` for how H10's values map onto the platform's names.
@@ -15,7 +15,7 @@ primitive  →  semantic  →  component
 ```
 
 - **Primitive** — the raw palette/scale. Named by hue + step
-  (`--h10-blue-600`). Not consumed directly by components.
+  (`--nds-blue-600`). Not consumed directly by components.
 - **Semantic** — what a thing *means*. Reuses the platform's existing names so
   H10 and the Tailwind app speak one language. **Components consume this tier.**
 - **Component** — a last-resort knob for a value the semantic tier can't express.

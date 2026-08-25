@@ -13,7 +13,7 @@ export interface HoverCardProps {
  */
 export function HoverCard({ card, children, className }: HoverCardProps) {
   return (
-    <span className={`h10-ds-hovercard${className ? ` ${className}` : ''}`} tabIndex={0}>
+    <span className={`nds-hovercard${className ? ` ${className}` : ''}`} tabIndex={0}>
       {children}
       <span className="hc" role="tooltip">
         {card}

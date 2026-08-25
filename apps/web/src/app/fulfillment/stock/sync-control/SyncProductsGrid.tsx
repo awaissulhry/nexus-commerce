@@ -349,7 +349,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   const to = Math.min(page * pageSize, total)
 
   return (
-    <div className="h10-ds-gridcard sc-card-pop">
+    <div className="nds-gridcard sc-card-pop">
       <GridToolbar
         count={
           selectedMasterIds.length > 0

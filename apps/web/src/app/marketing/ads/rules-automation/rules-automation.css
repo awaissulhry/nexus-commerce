@@ -2384,7 +2384,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* ── DS token pin ──────────────────────────────────────────────────────────────────────────────
    `EmptyState` and `ProgressBar` read four custom properties. `.h10-shell` already pins three of
    them (`--text-primary`, `--text-tertiary`, `--surface-sunken`) as part of the 56 it fixes to keep
-   this deliberately-light shell out of dark mode — but `--color-primary` and `--h10-wash-primary`
+   this deliberately-light shell out of dark mode — but `--color-primary` and `--nds-wash-primary`
    are NOT among them, so they would resolve from whatever `tokens.css` happens to say.
 
    Pinned here on the elements themselves rather than trusting stylesheet order: a custom property
@@ -2392,7 +2392,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    of `rules-automation.css` and `design-system/styles/*.css` the bundler emits second. */
 .h10-bsp-empty, .h10-bsp-bar {
   --color-primary: #1f6fde;
-  --h10-wash-primary: #e8f1fd;
+  --nds-wash-primary: #e8f1fd;
 }
 
 /* 🔴 SOV.0 — the query STOPS BEHAVING like a link. Measured on prod: the colour override above wins
@@ -5444,10 +5444,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 
 /* SG.6 — the Queue segment's link-out (one inbox: deciding lives on the Suggestions page).
    The count stays here because "how much is waiting" belongs on the section's front page. */
-.h10-au-queueout { padding: 26px 22px; border: 1px solid var(--h10-border); border-radius: 11px; background: var(--h10-surface); }
-.h10-au-queueout .q { margin: 0 0 6px; font-size: 14px; color: var(--h10-text-1); }
+.h10-au-queueout { padding: 26px 22px; border: 1px solid var(--nds-border); border-radius: 11px; background: var(--nds-surface); }
+.h10-au-queueout .q { margin: 0 0 6px; font-size: 14px; color: var(--nds-text-1); }
 .h10-au-queueout .q b { font-weight: 800; }
-.h10-au-queueout .s { margin: 0 0 16px; max-width: 62ch; font-size: 12.5px; line-height: 1.6; color: var(--h10-text-2); }
+.h10-au-queueout .s { margin: 0 0 16px; max-width: 62ch; font-size: 12.5px; line-height: 1.6; color: var(--nds-text-2); }
 
 /* ── BSP-P1 — the hourly chart gets a scale, and a gap that reads as a gap ──────────────────────
    `.axlab` — the two value axes. The chart had three unlabelled gridlines, so neither series had a
@@ -5506,7 +5506,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    already carry BUD-P4's wrap fix, so a long derived description is not clipped.
    🔴 `aria-disabled` rather than `disabled`: an unavailable starter must still answer a hover and
    say what would unlock it, which a truly disabled button cannot do. */
-.h10-sb-starters { margin: 18px 0 4px; padding: 14px 16px 12px; border: 1px solid var(--h10-border, #e4e8ee); border-radius: 10px; background: #fbfcfd; }
+.h10-sb-starters { margin: 18px 0 4px; padding: 14px 16px 12px; border: 1px solid var(--nds-border, #e4e8ee); border-radius: 10px; background: #fbfcfd; }
 .h10-sb-starters .tmgrp { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #626c7c; }
 .h10-sb-starters .tmlist { display: flex; flex-direction: column; gap: 6px; }
 .h10-sb-starters .tmrow { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid #eef1f5; border-radius: 8px; background: #fff; }

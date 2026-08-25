@@ -124,19 +124,19 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
   }
 
   const renderMonth = (month: Date) => (
-    <div className="h10-ds-dp-month">
-      <div className="h10-ds-dp-mh">{monthLabel(month)}</div>
-      <div className="h10-ds-dp-grid">
+    <div className="nds-dp-month">
+      <div className="nds-dp-mh">{monthLabel(month)}</div>
+      <div className="nds-dp-grid">
         {WEEKDAYS.map((w, i) => (
-          <div key={`wd-${i}`} className="h10-ds-dp-wd">{w}</div>
+          <div key={`wd-${i}`} className="nds-dp-wd">{w}</div>
         ))}
         {monthGrid(month).map((day, i) => {
-          if (!day) return <span key={i} className="h10-ds-dp-day empty" />
+          if (!day) return <span key={i} className="nds-dp-day empty" />
           const future = day > today
           const isStart = draftStart ? sameDay(day, draftStart) : sameDay(day, value.start)
           const isEnd = !draftStart && sameDay(day, value.end)
           const inRange = !draftStart && day > value.start && day < value.end
-          const cls = ['h10-ds-dp-day', future ? 'dis' : '', inRange ? 'in' : '', isStart ? 'start' : '', isEnd ? 'end' : '', sameDay(day, today) ? 'today' : '']
+          const cls = ['nds-dp-day', future ? 'dis' : '', inRange ? 'in' : '', isStart ? 'start' : '', isEnd ? 'end' : '', sameDay(day, today) ? 'today' : '']
             .filter(Boolean)
             .join(' ')
           return (
@@ -150,20 +150,20 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
   )
 
   return (
-    <div className={`h10-ds-dp${className ? ` ${className}` : ''}`} ref={ref}>
-      <button type="button" className="h10-ds-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+    <div className={`nds-dp${className ? ` ${className}` : ''}`} ref={ref}>
+      <button type="button" className="nds-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Calendar size={15} />
         {fmt(value.start)} – {fmt(value.end)}
         <ChevronDown size={15} />
       </button>
       {open && (
-        <div className="h10-ds-dp-pop">
-          <div className="h10-ds-dp-presets">
+        <div className="nds-dp-pop">
+          <div className="nds-dp-presets">
             {presets.map((p) => (
               <button
                 key={p.label}
                 type="button"
-                className="h10-ds-dp-preset"
+                className="nds-dp-preset"
                 onClick={() => {
                   onChange(p.get())
                   setDraftStart(null)
@@ -174,8 +174,8 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
               </button>
             ))}
           </div>
-          <div className="h10-ds-dp-cal">
-            <div className="h10-ds-dp-nav">
+          <div className="nds-dp-cal">
+            <div className="nds-dp-nav">
               <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label="Previous month">
                 <ChevronLeft size={16} />
               </button>
@@ -183,7 +183,7 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
                 <ChevronRight size={16} />
               </button>
             </div>
-            <div className="h10-ds-dp-months">
+            <div className="nds-dp-months">
               {renderMonth(view)}
               {renderMonth(addMonths(view, 1))}
             </div>

@@ -74,7 +74,7 @@ export function ConditionalFormatBar(props: ConditionalFormatBarProps) {
   useEffect(() => {
     if (open && pendingFocus) {
       const first = panelRef.current?.querySelector(
-        'input[type="text"], input[type="number"], select, .h10-ds-listbox-btn',
+        'input[type="text"], input[type="number"], select, .nds-listbox-btn',
       ) as HTMLElement | null
       first?.focus()
       setPendingFocus(false)

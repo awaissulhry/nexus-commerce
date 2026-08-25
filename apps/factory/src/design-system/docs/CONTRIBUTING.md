@@ -18,9 +18,9 @@ Concretely, when you build anything:
    feature could want (a chip, a panel, an overlay, a control), it belongs in the
    DS. Promote it here — generalized, tokenized, cataloged — and import it back
    into the feature.
-3. **Keep it platform-consistent.** New UI uses `.h10-ds-*` classes + the
+3. **Keep it platform-consistent.** New UI uses `.nds-*` classes + the
    **semantic** tokens (`--text-*` / `--surface-*` / `--border-*` / `--status-*` /
-   `--color-primary`); no raw hex, no raw `--h10-*-NNN` ramp, no raw Tailwind
+   `--color-primary`); no raw hex, no raw `--nds-*-NNN` ramp, no raw Tailwind
    palette. One `Tone` vocabulary (`neutral · info · success · warning · danger`),
    one `Size` scale (`sm · md · lg · xl`), `variant` only for emphasis.
 4. **Page-specific one-offs stay out** of the system — they live in the feature's

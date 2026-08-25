@@ -36,7 +36,7 @@ The operator's standing instruction (2026-07-21, on Sync Control) is explicit:
 > fact, we must use the shared component."
 
 Table surfaces use `DataGrid` + `GridToolbar` + `FilterBar` + DS `Pagination`
-inside `h10-ds-gridcard`, with all four DS stylesheets imported by the page.
+inside `nds-gridcard`, with all four DS stylesheets imported by the page.
 
 Against that, this exact subtree carries a documented refusal.
 `control-room/GuardrailGrid.tsx`:
@@ -53,7 +53,7 @@ The premise is that the DS stylesheets carry `.dark` rules. They do not. Counted
 
 | Stylesheet | `.dark` rules |
 |---|---|
-| `tokens.css` | **1** — a single block that redefines `--h10-*` custom properties |
+| `tokens.css` | **1** — a single block that redefines `--nds-*` custom properties |
 | `primitives.css` | 0 |
 | `components.css` | 0 |
 | `patterns.css` | 0 |
@@ -84,7 +84,7 @@ style difference:
 --border-default: 203 213 225;
 
 /* products-next-shell.css .productsNextLight — WHOLE COLOUR VALUES */
---border-default: var(--h10-grey-200);
+--border-default: var(--nds-grey-200);
 ```
 
 `design-system/styles/primitives.css` consumes them as whole values:
@@ -98,7 +98,7 @@ console exist — they are workarounds for a base style that never applied.
 
 **Copying ACR.1.6's block onto `.fleet-surface` would reproduce that defect on
 every fleet page.** The pin to copy is **`.productsNextLight`** — semantic
-aliases expressed through the `--h10-*` primitive ramp, which the `.dark` block
+aliases expressed through the `--nds-*` primitive ramp, which the `.dark` block
 never touches, so there is one source of truth for the hex.
 
 The corollary, and it becomes a rule for this subtree: **inside
@@ -121,7 +121,7 @@ draws dark cards on a light page — the exact ACR.1.6 defect, waiting.
 
 > **Pin the DS tokens on `.fleet-surface` — the same block ACR.1.6 already
 > reviewed — and build the roster on the DS `DataGrid` + `GridToolbar` +
-> `FilterBar` + `Pagination` stack inside `h10-ds-gridcard`.**
+> `FilterBar` + `Pagination` stack inside `nds-gridcard`.**
 
 Because: it honours the standing rule; it closes a latent defect rather than
 routing around it; it costs one CSS block instead of a hand-built selection
@@ -132,7 +132,7 @@ sessions.
 **Consequences to handle, not to discover later.**
 
 1. **Pin all, or none — and pin the `productsNextLight` way**, semantic aliases
-   expressed through `var(--h10-*)`, never as Tailwind triplets. See the warning
+   expressed through `var(--nds-*)`, never as Tailwind triplets. See the warning
    above; getting this wrong is invisible in review and produces borderless
    buttons in production.
 2. **Two visual families on one page.** The roster becomes a DS grid card among

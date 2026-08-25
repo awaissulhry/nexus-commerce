@@ -29,13 +29,13 @@ export function QCChecklist({ stageId, canEdit, onChanged }: { stageId: string; 
 
   return (
     <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: 8, borderRadius: 8, fontSize: 12, background: blocked ? "var(--h10-wash-danger, #fdecec)" : "var(--h10-wash-success, #eaf7ee)", color: blocked ? "var(--h10-danger)" : "var(--h10-success)" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: 8, borderRadius: 8, fontSize: 12, background: blocked ? "var(--nds-wash-danger, #fdecec)" : "var(--nds-wash-success, #eaf7ee)", color: blocked ? "var(--nds-danger)" : "var(--nds-success)" }}>
         {blocked ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
         {blocked ? CERT_MSG[qc.cert] : qc.cert === "ok" ? "EN 17092 certificate valid." : "No cert requirement resolved for this garment."}
       </div>
       <div style={{ display: "grid", gap: 5 }}>
         {qc.checklist.map((c) => (
-          <label key={c.item} style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 12.5, cursor: canEdit ? "pointer" : "default", color: c.checked ? "var(--h10-text)" : "var(--h10-text-2)" }}>
+          <label key={c.item} style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 12.5, cursor: canEdit ? "pointer" : "default", color: c.checked ? "var(--nds-text)" : "var(--nds-text-2)" }}>
             <Checkbox checked={c.checked} disabled={!canEdit} onChange={() => void save(qc.checklist.map((x) => (x.item === c.item ? { ...x, checked: !x.checked } : x)), qc.certCheckPassed)} aria-label={c.item} />
             {c.item}
           </label>

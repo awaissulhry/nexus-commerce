@@ -6,12 +6,12 @@ F0 deliverable 5 of 6 — exactly which design-system files, classes and idioms 
 
 ## What is being copied (source of truth: `apps/web/src/design-system/`)
 
-The Nexus "H10" design system — 19 primitives + 24 components + 11 pattern exports on `.h10-ds-*` classes (the README's status line lags at "19+21+8"; `ds-parity-check.mjs` re-measures counts at copy time), a generated token layer, and governance docs — pixel-matched to the ads console the Owner loves. Copy mechanism per FD12: **verbatim copy** into `apps/factory/src/design-system/` + a read-only parity script.
+The Nexus "H10" design system — 19 primitives + 24 components + 11 pattern exports on `.nds-*` classes (the README's status line lags at "19+21+8"; `ds-parity-check.mjs` re-measures counts at copy time), a generated token layer, and governance docs — pixel-matched to the ads console the Owner loves. Copy mechanism per FD12: **verbatim copy** into `apps/factory/src/design-system/` + a read-only parity script.
 
 | Copied (verbatim) | Contents | Note |
 |---|---|---|
-| `styles/tokens.css` | `--h10-*` primitive ramps + semantic roles + platform aliases (`--text-*`, `--surface-*`, `--border-*`, `--status-*`, `--color-primary`), `:root` + `.dark` | **Copy the generated file as the value source, not just `tokens/css-vars.ts`** — 11 `--h10-rail-*` vars exist only in tokens.css/ads.css (drift from commit `99746dbe`), and css-vars.ts alone would lose the rail palette |
-| `styles/primitives.css` · `styles/components.css` · `styles/patterns.css` · `styles/a11y.css` | All `.h10-ds-*` component CSS (605 / 1,245 / 782 / 26 lines) | In Nexus these load per-route (alias collision with `globals.css`); **factory is greenfield and loads all five globally** — one import in the root layout |
+| `styles/tokens.css` | `--nds-*` primitive ramps + semantic roles + platform aliases (`--text-*`, `--surface-*`, `--border-*`, `--status-*`, `--color-primary`), `:root` + `.dark` | **Copy the generated file as the value source, not just `tokens/css-vars.ts`** — 11 `--nds-rail-*` vars exist only in tokens.css/ads.css (drift from commit `99746dbe`), and css-vars.ts alone would lose the rail palette |
+| `styles/primitives.css` · `styles/components.css` · `styles/patterns.css` · `styles/a11y.css` | All `.nds-*` component CSS (605 / 1,245 / 782 / 26 lines) | In Nexus these load per-route (alias collision with `globals.css`); **factory is greenfield and loads all five globally** — one import in the root layout |
 | `tokens/` (all TS files) + `tools/generate-tokens-css.ts` + `token-guard.mjs` / `api-guard.mjs` | Typed token source (fontSize base 13px workhorse, spacing px-scale, durations, z-index…), the tokens.css generator, and the guards | Factory wires its own `tokens:gen` / `tokens:check` scripts; TS tokens feed chart/JS consumers |
 | `primitives/` (19) | `Button`, `Pill` (Tone), `Tag`, `Input` (prefix `€` / suffix `%` adornments), `Textarea`, `Select`, `Listbox`-era `Checkbox/Toggle/Radio/RadioCard`, `Tooltip`, `Spinner`, `Skeleton`, `Kbd`, `Divider`, `TagInput`, `SegmentedControl`, `ToolbarButton`… + `tone.ts` (`neutral·info·success·warning·danger`) | `Badge` (ad-program sp/sd/sb chips) is copied but unused — ads semantics, IGNORE |
 | `components/` (24) | `DataGrid`, `Modal` (440/560/660/920), `Drawer`, `Menu`, `ToastProvider`, `Tabs`, `Card`, `EmptyState`, `Pagination`, `ProgressBar`, `Stepper`, `Banner`, `FileDropzone`, `ImageUpload`, `MultiSelect`, `Combobox`, `Listbox`, `DateField`, `DateRangePicker`, `MetricStrip`, `HoverCard`, `PerformanceGraph`, `Heatmap`, `ColumnGroupModal` | The hard rule travels with it: **always `<Modal>`, never hand-roll dialogs** (documented collision incident) |
@@ -29,19 +29,19 @@ Adopt the **DS `patterns/AppShell.tsx` rail** — the tokenized twin of `AdsSide
 |---|---|
 | Geometry | 66px collapsed → **344px hover-expand** (pure CSS, overlays content — the page never shifts; shell reserves 66px), `.pinned` docks at 344px |
 | Rows | 46px height, radius 10, 15px/600 labels; 50px icon zone with 20px lucide glyphs (glyph centres 33px = collapsed-rail centre) |
-| Active state | **Blue fill (`--h10-primary` #1f6fde) + white text/icon only — same size/weight as siblings** (H10 does not embolden the selection) |
-| Hover | `--h10-rail-item-hover` #e6eaf0; label fades in .14s |
+| Active state | **Blue fill (`--nds-primary` #1f6fde) + white text/icon only — same size/weight as siblings** (H10 does not embolden the selection) |
+| Hover | `--nds-rail-item-hover` #e6eaf0; label fades in .14s |
 | Brand area | 66px row: 28×28 radius-7 primary block + wordmark ("**Nexus** Factory" pattern: mark in rail-text-strong, accent word in primary/800) |
 | Badges | Count badge absolute left:29px/top:6px, danger fill, 2px rail-bg ring; 7×7 status dots with the one-`margin-left:auto` rule |
 | Balance rule (design law) | Trailing chevron mirrors the leading icon zone: glyph centre 25px from left edge, chevron centre 25px from right edge (8px margin + 17px) |
-| Surface | `--h10-rail-surface` #f1f3f5, border `--h10-rail-line` #e3e7ec, `--h10-shadow-rail` on expand; rail pins light (`color-scheme: light`) like `.h10-shell` |
+| Surface | `--nds-rail-surface` #f1f3f5, border `--nds-rail-line` #e3e7ec, `--nds-shadow-rail` on expand; rail pins light (`color-scheme: light`) like `.h10-shell` |
 | Sub-nav | Indented 60px, 12.5px items; active = blue text/600, no fill; third level with tree-line border |
 
 Factory nav registry mirrors `_shell/nav.ts` (`NavItem {label, route, Icon, children?}`): the 11 F0-IA pages, lucide icons, active test `pathname === href || startsWith(href + '/')`, groups auto-open on active route.
 
 ## The visual vocabulary above the DS (ads.css — reference, not dependency)
 
-`marketing/ads/ads.css` (2,472 lines, ~226 KB, largely raw hex predating the token layer) is **not imported and not bulk-copied**. Where a factory surface wants an ads-console look that already has a `.h10-ds-*` equivalent, use the DS component. The handful of ads-only idioms worth carrying are re-expressed on tokens in factory CSS, citing the source family:
+`marketing/ads/ads.css` (2,472 lines, ~226 KB, largely raw hex predating the token layer) is **not imported and not bulk-copied**. Where a factory surface wants an ads-console look that already has a `.nds-*` equivalent, use the DS component. The handful of ads-only idioms worth carrying are re-expressed on tokens in factory CSS, citing the source family:
 
 | Ads idiom | Factory treatment |
 |---|---|
@@ -85,7 +85,7 @@ From the F0 idioms recon; each lands in `apps/factory/src/vendor/` with a proven
 
 ## Parity checklist (verified at F1 gate and re-checked by `ds-parity-check.mjs`)
 
-- [ ] Primary `#1f6fde` (`--h10-blue-600`); 14-step cool-slate grey ramp `#f7f9fb…#1c2530` (grey-25 → grey-900); canvas `#f4f6f9`
+- [ ] Primary `#1f6fde` (`--nds-blue-600`); 14-step cool-slate grey ramp `#f7f9fb…#1c2530` (grey-25 → grey-900); canvas `#f4f6f9`
 - [ ] Radius scale 4/6/7/8/10/12/14/999; navy-tinted shadows (base `20 28 38`); focus ring `0 0 0 2px rgb(31 111 222 / .12)`
 - [ ] Type scale with **13px base**, 15px nav/modal titles, weights 500/600/700/800; Inter + Space Grotesk + JetBrains Mono via `next/font`
 - [ ] Shell smoothing `auto` (heavier), body `450` weight rule

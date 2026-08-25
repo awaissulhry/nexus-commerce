@@ -17,7 +17,7 @@ export interface BulkActionBarProps {
 export function BulkActionBar({ count, children, onClear, noun = 'selected', className }: BulkActionBarProps) {
   if (count <= 0) return null
   return (
-    <div className={`h10-ds-actionbar${className ? ` ${className}` : ''}`} role="region" aria-label="Bulk actions">
+    <div className={`nds-actionbar${className ? ` ${className}` : ''}`} role="region" aria-label="Bulk actions">
       <span className="lbl">
         <b>{count}</b> {noun}
       </span>
@@ -25,7 +25,7 @@ export function BulkActionBar({ count, children, onClear, noun = 'selected', cla
       <span className="acts">
         {children}
         {onClear && (
-          <button type="button" className="h10-ds-actionbar-clear" onClick={onClear}>
+          <button type="button" className="nds-actionbar-clear" onClick={onClear}>
             Clear
           </button>
         )}

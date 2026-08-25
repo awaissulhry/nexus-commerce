@@ -8,7 +8,7 @@ props, are called out explicitly with a migration note.
 
 Until now the DS stylesheets arrived only where an individual file imported them:
 `primitives.css` reached 46 files and **`a11y.css` reached one**. A DS component rendered
-unstyled on any route where nothing happened to pull its sheet in — `.h10-ds-btn` did not
+unstyled on any route where nothing happened to pull its sheet in — `.nds-btn` did not
 resolve on `/design` at all. That is styling by coincidence of import graph, and it blocked
 every remaining 9.3 tranche (`Button` alone is 205 files needing `primitives.css`).
 
@@ -26,7 +26,7 @@ every remaining 9.3 tranche (`Button` alone is 205 files needing `primitives.css
   both.
 
 **Verified** on `/sync-logs` and `/dashboard`, routes that import nothing themselves:
-`.h10-ds-btn` resolves (`padding: 7px 13px`, `radius: 8px`), and the DS `focus-visible` +
+`.nds-btn` resolves (`padding: 7px 13px`, `radius: 8px`), and the DS `focus-visible` +
 reduced-motion rules are present for the first time.
 
 ### 🔴 Found while verifying (pre-existing, not caused here)
@@ -54,7 +54,7 @@ site changed.
   stack only applies when `description` is passed.
 - **`Card.padded` now reaches the BODY of a headed card.** It previously applied only to
   headerless cards, so a headed card always got 16px — which is why 17 charts and tables kept
-  the legacy component. `padded={false}` → `.h10-ds-card-body.flush`. No existing DS caller
+  the legacy component. `padded={false}` → `.nds-card-body.flush`. No existing DS caller
   passes both props, so nothing shifts.
 
 ### Kept OUT of the DS (deliberately)
@@ -67,13 +67,13 @@ prop. Every production call site was already using the DS `Spinner`/`ProgressBar
 ### 🔴 Adapters now carry their own stylesheet imports
 
 The DS stylesheets are **not** loaded app-wide: `primitives.css` is imported by 46 files,
-`a11y.css` by **one**. Measured on `/design`, `.h10-ds-card` resolves but `.h10-ds-btn` does
+`a11y.css` by **one**. Measured on `/design`, `.nds-card` resolves but `.nds-btn` does
 not. This bit the `EmptyState` adapter directly — it renders a DS `Button`, which came out as
 unstyled black text on 55 of its 56 pages until caught in review. Each adapter now imports the
 stylesheets its component needs, as `AccountSwitcher` already did. Next dedupes them.
 
 The real fix is loading the DS stylesheets once, app-wide, which **9.0b is what makes possible**
-— `tokens.css` can now be split into the `--h10-*` tiers (safe globally) and the platform-alias
+— `tokens.css` can now be split into the `--nds-*` tiers (safe globally) and the platform-alias
 tier (opt-in, and a `:root` race with `globals.css` if loaded). It should land before the
 `Button` tranche, which is 205 files needing `primitives.css`. See
 `docs/PHASE-9-3-DUPLICATE-CONCEPTS.md` §3b.
@@ -91,13 +91,13 @@ The DS published `--text-*` / `--surface-*` / `--border-*` as **colours**; `glob
 computed-value time, silently dropped. **285 declarations across nearly every component were
 dead on every ads page**: 138 `color`, 79 `border`, 63 `background`, 3 `box-shadow`.
 
-- **DS stylesheets now consume the DS-owned `--h10-*` tier only** — 394 substitutions
+- **DS stylesheets now consume the DS-owned `--nds-*` tier only** — 394 substitutions
   (`primitives` 100, `components` 226, `patterns` 68). Value-preserving at `:root`; a fix
   inside the shell, where 6 of 6 sampled tokens went from `rgba(0,0,0,0)` to a real colour.
 - **`token-guard` check D** bans the whole platform-alias tier inside DS stylesheets.
   Reports every alias on a line, not just the first.
-- **New token `--h10-info-strong`.** The info tone had `soft` and `line` but no `strong`, so
-  `--status-info-strong` reached past the semantic tier to `--h10-blue-700` — a numbered ramp,
+- **New token `--nds-info-strong`.** The info tone had `soft` and `line` but no `strong`, so
+  `--status-info-strong` reached past the semantic tier to `--nds-blue-700` — a numbered ramp,
   which check B bans. The alias now points at the new token so the two cannot drift.
 - **The alias tier is KEPT, not deleted** (the plan said delete). Only 11 of 25 names are
   contested; the other 14 are DS-only and app CSS depends on them — `reporting.css` alone has
@@ -123,22 +123,22 @@ cleared here, because a gate is only honest once the tree passes it.
 
 ### Token-value changes (these restyle the app)
 
-- **`.dark` gained the tone + link roles**: `--h10-success-strong`, `--h10-warning-strong`,
-  `--h10-danger-strong`, `--h10-text-link`. The light values measured **2.94:1–3.18:1**
+- **`.dark` gained the tone + link roles**: `--nds-success-strong`, `--nds-warning-strong`,
+  `--nds-danger-strong`, `--nds-text-link`. The light values measured **2.94:1–3.18:1**
   on the dark canvas — below AA everywhere they were used, not just where someone had
   noticed. `components.css` had been patching this per-component with hex overrides on
-  `.h10-ds-acct*`; those are deleted, so any component now inherits the AA value instead
+  `.nds-acct*`; those are deleted, so any component now inherits the AA value instead
   of the sub-AA one. **Migration:** none — strictly a contrast improvement, dark only.
-- **Tooltip inks are tokens and theme-invariant**: `--h10-tooltip-light-{bg,fg,fg-2,border}`
-  and `--h10-tip-{bg,fg}`. The values they replace were foreign Tailwind slate hexes
+- **Tooltip inks are tokens and theme-invariant**: `--nds-tooltip-light-{bg,fg,fg-2,border}`
+  and `--nds-tip-{bg,fg}`. The values they replace were foreign Tailwind slate hexes
   (`#1e293b` / `#e2e8f0` / `#28313d`) hardcoded in `primitives.css`; snapped onto the
   nearest H10 ramp step, max delta 4/255 per channel. They point at raw ramps, which
   `.dark` never redefines, so a tip keeps its own contrast rather than inverting.
-- **`.h10-ds-burn-tip` painted transparent, not white.** It read
+- **`.nds-burn-tip` painted transparent, not white.** It read
   `var(--surface-raised, #fff)` — but `--surface-raised` IS defined app-wide, by
   globals.css and ads.css, as **RGB channels** (`255 255 255`). The substitution produced
   `background: 255 255 255`, invalid at computed-value time, and a `var()` fallback covers
-  an *undefined* variable, never an invalid one. Now reads `var(--h10-surface-raised)` —
+  an *undefined* variable, never an invalid one. Now reads `var(--nds-surface-raised)` —
   DS-owned, a real colour in both themes. **Deliberately NOT fixed by aliasing
   `--surface-raised` in tokens.css**: that would have broken the reverse case,
   `rgb(var(--surface-raised))` in `reporting.css`, on the pages that load both.
@@ -152,7 +152,7 @@ when some other file happened to use the same class. The ToolbarButton badge's a
 values (`-right-0.5`, `min-w-[14px]`, `text-[9px]`) were emitted **zero times**: it was
 mis-rendered wherever it shipped, and `ToolbarDivider` was an invisible dimensionless div.
 
-Rewritten onto `.h10-ds-tbtn*` / `.h10-ds-tdivider` / `.h10-ds-cgm-*` + tokens. Every
+Rewritten onto `.nds-tbtn*` / `.nds-tdivider` / `.nds-cgm-*` + tokens. Every
 state (hover / pressed / disabled) is now CSS keyed off `:hover`, `[aria-pressed]` and
 `:disabled`, so the visual cannot drift from the a11y tree. ColumnGroupModal's eleven
 Tailwind dot hues collapse onto the DS palette via `[data-color]`; an unknown key falls
@@ -161,7 +161,7 @@ outside itself, which is the point.
 
 ### Other
 
-- `--h10-blue-600` × 6 in `components.css` → `var(--color-primary)` (value-identical).
+- `--nds-blue-600` × 6 in `components.css` → `var(--color-primary)` (value-identical).
 - `ACCOUNT_COLORS` moved to `tokens/colors.ts` as `accountIdentity`; chart inks to
   `chart`. Both keep their exact hexes — `ChannelConnection.accountColor` **persists**
   these strings, so snapping one onto a ramp step would orphan stored accounts.
@@ -177,7 +177,7 @@ outside itself, which is the point.
 
 - **`Drawer` gained `width`** (number = px, or any CSS length; default stays the
   stylesheet's 420px, `max-width: 100%` still applies) **and `subtitle`** (small
-  line under the title — new `.h10-ds-drawer-ht` / `.st` in components.css,
+  line under the title — new `.nds-drawer-ht` / `.st` in components.css,
   token-clean). Both optional; existing callers unchanged. First consumer: the
   eBay flat-file images drawer (840px).
 
@@ -202,7 +202,7 @@ outside itself, which is the point.
   `workspaceSlot`; right: every column with a drag handle + DS `Toggle` (locked
   columns disabled). Draft-then-Save (atomic), Reset to defaults. Pure DS — built
   on `Modal` + `Button` + `Toggle`, no app i18n/utils. Optional sections collapse
-  on empty option lists. Token-clean `.h10-ds-prefs*`. Title defaults to "Customise".
+  on empty option lists. Token-clean `.nds-prefs*`. Title defaults to "Customise".
 - **`DataGrid` gained `stickyRight`** on `Column` — pins a column to the right
   edge (offsets stack, like sticky-left), with a left edge-shadow. Lets the
   Customise "Pin last column" toggle actually pin the trailing actions column.
@@ -214,10 +214,10 @@ outside itself, which is the point.
 
 - **`GridToolbar`** (`patterns/GridToolbar.tsx`) — the Ad-Manager `.h10-am-toolbar`
   row as a reusable DS pattern: `count` (left) + left-action `children` + flexible
-  spacer + `right` actions. Token-clean `.h10-ds-toolbar` (count `.cnt`, bold
+  spacer + `right` actions. Token-clean `.nds-toolbar` (count `.cnt`, bold
   numbers, `.grow` spacer).
-- **`.h10-ds-gridcard`** wrapper — seats the toolbar inside the grid card above a
-  `DataGrid` (toolbar gets a bottom divider; the inner `.h10-ds-grid-wrap` drops
+- **`.nds-gridcard`** wrapper — seats the toolbar inside the grid card above a
+  `DataGrid` (toolbar gets a bottom divider; the inner `.nds-grid-wrap` drops
   its own border + radius), matching the campaigns page's one-card layout.
 - Recorded in the patterns barrel + catalog (Filters & action bars → GridToolbar).
   First consumer: `/products/next` (count · Customise · Export · density · Live).
@@ -236,8 +236,8 @@ The declarative filter bar the grid workspaces were missing — so feature pages
 - **`FilterPanel` gained `resetLabel` + `resetDisabled`** (additive) — lets the
   footer read **"Clear"** and disable when no filters are active, matching the
   Ad Manager. Existing consumers default to "Reset", unchanged.
-- **New CSS** — `.h10-ds-range*` (min/max field; input border uses
-  `--border-strong` = the campaigns input border exactly) + `.h10-ds-ms-count`
+- **New CSS** — `.nds-range*` (min/max field; input border uses
+  `--border-strong` = the campaigns input border exactly) + `.nds-ms-count`
   (muted facet count after an option label). All semantic-token-clean; `token-guard`
   + `api-guard` green. Rendered in the catalog under Filters → FilterBar.
 - **Known follow-up:** a token-reconciliation pass to lock the remaining DS↔campaigns
@@ -253,12 +253,12 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 - **Platform-semantic alias layer is now LIVE.** Added the platform's semantic
   names — `--text-*`, `--surface-*`, `--border-*`,
   `--status-{success,warning,danger,info}-{soft,line,strong}`, `--color-primary`
-  (+`-soft`) — as **value-preserving aliases** over the existing `--h10-*` roles,
+  (+`-soft`) — as **value-preserving aliases** over the existing `--nds-*` roles,
   and repointed **every** component CSS rule onto them (the ~13 raw-ramp reaches
-  in Tag/Toggle/Tooltip/Skeleton/DataGrid/AppShell are gone). `--h10-*` is now
+  in Tag/Toggle/Tooltip/Skeleton/DataGrid/AppShell are gone). `--nds-*` is now
   strictly the raw ramp + DS-only component-token tier underneath. No pixels move
   — the alias values are identical, so the catalog screenshot-diff is a no-op.
-  `/marketing/ads` keeps reading `--h10-*` directly and is unaffected.
+  `/marketing/ads` keeps reading `--nds-*` directly and is unaffected.
 - **`tokens.css` is GENERATED from TypeScript.** `tokens/css-vars.ts` (hex
   sourced once from `tokens/colors.ts`) is the single source; new
   `tools/generate-tokens-css.ts` emits the `:root{}` + `.dark{}` blocks.
@@ -278,7 +278,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
   public Props via the barrel (incl. previously-leaking `KbdProps`, `PillProps`,
   `TagProps`, and Toast's `ToastApi`). New shared `Size = sm|md|lg|xl`
   (`primitives/size.ts`); Spinner's numeric `size` is the documented exception.
-- **Outliers conformed.** `TagInput` rebuilt onto `.h10-ds-taginput*` + semantic
+- **Outliers conformed.** `TagInput` rebuilt onto `.nds-taginput*` + semantic
   tokens (dropping the raw Tailwind palette + hand-rolled `dark:` + `@/lib/utils`),
   props unchanged so its two untouchable consumers need no edits. `ImageUpload`
   CSS repointed onto the semantic aliases.
@@ -291,7 +291,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 
 ## [P5.1] — 2026-06-23 — Tag primitive (neutral / semantic chip)
 
-- **`Tag`** (`primitives/Tag.tsx` + `.h10-ds-tag` in `styles/primitives.css`) — the
+- **`Tag`** (`primitives/Tag.tsx` + `.nds-tag` in `styles/primitives.css`) — the
   generic inline label chip the console was missing. `Pill` encodes entity *status*
   (Active/Paused/Archived/Error) and `Badge` encodes the ad *program* (SP/SD/SB/Auto/
   Manual); `Tag` covers everything else you label inline. Five tones — `neutral` ·
@@ -301,7 +301,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 
 ## [P4.1] — 2026-06-23 — ImageUpload component
 
-- **`ImageUpload`** (`components/ImageUpload.tsx` + `.h10-ds-imgup-*` in
+- **`ImageUpload`** (`components/ImageUpload.tsx` + `.nds-imgup-*` in
   `styles/components.css`) — a reusable image dropzone: drag-drop + click, live
   preview with remove, a criteria panel, and client-side format / size / minimum-
   dimension validation. Platform-agnostic — the caller passes `onUpload(file) =>
@@ -367,8 +367,8 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
   `Combobox`. `docs/ACCESSIBILITY.md` documents focus / keyboard / ARIA / motion /
   contrast (ARIA roles + states were already applied across components).
 - **Contrast:** `studies/02-contrast-audit.md` — WCAG AA ratios for the key token
-  pairs; `--h10-text-3` (~3.2:1) flagged secondary/large-only (body uses
-  `--h10-text-2`, 5.9:1); primary passes AA (~4.8:1). H10 values kept; usage rule
+  pairs; `--nds-text-3` (~3.2:1) flagged secondary/large-only (body uses
+  `--nds-text-2`, 5.9:1); primary passes AA (~4.8:1). H10 values kept; usage rule
   documented for the Phase 7 lint.
 - **Content/data:** canonical formatters in `lib/format.ts` (cents-based money,
   fraction `pct`, fixed `en-IE`/`en-GB` locales → no hydration drift),
@@ -393,7 +393,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
   col field grid via `FilterField`, reset/apply footer; DS controls fill their
   cells; orphan-margin balanced when collapsed). `BulkActionBar` (sticky
   "N selected" + actions + Clear; renders nothing at 0). `EditModeBar` (sticky
-  discard/apply for unsaved edits). Shared `.h10-ds-actionbar`.
+  discard/apply for unsaved edits). Shared `.nds-actionbar`.
 - Catalog Filters section dog-foods them (FilterPanel with MultiSelect / Combobox
   / Select / €-% inputs). `tsc` clean; self-verified @2x (fields fill cells; sticky bars).
 
@@ -467,7 +467,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 ## [P4.1] — 2026-06-22 — Components wave 1 (Card · EmptyState · Tabs · Pagination · ProgressBar)
 
 - First composite components in `components/` + `styles/components.css`
-  (`.h10-ds-*`): `Card` (panel + optional header/action slot), `EmptyState`
+  (`.nds-*`): `Card` (panel + optional header/action slot), `EmptyState`
   (icon + title + description + CTA), `Tabs` (underline indicator, controlled),
   `Pagination` (windowed page list with ellipses + prev/next), `ProgressBar`
   (determinate + indeterminate).
@@ -494,7 +494,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
   `€`-prefix / `%`-suffix via the `.h10-am-search` + `.mmin` field pattern),
   `Select` (styled native + chevron, `.h10-fsel`), `Checkbox` (accent-tinted
   native), `Toggle` (`role="switch"`, `.h10-toggle` 30×17 with sliding knob).
-- Appended `.h10-ds-field/select/check/toggle` to `styles/primitives.css`;
+- Appended `.nds-field/select/check/toggle` to `styles/primitives.css`;
   catalog dog-foods them in a second Primitives card.
 - `tsc` clean; identical pattern to the visually-verified wave 1. The @2x visual
   capture + push were deferred at commit time — a concurrent session was actively
@@ -506,9 +506,9 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 - First primitives in `primitives/`, tokenized to the H10 spec: `Button`
   (primary/secondary/ghost × md/sm + disabled, matches `.h10-am-btn`), `Pill`
   (ok/warn/arch, matches `.h10-pill`), `Badge` (SP/SD/SB program + A/M targeting).
-- Self-contained `styles/primitives.css` under the `.h10-ds-*` sub-namespace
+- Self-contained `styles/primitives.css` under the `.nds-*` sub-namespace
   (collision-proof vs ads.css's route-scoped `.h10-*`; documented in NAMING).
-  Added `--h10-text-strong` + `--h10-surface-hover` semantic tokens.
+  Added `--nds-text-strong` + `--nds-surface-hover` semantic tokens.
 - Catalog now **dog-foods** the components (Primitives section); the verify
   harness gained a per-section `[data-cat]` capture.
 - Verified @2x: light, dark, and a focused primitives shot — all match the H10
@@ -537,7 +537,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 
 - Canonical token system shipped as new files (zero changes to existing code):
   `tokens/` (colors, typography, spacing, radius, shadow, motion, zindex,
-  breakpoints + `index` barrel) and `styles/tokens.css` (the `--h10-*` CSS vars,
+  breakpoints + `index` barrel) and `styles/tokens.css` (the `--nds-*` CSS vars,
   three tiers: primitive ramps → semantic roles → component chips).
 - Distilled the canon from **251 hex literals → ~70 tokens**; documented the
   drift (near-duplicate greens/reds/blues/greys, dual shadow tints) and the
@@ -547,7 +547,7 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
 - **Sequencing decision:** the `ads.css` rewrite onto tokens is deferred to
   *after* the Phase 2 screenshot-diff harness — canonicalizing drift changes
   pixels, so it must be verified, not done blind. Phase 1 stays pure-additive.
-- Namespaced `--h10-*` to avoid colliding with `globals.css`; convergence onto
+- Namespaced `--nds-*` to avoid colliding with `globals.css`; convergence onto
   the platform's semantic names is a deliberate migration step.
 
 ## [P0] — 2026-06-22 — Scaffold + governance + inventory

@@ -333,7 +333,7 @@ Implemented task-by-task with per-task local commits (`5492a220a` schema → `94
 | `.githooks/pre-push` | ✅ | full run green: drift ×2, i18n (5,594 refs), links, token guard, DS ratchet, apps/web build, apps/api build, RBAC, 82 security tests |
 | `fleet-selftest` end-to-end from a real observation | ⏳ | **pending deploy** — on push, migration applies via `migrate-direct.mjs`; then `POST /api/agent/fleet/charters/seed` + `POST /api/agent/fleet/run/fleet-selftest` on prod Railway (Q2), acceptance matrix updated with run ids |
 
-**Found during gates, NOT a NAF failure:** `npm run tokens:check` is RED on main and has been since 2026-06-29 — commit `99746dbe8` (rail P1) hand-added 28 `--h10-rail-*` variables directly into the generated `tokens.css` without porting them to `tokens/css-vars.ts`; regenerating would DELETE the live rail palette. `.githooks/pre-push` does not run tokens:check, which is why every push since has been green. Fix belongs to the design-system workstream: port the rail vars into `css-vars.ts`, then regen. Phase A makes no web changes.
+**Found during gates, NOT a NAF failure:** `npm run tokens:check` is RED on main and has been since 2026-06-29 — commit `99746dbe8` (rail P1) hand-added 28 `--nds-rail-*` variables directly into the generated `tokens.css` without porting them to `tokens/css-vars.ts`; regenerating would DELETE the live rail palette. `.githooks/pre-push` does not run tokens:check, which is why every push since has been green. Fix belongs to the design-system workstream: port the rail vars into `css-vars.ts`, then regen. Phase A makes no web changes.
 
 **Implementation deviations, all recorded in code comments:** `ObservationResult` gained `id` (findings must cite real `AgentObservation` row ids — the plan's interface omitted the one field `evidenceRefs` needs); `fleet-selftest.maxToolCallsPerRun = 2` (>0 so the generic used≥cap continue-check doesn't trip a tool-less charter); fleet unions use optional-`undefined` members instead of discriminant narrowing (strict:false disables the narrow in source files, and vitest files are tsc-excluded — the plan's risk (1) made concrete); evidence-integrity (refs ⊆ shown observation ids) enforced as part of validation, so a hallucinated evidence id is a retried-then-failed run, not a stored finding.
 
@@ -345,7 +345,7 @@ Implemented task-by-task with per-task local commits (`5492a220a` schema → `94
 
 - **Phase C prerequisite — `apps/api` strict mode:** `strict:false` disables discriminated-union narrowing in source files (bitten in Phase A — `BudgetVerdict` needed optional-`undefined` members). The Critic's check union (`CriticOutput.checks[].result` driving block/revise flow) needs real narrowing. **Add "flip apps/api to strict (or at minimum strictNullChecks)" to the Phase C plan's open-questions list.**
 - **Phase D obligation (existing, restated):** fleet lever registration in `getEngineLevers()` with `haltBehaviour: 'honours'` (D11), and the run timeline must read BOTH step shapes — `AgentStep` rows for fleet runs, `AgentRun.steps` Json for ACP copilot runs (D12).
-- **Design-system workstream (not NAF):** TECH_DEBT #62 — port the 28 `--h10-rail-*` vars into `css-vars.ts` and add `tokens:check` to `.githooks/pre-push` **in the same commit**.
+- **Design-system workstream (not NAF):** TECH_DEBT #62 — port the 28 `--nds-rail-*` vars into `css-vars.ts` and add `tokens:check` to `.githooks/pre-push` **in the same commit**.
 
 ## Live verification — 2026-08-06 ~04:50 UTC (prod Railway, deploy 4ceae897 / build 59e4af4e)
 

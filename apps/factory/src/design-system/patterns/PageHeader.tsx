@@ -11,13 +11,13 @@ export interface PageHeaderProps {
 /** List-page header (H10 `.h10-hdr`): eyebrow + title + subtitle, actions right. */
 export function PageHeader({ eyebrow, title, subtitle, actions }: PageHeaderProps) {
   return (
-    <div className="h10-ds-pagehdr">
+    <div className="nds-pagehdr">
       <div>
         {eyebrow != null && <div className="eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
         {subtitle != null && <div className="sub">{subtitle}</div>}
       </div>
-      {actions != null && <div className="h10-ds-pagehdr-actions">{actions}</div>}
+      {actions != null && <div className="nds-pagehdr-actions">{actions}</div>}
     </div>
   )
 }

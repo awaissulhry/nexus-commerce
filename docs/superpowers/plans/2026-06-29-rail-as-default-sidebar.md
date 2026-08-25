@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `AppRail` presentational. Add a client container `AppNavRail` that owns app data (counts, connections), chrome (workspace, ⌘K/search/theme, recently-viewed, user, markets modal), pin state, and mobile-drawer state, feeding a canonical `APP_NAV`. Tokenize the rail CSS so it follows the app theme, while pinning the deliberately-light standalone shells (`.h10-shell`) light. Swap `AppShell`'s `sidebar` slot to `AppNavRail` and rewrite its chrome layout to the rail model. Keep `AppSidebar` as instant rollback until a full verification sweep, then delete it.
 
-**Tech Stack:** Next.js 16 (App Router), React 18, TypeScript, CSS custom properties (`--h10-*` design tokens in `design-system/styles/tokens.css`), lucide-react icons, Tailwind utility classes in the shell.
+**Tech Stack:** Next.js 16 (App Router), React 18, TypeScript, CSS custom properties (`--nds-*` design tokens in `design-system/styles/tokens.css`), lucide-react icons, Tailwind utility classes in the shell.
 
 ## Global Constraints
 
@@ -30,27 +30,27 @@
 - Modify: `apps/web/src/app/marketing/ads/ads.css:6` (`.h10-shell`)
 
 **Interfaces:**
-- Produces: CSS custom properties `--h10-rail-item-hover`, `--h10-rail-chip-bg`, `--h10-rail-chip-active-bg`, `--h10-rail-chip-active-fg` (light + dark values), consumed by Task 1.2.
+- Produces: CSS custom properties `--nds-rail-item-hover`, `--nds-rail-chip-bg`, `--nds-rail-chip-active-bg`, `--nds-rail-chip-active-fg` (light + dark values), consumed by Task 1.2.
 
-- [ ] **Step 1: Add rail tokens to `:root`** (after `--h10-rail-line` at line 36)
+- [ ] **Step 1: Add rail tokens to `:root`** (after `--nds-rail-line` at line 36)
 
 ```css
-  --h10-rail-item-hover: #e6eaf0;
-  --h10-rail-chip-bg: #e8ebf0;
-  --h10-rail-chip-active-bg: #dce8fb;
-  --h10-rail-chip-active-fg: #1f6fde;
+  --nds-rail-item-hover: #e6eaf0;
+  --nds-rail-chip-bg: #e8ebf0;
+  --nds-rail-chip-active-bg: #dce8fb;
+  --nds-rail-chip-active-fg: #1f6fde;
 ```
 
-- [ ] **Step 2: Add the dark overrides to `.dark`** (inside the `.dark { … }` block, after `--h10-rail-border`)
+- [ ] **Step 2: Add the dark overrides to `.dark`** (inside the `.dark { … }` block, after `--nds-rail-border`)
 
 ```css
-  --h10-rail-item-hover: #223247;
-  --h10-rail-chip-bg: #243345;
-  --h10-rail-chip-active-bg: #1d3a5f;
-  --h10-rail-chip-active-fg: #cfe1fb;
+  --nds-rail-item-hover: #223247;
+  --nds-rail-chip-bg: #243345;
+  --nds-rail-chip-active-bg: #1d3a5f;
+  --nds-rail-chip-active-fg: #cfe1fb;
   /* fill gaps the rail consumes that .dark did not previously override */
-  --h10-text-strong: #cdd6e1;
-  --h10-surface-hover: #223247;
+  --nds-text-strong: #cdd6e1;
+  --nds-surface-hover: #223247;
 ```
 
 - [ ] **Step 3: Pin `.h10-shell` to light tokens** so standalone shells stay light regardless of `.dark`. Edit `ads.css:6` — keep its hardcoded light `background`/`color`, and ADD a re-scope of the rail tokens to their light values (mirror `products-next-shell.css`):
@@ -58,15 +58,15 @@
 ```css
 .h10-shell {
   /* …existing display/height/background/color/font rules unchanged… */
-  --h10-rail-bg: #f1f3f5;
-  --h10-rail-border: #e3e7ec;
-  --h10-rail-item-hover: #e6eaf0;
-  --h10-rail-chip-bg: #e8ebf0;
-  --h10-rail-chip-active-bg: #dce8fb;
-  --h10-rail-chip-active-fg: #1f6fde;
-  --h10-text: #1c2530;
-  --h10-text-2: #4a5462;
-  --h10-text-3: #8a93a1;
+  --nds-rail-bg: #f1f3f5;
+  --nds-rail-border: #e3e7ec;
+  --nds-rail-item-hover: #e6eaf0;
+  --nds-rail-chip-bg: #e8ebf0;
+  --nds-rail-chip-active-bg: #dce8fb;
+  --nds-rail-chip-active-fg: #1f6fde;
+  --nds-text: #1c2530;
+  --nds-text-2: #4a5462;
+  --nds-text-3: #8a93a1;
   color-scheme: light;
 }
 ```
@@ -85,14 +85,14 @@ git commit --only apps/web/src/design-system/styles/tokens.css apps/web/src/app/
 - Modify: `apps/web/src/app/marketing/ads/ads.css` (`.h10-rail`, `.h10-brand`, `.h10-item`, `.h10-sub*`, `.h10-subsub*` colour declarations, ~lines 20-98)
 
 **Interfaces:**
-- Consumes: tokens from Task 1.1 + existing `--h10-text`, `--h10-text-2`, `--h10-text-3`, `--h10-primary`, `--h10-rail-bg`, `--h10-rail-border`, `--h10-shadow-rail`.
+- Consumes: tokens from Task 1.1 + existing `--nds-text`, `--nds-text-2`, `--nds-text-3`, `--nds-primary`, `--nds-rail-bg`, `--nds-rail-border`, `--nds-shadow-rail`.
 
-- [ ] **Step 1: Replace hardcoded hex with `var(--h10-*)`** in the rail rules. Mapping (apply to every matching declaration):
-  - rail `background: #f1f3f5` → `var(--h10-rail-bg)`; `border-right: 1px solid #e3e7ec` → `var(--h10-rail-border)`; hover `box-shadow` → `var(--h10-shadow-rail)`
-  - brand `.word .mk` `#1c2530` → `var(--h10-text)`; logo keeps `#1f6fde` (brand blue, theme-agnostic) or `var(--h10-primary)`
-  - item text `#4a5462` → `var(--h10-text-2)`; icon `#8a93a1` → `var(--h10-text-3)`; hover bg `#e6eaf0` → `var(--h10-rail-item-hover)`; hover text `#1c2530` → `var(--h10-text)`; active `.on` keeps `background: var(--h10-primary); color: #fff`
-  - sub text `#5b6573` → `var(--h10-text-2)`; subitem hover `#f1f4f8` → `var(--h10-rail-item-hover)`; `.on` `#1f6fde` → `var(--h10-primary)`
-  - subsub: `.subchev-btn` color `#98a2b3` → `var(--h10-text-3)`; chip `.mcode` bg `#e8ebf0` → `var(--h10-rail-chip-bg)`, fg `#5b6573` → `var(--h10-text-2)`; `.on .mcode` → `var(--h10-rail-chip-active-bg)` / `var(--h10-rail-chip-active-fg)`; tree line `#e3e7ec` → `var(--h10-rail-border)`
+- [ ] **Step 1: Replace hardcoded hex with `var(--nds-*)`** in the rail rules. Mapping (apply to every matching declaration):
+  - rail `background: #f1f3f5` → `var(--nds-rail-bg)`; `border-right: 1px solid #e3e7ec` → `var(--nds-rail-border)`; hover `box-shadow` → `var(--nds-shadow-rail)`
+  - brand `.word .mk` `#1c2530` → `var(--nds-text)`; logo keeps `#1f6fde` (brand blue, theme-agnostic) or `var(--nds-primary)`
+  - item text `#4a5462` → `var(--nds-text-2)`; icon `#8a93a1` → `var(--nds-text-3)`; hover bg `#e6eaf0` → `var(--nds-rail-item-hover)`; hover text `#1c2530` → `var(--nds-text)`; active `.on` keeps `background: var(--nds-primary); color: #fff`
+  - sub text `#5b6573` → `var(--nds-text-2)`; subitem hover `#f1f4f8` → `var(--nds-rail-item-hover)`; `.on` `#1f6fde` → `var(--nds-primary)`
+  - subsub: `.subchev-btn` color `#98a2b3` → `var(--nds-text-3)`; chip `.mcode` bg `#e8ebf0` → `var(--nds-rail-chip-bg)`, fg `#5b6573` → `var(--nds-text-2)`; `.on .mcode` → `var(--nds-rail-chip-active-bg)` / `var(--nds-rail-chip-active-fg)`; tree line `#e3e7ec` → `var(--nds-rail-border)`
 
 - [ ] **Step 2: Verify light unchanged** — restart not needed (CSS hot-reloads). In the browser at `/products/next`: rail must look identical to before (it's under `.h10-shell` which pins light). Screenshot + compare to the pre-change look.
 
@@ -167,9 +167,9 @@ git commit --only apps/web/src/app/_shared/app-nav.ts apps/web/src/app/products/
 
 ```css
 .h10-dot { width: 7px; height: 7px; border-radius: 999px; margin-left: auto; flex-shrink: 0; }
-.h10-dot.action { background: var(--h10-danger); }
-.h10-dot.warning { background: var(--h10-warning); }
-.h10-connect { margin-left: auto; font-size: 11px; color: var(--h10-text-3); opacity: 0; transition: opacity .14s; }
+.h10-dot.action { background: var(--nds-danger); }
+.h10-dot.warning { background: var(--nds-warning); }
+.h10-connect { margin-left: auto; font-size: 11px; color: var(--nds-text-3); opacity: 0; transition: opacity .14s; }
 .h10-rail:hover .h10-connect { opacity: 1; }
 ```
 
@@ -226,7 +226,7 @@ git commit --only apps/web/src/app/_shared/AppNavRail.tsx apps/web/src/app/produ
 
 - [ ] **Step 2:** In `AppNavRail`, build the header: workspace button (port `AppSidebar.tsx:366-377`), ⌘K + search buttons dispatching `new CustomEvent('nexus:open-command-palette')` (port lines 312-314, 349-362), and the theme toggle (port `SidebarThemeToggle` lines 1238-1258 but use theme-aware token colours, not fixed slate). Pass as `header` prop.
 
-- [ ] **Step 3:** Add `.h10-railhdr` styles in `ads.css` (a thin control row; buttons use `var(--h10-text-2)` with `var(--h10-rail-item-hover)` hover).
+- [ ] **Step 3:** Add `.h10-railhdr` styles in `ads.css` (a thin control row; buttons use `var(--nds-text-2)` with `var(--nds-rail-item-hover)` hover).
 
 - [ ] **Step 4: Verify** at `/products/next`: workspace + ⌘K (opens palette) + search + theme toggle all present and working. `npx tsc --noEmit` → 0.
 
@@ -319,7 +319,7 @@ git commit --only apps/web/src/app/_shared/AppRail.tsx apps/web/src/app/_shared/
 **Interfaces:**
 - Produces: `AppNavRail` exposes pin state via a `data-rail-pinned` attribute on a stable ancestor so `AppShell` can reserve the matching width (or via a shared context — pick the attribute approach for simplicity).
 
-- [ ] **Step 1:** Add `pinned` to `AppRailProps`; when true add class `pinned`. CSS: `.h10-rail.pinned { width: var(--h10-rail-expanded); }` and `.h10-rail.pinned .lbl,.chev,.h10-railhdr,.h10-railft { opacity:1 }`.
+- [ ] **Step 1:** Add `pinned` to `AppRailProps`; when true add class `pinned`. CSS: `.h10-rail.pinned { width: var(--nds-rail-expanded); }` and `.h10-rail.pinned .lbl,.chev,.h10-railhdr,.h10-railft { opacity:1 }`.
 
 - [ ] **Step 2:** In `AppNavRail`, add `pinned` state (localStorage `nexus.rail.pinned`), a pin/unpin button in the header, and set `document.documentElement.dataset.railPinned = pinned ? '1' : '0'` in an effect so the shell can react.
 
@@ -365,7 +365,7 @@ return (
 )
 ```
 
-  Set `--rail-reserve` from the pin attribute: add a tiny effect/CSS — `:root[data-rail-pinned='1'] { --rail-reserve: var(--h10-rail-expanded); }` and default `66px`. Below `md`, `--rail-reserve: 0` (drawer overlays). Mark the rail `data-print-hide` (add the attribute on the `.h10-rail` in `AppRail`).
+  Set `--rail-reserve` from the pin attribute: add a tiny effect/CSS — `:root[data-rail-pinned='1'] { --rail-reserve: var(--nds-rail-expanded); }` and default `66px`. Below `md`, `--rail-reserve: 0` (drawer overlays). Mark the rail `data-print-hide` (add the attribute on the `.h10-rail` in `AppRail`).
 
 - [ ] **Step 3:** z-index check: ensure command palette / modals / toasts sit above the rail (`z-50`). Bump the rail to a defined layer if needed (rail `z-40`, overlays `z-50`).
 

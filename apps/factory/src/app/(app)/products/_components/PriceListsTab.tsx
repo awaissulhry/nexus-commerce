@@ -56,12 +56,12 @@ export function PriceListsTab() {
         <div style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Price lists</div>
         {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New list</Button>}
       </div>
-      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: "var(--nds-text-3)", marginBottom: 10 }}>
         A new list inherits everything from <b>Listino base</b> — you only add the lines you negotiated (a discounted base, a cheaper option). Assign it to the brands/customers who get it.
       </div>
       <DataGrid
         columns={[
-          { key: "name", label: "List", render: (r: PriceListRow) => <button type="button" onClick={() => setOpenId(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.name}</button> },
+          { key: "name", label: "List", render: (r: PriceListRow) => <button type="button" onClick={() => setOpenId(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.name}</button> },
           { key: "kind", label: "Kind", render: (r: PriceListRow) => <Pill tone={r.kind === "DEFAULT" ? "neutral" : "info"}>{r.kind === "DEFAULT" ? "default" : "party tier"}</Pill> },
           { key: "entries", label: "Overrides", align: "right" as const, render: (r: PriceListRow) => r.entryCount },
           { key: "parties", label: "Parties", align: "right" as const, render: (r: PriceListRow) => r.partyCount },
@@ -173,7 +173,7 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
       </div>
 
       {isDefault ? (
-        <div style={{ fontSize: 13, color: "var(--h10-text-2)" }}>
+        <div style={{ fontSize: 13, color: "var(--nds-text-2)" }}>
           This is <b>Listino base</b> — the fallback everyone inherits. It has no overrides by design; set base
           prices on the templates themselves. Create a party-tier list to override for specific brands/customers.
         </div>
@@ -183,9 +183,9 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Applies to</div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               {assigned.map((a) => (
-                <span key={a.id} style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, padding: "3px 6px 3px 9px", borderRadius: 999, border: "1px solid var(--h10-border)", background: "var(--h10-wash-primary)", color: "var(--h10-text)" }}>
+                <span key={a.id} style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, padding: "3px 6px 3px 9px", borderRadius: 999, border: "1px solid var(--nds-border)", background: "var(--nds-wash-primary)", color: "var(--nds-text)" }}>
                   {a.label}
-                  <button type="button" aria-label={`Remove ${a.label}`} onClick={() => setAssigned((xs) => xs.filter((x) => x.id !== a.id))} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--h10-text-3)", display: "grid", placeItems: "center" }}><X size={12} /></button>
+                  <button type="button" aria-label={`Remove ${a.label}`} onClick={() => setAssigned((xs) => xs.filter((x) => x.id !== a.id))} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--nds-text-3)", display: "grid", placeItems: "center" }}><X size={12} /></button>
                 </span>
               ))}
               <AsyncCombobox
@@ -209,41 +209,41 @@ function PriceListDetail({ listId, onBack }: { listId: string; onBack: () => voi
                 />
               )}
             </div>
-            {shownTemplateIds.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No overrides — this list currently equals Listino base. Add a template above.</div>}
+            {shownTemplateIds.length === 0 && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No overrides — this list currently equals Listino base. Add a template above.</div>}
             <div style={{ display: "grid", gap: 12 }}>
               {shownTemplateIds.map((tid) => {
                 const d = details[tid];
                 const tRow = templates.find((t) => t.id === tid);
                 return (
-                  <div key={tid} style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: 12 }}>
+                  <div key={tid} style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: 12 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                       <b style={{ fontSize: 13 }}>{d?.name ?? tRow?.name ?? tid}</b>
-                      <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>base {tRow ? `€${(tRow.basePriceCents / 100).toFixed(2)}` : ""}</span>
-                      <button type="button" title="Remove overrides for this template" onClick={() => { setBaseOv((b) => { const n = { ...b }; delete n[tid]; return n; }); setOptOv((o) => { const n = { ...o }; for (const g of d?.optionGroups ?? []) for (const opt of g.options) delete n[opt.id]; return n; }); setDetails((dd) => { const n = { ...dd }; delete n[tid]; return n; }); }} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--h10-danger)", display: "inline-flex", padding: 2 }}><Trash2 size={13} /></button>
+                      <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>base {tRow ? `€${(tRow.basePriceCents / 100).toFixed(2)}` : ""}</span>
+                      <button type="button" title="Remove overrides for this template" onClick={() => { setBaseOv((b) => { const n = { ...b }; delete n[tid]; return n; }); setOptOv((o) => { const n = { ...o }; for (const g of d?.optionGroups ?? []) for (const opt of g.options) delete n[opt.id]; return n; }); setDetails((dd) => { const n = { ...dd }; delete n[tid]; return n; }); }} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--nds-danger)", display: "inline-flex", padding: 2 }}><Trash2 size={13} /></button>
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, fontSize: 12 }}>
                       <span>Base price override:</span>
                       {baseOv[tid] != null ? (
                         <>
                           <EuroInput cents={baseOv[tid]} onCommit={(c) => setBaseOv((b) => ({ ...b, [tid]: c }))} ariaLabel="Base override" width={82} />
-                          <button type="button" onClick={() => setBaseOv((b) => { const n = { ...b }; delete n[tid]; return n; })} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 11.5 }}>clear</button>
+                          <button type="button" onClick={() => setBaseOv((b) => { const n = { ...b }; delete n[tid]; return n; })} style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", fontSize: 11.5 }}>clear</button>
                         </>
                       ) : (
-                        <button type="button" onClick={() => setBaseOv((b) => ({ ...b, [tid]: tRow?.basePriceCents ?? 0 }))} style={{ background: "none", border: "1px dashed var(--h10-border)", borderRadius: 6, cursor: "pointer", fontSize: 11.5, padding: "3px 8px", color: "var(--h10-text-2)" }}>+ override base</button>
+                        <button type="button" onClick={() => setBaseOv((b) => ({ ...b, [tid]: tRow?.basePriceCents ?? 0 }))} style={{ background: "none", border: "1px dashed var(--nds-border)", borderRadius: 6, cursor: "pointer", fontSize: 11.5, padding: "3px 8px", color: "var(--nds-text-2)" }}>+ override base</button>
                       )}
                     </div>
                     {d?.optionGroups.flatMap((g) => g.options).length ? (
                       <div style={{ display: "grid", gap: 4 }}>
                         {d.optionGroups.flatMap((g) => g.options.map((opt) => ({ g, opt }))).map(({ g, opt }) => (
                           <div key={opt.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                            <span style={{ minWidth: 200, color: "var(--h10-text-2)" }}>{g.name}: {opt.name}</span>
+                            <span style={{ minWidth: 200, color: "var(--nds-text-2)" }}>{g.name}: {opt.name}</span>
                             {optOv[opt.id] ? (
                               <>
                                 <DeltaInput mode={optOv[opt.id].mode} value={optOv[opt.id].delta} baseCents={tRow?.basePriceCents} onChange={(next) => setOptOv((o) => ({ ...o, [opt.id]: { mode: next.mode, delta: next.value } }))} ariaLabel={`${opt.name} override`} />
-                                <button type="button" onClick={() => setOptOv((o) => { const n = { ...o }; delete n[opt.id]; return n; })} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 11 }}>clear</button>
+                                <button type="button" onClick={() => setOptOv((o) => { const n = { ...o }; delete n[opt.id]; return n; })} style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", fontSize: 11 }}>clear</button>
                               </>
                             ) : (
-                              <button type="button" onClick={() => setOptOv((o) => ({ ...o, [opt.id]: { mode: opt.priceDeltaMode, delta: opt.priceDelta } }))} style={{ background: "none", border: "1px dashed var(--h10-border)", borderRadius: 6, cursor: "pointer", fontSize: 11, padding: "2px 7px", color: "var(--h10-text-3)" }}>+ override</button>
+                              <button type="button" onClick={() => setOptOv((o) => ({ ...o, [opt.id]: { mode: opt.priceDeltaMode, delta: opt.priceDelta } }))} style={{ background: "none", border: "1px dashed var(--nds-border)", borderRadius: 6, cursor: "pointer", fontSize: 11, padding: "2px 7px", color: "var(--nds-text-3)" }}>+ override</button>
                             )}
                           </div>
                         ))}

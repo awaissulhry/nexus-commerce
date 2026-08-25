@@ -167,7 +167,7 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
 | `…/rules-automation/rules-automation.css` | BSP.1 (`h10-bsp-*` at EOF) | 2026-08-12 | **released** — EOF-append only, every hunk `git diff`-checked as mine before committing |
 | `apps/web/src/design-system/components/index.ts` | BSP.1 (one additive export: `BurnDownChart`) | 2026-08-12 | **released** — one line; the DS is shared app-wide but is not on §3's list, so this row exists rather than an unclaimed edit |
-| `apps/web/src/design-system/styles/components.css` | BSP.1 (`h10-ds-burn-*` at EOF) | 2026-08-12 | **released** — EOF-append only, new prefix, no existing selector touched |
+| `apps/web/src/design-system/styles/components.css` | BSP.1 (`nds-burn-*` at EOF) | 2026-08-12 | **released** — EOF-append only, new prefix, no existing selector touched |
 
 | `apps/api/src/services/advertising/ads-write-gate.ts` | AUTO.P0 (guard ④ — the daily budget MOVEMENT bound: one new `GateDeniedAt`, one new denial fn, one call site beside BUD.2's budget bounds) | 2026-08-16 | **claimed** — additive only. CAP §6.5 and BUD.2 both name this as the remaining gap: a cap bounds a ratchet's *rate*, `minBudgetCents` bounds its *destination* but is set on **0 of 220** campaigns, and neither bounds *cumulative daily movement*. Binds at the gate so it holds for the pacer and a rule nobody has written yet |
 | `apps/api/src/services/automation-rule.service.ts` | AUTO.P0 (record a cap refusal durably — 2 call sites: the `maxExecutionsPerDay` refusal and the `maxWritesPerDay` demotion) | 2026-08-16 | **claimed** — CAP released it after `6ce492420`; I add only the refusal-record write, and touch neither predicate |
@@ -1194,7 +1194,7 @@ mid-edit on. `?tab=dayparting` and `?tab=keyword-tracker` remain broken and rema
 - **`RdSection` is the geometry contract.** Mount inside it and a section cannot acquire a
   horizontal inset — the gutter here is 0, not 24px. It gives each section an id (`#rd-p2`).
 - **Page-scoped CSS**, `rank-dayparting.css`, prefix `rd-*`, plus the four DS stylesheets (verified
-  namespaced under `.h10-ds-*`, so they restyle nothing). `rules-automation.css` is inside the
+  namespaced under `.nds-*`, so they restyle nothing). `rules-automation.css` is inside the
   builder boundary — do not append to it from this page.
 
 Measured on prod after the change: sections at x=96 w=1602 with no stagger, 16 rows, and all five

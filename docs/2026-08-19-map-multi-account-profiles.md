@@ -597,7 +597,7 @@ account's** colour as a left edge, and each panel row takes its own as a bar. Ne
 text — the text contrast is verified against the panel ground, and tinting the whole pill would put
 arbitrary text on an arbitrary colour.
 
-**A semantic fix found by measuring.** The selected-account tick was green (`--h10-success`) and
+**A semantic fix found by measuring.** The selected-account tick was green (`--nds-success`) and
 measured **2.91:1** in light mode; `-strong` only reached **4.43:1**, still under the bar. The real
 problem was not the shade: the tick means *selected*, and the row already carries a **health** dot
 two elements to its left, so green conflated two different meanings on one row. It takes the text
@@ -773,7 +773,7 @@ plain bug outside the MAP.0/MAP.1 grant, and the one-word fix belongs to whoever
 ### 9.4 A design-system gap
 
 `.dark` (`design-system/styles/tokens.css:190`) redefines the text, surface and border tokens but
-**not** `--h10-warning-strong`, `--h10-danger-strong` or `--h10-text-link`. On a dark panel those
+**not** `--nds-warning-strong`, `--nds-danger-strong` or `--nds-text-link`. On a dark panel those
 light-mode values measure **2.94:1** and **3.18:1** — both below AA. Fixed scoped to the switcher's
 own classes rather than to the tokens, because the token-level fix touches every component and
 belongs to the DS-hardening session.

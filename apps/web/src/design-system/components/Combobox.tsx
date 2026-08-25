@@ -28,9 +28,9 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
   const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <div className={`h10-ds-combo${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+    <div className={`nds-combo${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <input
-        className="h10-ds-combo-in"
+        className="nds-combo-in"
         value={open ? query : selected?.label ?? ''}
         placeholder={placeholder}
         onFocus={() => setOpen(true)}
@@ -41,9 +41,9 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
       />
       <ChevronDown size={15} className="chev" aria-hidden />
       {open && (
-        <div className="h10-ds-combo-pop" role="listbox">
+        <div className="nds-combo-pop" role="listbox">
           {filtered.length === 0 ? (
-            <div className="h10-ds-combo-empty">No matches</div>
+            <div className="nds-combo-empty">No matches</div>
           ) : (
             filtered.map((o) => (
               <button

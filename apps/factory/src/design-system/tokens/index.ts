@@ -3,7 +3,7 @@
  *
  *   import { color, space, radius, shadow } from '@/design-system/tokens'
  *
- * CSS consumers use the matching `var(--h10-*)` from ../styles/tokens.css.
+ * CSS consumers use the matching `var(--nds-*)` from ../styles/tokens.css.
  */
 
 export * from './colors'

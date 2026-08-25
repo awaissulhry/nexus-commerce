@@ -48,7 +48,7 @@ function Forbidden({ page }: { page: FactoryPage }) {
   return (
     <div className="factory-coming" style={{ paddingTop: 40 }}>
       <h1 style={{ fontSize: 18, fontWeight: 700 }}>Access denied</h1>
-      <p style={{ fontSize: 13, color: "var(--h10-text-2)" }}>
+      <p style={{ fontSize: 13, color: "var(--nds-text-2)" }}>
         Your role does not include <b>{page.label}</b>. The server enforces this too — ask the Owner if
         you need access.
       </p>
@@ -84,7 +84,7 @@ export function FactoryShell({ children }: { children: React.ReactNode }) {
           mark: "N",
           name: (
             <>
-              Nexus <b style={{ color: "var(--h10-primary)" }}>Factory</b>
+              Nexus <b style={{ color: "var(--nds-primary)" }}>Factory</b>
             </>
           ),
         }}

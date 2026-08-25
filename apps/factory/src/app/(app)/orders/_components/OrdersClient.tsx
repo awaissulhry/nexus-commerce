@@ -70,7 +70,7 @@ const BADGE_UI: Record<string, { label: string; tone: "success" | "info" | "warn
 
 function PaymentChip({ r }: { r: OrderRow }) {
   const b = paymentBadge(r);
-  if (!b) return <span style={{ color: "var(--h10-text-3)" }}>—</span>;
+  if (!b) return <span style={{ color: "var(--nds-text-3)" }}>—</span>;
   const ui = BADGE_UI[b];
   return <Pill tone={ui.tone}>{ui.label}</Pill>;
 }
@@ -355,14 +355,14 @@ function PipelineInner() {
         {/* EPO.7b — DS MetricStrip replaces the hand-rolled counter tiles */}
         <div style={{ flex: "0 1 460px" }}>
           <MetricStrip metrics={[
-            { label: "In production", value: <span style={{ color: "var(--h10-primary)" }}>{data?.counters.inProduction ?? 0}</span> },
-            { label: "Awaiting deposit", value: <span style={{ color: data && data.counters.awaitingDeposit > 0 ? "var(--h10-warning)" : "var(--h10-text-3)" }}>{data?.counters.awaitingDeposit ?? 0}</span> },
-            { label: "Overdue", value: <span style={{ color: data && data.counters.overdue > 0 ? "var(--h10-danger)" : "var(--h10-text-3)" }}>{data?.counters.overdue ?? 0}</span> },
+            { label: "In production", value: <span style={{ color: "var(--nds-primary)" }}>{data?.counters.inProduction ?? 0}</span> },
+            { label: "Awaiting deposit", value: <span style={{ color: data && data.counters.awaitingDeposit > 0 ? "var(--nds-warning)" : "var(--nds-text-3)" }}>{data?.counters.awaitingDeposit ?? 0}</span> },
+            { label: "Overdue", value: <span style={{ color: data && data.counters.overdue > 0 ? "var(--nds-danger)" : "var(--nds-text-3)" }}>{data?.counters.overdue ?? 0}</span> },
           ]} />
         </div>
         <div style={{ marginLeft: "auto", alignSelf: "center", display: "flex", gap: 12, alignItems: "center" }}>
-          {canImport && <button type="button" onClick={() => { setImportCsv(""); setImportResult(null); setImporting(true); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: "var(--h10-text-link)" }}>Import history</button>}
-          <a href={exportHref()} style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export CSV</a>
+          {canImport && <button type="button" onClick={() => { setImportCsv(""); setImportResult(null); setImporting(true); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: "var(--nds-text-link)" }}>Import history</button>}
+          <a href={exportHref()} style={{ fontSize: 12, color: "var(--nds-text-link)" }}>Export CSV</a>
           {/* EPO.7b — DS SegmentedControl replaces the hand-rolled toggle (keyboard + aria for free) */}
           <SegmentedControl size="sm" options={[{ value: "grid", label: "Grid" }, { value: "kanban", label: "Kanban" }]} value={view} onChange={(v) => switchView(v as "grid" | "kanban")} />
         </div>
@@ -372,7 +372,7 @@ function PipelineInner() {
           {view === "grid" && (
             <div style={{ display: "flex", gap: 4 }}>
               {TABS.map((t) => (
-                <button key={t.id} type="button" onClick={() => setState(t.id)} style={{ border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: "5px 10px", borderRadius: 8, background: state === t.id ? "var(--h10-primary)" : "transparent", color: state === t.id ? "#fff" : "var(--h10-text-2)" }}>
+                <button key={t.id} type="button" onClick={() => setState(t.id)} style={{ border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: "5px 10px", borderRadius: 8, background: state === t.id ? "var(--nds-primary)" : "transparent", color: state === t.id ? "#fff" : "var(--nds-text-2)" }}>
                   {t.label}{t.id !== "all" && data?.counts[t.id.toUpperCase()] ? <span style={{ marginLeft: 5, fontSize: 10.5, opacity: 0.85 }}>{data.counts[t.id.toUpperCase()]}</span> : null}
                 </button>
               ))}
@@ -382,7 +382,7 @@ function PipelineInner() {
             {/* EPO.7 (D-5) — the brand-view chip: a party arriving via ?party= (a
                 deep link from Contacts/Financials) reads as a dismissible filter */}
             {partyId ? (
-              <button type="button" onClick={() => setPartyFilter("", "")} title="Clear brand filter" style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--h10-primary)", background: "var(--h10-wash-primary, rgba(31,111,222,0.08))", color: "var(--h10-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={() => setPartyFilter("", "")} title="Clear brand filter" style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--nds-primary)", background: "var(--nds-wash-primary, rgba(31,111,222,0.08))", color: "var(--nds-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 {partyLabel || "Brand"} <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>×</span>
               </button>
             ) : (
@@ -393,7 +393,7 @@ function PipelineInner() {
             )}
             {/* EPO.4 range + search — EPO.7b: DS Input owns hover/focus states */}
             {view === "grid" && (
-              <span style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 11.5, color: "var(--h10-text-3)" }}>
+              <span style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 11.5, color: "var(--nds-text-3)" }}>
                 <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Created from" />
                 –
                 <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Created to" />
@@ -406,12 +406,12 @@ function PipelineInner() {
         {view === "grid" && (views.length > 0 || state !== "attention" || q.trim() || partyId || fromDate || toDate) && (
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
             {views.map((v) => (
-              <span key={v.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid var(--h10-border-subtle)", borderRadius: 999, padding: "3px 4px 3px 10px", fontSize: 11.5, background: "var(--h10-surface)" }}>
-                <button type="button" onClick={() => applyView(v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--h10-text-2)" }}>{v.name}</button>
-                <button type="button" onClick={() => void deleteView(v.id)} aria-label={`Delete view ${v.name}`} title="Delete view" style={{ background: "none", border: "none", padding: "0 4px", cursor: "pointer", color: "var(--h10-text-3)", fontSize: 12, lineHeight: 1 }}>×</button>
+              <span key={v.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid var(--nds-border-subtle)", borderRadius: 999, padding: "3px 4px 3px 10px", fontSize: 11.5, background: "var(--nds-surface)" }}>
+                <button type="button" onClick={() => applyView(v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, color: "var(--nds-text-2)" }}>{v.name}</button>
+                <button type="button" onClick={() => void deleteView(v.id)} aria-label={`Delete view ${v.name}`} title="Delete view" style={{ background: "none", border: "none", padding: "0 4px", cursor: "pointer", color: "var(--nds-text-3)", fontSize: 12, lineHeight: 1 }}>×</button>
               </span>
             ))}
-            <button type="button" onClick={() => { setViewName(""); setSavingView(true); }} style={{ background: "none", border: "1px dashed var(--h10-border)", borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-3)" }}>+ Save view</button>
+            <button type="button" onClick={() => { setViewName(""); setSavingView(true); }} style={{ background: "none", border: "1px dashed var(--nds-border)", borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 11.5, color: "var(--nds-text-3)" }}>+ Save view</button>
           </div>
         )}
         {view === "grid" && data == null ? (
@@ -425,19 +425,19 @@ function PipelineInner() {
               // pagination it would reorder only the LOADED rows — the server's
               // promise-asc sort stays the single truth across pages.)
               { key: "select", label: "", width: 34, render: (r: OrderRow) => <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelected(r.id)} aria-label={`Select ${r.number}`} /> },
-              { key: "number", label: "Order", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>{r.urgent && <Pill tone="danger">urgent</Pill>}</span> },
+              { key: "number", label: "Order", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><button type="button" onClick={() => openDetail(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.number}</button>{r.urgent && <Pill tone="danger">urgent</Pill>}</span> },
               // EPO.4 — cockpit mode leads with WHY the row needs attention
               ...(state === "attention" ? [{ key: "why", label: "Why", render: (r: OrderRow) => <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" as const }}>{(r.attention ?? []).map((a) => { const ui = REASON_UI[a]; return ui ? <Pill key={a} tone={ui.tone}>{ui.label}</Pill> : null; })}</span> }] : []),
-              { key: "party", label: "Party", render: (r: OrderRow) => <a href={`/contacts?c=${r.party.id}`} style={{ color: "inherit", textDecoration: "none" }} onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "var(--h10-text-link)"; }} onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "inherit"; }}>{r.party.name}</a> }, // EPO.3 (E2) — party hops to contacts
+              { key: "party", label: "Party", render: (r: OrderRow) => <a href={`/contacts?c=${r.party.id}`} style={{ color: "inherit", textDecoration: "none" }} onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "var(--nds-text-link)"; }} onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "inherit"; }}>{r.party.name}</a> }, // EPO.3 (E2) — party hops to contacts
               { key: "state", label: "State", render: stateCell },
               // EPO.2 (C7) — stripped money renders "—", never a misleading €0,00
               { key: "net", label: "Net", align: "right" as const, render: (r: OrderRow) => (r.netCents != null && r.lineCount ? eur(r.netCents) : "—") },
               // EPO.2 — balance owed; red once the goods are delivered but unpaid
-              { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderRow) => (r.balanceCents != null && r.lineCount ? <span style={{ color: r.balanceCents > 0 && (r.state === "DELIVERED" || r.state === "CLOSED") ? "var(--h10-danger)" : undefined, fontWeight: r.balanceCents > 0 ? 600 : undefined }}>{eur(r.balanceCents)}</span> : "—") },
+              { key: "balance", label: "Balance", align: "right" as const, render: (r: OrderRow) => (r.balanceCents != null && r.lineCount ? <span style={{ color: r.balanceCents > 0 && (r.state === "DELIVERED" || r.state === "CLOSED") ? "var(--nds-danger)" : undefined, fontWeight: r.balanceCents > 0 ? 600 : undefined }}>{eur(r.balanceCents)}</span> : "—") },
               ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderRow) => (r.lineCount && r.marginPct != null ? <Pill tone={(r.marginCents ?? 0) < 0 || (data?.marginFloorPct != null && r.marginPct < data.marginFloorPct) ? "danger" : "success"}>{r.marginPct.toFixed(0)}%</Pill> : "—") }] : []),
               { key: "payment", label: "Payment", render: (r: OrderRow) => <PaymentChip r={r} /> },
               // EPO.4 — the promise cell carries its integrity: slips + pre-late risk
-              { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><span style={{ color: r.overdue ? "var(--h10-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{formatDate(r.promiseDateAt)}</span>{(r.promiseSlips ?? 0) > 0 && <Pill tone="warning">slipped ×{r.promiseSlips}</Pill>}{r.atRisk && !r.overdue && <Pill tone="warning">at risk</Pill>}</span> : "—") },
+              { key: "promise", label: "Promise", render: (r: OrderRow) => (r.promiseDateAt ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}><span style={{ color: r.overdue ? "var(--nds-danger)" : undefined, fontWeight: r.overdue ? 700 : undefined }}>{formatDate(r.promiseDateAt)}</span>{(r.promiseSlips ?? 0) > 0 && <Pill tone="warning">slipped ×{r.promiseSlips}</Pill>}{r.atRisk && !r.overdue && <Pill tone="warning">at risk</Pill>}</span> : "—") },
               { key: "wos", label: "WOs", align: "right" as const, render: (r: OrderRow) => (r.woCount ? r.woCount : "—") },
               { key: "updated", label: "Updated", render: (r: OrderRow) => formatDate(r.updatedAt) },
             ]}
@@ -451,21 +451,21 @@ function PipelineInner() {
         {/* EPO.7 (C6) — the grid consumes the cursor: no more silent 200-row cliff */}
         {view === "grid" && gridCursor && (
           <div style={{ display: "flex", justifyContent: "center", paddingTop: 10 }}>
-            <button type="button" onClick={() => void loadMoreGrid()} style={{ border: "1px dashed var(--h10-border)", borderRadius: 8, background: "none", padding: "7px 16px", fontSize: 12, color: "var(--h10-text-2)", cursor: "pointer" }}>Load more orders</button>
+            <button type="button" onClick={() => void loadMoreGrid()} style={{ border: "1px dashed var(--nds-border)", borderRadius: 8, background: "none", padding: "7px 16px", fontSize: 12, color: "var(--nds-text-2)", cursor: "pointer" }}>Load more orders</button>
           </div>
         )}
         {/* EPO.7 (E9) — bulk actions for the selection */}
         <BulkActionBar count={selected.size} onClear={clearSelection}>
-          {canCancel && <Button onClick={() => { setReason(""); setBulkCancelling(true); }} disabled={bulkCancellable.length === 0} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>Cancel {bulkCancellable.length || ""} selected</Button>}
-          <a href={exportHref()} style={{ fontSize: 12.5, color: "var(--h10-text-link)", alignSelf: "center" }}>Export filtered CSV</a>
+          {canCancel && <Button onClick={() => { setReason(""); setBulkCancelling(true); }} disabled={bulkCancellable.length === 0} style={{ background: "var(--nds-danger)", color: "#fff", borderColor: "var(--nds-danger)" }}>Cancel {bulkCancellable.length || ""} selected</Button>}
+          <a href={exportHref()} style={{ fontSize: 12.5, color: "var(--nds-text-link)", alignSelf: "center" }}>Export filtered CSV</a>
         </BulkActionBar>
       </Card>
 
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={`Cancel ${cancelling?.number ?? ""}?`} size="sm"
-        footer={<><Button onClick={() => setCancelling(null)}>Keep order</Button><Button onClick={confirmCancel} disabled={!reason.trim() || busy} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>Cancel order</Button></>}>
+        footer={<><Button onClick={() => setCancelling(null)}>Keep order</Button><Button onClick={confirmCancel} disabled={!reason.trim() || busy} style={{ background: "var(--nds-danger)", color: "#fff", borderColor: "var(--nds-danger)" }}>Cancel order</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>A reason is required. Open work orders are cancelled with the order.</div>
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why is this order being cancelled?" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>A reason is required. Open work orders are cancelled with the order.</div>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why is this order being cancelled?" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
         </div>
       </Modal>
 
@@ -473,7 +473,7 @@ function PipelineInner() {
       <Modal open={savingView} onClose={() => !busy && setSavingView(false)} title="Save this view" size="sm"
         footer={<><Button onClick={() => setSavingView(false)} disabled={busy}>Cancel</Button><Button variant="primary" onClick={() => void saveView()} disabled={busy || !viewName.trim()}>Save</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Saves the current tab, search, brand, date range and layout as a one-click chip. Personal — only you see it.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>Saves the current tab, search, brand, date range and layout as a one-click chip. Personal — only you see it.</div>
           <Input value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="e.g. Aireon in production" aria-label="View name" autoFocus />
         </div>
       </Modal>
@@ -486,15 +486,15 @@ function PipelineInner() {
           <Button variant="primary" onClick={() => void runImport(false)} disabled={busy || !importResult?.dryRun || importResult.rows === 0 || importResult.rows === importResult.errorCount}>Apply valid rows</Button>
         </>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>
             One row = one past order with a single line. Columns: <code style={{ fontSize: 11 }}>party, description, qty, unit_net_eur, unit_cost_eur, state, confirmed_date, promise_date, number, client_ref</code>. Parties must exist first (Contacts import). Nothing is written until Apply — and only rows the dry run cleared.
           </div>
-          <textarea value={importCsv} onChange={(e) => { setImportCsv(e.target.value); setImportResult(null); }} rows={6} placeholder="Paste CSV here…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 11.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+          <textarea value={importCsv} onChange={(e) => { setImportCsv(e.target.value); setImportResult(null); }} rows={6} placeholder="Paste CSV here…" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 11.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
           {importResult && (
             <div style={{ maxHeight: 180, overflowY: "auto", display: "grid", gap: 3, fontSize: 11.5 }}>
               <div style={{ fontWeight: 700 }}>{importResult.dryRun ? `Dry run — ${importResult.rows} row(s), ${importResult.errorCount} error(s)` : `Imported ${importResult.created ?? 0} order(s)`}</div>
-              {importResult.errors.map((e) => <div key={`p${e.row}`} style={{ color: "var(--h10-danger)" }}>Row {e.row}: {e.error}</div>)}
-              {importResult.diff.map((d) => <div key={`d${d.row}`} style={{ color: d.error ? "var(--h10-danger)" : "var(--h10-text-2)" }}>Row {d.row}: {d.error ?? d.note}</div>)}
+              {importResult.errors.map((e) => <div key={`p${e.row}`} style={{ color: "var(--nds-danger)" }}>Row {e.row}: {e.error}</div>)}
+              {importResult.diff.map((d) => <div key={`d${d.row}`} style={{ color: d.error ? "var(--nds-danger)" : "var(--nds-text-2)" }}>Row {d.row}: {d.error ?? d.note}</div>)}
             </div>
           )}
         </div>
@@ -502,10 +502,10 @@ function PipelineInner() {
 
       {/* EPO.7 (E9) — one reason for the whole selection; each order still validated server-side */}
       <Modal open={bulkCancelling} onClose={() => !busy && setBulkCancelling(false)} title={`Cancel ${bulkCancellable.length} order${bulkCancellable.length === 1 ? "" : "s"}?`} size="sm"
-        footer={<><Button onClick={() => setBulkCancelling(false)} disabled={busy}>Keep them</Button><Button onClick={confirmBulkCancel} disabled={!reason.trim() || busy} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>{busy ? "Cancelling…" : "Cancel orders"}</Button></>}>
+        footer={<><Button onClick={() => setBulkCancelling(false)} disabled={busy}>Keep them</Button><Button onClick={confirmBulkCancel} disabled={!reason.trim() || busy} style={{ background: "var(--nds-danger)", color: "#fff", borderColor: "var(--nds-danger)" }}>{busy ? "Cancelling…" : "Cancel orders"}</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>The reason applies to all {bulkCancellable.length}. Open work orders are cancelled with each. {selected.size > bulkCancellable.length && <>({selected.size - bulkCancellable.length} of your selection can’t be cancelled from their state and will be skipped.)</>}</div>
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why are these orders being cancelled?" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>The reason applies to all {bulkCancellable.length}. Open work orders are cancelled with each. {selected.size > bulkCancellable.length && <>({selected.size - bulkCancellable.length} of your selection can’t be cancelled from their state and will be skipped.)</>}</div>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Why are these orders being cancelled?" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
         </div>
       </Modal>
 

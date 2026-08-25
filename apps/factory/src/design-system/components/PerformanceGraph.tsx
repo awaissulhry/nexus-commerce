@@ -35,14 +35,14 @@ function ChartTooltip({
 }) {
   if (!active || !payload || payload.length === 0) return null
   return (
-    <div className="h10-ds-chart-tt">
+    <div className="nds-chart-tt">
       <div className="d">{label}</div>
       {payload.map((p) => {
         const s = p.dataKey === left.key ? left : right
         return (
           <div className="r" key={String(p.dataKey)}>
             <span className="dot" style={{ background: s.color }} />
-            <span style={{ color: 'var(--h10-text-2)' }}>{s.label}</span>
+            <span style={{ color: 'var(--nds-text-2)' }}>{s.label}</span>
             <span style={{ marginLeft: 'auto', fontWeight: 600 }}>{s.format && p.value != null ? s.format(p.value) : p.value}</span>
           </div>
         )
@@ -72,7 +72,7 @@ export function PerformanceGraph({ data, xKey, left, right, height = 240, classN
           <Line yAxisId={right.axis} dataKey={right.key} stroke={right.color} dot={false} strokeWidth={2} />
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="h10-ds-chart-legend">
+      <div className="nds-chart-legend">
         <span className="sw">
           <span className="ln" style={{ background: left.color }} />
           {left.label}

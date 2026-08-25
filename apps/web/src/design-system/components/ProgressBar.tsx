@@ -9,7 +9,7 @@ export interface ProgressBarProps {
 
 /** Progress track + fill (H10 `.h10-util` look). */
 export function ProgressBar({ value = 0, indeterminate, height = 7, className }: ProgressBarProps) {
-  const cls = ['h10-ds-progress', indeterminate ? 'indet' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-progress', indeterminate ? 'indet' : '', className ?? ''].filter(Boolean).join(' ')
   const pct = Math.max(0, Math.min(100, value))
   return (
     <span

@@ -373,7 +373,7 @@
   pushes Cost off the card. A PLAIN global class, never a CSS-module one —
   a hashed class has resolved to `undefined` at render in this repo before.
 */
-.sba-gridcard .h10-ds-grid {
+.sba-gridcard .nds-grid {
   table-layout: fixed;
   width: 100%;
 }
@@ -384,22 +384,22 @@
   and printed ON TOP of the next column's text. Sizing every column is the fix;
   sizing one and hoping is what caused it.
 */
-.sba-gridcard .h10-ds-grid th:nth-child(1),
-.sba-gridcard .h10-ds-grid td:nth-child(1) { width: 8%; }
-.sba-gridcard .h10-ds-grid th:nth-child(2),
-.sba-gridcard .h10-ds-grid td:nth-child(2) { width: 18%; }
-.sba-gridcard .h10-ds-grid th:nth-child(3),
-.sba-gridcard .h10-ds-grid td:nth-child(3) { width: 34%; }
-.sba-gridcard .h10-ds-grid th:nth-child(4),
-.sba-gridcard .h10-ds-grid td:nth-child(4) { width: 16%; }
-.sba-gridcard .h10-ds-grid th:nth-child(5),
-.sba-gridcard .h10-ds-grid td:nth-child(5) { width: 9%; }
-.sba-gridcard .h10-ds-grid th:nth-child(6),
-.sba-gridcard .h10-ds-grid td:nth-child(6) { width: 7%; }
-.sba-gridcard .h10-ds-grid th:nth-child(7),
-.sba-gridcard .h10-ds-grid td:nth-child(7) { width: 8%; }
+.sba-gridcard .nds-grid th:nth-child(1),
+.sba-gridcard .nds-grid td:nth-child(1) { width: 8%; }
+.sba-gridcard .nds-grid th:nth-child(2),
+.sba-gridcard .nds-grid td:nth-child(2) { width: 18%; }
+.sba-gridcard .nds-grid th:nth-child(3),
+.sba-gridcard .nds-grid td:nth-child(3) { width: 34%; }
+.sba-gridcard .nds-grid th:nth-child(4),
+.sba-gridcard .nds-grid td:nth-child(4) { width: 16%; }
+.sba-gridcard .nds-grid th:nth-child(5),
+.sba-gridcard .nds-grid td:nth-child(5) { width: 9%; }
+.sba-gridcard .nds-grid th:nth-child(6),
+.sba-gridcard .nds-grid td:nth-child(6) { width: 7%; }
+.sba-gridcard .nds-grid th:nth-child(7),
+.sba-gridcard .nds-grid td:nth-child(7) { width: 8%; }
 /* A worker with a badge wraps to a second line rather than escaping its cell. */
-.sba-gridcard .h10-ds-grid td:nth-child(2) {
+.sba-gridcard .nds-grid td:nth-child(2) {
   white-space: normal;
 }
 .sba-cellprose {
@@ -447,7 +447,7 @@
 
 /* S4R §22.3.3 — both grains wear the DS grid card. The Everything grain was
    `.acr-card` (hard-coded #dfe5ec / 9px radius) while the Runs grain was
-   `.h10-ds-gridcard` (DS tokens): same data, same page, two different cards.
+   `.nds-gridcard` (DS tokens): same data, same page, two different cards.
    The empty states live inside it, so they supply their own padding. */
 .sba-list {
   padding: 0;
@@ -1264,7 +1264,7 @@
    20/13/12 and a filter panel is not the place to reintroduce one. Pinned page
    locally under `.sba-page`, the same way S1 fixed `.acr-sub`'s contrast:
    the component stays the DS's, only its scale answers to this page. */
-.sba-page .h10-ds-fpanel-head h3 {
+.sba-page .nds-fpanel-head h3 {
   font-size: 13px;
   font-weight: 600;
 }
@@ -1309,7 +1309,7 @@
 /* The DS drawer title ships at 15px, which on this page is a fourth size
    against S1's 20/13/12 — the same call S3R made for the FilterBar's 18px.
    The component stays the DS's; only its scale answers to this page. */
-.sba-drawer .h10-ds-drawer-h .t {
+.sba-drawer .nds-drawer-h .t {
   font-size: 13px;
   font-weight: 600;
 }

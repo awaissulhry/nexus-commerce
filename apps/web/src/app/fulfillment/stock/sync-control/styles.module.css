@@ -1,10 +1,10 @@
 /* SCG.1 — density wrappers for the DS DataGrid (products/next parity). */
-.densityCompact :global(.h10-ds-grid tbody td) {
+.densityCompact :global(.nds-grid tbody td) {
   padding-top: 5px;
   padding-bottom: 5px;
 }
 
-.densitySpacious :global(.h10-ds-grid tbody td) {
+.densitySpacious :global(.nds-grid tbody td) {
   padding-top: 15px;
   padding-bottom: 15px;
 }
@@ -36,11 +36,11 @@
    header th ≡ body td, so a long product name can never overrun the sticky
    Product column or push Scope/Sync/In-stock off-screen. overflow:hidden clips
    any residual overflow. All Sync Control columns declare explicit widths. */
-:global(.scv-fixed-grid .h10-ds-grid) {
+:global(.scv-fixed-grid .nds-grid) {
   table-layout: fixed;
 }
-:global(.scv-fixed-grid .h10-ds-grid td),
-:global(.scv-fixed-grid .h10-ds-grid th) {
+:global(.scv-fixed-grid .nds-grid td),
+:global(.scv-fixed-grid .nds-grid th) {
   overflow: hidden;
 }
 
@@ -50,12 +50,12 @@
    measured on an empty grid: card bottom 503px, "500 / page" bottom 548px.
    The card's children carry no background of their own, so the corners stay
    rounded without the clip, and the grid's own scroll container is
-   .h10-ds-grid-wrap, which keeps its own overflow. */
+   .nds-grid-wrap, which keeps its own overflow. */
 /* BOTH classes in one compound selector on purpose: `.sc-card-pop` alone ties
-   `.h10-ds-gridcard` on specificity, and in the PRODUCTION bundle patterns.css
+   `.nds-gridcard` on specificity, and in the PRODUCTION bundle patterns.css
    loads AFTER this module, so overflow:hidden won and the fix silently did
    nothing on prod while working in dev. Verified on prod: computed overflow was
    still 'hidden' with the class applied and the rule present. */
-:global(.h10-ds-gridcard.sc-card-pop) {
+:global(.nds-gridcard.sc-card-pop) {
   overflow: visible;
 }

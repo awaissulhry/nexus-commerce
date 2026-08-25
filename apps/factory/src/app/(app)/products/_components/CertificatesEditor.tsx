@@ -94,20 +94,20 @@ export function CertificatesEditor({ template, onChanged }: { template: Template
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--h10-text-2)" }}>
+      <div style={{ fontSize: 12, color: "var(--nds-text-2)" }}>
         EN 17092 impact-protection certificates covering this garment. FP6 will block shipping a unit
         whose class certificate is missing or expired.
       </div>
 
-      {template.certCoverage.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No certificate attached yet.</div>}
+      {template.certCoverage.length === 0 && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No certificate attached yet.</div>}
       <div style={{ display: "grid", gap: 6 }}>
         {template.certCoverage.map((cov) => (
-          <div key={cov.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5 }}>
+          <div key={cov.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5 }}>
             <Pill tone="info">{cov.certificate.standard} · {cov.certificate.class}</Pill>
             <b>#{cov.certificate.certNumber}</b>
-            {cov.certificate.notifiedBody && <span style={{ color: "var(--h10-text-2)" }}>{cov.certificate.notifiedBody}</span>}
+            {cov.certificate.notifiedBody && <span style={{ color: "var(--nds-text-2)" }}>{cov.certificate.notifiedBody}</span>}
             {expiryChip(cov.certificate.expiresAt)}
-            <button type="button" disabled={busy} title="Detach" onClick={() => void detach(cov.certificateId)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--h10-danger)", display: "inline-flex", padding: 2 }}>
+            <button type="button" disabled={busy} title="Detach" onClick={() => void detach(cov.certificateId)} style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--nds-danger)", display: "inline-flex", padding: 2 }}>
               <Trash2 size={13} />
             </button>
           </div>
@@ -134,7 +134,7 @@ export function CertificatesEditor({ template, onChanged }: { template: Template
           <Listbox ariaLabel="Class" options={CLASSES} value={form.class} onChange={(v) => setForm((f) => ({ ...f, class: v }))} />
           <Input placeholder="Certificate number" value={form.certNumber} onChange={(e) => setForm((f) => ({ ...f, certNumber: e.target.value }))} />
           <Input placeholder="Notified body (optional)" value={form.notifiedBody} onChange={(e) => setForm((f) => ({ ...f, notifiedBody: e.target.value }))} />
-          <label style={{ fontSize: 12, color: "var(--h10-text-2)", display: "grid", gap: 4 }}>
+          <label style={{ fontSize: 12, color: "var(--nds-text-2)", display: "grid", gap: 4 }}>
             Expiry date
             <DateField ariaLabel="Expiry date" value={form.expiresAt} onChange={(v) => setForm((f) => ({ ...f, expiresAt: v }))} placeholder="no expiry" />
           </label>

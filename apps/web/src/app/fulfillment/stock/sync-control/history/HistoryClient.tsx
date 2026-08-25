@@ -83,7 +83,7 @@ export default function HistoryClient() {
           Failed to load: {error}
         </div>
       )}
-      <div className="h10-ds-gridcard">
+      <div className="nds-gridcard">
         <GridToolbar
           count={<>Viewing <b>{from}–{to}</b> of <b>{total}</b> changes</>}
           right={

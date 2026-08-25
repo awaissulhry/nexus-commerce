@@ -11,7 +11,7 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
  */
 export function Select({ className, children, ...rest }: SelectProps) {
   return (
-    <span className="h10-ds-select">
+    <span className="nds-select">
       <select className={className} {...rest}>
         {children}
       </select>

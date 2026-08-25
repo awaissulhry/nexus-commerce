@@ -11,10 +11,10 @@
    renders and nothing another session is holding.
 
    The DS stylesheets are imported alongside this one and are entirely namespaced under
-   `.h10-ds-*` — verified, not assumed: zero top-level selectors outside that prefix in
+   `.nds-*` — verified, not assumed: zero top-level selectors outside that prefix in
    primitives.css, components.css and patterns.css. So loading them cannot restyle the `h10-*`
-   chrome this page already wears. (`--h10-pill-*` in the DS are custom PROPERTY names, not
-   selectors; the DS's own pill is `.h10-ds-pill`.)
+   chrome this page already wears. (`--nds-pill-*` in the DS are custom PROPERTY names, not
+   selectors; the DS's own pill is `.nds-pill`.)
 
    TWO TRAPS THIS PAGE HAS ALREADY PAID FOR ELSEWHERE — read before adding a rule here:
 

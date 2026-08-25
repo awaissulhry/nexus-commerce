@@ -23,20 +23,20 @@ function pageList(page: number, pageCount: number): Array<number | 'gap'> {
 /** Pager (H10 `.h10-am-pager` look). Controlled via `page` / `onPage`. */
 export function Pagination({ page, pageCount, onPage, className }: PaginationProps) {
   return (
-    <div className={`h10-ds-pager${className ? ` ${className}` : ''}`}>
-      <button type="button" className="h10-ds-pgbtn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page">
+    <div className={`nds-pager${className ? ` ${className}` : ''}`}>
+      <button type="button" className="nds-pgbtn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page">
         <ChevronLeft size={15} />
       </button>
       {pageList(page, pageCount).map((p, i) =>
         p === 'gap' ? (
-          <span key={`gap-${i}`} className="h10-ds-pgell">
+          <span key={`gap-${i}`} className="nds-pgell">
             …
           </span>
         ) : (
           <button
             key={p}
             type="button"
-            className={['h10-ds-pgbtn', p === page ? 'on' : ''].filter(Boolean).join(' ')}
+            className={['nds-pgbtn', p === page ? 'on' : ''].filter(Boolean).join(' ')}
             aria-current={p === page ? 'page' : undefined}
             onClick={() => onPage(p)}
           >
@@ -44,7 +44,7 @@ export function Pagination({ page, pageCount, onPage, className }: PaginationPro
           </button>
         ),
       )}
-      <button type="button" className="h10-ds-pgbtn" disabled={page >= pageCount} onClick={() => onPage(page + 1)} aria-label="Next page">
+      <button type="button" className="nds-pgbtn" disabled={page >= pageCount} onClick={() => onPage(page + 1)} aria-label="Next page">
         <ChevronRight size={15} />
       </button>
     </div>

@@ -14,8 +14,8 @@ across `styles/` + all consumers, in one reviewed sweep. Until then, treat
 Do **not** introduce new prefixes. New classes use `.h10-` to stay consistent
 until the rename.
 
-**Component sub-namespace.** DS primitive/component styles use `.h10-ds-*`
-(e.g. `.h10-ds-btn`, `.h10-ds-pill`, `.h10-ds-badge`) so they never collide with
+**Component sub-namespace.** DS primitive/component styles use `.nds-*`
+(e.g. `.nds-btn`, `.nds-pill`, `.nds-badge`) so they never collide with
 the route-scoped `.h10-*` utility classes in `ads.css`. Still under the `h10`
 umbrella; both are renamed together in Phase 9.
 
@@ -23,8 +23,8 @@ umbrella; both are renamed together in Phase 9.
 
 `--<tier>-<role>[-<variant>][-<state>]`, lower-kebab.
 
-- **Primitive (raw ramp):** `--h10-blue-600`, `--h10-grey-100` (raw scale; **not**
-  consumed by component CSS directly — a `var(--h10-*-NNN)` reach in a `.h10-ds-*`
+- **Primitive (raw ramp):** `--nds-blue-600`, `--nds-grey-100` (raw scale; **not**
+  consumed by component CSS directly — a `var(--nds-*-NNN)` reach in a `.nds-*`
   rule is a defect).
 - **Semantic (live):** `--text-primary`, `--text-secondary`, `--text-tertiary`,
   `--text-disabled`, `--text-link`, `--surface-canvas`, `--surface-card`,
@@ -33,22 +33,22 @@ umbrella; both are renamed together in Phase 9.
   `--color-primary-soft`. These are the platform's existing semantic names, so
   both systems share one vocabulary.
 - **Component (DS-only):** the knobs the semantic layer doesn't express stay under
-  `--h10-*` — `--h10-radius-*`, `--h10-shadow-*`, `--h10-focus-ring`,
-  `--h10-pill-*`, `--h10-badge-*`, `--h10-targeting-*`, `--h10-rail-*`,
-  `--h10-row-nav`, `--h10-icon-zone`, plus DS-only roles like `--h10-text-strong`
-  / `--h10-surface-raised`.
+  `--nds-*` — `--nds-radius-*`, `--nds-shadow-*`, `--nds-focus-ring`,
+  `--nds-pill-*`, `--nds-badge-*`, `--nds-targeting-*`, `--nds-rail-*`,
+  `--nds-row-nav`, `--nds-icon-zone`, plus DS-only roles like `--nds-text-strong`
+  / `--nds-surface-raised`.
 
 ### Semantic layer — LIVE
 
 The platform-semantic tier is **wired**, not aspirational: `styles/tokens.css`
 declares each `--text-*` / `--surface-*` / `--border-*` / `--status-*` /
 `--color-primary` as a **value-preserving alias** over the corresponding
-`--h10-*` role (e.g. `--text-secondary: var(--h10-text-2)`,
-`--status-danger-soft: var(--h10-danger-soft)`), and **every** component CSS rule
-consumes the alias. `--h10-*` is now strictly the layer **underneath** —
+`--nds-*` role (e.g. `--text-secondary: var(--nds-text-2)`,
+`--status-danger-soft: var(--nds-danger-soft)`), and **every** component CSS rule
+consumes the alias. `--nds-*` is now strictly the layer **underneath** —
 the raw colour ramp + the DS-only component tokens. The full alias map lives in
 `docs/AUDIT.md` §2 and `docs/TOKEN-RECONCILIATION.md`. (`/marketing/ads` keeps
-reading `--h10-*` directly and is unaffected.)
+reading `--nds-*` directly and is unaffected.)
 
 ## Component & file naming
 

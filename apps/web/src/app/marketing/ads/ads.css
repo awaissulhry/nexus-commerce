@@ -201,7 +201,7 @@
 .h10-am-link:disabled { color: #c2c9d3; cursor: default; text-decoration: none; }
 /* Inside a toast the surface is DARK (--text-primary); brand blue fails contrast there, so the
    one link-verb class adapts to the container: inherit the inverse text, underline for affordance. */
-.h10-ds-toast .h10-am-link { color: inherit; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; }
+.nds-toast .h10-am-link { color: inherit; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; }
 .h10-am-btn.sm { padding: 6px 14px; font-size: 13px; }
 
 /* saved-filter library popover */
@@ -415,16 +415,16 @@
 /* ADM-P6b — the two exception bands. The BAR takes the DS tokens; a bar is a graphic and needs
    3:1, which they clear. The NUMBER takes darker values already in this stylesheet (#c11208 on
    .h10-menu button.danger, #9a6700 on .h10-pill.warn) because text needs 4.5:1 and
-   --h10-danger's #e5484d reaches only 3.5:1. Measured in the browser, not read off the hex.
+   --nds-danger's #e5484d reaches only 3.5:1. Measured in the browser, not read off the hex.
 
-   🔴 The fallbacks are load-bearing. --h10-danger and --h10-warning are declared on `.h10-shell`
-   and `.app-rail-host`, NOT on `:root`, so a bare `var(--h10-danger)` resolves to nothing wherever
+   🔴 The fallbacks are load-bearing. --nds-danger and --nds-warning are declared on `.h10-shell`
+   and `.app-rail-host`, NOT on `:root`, so a bare `var(--nds-danger)` resolves to nothing wherever
    this cell renders outside that wrapper — and an unresolved background is TRANSPARENT, so the
    bar silently disappears rather than falling back to blue. Caught by probing the computed value;
    it is invisible in the source.
 
    Nothing below 85% is coloured — see `utilBand.ts` for why there is no green band. */
-.h10-utilcell.b-capped .h10-util .uf { background: var(--h10-danger, #e5484d); }
+.h10-utilcell.b-capped .h10-util .uf { background: var(--nds-danger, #e5484d); }
 .h10-utilcell.b-capped .uv { color: #c11208; }
 /* ADM-P6c — a REAL yellow, and it needed a different technique rather than a different hex.
    Yellow is intrinsically light: #f2c200 measures 1.44:1 against this #eef1f5 track, so a fill
@@ -1979,9 +1979,9 @@
 
 /* S3 — Automation mode (Rule Setting / AI Control) — DS RadioCards, radio on the right */
 .h10-spw-autom { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.h10-spw-autom .h10-ds-radiocard { flex-direction: row-reverse; justify-content: space-between; align-items: center; padding: 16px 18px; }
-.h10-spw-autom .h10-ds-radiocard .rc-body { flex: 1; }
-.h10-spw-autom .h10-ds-radiocard .rc-title { font-size: 14px; }
+.h10-spw-autom .nds-radiocard { flex-direction: row-reverse; justify-content: space-between; align-items: center; padding: 16px 18px; }
+.h10-spw-autom .nds-radiocard .rc-body { flex: 1; }
+.h10-spw-autom .nds-radiocard .rc-title { font-size: 14px; }
 /* AI Control note (when AI mode is selected) */
 .h10-spw-ainote { display: flex; align-items: flex-start; gap: 11px; font-size: 13.5px; line-height: 1.55; color: #3a4452; background: #f4f8ff; border-color: #dce8fb; }
 .h10-spw-ainote svg { color: #1f6fde; flex-shrink: 0; margin-top: 1px; }
@@ -2160,14 +2160,14 @@
 .h10-spw-ps-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
 .h10-spw-ps-filters label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .h10-spw-ps-filters label > span { font-size: 11px; font-weight: 600; color: #6b7a8d; letter-spacing: .01em; }
-.h10-spw-ps-filters .h10-ds-select select { font-size: 12.5px; padding: 6px 26px 6px 9px; }
+.h10-spw-ps-filters .nds-select select { font-size: 12.5px; padding: 6px 26px 6px 9px; }
 .h10-spw-ps-clear { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12px; font-weight: 600; color: #5b6573; background: none; border: none; cursor: pointer; padding: 7px 4px; }
 .h10-spw-ps-clear:hover { color: #1f6fde; }
 /* APS.5b — saved sets, in the staging tray where the selection lives. The
    select flexes so long set names are readable; the button never shrinks. */
 .h10-spw-ps-sets { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
-.h10-spw-ps-sets .h10-ds-select { flex: 1; min-width: 0; }
-.h10-spw-ps-sets .h10-ds-select select { width: 100%; font-size: 12.5px; padding: 6px 26px 6px 9px; }
+.h10-spw-ps-sets .nds-select { flex: 1; min-width: 0; }
+.h10-spw-ps-sets .nds-select select { width: 100%; font-size: 12.5px; padding: 6px 26px 6px 9px; }
 .h10-spw-ps-saveset { flex: none; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #d8dde4; border-radius: 7px; padding: 7px 11px; cursor: pointer; white-space: nowrap; }
 .h10-spw-ps-saveset:hover:not(:disabled) { background: #f1f4f8; }
 .h10-spw-ps-saveset:disabled { color: #b5bcc6; background: #f6f8fa; cursor: default; }
@@ -2292,7 +2292,7 @@
 /* ER1 — danger menu items: CampaignDetailHeader has always emitted
    `.h10-menu button.danger` (CampaignDetailHeader.tsx:88) but no rule ever
    styled it. Additive; visible only where a danger action exists. */
-.h10-menu button.danger { color: var(--h10-danger, #e5484d); }
+.h10-menu button.danger { color: var(--nds-danger, #e5484d); }
 .h10-menu button.danger:hover { background: #fdecec; color: #c11208; }
 
 /* ══ AX3.2 — Replicate Structure builder ═════════════════════════════════
@@ -2567,7 +2567,7 @@
 .h10-rep-tbl .cf .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rep-tbl .mini { flex: none; font: inherit; font-size: 11.5px; font-weight: 600; color: #3a4452; background: #fff; border: 1px solid #e0d4a8; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
 .h10-rep-tbl .mini:hover { background: #fffdf5; }
-.h10-rep-tbl .h10-ds-select select { font-size: 12px; padding: 3px 22px 3px 8px; }
+.h10-rep-tbl .nds-select select { font-size: 12px; padding: 3px 22px 3px 8px; }
 .h10-rep-tbl tfoot td { border-bottom: none; border-top: 1px solid #eef0f4; background: #fbfcfd; }
 .h10-rep-tbl .lnk { font: inherit; color: #9aa4b1; background: none; border: none; cursor: pointer; padding: 2px; }
 .h10-rep-tbl .lnk:hover { color: #1f6fde; }
@@ -2905,72 +2905,72 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
 /* An uncommitted staged change. Amber like the staleness chip, because both mean "this is not
    settled yet". #8a5316 on #fff6e8 is 5.89:1 — computed, not guessed. */
 /* ── D3a — the "Budget rules" modal, from the design handoff ─────────────────────────────────────
-   Built on the DS `Modal` (`h10-ds-modal`) rather than the old `h10-rtm` chassis, per the handoff:
+   Built on the DS `Modal` (`nds-modal`) rather than the old `h10-rtm` chassis, per the handoff:
    "recreate this design through DS components, not by transcribing inline styles". Every colour the
-   handoff names as a hex resolves to an existing --h10-* token — all 14 checked — so this block
+   handoff names as a hex resolves to an existing --nds-* token — all 14 checked — so this block
    uses the tokens and never the literals. Only the toggle animates (the DS Toggle owns that);
    nothing else here transitions, which is the handoff's rule.
    ⚠️ The width is the ONE deviation from "prefer the primitive": the handoff specifies 720px and
    the DS offers 440/560/660/920, so `size="lg"` is overridden here.
-   🔴 THREE classes, not two. The first cut wrote `.h10-ds-modal.h10-ram` claiming it beat the
-   size on specificity — it does not: `.h10-ds-modal.lg` is ALSO (0,2,0), so they tie and
+   🔴 THREE classes, not two. The first cut wrote `.nds-modal.h10-ram` claiming it beat the
+   size on specificity — it does not: `.nds-modal.lg` is ALSO (0,2,0), so they tie and
    `components.css` wins on source order. Measured on prod: the modal rendered at 660px, the `lg`
    width, not 720. Naming `.lg` in the selector makes it (0,3,0) and settles it by specificity. */
-.h10-ds-modal.lg.h10-ram { width: 720px; max-height: 88vh; }
+.nds-modal.lg.h10-ram { width: 720px; max-height: 88vh; }
 
 .h10-ram-title { display: inline-flex; align-items: baseline; gap: 9px; }
 /* The campaign is DATA — mono, so it reads as an identifier rather than prose. */
-.h10-ram-title .camp { font-family: var(--font-mono), ui-monospace, monospace; font-size: 13px; font-weight: 400; color: var(--h10-grey-500); }
+.h10-ram-title .camp { font-family: var(--font-mono), ui-monospace, monospace; font-size: 13px; font-weight: 400; color: var(--nds-grey-500); }
 
 /* Control bar — search grows, segments keep their width. Wraps under 760px so the segmented
    control drops beneath the field, as the handoff's responsive note requires. */
 .h10-ram-bar { display: flex; gap: 8px; padding: 0 20px 12px; }
 .h10-ram-bar .h10-ram-search { flex: 1 1 auto; min-width: 0; }
-.h10-ram-clear { display: inline-flex; border: 0; background: none; padding: 0; color: var(--h10-grey-500); cursor: pointer; }
-.h10-ram-clear:hover { color: var(--h10-grey-900); }
+.h10-ram-clear { display: inline-flex; border: 0; background: none; padding: 0; color: var(--nds-grey-500); cursor: pointer; }
+.h10-ram-clear:hover { color: var(--nds-grey-900); }
 @media (max-width: 760px) { .h10-ram-bar { flex-wrap: wrap; } .h10-ram-bar .h10-ram-search { flex-basis: 100%; } }
 
-.h10-ram-list { border-top: 1px solid var(--h10-grey-150); }
+.h10-ram-list { border-top: 1px solid var(--nds-grey-150); }
 
 /* Row — two lines reading as one sentence. `border-left` is the status bar; its colour is the
    rule's MODE, and it drops to the subtlest grey when the rule is not assigned here. */
-.h10-ram-row { display: flex; align-items: center; gap: 12px; padding: 10px 20px 10px 17px; border-left: 3px solid var(--h10-grey-100); border-bottom: 1px solid var(--h10-grey-100); }
-.h10-ram-row:hover { background: var(--h10-grey-25); }
+.h10-ram-row { display: flex; align-items: center; gap: 12px; padding: 10px 20px 10px 17px; border-left: 3px solid var(--nds-grey-100); border-bottom: 1px solid var(--nds-grey-100); }
+.h10-ram-row:hover { background: var(--nds-grey-25); }
 .h10-ram-row .b { min-width: 0; flex: 1 1 auto; }
 /* 🔴 `line-height: normal` on both lines, matching the reference. Inheriting the app's 1.45 body
    line-height pushed the row to 62px against the prototype's measured 56.5px — and note the
    README's "~44px" is wrong about its own prototype, so the reference is what this matches. */
 .h10-ram-row .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; line-height: normal; }
-.h10-ram-row .nm { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--h10-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ram-row .nm { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 🔴 A BARE WORD — no chip, no pill, no fill. The handoff's deliberate replacement for the old
    Automation column of chips, and a deliberate reversal of the filled badges D2d added. */
-.h10-ram-row .md { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--h10-grey-400); }
+.h10-ram-row .md { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--nds-grey-400); }
 .h10-ram-row .l2 { display: flex; align-items: baseline; gap: 7px; min-width: 0; margin-top: 2px; line-height: normal; font-family: var(--font-mono), ui-monospace, monospace; font-size: 12.5px; }
-.h10-ram-row .cond { color: var(--h10-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-ram-row .arw { flex-shrink: 0; color: var(--h10-grey-400); }
+.h10-ram-row .cond { color: var(--nds-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ram-row .arw { flex-shrink: 0; color: var(--nds-grey-400); }
 .h10-ram-row .dl { flex-shrink: 0; font-weight: 600; }
 
 /* Assigned: the mode colours the bar and the word. */
-.h10-ram-row.on.m-auto { border-left-color: var(--h10-blue-600); }
-.h10-ram-row.on.m-auto .md { color: var(--h10-blue-600); }
-.h10-ram-row.on.m-propose { border-left-color: var(--h10-blue-200); }
-.h10-ram-row.on.m-propose .md { color: var(--h10-grey-600); }
-.h10-ram-row.on.m-off { border-left-color: var(--h10-grey-150); }
-.h10-ram-row.on .dl.up { color: var(--h10-green-700); }
-.h10-ram-row.on .dl.down { color: var(--h10-red-700); }
+.h10-ram-row.on.m-auto { border-left-color: var(--nds-blue-600); }
+.h10-ram-row.on.m-auto .md { color: var(--nds-blue-600); }
+.h10-ram-row.on.m-propose { border-left-color: var(--nds-blue-200); }
+.h10-ram-row.on.m-propose .md { color: var(--nds-grey-600); }
+.h10-ram-row.on.m-off { border-left-color: var(--nds-grey-150); }
+.h10-ram-row.on .dl.up { color: var(--nds-green-700); }
+.h10-ram-row.on .dl.down { color: var(--nds-red-700); }
 
 /* Unassigned: sunken, dimmed, and the delta loses its direction colour — nothing here will move
    this budget, so nothing here should read as a live number. */
 /* 🔴 The one colour in the handoff with NO token: "surface sunken (row off)" #fbfcfd. It is
-   deliberately not --h10-grey-25 (#f7f9fb) — that is the RAISED surface, already used by this
+   deliberately not --nds-grey-25 (#f7f9fb) — that is the RAISED surface, already used by this
    row's hover, and an unassigned row must not look like a hovered one. Adding a token would mean
    editing tokens.css, which is GENERATED from tokens/css-vars.ts and which the handoff puts in a
    separate PR ("touches shared tokens, so it affects every screen"). So: the literal, named. */
 .h10-ram-row.off { background: #fbfcfd; }
-.h10-ram-row.off .nm { color: var(--h10-grey-500); }
-.h10-ram-row.off .md, .h10-ram-row.off .cond, .h10-ram-row.off .arw, .h10-ram-row.off .dl { color: var(--h10-grey-400); }
+.h10-ram-row.off .nm { color: var(--nds-grey-500); }
+.h10-ram-row.off .md, .h10-ram-row.off .cond, .h10-ram-row.off .arw, .h10-ram-row.off .dl { color: var(--nds-grey-400); }
 
-.h10-ram-none { padding: 34px 20px; text-align: center; font-size: 13px; color: var(--h10-grey-500); }
+.h10-ram-none { padding: 34px 20px; text-align: center; font-size: 13px; color: var(--nds-grey-500); }
 /* A FAILED load, which is not an empty one — bordered and danger-toned so it cannot be read as
    "there are none". */
 .h10-ram-broke { margin: 12px 20px; padding: 9px 11px; border: 1px solid #d38b80; border-radius: 8px; background: #fdece9; font-size: 12.5px; font-weight: 600; color: #8c2f22; }
@@ -2978,21 +2978,21 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
 /* `Unassign all` — kept out of the footer on the handoff's own instruction ("do not re-add a third
    footer button"); it appears with the assigned context instead. */
 .h10-ram-sub { padding: 10px 20px; }
-.h10-ram-count { font-size: 12.5px; color: var(--h10-grey-500); }
-.h10-ram-note { font-size: 11.5px; color: var(--h10-grey-500); }
+.h10-ram-count { font-size: 12.5px; color: var(--nds-grey-500); }
+.h10-ram-note { font-size: 11.5px; color: var(--nds-grey-500); }
 .h10-ram-grow { flex: 1 1 auto; }
 
 /* The create form the prototype has no equivalent for — kept because the operator asked for it. */
-.h10-ram-new { margin: 12px 20px; padding: 14px; border: 1px solid var(--h10-grey-150); border-radius: 10px; background: var(--h10-grey-25); }
+.h10-ram-new { margin: 12px 20px; padding: 14px; border: 1px solid var(--nds-grey-150); border-radius: 10px; background: var(--nds-grey-25); }
 .h10-ram-new .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; align-items: flex-end; }
 .h10-ram-new .row:first-child { margin-top: 0; }
 .h10-ram-new .f { display: flex; flex-direction: column; gap: 5px; flex: 1 1 auto; min-width: 0; }
 .h10-ram-new .f.narrow { flex: 0 0 auto; }
-.h10-ram-new .f > span:first-child { font-size: 11.5px; font-weight: 700; color: var(--h10-grey-500); }
-.h10-ram-new .f input, .h10-ram-new .f .h10-ds-select { width: 100%; }
-.h10-ram-new .f input { padding: 7px 9px; border: 1px solid var(--h10-grey-200); border-radius: 9px; font: inherit; font-size: 13px; color: var(--h10-grey-900); background: #fff; }
-.h10-ram-new .f.narrow input, .h10-ram-new .f.narrow .h10-ds-select { width: 116px; }
-.h10-ram-new .f input:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: 1px; border-color: var(--h10-blue-600); }
+.h10-ram-new .f > span:first-child { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-500); }
+.h10-ram-new .f input, .h10-ram-new .f .nds-select { width: 100%; }
+.h10-ram-new .f input { padding: 7px 9px; border: 1px solid var(--nds-grey-200); border-radius: 9px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: #fff; }
+.h10-ram-new .f.narrow input, .h10-ram-new .f.narrow .nds-select { width: 116px; }
+.h10-ram-new .f input:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 1px; border-color: var(--nds-blue-600); }
 .h10-ram-new .err { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #8c2f22; }
 .h10-ram-new .acts { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 
@@ -3074,13 +3074,13 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
    reads it reads like it governs everything.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 .h10-bset { display: flex; flex-direction: column; gap: 22px; }
-.h10-bset-sec h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--h10-text-1); }
-.h10-bset-why { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--h10-text-2); }
-.h10-bset-why svg { flex: none; margin-top: 2px; color: var(--h10-live); }
+.h10-bset-sec h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--nds-text-1); }
+.h10-bset-why { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }
+.h10-bset-why svg { flex: none; margin-top: 2px; color: var(--nds-live); }
 .h10-bset-grid { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 8px 12px; align-items: center; max-width: 420px; }
-.h10-bset-grid .h10-bset-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--h10-text-3); }
+.h10-bset-grid .h10-bset-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-3); }
 .h10-bset-row { display: contents; }
-.h10-bset-mkt { font-size: 13px; font-weight: 700; color: var(--h10-text-1); }
+.h10-bset-mkt { font-size: 13px; font-weight: 700; color: var(--nds-text-1); }
 .h10-bset-acts { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-.h10-bset-quiet { font-size: 12.5px; color: var(--h10-text-3); }
+.h10-bset-quiet { font-size: 12.5px; color: var(--nds-text-3); }
 .h10-bset-pct { max-width: 110px; }

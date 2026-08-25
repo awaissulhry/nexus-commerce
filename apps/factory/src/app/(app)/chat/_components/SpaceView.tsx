@@ -176,14 +176,14 @@ export function SpaceView({
 
   if (!spaceId) {
     return (
-      <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--h10-text-3)", fontSize: 13, padding: 20, textAlign: "center" }}>
+      <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--nds-text-3)", fontSize: 13, padding: 20, textAlign: "center" }}>
         Select a space — j/k or ↑/↓ to move, Enter to open.
       </div>
     );
   }
   if (notMember) {
     return (
-      <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--h10-text-3)", fontSize: 13, padding: 20, textAlign: "center" }}>
+      <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--nds-text-3)", fontSize: 13, padding: 20, textAlign: "center" }}>
         You&apos;re not a member of this space. Ask the Owner or a space manager to add you.
       </div>
     );
@@ -253,7 +253,7 @@ export function SpaceView({
       ) : (
         <div ref={wrapRef} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           {hasEarlier && (
-            <div style={{ textAlign: "center", padding: "6px 0", borderBottom: "1px solid var(--h10-border-subtle)" }}>
+            <div style={{ textAlign: "center", padding: "6px 0", borderBottom: "1px solid var(--nds-border-subtle)" }}>
               <button
                 type="button"
                 className="fc2-load-earlier"
@@ -287,7 +287,7 @@ export function SpaceView({
               className="fc2-stream-scroll"
               style={{ padding: "8px 0" }}
               emptyState={
-                <div style={{ padding: 24, fontSize: 12.5, color: "var(--h10-text-3)", textAlign: "center" }}>
+                <div style={{ padding: 24, fontSize: 12.5, color: "var(--nds-text-3)", textAlign: "center" }}>
                   This space is quiet. Say something — the team sees it instantly.
                 </div>
               }
@@ -350,14 +350,14 @@ export function SpaceView({
             <Button
               onClick={() => void confirmDelete()}
               disabled={deleteBusy}
-              style={{ color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}
+              style={{ color: "var(--nds-danger)", borderColor: "var(--nds-danger)" }}
             >
               {deleteBusy ? "Deleting…" : "Delete"}
             </Button>
           </>
         }
       >
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "var(--h10-text-2)", display: "grid", gap: 4 }}>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "var(--nds-text-2)", display: "grid", gap: 4 }}>
           <li>Everyone in the space sees a &quot;Message deleted&quot; tombstone instead.</li>
           <li>The audit log keeps the original text — deletion is soft, never silent.</li>
         </ul>

@@ -10,5 +10,5 @@ export interface BadgeProps {
 }
 
 export function Badge({ program, className, children }: BadgeProps) {
-  return <span className={`h10-ds-badge ${program}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-badge ${program}${className ? ` ${className}` : ''}`}>{children}</span>
 }

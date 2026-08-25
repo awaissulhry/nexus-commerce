@@ -38,12 +38,12 @@ export function Menu({ label, items, align = 'left', triggerProps, className }: 
   }, [open])
 
   return (
-    <div className={`h10-ds-menu-wrap${className ? ` ${className}` : ''}`} ref={ref}>
-      <button type="button" className="h10-ds-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} {...triggerProps}>
+    <div className={`nds-menu-wrap${className ? ` ${className}` : ''}`} ref={ref}>
+      <button type="button" className="nds-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} {...triggerProps}>
         {label}
       </button>
       {open && (
-        <div className={['h10-ds-menu', align === 'right' ? 'right' : ''].filter(Boolean).join(' ')} role="menu">
+        <div className={['nds-menu', align === 'right' ? 'right' : ''].filter(Boolean).join(' ')} role="menu">
           {items.map((it) => (
             <button
               key={it.id}

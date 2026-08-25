@@ -19,7 +19,7 @@ const present = await p.evaluate(() => ({
 }))
 
 // (2) switch to AI Control → bid strategy should disappear, AI note appear
-await p.locator('.h10-spw-autom .h10-ds-radiocard', { hasText: 'AI Control' }).click()
+await p.locator('.h10-spw-autom .nds-radiocard', { hasText: 'AI Control' }).click()
 await p.waitForTimeout(300)
 await p.screenshot({ path: '/tmp/spw/s3_ai.png' })
 const aiState = await p.evaluate(() => ({ ainote: !!document.querySelector('.h10-spw-ainote'), bidstratGone: document.querySelectorAll('.h10-spw-bidcard').length === 0 }))

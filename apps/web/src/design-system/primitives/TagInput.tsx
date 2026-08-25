@@ -37,10 +37,10 @@ export function TagInput({
   const filtered = suggestions.filter((s) => s.toLowerCase().includes(input.toLowerCase()) && !value.includes(s))
 
   return (
-    <div className={`h10-ds-taginput${disabled ? ' disabled' : ''}${className ? ` ${className}` : ''}`}>
-      <div className="h10-ds-taginput-field" onClick={() => inputRef.current?.focus()}>
+    <div className={`nds-taginput${disabled ? ' disabled' : ''}${className ? ` ${className}` : ''}`}>
+      <div className="nds-taginput-field" onClick={() => inputRef.current?.focus()}>
         {value.map((tag, i) => (
-          <span key={tag} className="h10-ds-taginput-chip">
+          <span key={tag} className="nds-taginput-chip">
             {tag}
             <button type="button" aria-label={`Remove ${tag}`}
               onClick={(e) => { e.stopPropagation(); onChange(value.filter((_, j) => j !== i)) }}>
@@ -58,7 +58,7 @@ export function TagInput({
         )}
       </div>
       {open && filtered.length > 0 && (
-        <ul className="h10-ds-taginput-menu">
+        <ul className="nds-taginput-menu">
           {filtered.map((s) => (
             <li key={s}>
               <button type="button" onMouseDown={(e) => e.preventDefault()}

@@ -49,8 +49,8 @@ const ago = (iso: string | null): string => {
 
 function GoogleSetupChecklist({ open }: { open: boolean }) {
   return (
-    <details open={open} style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 12 }}>
-      <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--h10-text)" }}>
+    <details open={open} style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginBottom: 12 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--nds-text)" }}>
         One-time Google Cloud setup (5 steps, free)
       </summary>
       <ol style={{ paddingLeft: 18, marginTop: 8, display: "grid", gap: 6 }}>
@@ -60,7 +60,7 @@ function GoogleSetupChecklist({ open }: { open: boolean }) {
         </li>
         <li>
           OAuth consent screen: User type <b>External</b> → fill the app name + your email →{" "}
-          <b style={{ color: "var(--h10-danger)" }}>PUBLISH TO PRODUCTION</b>. Do NOT leave it in
+          <b style={{ color: "var(--nds-danger)" }}>PUBLISH TO PRODUCTION</b>. Do NOT leave it in
           “Testing” — Testing mode expires the connection every 7 days. Unverified + published is the
           documented personal-use path (&lt;100 users); you will click through one “unverified app”
           screen exactly once.
@@ -240,7 +240,7 @@ function IntegrationsInner() {
                     <button
                       type="button"
                       onClick={() => setEditClient(true)}
-                      style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 12.5, padding: 0 }}
+                      style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", fontSize: 12.5, padding: 0 }}
                     >
                       Replace
                     </button>
@@ -262,7 +262,7 @@ function IntegrationsInner() {
                     >
                       {busy === "connect" ? "Opening Google…" : "Connect Google"}
                     </Button>
-                    <span style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+                    <span style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>
                       Approve Gmail + Drive file access; you'll land back here.
                     </span>
                   </div>
@@ -298,7 +298,7 @@ function IntegrationsInner() {
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
                 <Pill tone="success">Connected</Pill>
                 <b>{g.email}</b>
-                <span style={{ color: "var(--h10-text-3)" }}>
+                <span style={{ color: "var(--nds-text-3)" }}>
                   · mail synced {ago(g.lastSyncAt)} · {status!.sync.conversations} conversations / {status!.sync.messages} messages
                 </span>
               </div>
@@ -344,7 +344,7 @@ function IntegrationsInner() {
                       setChangingLabel(true);
                       void loadLabels();
                     }}
-                    style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 12.5, padding: 0 }}
+                    style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", fontSize: 12.5, padding: 0 }}
                   >
                     Change
                   </button>
@@ -362,7 +362,7 @@ function IntegrationsInner() {
                     {status!.sync.recent.map((c) => (
                       <div key={c.id} style={{ fontSize: 12.5, display: "flex", gap: 8, alignItems: "baseline" }}>
                         <span style={{ fontWeight: 600 }}>{c.subject ?? "(no subject)"}</span>
-                        <span style={{ color: "var(--h10-text-3)" }}>
+                        <span style={{ color: "var(--nds-text-3)" }}>
                           {c.party ? `${c.party.name} (${c.party.kind})` : "unmatched sender"} · {ago(c.lastMessageAt)}
                         </span>
                       </div>
@@ -382,7 +382,7 @@ function IntegrationsInner() {
         </Card>
 
         <Card padded header="Google Drive — customer-shared files">
-          {!connected && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>Connect Google first — Drive rides the same grant (drive.file scope: only files this app creates).</div>}
+          {!connected && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>Connect Google first — Drive rides the same grant (drive.file scope: only files this app creates).</div>}
           {connected && g && (
             <div style={{ display: "grid", gap: 8, fontSize: 12.5 }}>
               {g.driveRootFolderId ? (
@@ -398,7 +398,7 @@ function IntegrationsInner() {
                 </div>
               )}
               {g.drive && (
-                <div style={{ color: "var(--h10-text-2)" }}>
+                <div style={{ color: "var(--nds-text-2)" }}>
                   Storage: {(g.drive.usedBytes / GB).toFixed(1)} GB used
                   {g.drive.limitBytes ? ` of ${(g.drive.limitBytes / GB).toFixed(0)} GB` : ""} — bulky
                   production video stays on local disk by design (F0 finding #2).
@@ -415,13 +415,13 @@ function IntegrationsInner() {
                 <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}>
                   <Pill tone="success">{c.adapterId}</Pill>
                   <b>{c.label}</b>
-                  <span style={{ color: "var(--h10-text-3)" }}>
+                  <span style={{ color: "var(--nds-text-3)" }}>
                     {(c.caps as { supportsPollingTracking?: boolean })?.supportsPollingTracking
                       ? "tracking-poll OK"
                       : "tracking-poll unavailable on this plan"}
                   </span>
                   <button
-                    style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 12 }}
+                    style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", fontSize: 12 }}
                     onClick={() =>
                       void apiJson(`/api/integrations/carriers?id=${c.id}`, { method: "DELETE" }).then(load)
                     }
@@ -433,7 +433,7 @@ function IntegrationsInner() {
             </div>
           ) : null}
           <div style={{ display: "grid", gap: 10, maxWidth: 480 }}>
-            <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+            <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>
               <b>Sendcloud</b> — keys are under Settings → Integrations → Sendcloud API in your Sendcloud
               panel. The test call also probes what your plan tier unlocks (labels / tracking polls).
             </div>

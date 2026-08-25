@@ -3065,8 +3065,8 @@ prod-verified on live Vercel + Railway.
 | a checkbox in the row | a `Counting` group in the panel's `presets` |
 
 **One deviation from §21.4, recorded:** `GridToolbar` is used **standalone**
-rather than inside an `h10-ds-gridcard`. Wrapping the Everything list in the
-grid card would restyle S4's container, and S4 is a later unit. `.h10-ds-toolbar`
+rather than inside an `nds-gridcard`. Wrapping the Everything list in the
+grid card would restyle S4's container, and S4 is a later unit. `.nds-toolbar`
 is a bare flex row with a `grow` spacer, so the slots work unwrapped; the Runs
 grain's existing gridcard is untouched.
 
@@ -3228,7 +3228,7 @@ appearing twice is a number that can disagree.
 ### Two grains, two containers
 
 `Everything` renders into `.acr-card sba-list`; `Runs only` renders into
-`.h10-ds-gridcard`. Same data, same page, different chrome — and after S3R the
+`.nds-gridcard`. Same data, same page, different chrome — and after S3R the
 DS card is the house shape.
 
 ### The rest of the shape
@@ -3347,7 +3347,7 @@ this reason.
 
 ### 22.3.3 One container, one count
 
-- Both grains render into **`.h10-ds-gridcard`**, the shape S3R adopted.
+- Both grains render into **`.nds-gridcard`**, the shape S3R adopted.
 - The grid card's inner `GridToolbar` is **removed** — S3's toolbar above
   already carries the controls, and its count was one of the three.
 - The footer states the count **only when it is not S1's**: while paging,
@@ -3627,7 +3627,7 @@ user is told one thing and gets another.
 **Scroll chaining** has a settled CSS-only answer: `overscroll-behavior:
 contain` on the scrolling panel, [available across browsers since 2022][osb] and
 safe without fallbacks. **The DS drawer body does not set it** — verified in
-`components.css`: `.h10-ds-drawer-b` is `overflow-y: auto` and nothing else.
+`components.css`: `.nds-drawer-b` is `overflow-y: auto` and nothing else.
 
 **Steal:** the APG list verbatim as the acceptance criteria; `overscroll-behavior`
 in the DS rather than here. **Reject:** a `<dialog>` element rewrite — the DS
@@ -3655,7 +3655,7 @@ returned, portalled to `<body>`, and every future fix to those 22 consumers.
 **One-line change proposed in the DS**, not here:
 
 ```css
-.h10-ds-drawer-b { overscroll-behavior: contain; }   /* + this */
+.nds-drawer-b { overscroll-behavior: contain; }   /* + this */
 ```
 
 Additive, no API change, and it fixes scroll chaining for all 22 consumers
@@ -3768,7 +3768,7 @@ Verified on prod by focusing a row, activating it, pressing Escape, and checking
 
 ### Two shared files, both claimed, both fixing every consumer
 
-1. **`components.css`** — `.h10-ds-drawer-b { overscroll-behavior: contain }`.
+1. **`components.css`** — `.nds-drawer-b { overscroll-behavior: contain }`.
    The DS drawer body scrolled the page behind it at the end of its own scroll.
    One additive declaration; `contain` confirmed on prod.
 2. **`fleet-pages.css`** — the light pin is now `.fleet-surface, .fleet-portal`,
@@ -3999,7 +3999,7 @@ and `preview-only` was minted by the Approvals stream.
 | `.sba-howtoggle` | 11.5px | **12px** |
 | `.sba-howbody p` | 12.5px | **13px** |
 
-After this the page is **20 / 13 / 12** for the first time. **Corrected after measurement (see §24.7): "and nothing else" was wrong.** Two elements remain at 12.5px — `.h10-ds-fpanel-toggle` and `.h10-ds-btn sm` — and both are DS components' own control text, not this page's. The ladder governs the page's text; DS components keep their internal scale. Left as a stated boundary rather than reached into, which is why the claim is amended here instead of the measurement being rounded to fit it.
+After this the page is **20 / 13 / 12** for the first time. **Corrected after measurement (see §24.7): "and nothing else" was wrong.** Two elements remain at 12.5px — `.nds-fpanel-toggle` and `.nds-btn sm` — and both are DS components' own control text, not this page's. The ladder governs the page's text; DS components keep their internal scale. Left as a stated boundary rather than reached into, which is why the claim is amended here instead of the measurement being rounded to fit it.
 
 ### 24.3.4 One shared file, one factual correction
 
@@ -4105,7 +4105,7 @@ overflow: 1728/1728
 ```
 
 Production matched local exactly. The two 12.5px are DS components' own control
-text (`.h10-ds-fpanel-toggle`, `.h10-ds-btn sm`) — the ladder governs the page's
+text (`.nds-fpanel-toggle`, `.nds-btn sm`) — the ladder governs the page's
 own text and DS components keep their internal scale. Stating "20/13/12 and
 nothing else" while two DS controls sit at 12.5 would be the kind of tidy claim
 this page exists not to make.
@@ -4202,8 +4202,8 @@ measurement:
 
 | rule | breakpoint |
 |---|---|
-| `.h10-ds-fpanel-grid` → 3 columns | `max-width: 1320px` |
-| `.h10-ds-fpanel-grid` → 2 columns | `max-width: 760px` |
+| `.nds-fpanel-grid` → 3 columns | `max-width: 1320px` |
+| `.nds-fpanel-grid` → 2 columns | `max-width: 760px` |
 | `.sba-row` → 2-column grid | `max-width: 720px` |
 
 At a 480px *viewport* the last two apply and the layout the probe measured does

@@ -194,7 +194,7 @@ export function ThreadPane({
   }
   if (!thread) {
     return (
-      <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--h10-text-3)", fontSize: 13 }}>
+      <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--nds-text-3)", fontSize: 13 }}>
         Select a conversation — j/k to move, Enter to open.
       </div>
     );
@@ -225,7 +225,7 @@ export function ThreadPane({
           gap: 10,
           alignItems: "center",
           padding: "10px 16px",
-          borderBottom: "1px solid var(--h10-border-subtle)",
+          borderBottom: "1px solid var(--nds-border-subtle)",
         }}
       >
         <div
@@ -248,12 +248,12 @@ export function ThreadPane({
               flexShrink: 0,
               whiteSpace: "nowrap",
               background: "none",
-              border: "1px solid var(--h10-border)",
+              border: "1px solid var(--nds-border)",
               borderRadius: 8,
               padding: "4px 9px",
               fontSize: 11.5,
               cursor: "pointer",
-              color: allowImages ? "var(--h10-primary)" : "var(--h10-text-2)",
+              color: allowImages ? "var(--nds-primary)" : "var(--nds-text-2)",
             }}
           >
             <ImageIcon size={13} />
@@ -278,35 +278,35 @@ export function ThreadPane({
               key={`c-${entry.comment.id}`}
               data-msg={`c-${entry.comment.id}`} // EPI2.4 — Files-panel anchor
               style={{
-                border: "1px solid var(--h10-warning-soft)",
-                background: "var(--h10-warning-soft)",
+                border: "1px solid var(--nds-warning-soft)",
+                background: "var(--nds-warning-soft)",
                 borderRadius: 12,
                 padding: "8px 12px",
                 fontSize: 12.5,
               }}
             >
-              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, color: "var(--h10-amber-text, #9a6700)" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, color: "var(--nds-amber-text, #9a6700)" }}>
                 <Lock size={11} />
                 <b>{entry.comment.author?.displayName ?? "Internal"}</b>
                 <span style={{ fontSize: 11.5 }}>Internal — never sent</span>
-                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-3)" }}>{ago(entry.comment.createdAt)} ago</span>
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--nds-text-3)" }}>{ago(entry.comment.createdAt)} ago</span>
               </div>
               <div style={{ whiteSpace: "pre-wrap" }}>{entry.comment.body}</div>
               {(entry.comment.attachments?.length ?? 0) > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                   {entry.comment.attachments!.map((a) => (
-                    <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, border: "1px solid var(--h10-border)", borderRadius: 8, padding: "3px 8px", background: "var(--h10-surface)" }}>
+                    <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, border: "1px solid var(--nds-border)", borderRadius: 8, padding: "3px 8px", background: "var(--nds-surface)" }}>
                       {onFileChange && countRemoteImages("") === 0 && ( // always true — inline guard keeps TS quiet
                         <button
                           type="button"
                           onClick={() => onFileChange(a.id)}
                           title="Preview"
-                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--h10-text)", display: "inline-flex", gap: 4, alignItems: "center" }}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--nds-text)", display: "inline-flex", gap: 4, alignItems: "center" }}
                         >
                           <Paperclip size={11} /> {a.filename}
                         </button>
                       )}
-                      <a href={`/api/inbox/${thread.conversation.id}/attachments/${a.id}`} title="Download" style={{ display: "inline-flex", color: "var(--h10-text-3)" }}>
+                      <a href={`/api/inbox/${thread.conversation.id}/attachments/${a.id}`} title="Download" style={{ display: "inline-flex", color: "var(--nds-text-3)" }}>
                         <Download size={11} />
                       </a>
                     </span>
@@ -315,7 +315,7 @@ export function ThreadPane({
               )}
             </div>
           ) : (
-            <div key={`e-${entry.event.id}`} style={{ textAlign: "center", fontSize: 11.5, color: "var(--h10-text-3)" }}>
+            <div key={`e-${entry.event.id}`} style={{ textAlign: "center", fontSize: 11.5, color: "var(--nds-text-3)" }}>
               {entry.event.actor?.displayName ?? "System"} {EVENT_LABELS[entry.event.action] ?? entry.event.action} · {ago(entry.event.createdAt)} ago
             </div>
           ),
@@ -323,12 +323,12 @@ export function ThreadPane({
       </div>
 
       {modeOptions.length === 0 ? (
-        <div style={{ borderTop: "1px solid var(--h10-border)", padding: 12, fontSize: 12.5, color: "var(--h10-text-3)" }}>
+        <div style={{ borderTop: "1px solid var(--nds-border)", padding: 12, fontSize: 12.5, color: "var(--nds-text-3)" }}>
           Your role can read this thread but not reply or comment.
         </div>
       ) : (
         <div
-          style={{ position: "relative", borderTop: "1px solid var(--h10-border)", padding: 12, display: "grid", gap: 8, background: mode === "comment" ? "var(--h10-warning-soft)" : "var(--h10-surface)" }}
+          style={{ position: "relative", borderTop: "1px solid var(--nds-border)", padding: 12, display: "grid", gap: 8, background: mode === "comment" ? "var(--nds-warning-soft)" : "var(--nds-surface)" }}
           onDragOver={(e) => {
             // EPI2.4 — Gmail's drop-to-attach zone
             if (e.dataTransfer.types.includes("Files")) {
@@ -354,7 +354,7 @@ export function ThreadPane({
           }}
         >
           {dragging && (
-            <div style={{ position: "absolute", inset: 4, zIndex: 5, display: "grid", placeItems: "center", borderRadius: 10, border: "2px dashed var(--h10-primary)", background: "var(--h10-wash-primary)", fontSize: 12.5, fontWeight: 600, color: "var(--h10-primary)", pointerEvents: "none" }}>
+            <div style={{ position: "absolute", inset: 4, zIndex: 5, display: "grid", placeItems: "center", borderRadius: 10, border: "2px dashed var(--nds-primary)", background: "var(--nds-wash-primary)", fontSize: 12.5, fontWeight: 600, color: "var(--nds-primary)", pointerEvents: "none" }}>
               Drop to attach
             </div>
           )}
@@ -365,7 +365,7 @@ export function ThreadPane({
               onChange={(v: string) => setMode(v as "reply" | "comment")}
             />
             {mode === "comment" && (
-              <span style={{ fontSize: 11.5, color: "var(--h10-amber-text, #9a6700)" }}>
+              <span style={{ fontSize: 11.5, color: "var(--nds-amber-text, #9a6700)" }}>
                 Amber = internal. @mention a teammate to notify them.
               </span>
             )}
@@ -390,12 +390,12 @@ export function ThreadPane({
                 width: "100%",
                 resize: "vertical",
                 ...(composerH ? { height: composerH } : {}),
-                border: "1px solid var(--h10-border)",
+                border: "1px solid var(--nds-border)",
                 borderRadius: 8,
                 padding: 10,
                 font: "13px var(--font-sans), sans-serif",
-                background: "var(--h10-surface)",
-                color: "var(--h10-text)",
+                background: "var(--nds-surface)",
+                color: "var(--nds-text)",
               }}
             />
           ) : (
@@ -416,19 +416,19 @@ export function ThreadPane({
                 width: "100%",
                 resize: "vertical",
                 ...(composerH ? { height: composerH } : {}),
-                border: "1px solid var(--h10-border)",
+                border: "1px solid var(--nds-border)",
                 borderRadius: 8,
                 padding: 10,
                 font: "13px var(--font-sans), sans-serif",
-                background: "var(--h10-surface)",
-                color: "var(--h10-text)",
+                background: "var(--nds-surface)",
+                color: "var(--nds-text)",
               }}
             />
           )}
           {files.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {files.map((f, i) => (
-                <span key={`${f.name}-${i}`} style={{ fontSize: 11.5, border: "1px solid var(--h10-border)", borderRadius: 8, padding: "3px 8px", display: "inline-flex", gap: 5, alignItems: "center" }}>
+                <span key={`${f.name}-${i}`} style={{ fontSize: 11.5, border: "1px solid var(--nds-border)", borderRadius: 8, padding: "3px 8px", display: "inline-flex", gap: 5, alignItems: "center" }}>
                   <Paperclip size={11} /> {f.name}
                   <button type="button" onClick={() => setFiles((fs) => fs.filter((_, j) => j !== i))} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex" }}>
                     <X size={11} />
@@ -449,7 +449,7 @@ export function ThreadPane({
             <Button onClick={() => fileInputRef.current?.click()}>
               <Paperclip size={13} /> Attach
             </Button>
-            <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-3)" }}>drop or paste files · ⌘⏎ to send</span>
+            <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--nds-text-3)" }}>drop or paste files · ⌘⏎ to send</span>
             <Button variant="primary" onClick={() => void submit()} disabled={busy || !text.trim()}>
               <Send size={13} /> {busy ? "Sending…" : mode === "reply" ? "Send reply" : "Add note"}
             </Button>

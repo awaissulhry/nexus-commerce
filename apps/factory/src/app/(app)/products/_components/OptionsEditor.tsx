@@ -62,13 +62,13 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
   return (
     <div style={{ display: "grid", gap: 12 }}>
       {groups.length === 0 && (
-        <div style={{ fontSize: 13, color: "var(--h10-text-3)", padding: "8px 0" }}>
+        <div style={{ fontSize: 13, color: "var(--nds-text-3)", padding: "8px 0" }}>
           No option groups yet. A group is a decision the customer makes (Leather type, Lining, Armor…).
         </div>
       )}
       {groups.map((g, gi) => (
-        <div key={g.id} style={{ border: "1px solid var(--h10-border)", borderRadius: 10, background: "var(--h10-surface)" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 12px", borderBottom: "1px solid var(--h10-border-subtle)", flexWrap: "wrap" }}>
+        <div key={g.id} style={{ border: "1px solid var(--nds-border)", borderRadius: 10, background: "var(--nds-surface)" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 12px", borderBottom: "1px solid var(--nds-border-subtle)", flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", flexDirection: "column" }}>
               <button type="button" disabled={busy || gi === 0} title="Move group up" onClick={() => persistOrder("group", reorder(groups, gi, gi - 1).map((x) => x.id))} style={arrowBtn}>
                 <ChevronUp size={12} />
@@ -82,7 +82,7 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
               key={g.name}
               onBlur={(e) => e.target.value.trim() && e.target.value !== g.name && patchGroup(g.id, { name: e.target.value.trim() })}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-              style={{ fontSize: 13.5, fontWeight: 700, border: "none", outline: "none", background: "transparent", color: "var(--h10-text)", minWidth: 140, flex: 1 }}
+              style={{ fontSize: 13.5, fontWeight: 700, border: "none", outline: "none", background: "transparent", color: "var(--nds-text)", minWidth: 140, flex: 1 }}
             />
             <label style={miniLabel}>
               min
@@ -92,13 +92,13 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
               max
               <input type="number" min={1} defaultValue={g.maxSelect} key={`max${g.maxSelect}`} onBlur={(e) => Number(e.target.value) !== g.maxSelect && patchGroup(g.id, { maxSelect: Math.max(1, Number(e.target.value)) })} style={miniNum} />
             </label>
-            <button type="button" disabled={busy} title="Delete group" onClick={() => deleteGroup(g.id)} style={{ ...iconBtn, color: "var(--h10-danger)" }}>
+            <button type="button" disabled={busy} title="Delete group" onClick={() => deleteGroup(g.id)} style={{ ...iconBtn, color: "var(--nds-danger)" }}>
               <Trash2 size={13} />
             </button>
           </div>
 
           <div style={{ padding: "6px 12px", display: "grid", gap: 4 }}>
-            {g.options.length === 0 && <div style={{ fontSize: 12, color: "var(--h10-text-3)", padding: "4px 0" }}>No options yet.</div>}
+            {g.options.length === 0 && <div style={{ fontSize: 12, color: "var(--nds-text-3)", padding: "4px 0" }}>No options yet.</div>}
             {g.options.map((o, oi) => (
               <div key={o.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "3px 0" }}>
                 <span style={{ display: "inline-flex", flexDirection: "column" }}>
@@ -110,9 +110,9 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
                   key={o.name}
                   onBlur={(e) => e.target.value.trim() && e.target.value !== o.name && patchOption(o.id, { name: e.target.value.trim() })}
                   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                  style={{ fontSize: 12.5, border: "1px solid var(--h10-border-subtle)", borderRadius: 7, padding: "3px 7px", outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 150, flex: 1 }}
+                  style={{ fontSize: 12.5, border: "1px solid var(--nds-border-subtle)", borderRadius: 7, padding: "3px 7px", outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)", minWidth: 150, flex: 1 }}
                 />
-                <span style={{ fontSize: 10.5, color: "var(--h10-text-3)", width: 30, textAlign: "right" }}>price</span>
+                <span style={{ fontSize: 10.5, color: "var(--nds-text-3)", width: 30, textAlign: "right" }}>price</span>
                 <DeltaInput
                   mode={o.priceDeltaMode}
                   value={o.priceDelta}
@@ -122,7 +122,7 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
                 />
                 {canCost && (
                   <>
-                    <span style={{ fontSize: 10.5, color: "var(--h10-text-3)", width: 24, textAlign: "right" }}>cost</span>
+                    <span style={{ fontSize: 10.5, color: "var(--nds-text-3)", width: 24, textAlign: "right" }}>cost</span>
                     <DeltaInput
                       mode={o.costDeltaMode}
                       value={o.costDelta}
@@ -133,7 +133,7 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
                   </>
                 )}
                 {(o.materialDraws?.length ?? 0) > 0 && <Pill tone="info">{o.materialDraws!.length} draw{o.materialDraws!.length > 1 ? "s" : ""}</Pill>}
-                <button type="button" disabled={busy} title="Delete option" onClick={() => deleteOption(o.id)} style={{ ...iconBtn, color: "var(--h10-danger)" }}><Trash2 size={12} /></button>
+                <button type="button" disabled={busy} title="Delete option" onClick={() => deleteOption(o.id)} style={{ ...iconBtn, color: "var(--nds-danger)" }}><Trash2 size={12} /></button>
               </div>
             ))}
             <div>
@@ -160,8 +160,8 @@ export function OptionsEditor({ template, baseCostCents, basePriceCents, onChang
   );
 }
 
-const arrowBtn: React.CSSProperties = { border: "none", background: "none", cursor: "pointer", color: "var(--h10-text-3)", padding: 0, lineHeight: 0.7, display: "block" };
+const arrowBtn: React.CSSProperties = { border: "none", background: "none", cursor: "pointer", color: "var(--nds-text-3)", padding: 0, lineHeight: 0.7, display: "block" };
 const iconBtn: React.CSSProperties = { border: "none", background: "none", cursor: "pointer", padding: 3, display: "inline-flex" };
-const addBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 4, border: "1px dashed var(--h10-border)", borderRadius: 7, background: "none", cursor: "pointer", fontSize: 11.5, padding: "3px 9px", color: "var(--h10-text-2)" };
-const miniLabel: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, color: "var(--h10-text-3)" };
-const miniNum: React.CSSProperties = { width: 40, border: "1px solid var(--h10-border-subtle)", borderRadius: 6, padding: "2px 4px", font: "12px var(--font-mono), monospace", textAlign: "center", background: "var(--h10-surface)", color: "var(--h10-text)" };
+const addBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 4, border: "1px dashed var(--nds-border)", borderRadius: 7, background: "none", cursor: "pointer", fontSize: 11.5, padding: "3px 9px", color: "var(--nds-text-2)" };
+const miniLabel: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, color: "var(--nds-text-3)" };
+const miniNum: React.CSSProperties = { width: 40, border: "1px solid var(--nds-border-subtle)", borderRadius: 6, padding: "2px 4px", font: "12px var(--font-mono), monospace", textAlign: "center", background: "var(--nds-surface)", color: "var(--nds-text)" };

@@ -50,7 +50,7 @@
   text-align: left;
 }
 
-.h10-vt-receipt-toggle:hover { background: var(--h10-surface-hover); }
+.h10-vt-receipt-toggle:hover { background: var(--nds-surface-hover); }
 
 .h10-vt-receipt-counts {
   display: flex;

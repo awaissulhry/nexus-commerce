@@ -19,16 +19,16 @@ reconciled, not merged.
 
 ## Token tiers
 
-1. **Primitive** — raw scale values (`--h10-blue-600: #1f6fde`). No semantics.
+1. **Primitive** — raw scale values (`--nds-blue-600: #1f6fde`). No semantics.
 2. **Semantic** — role-based, under the platform's names (`--text-primary`,
    `--surface-card`, `--border-default`, `--status-success-{soft,line,strong}`,
    `--color-primary`). **Live**: these are value-preserving aliases over the
-   `--h10-*` roles, and every component CSS rule consumes **them**.
+   `--nds-*` roles, and every component CSS rule consumes **them**.
 3. **Component** — DS-only knobs the semantic layer doesn't express, kept under
-   `--h10-*` (radius/shadow/focus/pill/badge/targeting/rail/structural-dim).
+   `--nds-*` (radius/shadow/focus/pill/badge/targeting/rail/structural-dim).
 
 Components reference the **semantic** (or DS-only component) tier — never the raw
-`--h10-*-NNN` ramps, never raw hex.
+`--nds-*-NNN` ramps, never raw hex.
 
 ## Versioning
 
@@ -99,7 +99,7 @@ concurrent sessions.
 - **Contract intent (not yet a script).** The consistency contract (see
   `docs/AUDIT.md` §0, spec §3) extends the hex guard to two further rules that are
   enforced by review today and slated for lint: **(a) no raw ramp** — a
-  `var(--h10-{grey,blue,green,red,amber,purple,cyan}-NNN)` reach in component CSS
+  `var(--nds-{grey,blue,green,red,amber,purple,cyan}-NNN)` reach in component CSS
   is a defect (use the semantic alias instead); **(b) no raw Tailwind palette**
   in DS `.tsx`. A planned `tools/api-guard.mjs` will assert **barrel-export
   completeness** (every component re-exports its public Props/types) and that the
@@ -109,7 +109,7 @@ concurrent sessions.
 - **Visual regression** — `catalog/verify.mjs` @2x-captures the catalog + every
   overlay; commit baselines and diff in CI to automate the screenshot-diff rule.
 - **Contrast** — body text uses `--text-primary` / `--text-secondary`
-  (`--h10-text` / `--h10-text-2`); `--h10-text-3` is secondary/large-only (see
+  (`--nds-text` / `--nds-text-2`); `--nds-text-3` is secondary/large-only (see
   `studies/02-contrast-audit.md`).
 - **CODEOWNERS** — deferred for a solo operator (a self-review request adds
   friction with no second reviewer); add when a team forms.

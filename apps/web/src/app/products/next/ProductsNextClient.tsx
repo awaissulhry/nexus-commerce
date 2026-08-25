@@ -1458,7 +1458,7 @@ function ProductsNextInner() {
       {/* One card: toolbar + grid share the grid rectangle (Ad-Manager parity).
           The toolbar's left slot swaps search ⇄ selection actions; the right
           slot carries density · Customise · Export · Live. */}
-      <div className="h10-ds-gridcard">
+      <div className="nds-gridcard">
         <GridToolbar
           count={
             selected.size > 0 ? (
@@ -1500,12 +1500,12 @@ function ProductsNextInner() {
               <Menu
                 label={<><TagIcon size={13} /> Tag <ChevronDown size={11} /></>}
                 items={tagMenuItems}
-                triggerProps={{ className: 'h10-ds-btn sm', disabled: busy }}
+                triggerProps={{ className: 'nds-btn sm', disabled: busy }}
               />
               <Menu
                 label={<><Send size={13} /> Publish <ChevronDown size={11} /></>}
                 items={publishMenuItems}
-                triggerProps={{ className: 'h10-ds-btn sm', disabled: busy }}
+                triggerProps={{ className: 'nds-btn sm', disabled: busy }}
               />
               <Button size="sm" disabled={busy} onClick={() => duplicateBulk(selectedIds)}>
                 <Copy size={13} /> Duplicate

@@ -61,14 +61,14 @@ export function Composer({
 
   if (!canPost) {
     return (
-      <div style={{ borderTop: "1px solid var(--h10-border)", padding: 12, fontSize: 12.5, color: "var(--h10-text-3)" }}>
+      <div style={{ borderTop: "1px solid var(--nds-border)", padding: 12, fontSize: 12.5, color: "var(--nds-text-3)" }}>
         Your role can read this space but not post.
       </div>
     );
   }
 
   return (
-    <div style={{ borderTop: "1px solid var(--h10-border)", padding: 12, display: "grid", gap: 8 }}>
+    <div style={{ borderTop: "1px solid var(--nds-border)", padding: 12, display: "grid", gap: 8 }}>
       <MentionTextarea
         key={composerKey} /* a fresh space (or thread) starts a fresh draft */
         value={text}
@@ -92,16 +92,16 @@ export function Composer({
         style={{
           width: "100%",
           resize: "vertical",
-          border: "1px solid var(--h10-border)",
+          border: "1px solid var(--nds-border)",
           borderRadius: 8,
           padding: 10,
           font: "13px var(--font-sans), sans-serif",
-          background: "var(--h10-surface)",
-          color: "var(--h10-text)",
+          background: "var(--nds-surface)",
+          color: "var(--nds-text)",
         }}
       />
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Enter sends · Shift+Enter for a new line</span>
+        <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Enter sends · Shift+Enter for a new line</span>
         <span style={{ marginLeft: "auto" }}>
           <Button variant="primary" onClick={() => void submit()} disabled={busy || !text.trim()}>
             <Send size={13} /> {busy ? "Sending…" : "Send"}

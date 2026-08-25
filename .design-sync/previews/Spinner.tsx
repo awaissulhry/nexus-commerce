@@ -54,7 +54,7 @@ export const PanelLoading = () => (
       padding: '28px 20px',
       background: 'var(--surface-card)',
       border: '1px solid var(--border-default)',
-      borderRadius: 'var(--h10-radius-lg)',
+      borderRadius: 'var(--nds-radius-lg)',
     }}
   >
     <Spinner size={26} />

@@ -41,7 +41,7 @@ and leave the allowlist policy to whoever owns Wave 1.
 ### 0a. This guard and Phase 9.1 collide — canary added
 
 The `ebay.css ⊆ ads.css` palette check compares **literal hex sets**. Phase 9.1 rewrites `ads.css`
-to reference `var(--h10-*)` instead of hex — at which point the Amazon palette set empties and the
+to reference `var(--nds-*)` instead of hex — at which point the Amazon palette set empties and the
 check either passes vacuously or fails everything, depending on which file tokenizes first.
 **A canary now prevents the silent version:** `--check` fails if the Amazon palette resolves to
 fewer than 200 literal colours (317 today; tokenizing `ads.css` alone drops it to 30). It names the
@@ -61,12 +61,12 @@ but the underlying design assumes hex literals forever.
 
 Measured across `apps/web` on 2026-08-24, at `57e644218`.
 
-**Radius is the control group.** It has had eight CSS-reachable steps (`--h10-radius-*`) since
+**Radius is the control group.** It has had eight CSS-reachable steps (`--nds-radius-*`) since
 long before this audit. Nothing about it was missing or hard to find:
 
 | | |
 |---|---:|
-| declarations using `var(--h10-radius-*)` | **78** |
+| declarations using `var(--nds-radius-*)` | **78** |
 | declarations using a raw px radius | **1,879** |
 | distinct raw radius values in use | 18 |
 
@@ -156,7 +156,7 @@ session's mid-write file fails another session's unrelated push.
 
 **This is not hypothetical: it happened while this document was being committed.** The commit added
 one markdown file and nothing else. The push failed on
-`styles/tokens-global.css:262  raw hex — --h10-rail-ft: #6f7b8b`, an **untracked** file another
+`styles/tokens-global.css:262  raw hex — --nds-rail-ft: #6f7b8b`, an **untracked** file another
 session had created four minutes earlier and was still editing. Re-running the guard a minute later
 reported zero violations.
 
@@ -180,7 +180,7 @@ rather than a bug fix.
 
 | # | scope | lines | why here |
 |---|---|---:|---|
-| 1 | `design-system/styles` | 425 | The DS's own house, and the two families it needs (`--h10-space-*`, `--h10-font-size-*`) landed in `57e644218`. Proves the tokens work before asking 93 ads files to adopt them. Not a ratchet — **drive to zero.** |
+| 1 | `design-system/styles` | 425 | The DS's own house, and the two families it needs (`--nds-space-*`, `--nds-font-size-*`) landed in `57e644218`. Proves the tokens work before asking 93 ads files to adopt them. Not a ratchet — **drive to zero.** |
 | 2 | `components/` + DS `.tsx` | 71 | 12 files. Finish it, then ratchet at 0. |
 | 3 | `app/` minus ads | 2,675 | 51 files, nothing in motion here. Ratchet at baseline. |
 | 4 | `design-system/catalog` | 151 | Demo surface, one file. Ratchet at baseline; fix opportunistically. |
@@ -192,7 +192,7 @@ rail credible before it is pointed at anyone else's code.
 ## 6. Decisions needed — do not guess these
 
 - **Chart and data-visualisation colour.** Recharts takes colour as a **prop**, not a class, so an
-  SVG presentation attribute cannot resolve `var(--h10-*)` — these must reach the component as
+  SVG presentation attribute cannot resolve `var(--nds-*)` — these must reach the component as
   literals. `tokens/colors.ts:115` already exports a `chart` ramp for exactly this reason
   (`actual` · `cap` · `reference` · `axis` · `grid` · `cursor`), and two of its six members are
   chart-only hues with no ramp counterpart. So the question is **not** whether to add a ramp — it

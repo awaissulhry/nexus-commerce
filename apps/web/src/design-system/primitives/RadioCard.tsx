@@ -12,7 +12,7 @@ export interface RadioCardProps extends Omit<InputHTMLAttributes<HTMLInputElemen
  * e.g. the targeting-type picker). Selected = primary border + wash.
  */
 export function RadioCard({ title, description, selected, className, ...rest }: RadioCardProps) {
-  const cls = ['h10-ds-radiocard', selected ? 'on' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-radiocard', selected ? 'on' : '', className ?? ''].filter(Boolean).join(' ')
   return (
     <label className={cls}>
       <input type="radio" {...rest} />

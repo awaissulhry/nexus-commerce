@@ -59,15 +59,15 @@ export function AnalyticsClient() {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><BarChart3 size={18} /> Analytics</h1>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>The factory&apos;s rhythm — every number a decision, every panel a link to its source.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginTop: 2 }}>The factory&apos;s rhythm — every number a decision, every panel a link to its source.</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>From</span>
+          <span style={{ fontSize: 12, color: "var(--nds-text-3)" }}>From</span>
           <DateField ariaLabel="From date" value={from} onChange={setFrom} max={to || undefined} />
-          <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>to</span>
+          <span style={{ fontSize: 12, color: "var(--nds-text-3)" }}>to</span>
           <DateField ariaLabel="To date" value={to} onChange={setTo} min={from || undefined} />
-          {ranged && <button type="button" onClick={() => { setFrom(""); setTo(""); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--h10-text-link)" }}>Clear</button>}
-          {views.length > 0 && <Menu align="right" label="Saved views" items={views.map((v) => ({ id: v.id, label: v.name, onSelect: () => applyView(v) }))} triggerProps={{ className: "h10-ds-btn" }} />}
+          {ranged && <button type="button" onClick={() => { setFrom(""); setTo(""); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--nds-text-link)" }}>Clear</button>}
+          {views.length > 0 && <Menu align="right" label="Saved views" items={views.map((v) => ({ id: v.id, label: v.name, onSelect: () => applyView(v) }))} triggerProps={{ className: "nds-btn" }} />}
           <Button onClick={() => setSavingOpen(true)}><Bookmark size={13} /> Save view</Button>
         </div>
       </div>
@@ -85,7 +85,7 @@ export function AnalyticsClient() {
         <Panel title="Stage lead time (median)" href="/production">
           <LeadTimeChart data={data?.leadTimes ?? []} bottleneckStage={data?.bottleneckStage ?? null} />
           {data?.bottleneckStage && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "var(--h10-danger)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "var(--nds-danger)" }}>
               <AlertTriangle size={13} /> Bottleneck: <b>{data.bottleneckStage.toLowerCase()}</b> — the slowest stage on the floor.
             </div>
           )}
@@ -119,21 +119,21 @@ function SaveViewModal({ open, views, onClose, onSave, onDelete, onApply }: { op
     <Modal open={open} onClose={onClose} title="Saved views" size="sm" footer={<Button onClick={onClose}>Close</Button>}>
       <div style={{ display: "grid", gap: 14 }}>
         <div>
-          <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 4 }}>Save the current date range</div>
+          <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 4 }}>Save the current date range</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="View name" style={{ flex: 1, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="View name" style={{ flex: 1, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" }} />
             <Button variant="primary" onClick={() => name.trim() && onSave(name.trim())} disabled={!name.trim()}>Save</Button>
           </div>
         </div>
         {views.length > 0 && (
           <div>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 6 }}>Your views</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 6 }}>Your views</div>
             <div style={{ display: "grid", gap: 5 }}>
               {views.map((v) => (
-                <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
-                  <button type="button" onClick={() => onApply(v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--h10-text-link)", fontWeight: 600, flex: 1, textAlign: "left" }}>{v.name}</button>
-                  <span style={{ color: "var(--h10-text-3)", fontSize: 11 }}>{v.config.from || "…"} → {v.config.to || "…"}</span>
-                  <button type="button" onClick={() => onDelete(v.id)} aria-label="Delete view" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-3)", display: "grid", placeItems: "center" }}><Trash2 size={13} /></button>
+                <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
+                  <button type="button" onClick={() => onApply(v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--nds-text-link)", fontWeight: 600, flex: 1, textAlign: "left" }}>{v.name}</button>
+                  <span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>{v.config.from || "…"} → {v.config.to || "…"}</span>
+                  <button type="button" onClick={() => onDelete(v.id)} aria-label="Delete view" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-3)", display: "grid", placeItems: "center" }}><Trash2 size={13} /></button>
                 </div>
               ))}
             </div>
@@ -145,13 +145,13 @@ function SaveViewModal({ open, views, onClose, onSave, onDelete, onApply }: { op
 }
 
 function Counter({ href, icon, label, value, tone }: { href: string; icon: React.ReactNode; label: string; value?: number; tone: "warning" | "info" | "danger" }) {
-  const accent = tone === "danger" ? "var(--h10-danger)" : tone === "warning" ? "var(--h10-warning-text, var(--h10-text))" : "var(--h10-text-link)";
+  const accent = tone === "danger" ? "var(--nds-danger)" : tone === "warning" ? "var(--nds-warning-text, var(--nds-text))" : "var(--nds-text-link)";
   const alert = (value ?? 0) > 0;
   return (
-    <a href={href} className="h10-ds-card" style={{ display: "block", textDecoration: "none", padding: "16px 18px", color: "var(--h10-text)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--h10-text-3)", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 8 }}>{icon}<span>{label}</span></div>
-      <div style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: alert ? accent : "var(--h10-text)" }}>{value ?? "—"}</div>
-      <div style={{ fontSize: 11.5, color: "var(--h10-text-link)", marginTop: 6 }}>{value == null ? "" : alert ? "Open →" : "All clear"}</div>
+    <a href={href} className="nds-card" style={{ display: "block", textDecoration: "none", padding: "16px 18px", color: "var(--nds-text)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--nds-text-3)", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 8 }}>{icon}<span>{label}</span></div>
+      <div style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: alert ? accent : "var(--nds-text)" }}>{value ?? "—"}</div>
+      <div style={{ fontSize: 11.5, color: "var(--nds-text-link)", marginTop: 6 }}>{value == null ? "" : alert ? "Open →" : "All clear"}</div>
     </a>
   );
 }

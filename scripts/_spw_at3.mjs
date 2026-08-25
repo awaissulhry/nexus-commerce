@@ -18,7 +18,7 @@ const closeBidBefore = await p.locator('.h10-spw-auto-ed .row').nth(0).locator('
 await p.locator('.h10-spw-auto-ed .row').nth(0).locator('.h10-spw-auto-sug').click()
 await p.waitForTimeout(150)
 const closeBidAfter = await p.locator('.h10-spw-auto-ed .row').nth(0).locator('.money input').inputValue()
-await p.locator('.h10-ds-modal').screenshot({ path: '/tmp/spw/at3.png' })
+await p.locator('.nds-modal').screenshot({ path: '/tmp/spw/at3.png' })
 console.log(JSON.stringify({ sugCount, closeBidBefore, closeBidAfter }))
 await b.close()
 execSync('sips -Z 1200 /tmp/spw/at3.png --out /tmp/spw/at3_v.png 2>/dev/null', { stdio: 'ignore' })

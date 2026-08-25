@@ -19,9 +19,9 @@ import { defaultPaymentKind, parseAmountToCents } from "@/lib/financials/money-u
 import { romeDayKey } from "@/lib/financials/rome-time";
 import type { FinancialDetail } from "./types";
 
-const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
-const consequence: React.CSSProperties = { fontSize: 12.5, color: "var(--h10-text-2)", lineHeight: 1.5 };
-const errBox: React.CSSProperties = { fontSize: 12.5, color: "var(--h10-danger)", background: "var(--h10-wash-danger, rgba(220,38,38,0.06))", border: "1px solid var(--h10-danger)", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 };
+const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 };
+const consequence: React.CSSProperties = { fontSize: 12.5, color: "var(--nds-text-2)", lineHeight: 1.5 };
+const errBox: React.CSSProperties = { fontSize: 12.5, color: "var(--nds-danger)", background: "var(--nds-wash-danger, rgba(220,38,38,0.06))", border: "1px solid var(--nds-danger)", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 };
 
 const KIND_OPTIONS = [
   { value: "DEPOSIT", label: "Deposit" },
@@ -101,7 +101,7 @@ export function PaymentModal({ detail, open, onClose, onDone }: { detail: Financ
   return (
     <Modal open={open} onClose={onClose} title={overpay ? `Overpay ${detail.order.number}?` : `Record payment — ${detail.order.number}`} size="sm"
       footer={overpay ? (
-        <><Button onClick={() => setOverpay(null)} disabled={busy}>Back</Button><Button onClick={() => void submit(true)} disabled={busy} style={{ background: "var(--h10-danger)", color: "#fff", borderColor: "var(--h10-danger)" }}>Record overpayment</Button></>
+        <><Button onClick={() => setOverpay(null)} disabled={busy}>Back</Button><Button onClick={() => void submit(true)} disabled={busy} style={{ background: "var(--nds-danger)", color: "#fff", borderColor: "var(--nds-danger)" }}>Record overpayment</Button></>
       ) : (
         <><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" onClick={() => void submit(false)} disabled={busy || !valid}>{isRefund ? "Record refund" : "Record"}</Button></>
       )}>
@@ -115,12 +115,12 @@ export function PaymentModal({ detail, open, onClose, onDone }: { detail: Financ
           <div>
             <div style={lbl}>Kind</div>
             <Listbox ariaLabel="Payment kind" options={KIND_OPTIONS} value={kind} onChange={setKind} />
-            {gateOpen && !isRefund && <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 3 }}>A deposit is still owed on this order — DEPOSIT payments unblock the floor.</div>}
+            {gateOpen && !isRefund && <div style={{ fontSize: 11, color: "var(--nds-text-3)", marginTop: 3 }}>A deposit is still owed on this order — DEPOSIT payments unblock the floor.</div>}
           </div>
           <div>
             <div style={lbl}>Amount (€)</div>
             <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" aria-label="Amount in EUR" autoFocus />
-            {magnitude != null && magnitude > 0 && <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 3 }}>= {isRefund ? `−${eur(magnitude)}` : eur(magnitude)}</div>}
+            {magnitude != null && magnitude > 0 && <div style={{ fontSize: 11, color: "var(--nds-text-3)", marginTop: 3 }}>= {isRefund ? `−${eur(magnitude)}` : eur(magnitude)}</div>}
           </div>
           <div>
             <div style={lbl}>Received on</div>

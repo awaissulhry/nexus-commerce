@@ -53,8 +53,8 @@
 .pf-mode--live { background: #f3f8ff; color: #1f4f9e; border: 1px solid #cfe0fb; }
 .pf-mode b { font-weight: 800; }
 .pf-confirm-name { font-size: 13px; color: #37495b; }
-.h10-ds-btn.pf-btn-danger { background: #e5484d; border-color: #e5484d; color: #fff; }
-.h10-ds-btn.pf-btn-danger:hover { background: #cf3d42; border-color: #cf3d42; }
+.nds-btn.pf-btn-danger { background: #e5484d; border-color: #e5484d; color: #fff; }
+.nds-btn.pf-btn-danger:hover { background: #cf3d42; border-color: #cf3d42; }
 
 /* row actions */
 .pf-table thead th.pf-actions-h { text-align: right; }

@@ -194,7 +194,7 @@ export function ThreadPanel({
           <Skeleton />
         </div>
       ) : !root ? (
-        <div style={{ flex: 1, display: "grid", placeItems: "center", padding: 16, fontSize: 12.5, color: "var(--h10-text-3)", textAlign: "center" }}>
+        <div style={{ flex: 1, display: "grid", placeItems: "center", padding: 16, fontSize: 12.5, color: "var(--nds-text-3)", textAlign: "center" }}>
           This thread is gone — its message may have been removed.
         </div>
       ) : (
@@ -207,7 +207,7 @@ export function ThreadPanel({
 
           <div ref={wrapRef} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             {hasEarlier && (
-              <div style={{ textAlign: "center", padding: "4px 0", borderBottom: "1px solid var(--h10-border-subtle)" }}>
+              <div style={{ textAlign: "center", padding: "4px 0", borderBottom: "1px solid var(--nds-border-subtle)" }}>
                 <button
                   type="button"
                   className="fc2-load-earlier"
@@ -232,7 +232,7 @@ export function ThreadPanel({
                 className="fc3-thread-scroll"
                 style={{ padding: "6px 0" }}
                 emptyState={
-                  <div style={{ padding: 20, fontSize: 12.5, color: "var(--h10-text-3)", textAlign: "center" }}>
+                  <div style={{ padding: 20, fontSize: 12.5, color: "var(--nds-text-3)", textAlign: "center" }}>
                     No replies yet — start the thread.
                   </div>
                 }
@@ -265,14 +265,14 @@ export function ThreadPanel({
             <Button
               onClick={() => void confirmDelete()}
               disabled={deleteBusy}
-              style={{ color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}
+              style={{ color: "var(--nds-danger)", borderColor: "var(--nds-danger)" }}
             >
               {deleteBusy ? "Deleting…" : "Delete"}
             </Button>
           </>
         }
       >
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "var(--h10-text-2)", display: "grid", gap: 4 }}>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "var(--nds-text-2)", display: "grid", gap: 4 }}>
           <li>Everyone in the thread sees a &quot;Message deleted&quot; tombstone instead.</li>
           <li>The audit log keeps the original text — deletion is soft, never silent.</li>
         </ul>

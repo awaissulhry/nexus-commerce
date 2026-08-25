@@ -6,13 +6,13 @@
  * The user-facing surface for the VP.0–VP.3 backend
  * (apps/api/src/routes/ebay-volume-pricing.routes.ts). Built ENTIRELY from the
  * H10 design system — every component comes from @/design-system/{components,
- * primitives}; every layout colour/border is an inline `var(--h10-*)` token (no
+ * primitives}; every layout colour/border is an inline `var(--nds-*)` token (no
  * raw Tailwind colour/border classes, which the P3 guard bans outside
  * flat-file/design paths).
  *
  *   List       — a DataGrid of EbayVolumePromotion rows + EmptyState + "New".
  *   Create/edit — a lg Modal with the tier-ladder editor, a live /preview margin
- *                 simulator (margin guard floor surfaced in --h10-danger), and
+ *                 simulator (margin guard floor surfaced in --nds-danger), and
  *                 By-rule | Manual SKU selection (/resolve-skus).
  *   Row actions — edit, push (/:id/push, dry-run gated server-side), delete.
  *
@@ -179,13 +179,13 @@ function fmtMoney(n: number): string {
 const label = (children: ReactNode): ReactNode => (
   <span
     className="text-[12px]"
-    style={{ fontWeight: 600, color: 'var(--h10-text-2)', display: 'block', marginBottom: 6 }}
+    style={{ fontWeight: 600, color: 'var(--nds-text-2)', display: 'block', marginBottom: 6 }}
   >
     {children}
   </span>
 )
 
-const muted = (size = 12): React.CSSProperties => ({ fontSize: size, color: 'var(--h10-text-3)' })
+const muted = (size = 12): React.CSSProperties => ({ fontSize: size, color: 'var(--nds-text-3)' })
 
 // The fixed eBay ladder: tier index i → minQty i+2 (buy-2, buy-3, buy-4).
 const tierQtyForIndex = (i: number) => i + 2
@@ -296,7 +296,7 @@ function VolumePricingInner() {
         sortValue: (r) => r.name.toLowerCase(),
         render: (r) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{r.name}</span>
+            <span style={{ fontWeight: 600, color: 'var(--nds-text)' }}>{r.name}</span>
             <span style={muted(11)}>{fmtDate(r.startDate)} → {fmtDate(r.endDate)}</span>
           </div>
         ),
@@ -321,7 +321,7 @@ function VolumePricingInner() {
         key: 'tiers',
         label: 'Tiers',
         render: (r) => (
-          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--h10-text)' }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--nds-text)' }}>
             {tierSummary(r.tiers)}
           </span>
         ),
@@ -333,7 +333,7 @@ function VolumePricingInner() {
         sortable: true,
         sortValue: (r) => (Array.isArray(r.skus) ? r.skus.length : 0),
         render: (r) => (
-          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--h10-text-2)' }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--nds-text-2)' }}>
             {Array.isArray(r.skus) ? r.skus.length : 0}
           </span>
         ),
@@ -423,7 +423,7 @@ function VolumePricingInner() {
               justifyContent: 'center',
               gap: 10,
               padding: '48px 0',
-              color: 'var(--h10-text-3)',
+              color: 'var(--nds-text-3)',
             }}
           >
             <Spinner size={18} /> Loading volume promotions…
@@ -482,8 +482,8 @@ function VolumePricingInner() {
           </>
         }
       >
-        <div className="text-[14px]" style={{ color: 'var(--h10-text-2)' }}>
-          Delete <strong style={{ color: 'var(--h10-text)' }}>{confirmDelete?.name}</strong>? This
+        <div className="text-[14px]" style={{ color: 'var(--nds-text-2)' }}>
+          Delete <strong style={{ color: 'var(--nds-text)' }}>{confirmDelete?.name}</strong>? This
           removes the promotion from Nexus. Tiers already pushed to eBay are not retracted by this
           action.
         </div>
@@ -775,7 +775,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const sectionTitle = (text: string): ReactNode => (
-    <div className="text-[13px]" style={{ fontWeight: 700, color: 'var(--h10-text)', marginBottom: 10 }}>
+    <div className="text-[13px]" style={{ fontWeight: 700, color: 'var(--nds-text)', marginBottom: 10 }}>
       {text}
     </div>
   )
@@ -867,7 +867,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
                     minWidth: 84,
                     fontSize: 13,
                     fontWeight: 600,
-                    color: 'var(--h10-text-2)',
+                    color: 'var(--nds-text-2)',
                   }}
                 >
                   Buy {tierQtyForIndex(i)}+
@@ -1071,8 +1071,8 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
                   {resolving ? <Spinner size={14} /> : <Search size={14} />} Find matching SKUs
                 </Button>
                 {resolved && (
-                  <span className="text-[13px]" style={{ color: 'var(--h10-text-2)' }}>
-                    <strong style={{ color: 'var(--h10-text)' }}>{resolved.count}</strong> SKUs
+                  <span className="text-[13px]" style={{ color: 'var(--nds-text-2)' }}>
+                    <strong style={{ color: 'var(--nds-text)' }}>{resolved.count}</strong> SKUs
                     {' '}
                     <span style={muted(12)}>
                       ({resolved.matched} matched{resolved.truncated ? ', truncated' : ''})
@@ -1106,7 +1106,7 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
                 style={{ width: '100%' }}
               />
               <div style={{ marginTop: 8, ...muted(12) }}>
-                <strong style={{ color: 'var(--h10-text-2)' }}>{manualSkus.length}</strong> SKU(s)
+                <strong style={{ color: 'var(--nds-text-2)' }}>{manualSkus.length}</strong> SKU(s)
                 entered.
               </div>
             </div>
@@ -1116,14 +1116,14 @@ function PromotionEditor({ promotion, onClose, onSaved, onPushed }: EditorProps)
             style={{
               marginTop: 12,
               padding: '8px 12px',
-              borderRadius: 'var(--h10-radius-md)',
-              background: 'var(--h10-surface-sunken)',
+              borderRadius: 'var(--nds-radius-md)',
+              background: 'var(--nds-surface-sunken)',
               fontSize: 13,
-              color: 'var(--h10-text-2)',
+              color: 'var(--nds-text-2)',
             }}
           >
             This promotion will apply to{' '}
-            <strong style={{ color: 'var(--h10-text)' }}>{effectiveSkus.length}</strong> SKU(s).
+            <strong style={{ color: 'var(--nds-text)' }}>{effectiveSkus.length}</strong> SKU(s).
           </div>
         </div>
       </div>
@@ -1176,25 +1176,25 @@ function MarginTable({
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
-    color: 'var(--h10-text-3)',
+    color: 'var(--nds-text-3)',
     padding: '6px 10px',
-    borderBottom: '1px solid var(--h10-border)',
+    borderBottom: '1px solid var(--nds-border)',
   }
   const td: React.CSSProperties = {
     fontSize: 13,
     padding: '8px 10px',
-    borderBottom: '1px solid var(--h10-border-subtle)',
+    borderBottom: '1px solid var(--nds-border-subtle)',
     fontVariantNumeric: 'tabular-nums',
-    color: 'var(--h10-text)',
+    color: 'var(--nds-text)',
   }
 
   return (
     <div
       style={{
-        border: '1px solid var(--h10-border)',
-        borderRadius: 'var(--h10-radius-md)',
+        border: '1px solid var(--nds-border)',
+        borderRadius: 'var(--nds-radius-md)',
         overflow: 'hidden',
-        background: 'var(--h10-surface)',
+        background: 'var(--nds-surface)',
       }}
     >
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1220,10 +1220,10 @@ function MarginTable({
                     textAlign: 'right',
                     fontWeight: below ? 700 : 500,
                     color: below
-                      ? 'var(--h10-danger)'
+                      ? 'var(--nds-danger)'
                       : c.marginPercent == null
-                        ? 'var(--h10-text-3)'
-                        : 'var(--h10-success-strong)',
+                        ? 'var(--nds-text-3)'
+                        : 'var(--nds-success-strong)',
                   }}
                 >
                   {c.marginPercent == null ? (hasCost ? '—' : 'add cost') : `${c.marginPercent}%`}
@@ -1238,8 +1238,8 @@ function MarginTable({
           style={{
             padding: '6px 10px',
             ...muted(11),
-            borderTop: '1px solid var(--h10-border-subtle)',
-            background: 'var(--h10-surface-raised)',
+            borderTop: '1px solid var(--nds-border-subtle)',
+            background: 'var(--nds-surface-raised)',
           }}
         >
           Margins below the {floor}% floor are highlighted in red.
@@ -1257,14 +1257,14 @@ function SampleSkuTable({ sample }: { sample: ResolvedSku[] }) {
       {
         key: 'sku',
         label: 'SKU',
-        render: (r) => <span style={{ fontWeight: 600, color: 'var(--h10-text)' }}>{r.sku}</span>,
+        render: (r) => <span style={{ fontWeight: 600, color: 'var(--nds-text)' }}>{r.sku}</span>,
       },
       {
         key: 'price',
         label: 'Price',
         align: 'right',
         render: (r) => (
-          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--h10-text-2)' }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--nds-text-2)' }}>
             €{fmtMoney(r.price)}
           </span>
         ),
@@ -1277,7 +1277,7 @@ function SampleSkuTable({ sample }: { sample: ResolvedSku[] }) {
           <span
             style={{
               fontVariantNumeric: 'tabular-nums',
-              color: r.marginPercent == null ? 'var(--h10-text-3)' : 'var(--h10-text-2)',
+              color: r.marginPercent == null ? 'var(--nds-text-3)' : 'var(--nds-text-2)',
             }}
           >
             {r.marginPercent == null ? '—' : `${r.marginPercent}%`}

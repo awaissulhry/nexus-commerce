@@ -4,16 +4,16 @@
 
 **Goal:** Make `apps/web/src/design-system` internally consistent, self-truthful, and durable — without changing a single rendered pixel except the one deliberate component rebuild (TagInput).
 
-**Architecture:** Introduce the platform-named semantic token layer as *value-preserving aliases* over the existing `--h10-*` Tier-2 roles; make `tokens/*.ts` the single source that *generates* `styles/tokens.css`; harmonize the public API (one `Tone` vocabulary, correct Badge naming, exported types) updating the 24 consumers; rebuild the one outlier component; lock it all down with extended lint + CI gates.
+**Architecture:** Introduce the platform-named semantic token layer as *value-preserving aliases* over the existing `--nds-*` Tier-2 roles; make `tokens/*.ts` the single source that *generates* `styles/tokens.css`; harmonize the public API (one `Tone` vocabulary, correct Badge naming, exported types) updating the 24 consumers; rebuild the one outlier component; lock it all down with extended lint + CI gates.
 
 **Tech Stack:** TypeScript, React, Next.js, plain CSS custom properties (`var(--…)`), Node ESM scripts (`.mjs`), the existing `catalog/verify.mjs` @2x screenshot harness, `tools/token-guard.mjs`.
 
 ## Global Constraints
 
 - **No color VALUE changes in Phases 0–2 and 4–5.** Every token edit is an alias or a rename; the catalog screenshot-diff MUST be a no-op. A visible diff is a bug to fix, never to accept. (Spec §2, §8.)
-- **`.h10-*` / `.h10-ds-*` class prefix is RETAINED.** The `.h10-*`→`.nx-*` rename is the deferred Phase-9 codemod and is OUT OF SCOPE. (Spec §10, `docs/NAMING.md`.)
+- **`.h10-*` / `.nds-*` class prefix is RETAINED.** The `.h10-*`→`.nx-*` rename is the deferred Phase-9 codemod and is OUT OF SCOPE. (Spec §10, `docs/NAMING.md`.)
 - **ZERO edits to `app/products/amazon-flat-file/**` and `app/products/ebay-flat-file/**`.** These are untouchable. Where their consumers (`EbayImportWizard.tsx` uses `Banner`+`Tag`) would otherwise need editing, the DS keeps a deprecated back-compat alias instead. (Spec §10; memory `feedback_flat_file_untouchable`.)
-- **`/marketing/ads` must render pixel-identical** after every phase — it reads `--h10-*`, which we keep. (Spec §9.)
+- **`/marketing/ads` must render pixel-identical** after every phase — it reads `--nds-*`, which we keep. (Spec §9.)
 - **Inside the design-system, imports are RELATIVE** (portability); `lucide-react` is the icon set. (`docs/NAMING.md`.)
 - **Commit with `git commit --only <paths>`** (concurrent sessions share `main`); end every commit message with the `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>` trailer. (Memory `project_concurrent_sessions`, `feedback_always_commit_push`.)
 - **Verify locally with `tsc` + `next build` + the token/catalog scripts; deploy verification is Vercel/Railway, not Docker.** (Memory `feedback_verify_on_prod_not_docker`.)
@@ -31,7 +31,7 @@ The exhaustive inventory the engagement is judged against, and the authoritative
 - Create: `apps/web/src/design-system/docs/AUDIT.md`
 
 **Interfaces:**
-- Produces: the canonical `--h10-* → platform-semantic` mapping table (consumed verbatim by Tasks 1.2 and 2.2) and the per-value tone remap (consumed by Tasks 3.1–3.4).
+- Produces: the canonical `--nds-* → platform-semantic` mapping table (consumed verbatim by Tasks 1.2 and 2.2) and the per-value tone remap (consumed by Tasks 3.1–3.4).
 
 - [ ] **Step 1: Generate the raw inventory data**
 
@@ -40,46 +40,46 @@ Run and keep the output:
 cd apps/web/src/design-system
 # every component + its barrel export
 rg -n "^export (function|const|type)" primitives components patterns
-# distinct --h10-* consumed by component CSS (the migration surface)
-rg -oh 'var\(--h10-[a-z0-9-]+\)' styles/primitives.css styles/components.css styles/patterns.css | sed 's/var(//;s/)//' | sort -u
+# distinct --nds-* consumed by component CSS (the migration surface)
+rg -oh 'var\(--nds-[a-z0-9-]+\)' styles/primitives.css styles/components.css styles/patterns.css | sed 's/var(//;s/)//' | sort -u
 # the raw-ramp violations to fix
-rg -n 'var\(--h10-(grey|blue|green|red|amber|purple|cyan)-[0-9]' styles/primitives.css styles/components.css styles/patterns.css
+rg -n 'var\(--nds-(grey|blue|green|red|amber|purple|cyan)-[0-9]' styles/primitives.css styles/components.css styles/patterns.css
 ```
 
 - [ ] **Step 2: Write `docs/AUDIT.md` with these required sections**
 
 The doc MUST contain, with no "TBD":
-1. **Token register** — every `--h10-*` in `styles/tokens.css`, its tier (ramp / semantic role / component token), and its platform-semantic target name (or "DS-only — stays `--h10-*`").
+1. **Token register** — every `--nds-*` in `styles/tokens.css`, its tier (ramp / semantic role / component token), and its platform-semantic target name (or "DS-only — stays `--nds-*`").
 2. **The mapping table** (core color roles only), authoritative for Tasks 1.2 + 2.2:
 
-| `--h10-*` (current) | Platform-semantic alias (new) |
+| `--nds-*` (current) | Platform-semantic alias (new) |
 |---|---|
-| `--h10-text` | `--text-primary` |
-| `--h10-text-2` | `--text-secondary` |
-| `--h10-text-3` | `--text-tertiary` |
-| `--h10-text-disabled` | `--text-disabled` |
-| `--h10-text-link` | `--text-link` |
-| `--h10-bg` | `--surface-canvas` |
-| `--h10-surface` | `--surface-card` |
-| `--h10-surface-sunken` | `--surface-sunken` |
-| `--h10-border` | `--border-default` |
-| `--h10-border-subtle` | `--border-subtle` |
-| `--h10-border-strong` | `--border-strong` |
-| `--h10-primary` | `--color-primary` |
-| `--h10-primary-soft` | `--color-primary-soft` |
-| `--h10-success-soft` | `--status-success-soft` |
-| `--h10-success` | `--status-success-line` |
-| `--h10-success-strong` | `--status-success-strong` |
-| `--h10-warning-soft` | `--status-warning-soft` |
-| `--h10-warning` | `--status-warning-line` |
-| `--h10-warning-strong` | `--status-warning-strong` |
-| `--h10-danger-soft` | `--status-danger-soft` |
-| `--h10-danger` | `--status-danger-line` |
-| `--h10-danger-strong` | `--status-danger-strong` |
-| `--h10-info-soft` | `--status-info-soft` |
-| `--h10-info` | `--status-info-line` |
+| `--nds-text` | `--text-primary` |
+| `--nds-text-2` | `--text-secondary` |
+| `--nds-text-3` | `--text-tertiary` |
+| `--nds-text-disabled` | `--text-disabled` |
+| `--nds-text-link` | `--text-link` |
+| `--nds-bg` | `--surface-canvas` |
+| `--nds-surface` | `--surface-card` |
+| `--nds-surface-sunken` | `--surface-sunken` |
+| `--nds-border` | `--border-default` |
+| `--nds-border-subtle` | `--border-subtle` |
+| `--nds-border-strong` | `--border-strong` |
+| `--nds-primary` | `--color-primary` |
+| `--nds-primary-soft` | `--color-primary-soft` |
+| `--nds-success-soft` | `--status-success-soft` |
+| `--nds-success` | `--status-success-line` |
+| `--nds-success-strong` | `--status-success-strong` |
+| `--nds-warning-soft` | `--status-warning-soft` |
+| `--nds-warning` | `--status-warning-line` |
+| `--nds-warning-strong` | `--status-warning-strong` |
+| `--nds-danger-soft` | `--status-danger-soft` |
+| `--nds-danger` | `--status-danger-line` |
+| `--nds-danger-strong` | `--status-danger-strong` |
+| `--nds-info-soft` | `--status-info-soft` |
+| `--nds-info` | `--status-info-line` |
 
-   *DS-only (no alias, stay `--h10-*`):* all `--h10-*-NNN` ramps, `--h10-surface-raised/hover`, `--h10-wash-primary`, `--h10-text-strong/inverse`, `--h10-primary-hover/dark/ghost-border`, `--h10-live`, `--h10-rail-*`, `--h10-radius-*`, `--h10-shadow-*`, `--h10-focus-ring`, `--h10-pill-*`, `--h10-badge-*`, `--h10-targeting-*`, `--h10-row-nav`, `--h10-icon-zone`, `--h10-font-*`.
+   *DS-only (no alias, stay `--nds-*`):* all `--nds-*-NNN` ramps, `--nds-surface-raised/hover`, `--nds-wash-primary`, `--nds-text-strong/inverse`, `--nds-primary-hover/dark/ghost-border`, `--nds-live`, `--nds-rail-*`, `--nds-radius-*`, `--nds-shadow-*`, `--nds-focus-ring`, `--nds-pill-*`, `--nds-badge-*`, `--nds-targeting-*`, `--nds-row-nav`, `--nds-icon-zone`, `--nds-font-*`.
 3. **Per-component register** — for each of the 47: props, tone/size axis, catalog coverage (yes/no), a11y notes, contract C1–C6 pass/fail.
 4. **Tone remap table** (authoritative for Phase 3):
 
@@ -129,26 +129,26 @@ import { palette, color, pill, badge } from './colors'
 /** The authoritative ordered list of CSS custom properties emitted to
  *  styles/tokens.css. ONE source of truth: tokens/* (TS) → tokens.css. */
 export const cssVars: ReadonlyArray<{ section?: string; name: string; value: string }> = [
-  { section: 'Tier 1: primitive ramps', name: '--h10-white', value: palette.white },
-  { name: '--h10-blue-50', value: palette.blue[50] },
-  { name: '--h10-blue-100', value: palette.blue[100] },
-  { name: '--h10-blue-200', value: palette.blue[200] },
-  { name: '--h10-blue-600', value: palette.blue[600] },
-  { name: '--h10-blue-700', value: palette.blue[700] },
-  { name: '--h10-blue-800', value: palette.blue[800] },
-  { name: '--h10-blue-900', value: palette.blue[900] },
+  { section: 'Tier 1: primitive ramps', name: '--nds-white', value: palette.white },
+  { name: '--nds-blue-50', value: palette.blue[50] },
+  { name: '--nds-blue-100', value: palette.blue[100] },
+  { name: '--nds-blue-200', value: palette.blue[200] },
+  { name: '--nds-blue-600', value: palette.blue[600] },
+  { name: '--nds-blue-700', value: palette.blue[700] },
+  { name: '--nds-blue-800', value: palette.blue[800] },
+  { name: '--nds-blue-900', value: palette.blue[900] },
   // … grey/green/red/amber/purple/cyan/amazon ramps, then:
-  { name: '--h10-shadow-rgb', value: '20 28 38' },
-  { name: '--h10-focus-rgb', value: '31 111 222' },
-  { section: 'Tier 2: semantic roles', name: '--h10-text', value: 'var(--h10-grey-900)' },
-  { name: '--h10-text-2', value: 'var(--h10-grey-600)' },
+  { name: '--nds-shadow-rgb', value: '20 28 38' },
+  { name: '--nds-focus-rgb', value: '31 111 222' },
+  { section: 'Tier 2: semantic roles', name: '--nds-text', value: 'var(--nds-grey-900)' },
+  { name: '--nds-text-2', value: 'var(--nds-grey-600)' },
   // … remaining Tier-2 roles, status pills, Tier-3 badges, radius, elevation,
   //    structural dims, type — each line copied from tokens.css :root in order.
 ]
 
 export const cssVarsDark: ReadonlyArray<{ name: string; value: string }> = [
-  { name: '--h10-text', value: '#e7ebf1' },
-  { name: '--h10-text-2', value: '#aab6c2' },
+  { name: '--nds-text', value: '#e7ebf1' },
+  { name: '--nds-text-2', value: '#aab6c2' },
   // … the rest of the current .dark block, in order.
 ]
 ```
@@ -245,41 +245,41 @@ EOF
 - Modify (regenerate): `apps/web/src/design-system/styles/tokens.css`
 
 **Interfaces:**
-- Produces: the platform-semantic vars (`--text-*`, `--surface-*`, `--border-*`, `--status-*`, `--color-primary*`) defined as `var(--h10-*)` aliases — consumed by Task 2.2.
+- Produces: the platform-semantic vars (`--text-*`, `--surface-*`, `--border-*`, `--status-*`, `--color-primary*`) defined as `var(--nds-*)` aliases — consumed by Task 2.2.
 
 - [ ] **Step 1: Append a "platform-semantic aliases" section to `cssVars`** (use the Task 0.1 mapping table, every row):
 ```ts
-  { section: 'Platform-semantic aliases (consume THESE in components)', name: '--text-primary', value: 'var(--h10-text)' },
-  { name: '--text-secondary', value: 'var(--h10-text-2)' },
-  { name: '--text-tertiary', value: 'var(--h10-text-3)' },
-  { name: '--text-disabled', value: 'var(--h10-text-disabled)' },
-  { name: '--text-link', value: 'var(--h10-text-link)' },
-  { name: '--surface-canvas', value: 'var(--h10-bg)' },
-  { name: '--surface-card', value: 'var(--h10-surface)' },
-  { name: '--surface-sunken', value: 'var(--h10-surface-sunken)' },
-  { name: '--border-default', value: 'var(--h10-border)' },
-  { name: '--border-subtle', value: 'var(--h10-border-subtle)' },
-  { name: '--border-strong', value: 'var(--h10-border-strong)' },
-  { name: '--color-primary', value: 'var(--h10-primary)' },
-  { name: '--color-primary-soft', value: 'var(--h10-primary-soft)' },
-  { name: '--status-success-soft', value: 'var(--h10-success-soft)' },
-  { name: '--status-success-line', value: 'var(--h10-success)' },
-  { name: '--status-success-strong', value: 'var(--h10-success-strong)' },
-  { name: '--status-warning-soft', value: 'var(--h10-warning-soft)' },
-  { name: '--status-warning-line', value: 'var(--h10-warning)' },
-  { name: '--status-warning-strong', value: 'var(--h10-warning-strong)' },
-  { name: '--status-danger-soft', value: 'var(--h10-danger-soft)' },
-  { name: '--status-danger-line', value: 'var(--h10-danger)' },
-  { name: '--status-danger-strong', value: 'var(--h10-danger-strong)' },
-  { name: '--status-info-soft', value: 'var(--h10-info-soft)' },
-  { name: '--status-info-line', value: 'var(--h10-info)' },
+  { section: 'Platform-semantic aliases (consume THESE in components)', name: '--text-primary', value: 'var(--nds-text)' },
+  { name: '--text-secondary', value: 'var(--nds-text-2)' },
+  { name: '--text-tertiary', value: 'var(--nds-text-3)' },
+  { name: '--text-disabled', value: 'var(--nds-text-disabled)' },
+  { name: '--text-link', value: 'var(--nds-text-link)' },
+  { name: '--surface-canvas', value: 'var(--nds-bg)' },
+  { name: '--surface-card', value: 'var(--nds-surface)' },
+  { name: '--surface-sunken', value: 'var(--nds-surface-sunken)' },
+  { name: '--border-default', value: 'var(--nds-border)' },
+  { name: '--border-subtle', value: 'var(--nds-border-subtle)' },
+  { name: '--border-strong', value: 'var(--nds-border-strong)' },
+  { name: '--color-primary', value: 'var(--nds-primary)' },
+  { name: '--color-primary-soft', value: 'var(--nds-primary-soft)' },
+  { name: '--status-success-soft', value: 'var(--nds-success-soft)' },
+  { name: '--status-success-line', value: 'var(--nds-success)' },
+  { name: '--status-success-strong', value: 'var(--nds-success-strong)' },
+  { name: '--status-warning-soft', value: 'var(--nds-warning-soft)' },
+  { name: '--status-warning-line', value: 'var(--nds-warning)' },
+  { name: '--status-warning-strong', value: 'var(--nds-warning-strong)' },
+  { name: '--status-danger-soft', value: 'var(--nds-danger-soft)' },
+  { name: '--status-danger-line', value: 'var(--nds-danger)' },
+  { name: '--status-danger-strong', value: 'var(--nds-danger-strong)' },
+  { name: '--status-info-soft', value: 'var(--nds-info-soft)' },
+  { name: '--status-info-line', value: 'var(--nds-info)' },
 ```
 
 - [ ] **Step 2: Regenerate + verify no-op + token-guard**
 ```bash
 cd apps/web && pnpm tokens:gen
 node src/design-system/tools/token-guard.mjs
-# the .dark block already flips the --h10-* these alias, so dark is covered transitively
+# the .dark block already flips the --nds-* these alias, so dark is covered transitively
 ```
 Aliases are additive (new var names only) — existing pairs unchanged, so the catalog is visually unaffected.
 
@@ -293,10 +293,10 @@ Expected: catalog renders identically (no value consumes the new aliases yet).
 ```bash
 git add apps/web/src/design-system/tokens/css-vars.ts apps/web/src/design-system/styles/tokens.css
 git commit --only apps/web/src/design-system/tokens/css-vars.ts apps/web/src/design-system/styles/tokens.css -m "$(cat <<'EOF'
-feat(design-system): platform-semantic token aliases over --h10-* (value-preserving)
+feat(design-system): platform-semantic token aliases over --nds-* (value-preserving)
 
 Adds --text-*/--surface-*/--border-*/--status-*/--color-primary as aliases of the
-existing --h10-* roles. No values move. Bridges to the ~290 platform pages' vocabulary.
+existing --nds-* roles. No values move. Bridges to the ~290 platform pages' vocabulary.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
@@ -336,24 +336,24 @@ git checkout src/design-system/styles/tokens.css
 
 | Raw ramp in component CSS | Replace with |
 |---|---|
-| `var(--h10-grey-900)` (text/tooltip bg contexts) | `var(--text-primary)` |
-| `var(--h10-grey-700)` (`.h10-ds-tag.neutral` fg) | `var(--text-strong-…)` → use `var(--h10-text-strong)` (DS-only role; already semantic) |
-| `var(--h10-grey-300)` | `var(--border-strong)` |
-| `var(--h10-grey-150)` | `var(--border-subtle)` |
-| `var(--h10-grey-100)` | `var(--surface-sunken)` |
-| `var(--h10-grey-25)` | `var(--h10-surface-raised)` (DS-only role) |
-| `var(--h10-blue-700)` (`.h10-ds-tag.info` fg) | `var(--status-info-strong)` *(add this alias if absent: `--status-info-strong: var(--h10-blue-700)`)* |
-| `var(--h10-blue-100)` (`.h10-ds-tag.info` bg) | `var(--status-info-soft)` |
-| `var(--h10-green-700)` (`.h10-ds-tag.positive` fg) | `var(--status-success-strong)` |
-| `var(--h10-green-soft)` | `var(--status-success-soft)` |
-| `var(--h10-red-700)` (`.h10-ds-tag.danger` fg) | `var(--status-danger-strong)` |
-| `var(--h10-red-soft)` | `var(--status-danger-soft)` |
+| `var(--nds-grey-900)` (text/tooltip bg contexts) | `var(--text-primary)` |
+| `var(--nds-grey-700)` (`.nds-tag.neutral` fg) | `var(--text-strong-…)` → use `var(--nds-text-strong)` (DS-only role; already semantic) |
+| `var(--nds-grey-300)` | `var(--border-strong)` |
+| `var(--nds-grey-150)` | `var(--border-subtle)` |
+| `var(--nds-grey-100)` | `var(--surface-sunken)` |
+| `var(--nds-grey-25)` | `var(--nds-surface-raised)` (DS-only role) |
+| `var(--nds-blue-700)` (`.nds-tag.info` fg) | `var(--status-info-strong)` *(add this alias if absent: `--status-info-strong: var(--nds-blue-700)`)* |
+| `var(--nds-blue-100)` (`.nds-tag.info` bg) | `var(--status-info-soft)` |
+| `var(--nds-green-700)` (`.nds-tag.positive` fg) | `var(--status-success-strong)` |
+| `var(--nds-green-soft)` | `var(--status-success-soft)` |
+| `var(--nds-red-700)` (`.nds-tag.danger` fg) | `var(--status-danger-strong)` |
+| `var(--nds-red-soft)` | `var(--status-danger-soft)` |
 
-   For `.h10-ds-tag.warning` confirm it already uses `--h10-warning*`/`--status-warning-*`; if it reaches a ramp, map analogously. Where a needed `--status-*-strong` info alias is missing, add it to `css-vars.ts` (Task 1.2 section) and regenerate.
+   For `.nds-tag.warning` confirm it already uses `--nds-warning*`/`--status-warning-*`; if it reaches a ramp, map analogously. Where a needed `--status-*-strong` info alias is missing, add it to `css-vars.ts` (Task 1.2 section) and regenerate.
 
 - [ ] **Step 2: Re-run the raw-ramp grep — expect ZERO hits**
 ```bash
-rg -n 'var\(--h10-(grey|blue|green|red|amber|purple|cyan)-[0-9]' apps/web/src/design-system/styles/primitives.css apps/web/src/design-system/styles/components.css apps/web/src/design-system/styles/patterns.css
+rg -n 'var\(--nds-(grey|blue|green|red|amber|purple|cyan)-[0-9]' apps/web/src/design-system/styles/primitives.css apps/web/src/design-system/styles/components.css apps/web/src/design-system/styles/patterns.css
 ```
 Expected: no matches.
 
@@ -374,33 +374,33 @@ Expected: catalog identical (values unchanged).
 - Modify: `apps/web/src/design-system/styles/components.css`
 - Modify: `apps/web/src/design-system/styles/patterns.css`
 
-- [ ] **Step 1: Apply the Task 0.1 mapping as a scripted replace** (core color roles only — NOT the DS-only `--h10-*`). Run from repo root:
+- [ ] **Step 1: Apply the Task 0.1 mapping as a scripted replace** (core color roles only — NOT the DS-only `--nds-*`). Run from repo root:
 ```bash
 cd apps/web/src/design-system/styles
-# one sed per mapping row; \b-guard so --h10-text doesn't also match --h10-text-2 etc.
-perl -pi -e 's/var\(--h10-text\)/var(--text-primary)/g;            s/var\(--h10-text-2\)/var(--text-secondary)/g;
-             s/var\(--h10-text-3\)/var(--text-tertiary)/g;          s/var\(--h10-text-disabled\)/var(--text-disabled)/g;
-             s/var\(--h10-text-link\)/var(--text-link)/g;
-             s/var\(--h10-bg\)/var(--surface-canvas)/g;             s/var\(--h10-surface\)(?![-a-z])/var(--surface-card)/g;
-             s/var\(--h10-surface-sunken\)/var(--surface-sunken)/g;
-             s/var\(--h10-border\)(?![-a-z])/var(--border-default)/g; s/var\(--h10-border-subtle\)/var(--border-subtle)/g;
-             s/var\(--h10-border-strong\)/var(--border-strong)/g;
-             s/var\(--h10-primary\)(?![-a-z])/var(--color-primary)/g; s/var\(--h10-primary-soft\)/var(--color-primary-soft)/g;
-             s/var\(--h10-success-soft\)/var(--status-success-soft)/g; s/var\(--h10-success-strong\)/var(--status-success-strong)/g;
-             s/var\(--h10-success\)(?![-a-z])/var(--status-success-line)/g;
-             s/var\(--h10-warning-soft\)/var(--status-warning-soft)/g; s/var\(--h10-warning-strong\)/var(--status-warning-strong)/g;
-             s/var\(--h10-warning\)(?![-a-z])/var(--status-warning-line)/g;
-             s/var\(--h10-danger-soft\)/var(--status-danger-soft)/g;   s/var\(--h10-danger-strong\)/var(--status-danger-strong)/g;
-             s/var\(--h10-danger\)(?![-a-z])/var(--status-danger-line)/g;
-             s/var\(--h10-info-soft\)/var(--status-info-soft)/g;       s/var\(--h10-info\)(?![-a-z])/var(--status-info-line)/g;' \
+# one sed per mapping row; \b-guard so --nds-text doesn't also match --nds-text-2 etc.
+perl -pi -e 's/var\(--nds-text\)/var(--text-primary)/g;            s/var\(--nds-text-2\)/var(--text-secondary)/g;
+             s/var\(--nds-text-3\)/var(--text-tertiary)/g;          s/var\(--nds-text-disabled\)/var(--text-disabled)/g;
+             s/var\(--nds-text-link\)/var(--text-link)/g;
+             s/var\(--nds-bg\)/var(--surface-canvas)/g;             s/var\(--nds-surface\)(?![-a-z])/var(--surface-card)/g;
+             s/var\(--nds-surface-sunken\)/var(--surface-sunken)/g;
+             s/var\(--nds-border\)(?![-a-z])/var(--border-default)/g; s/var\(--nds-border-subtle\)/var(--border-subtle)/g;
+             s/var\(--nds-border-strong\)/var(--border-strong)/g;
+             s/var\(--nds-primary\)(?![-a-z])/var(--color-primary)/g; s/var\(--nds-primary-soft\)/var(--color-primary-soft)/g;
+             s/var\(--nds-success-soft\)/var(--status-success-soft)/g; s/var\(--nds-success-strong\)/var(--status-success-strong)/g;
+             s/var\(--nds-success\)(?![-a-z])/var(--status-success-line)/g;
+             s/var\(--nds-warning-soft\)/var(--status-warning-soft)/g; s/var\(--nds-warning-strong\)/var(--status-warning-strong)/g;
+             s/var\(--nds-warning\)(?![-a-z])/var(--status-warning-line)/g;
+             s/var\(--nds-danger-soft\)/var(--status-danger-soft)/g;   s/var\(--nds-danger-strong\)/var(--status-danger-strong)/g;
+             s/var\(--nds-danger\)(?![-a-z])/var(--status-danger-line)/g;
+             s/var\(--nds-info-soft\)/var(--status-info-soft)/g;       s/var\(--nds-info\)(?![-a-z])/var(--status-info-line)/g;' \
              primitives.css components.css patterns.css
 ```
 
-- [ ] **Step 2: Verify only DS-only `--h10-*` remain in components**
+- [ ] **Step 2: Verify only DS-only `--nds-*` remain in components**
 ```bash
-rg -oh 'var\(--h10-[a-z0-9-]+\)' apps/web/src/design-system/styles/{primitives,components,patterns}.css | sort -u
+rg -oh 'var\(--nds-[a-z0-9-]+\)' apps/web/src/design-system/styles/{primitives,components,patterns}.css | sort -u
 ```
-Expected: only DS-only names (radius/shadow/focus/pill/badge/targeting/rail/surface-raised/surface-hover/wash-primary/text-strong/text-inverse/primary-hover/primary-dark/primary-ghost-border/live + ramps used by `--h10-pill-*` definitions). NO core role (`--h10-text`, `--h10-bg`, `--h10-border`, `--h10-primary`, `--h10-status*`).
+Expected: only DS-only names (radius/shadow/focus/pill/badge/targeting/rail/surface-raised/surface-hover/wash-primary/text-strong/text-inverse/primary-hover/primary-dark/primary-ghost-border/live + ramps used by `--nds-pill-*` definitions). NO core role (`--nds-text`, `--nds-bg`, `--nds-border`, `--nds-primary`, `--nds-status*`).
 
 - [ ] **Step 3: Screenshot-diff no-op + build**
 ```bash
@@ -418,8 +418,8 @@ Expected: catalog identical; build clean.
 - Create: `apps/web/src/design-system/primitives/tone.ts`
 - Modify: `apps/web/src/design-system/primitives/Pill.tsx`
 - Modify: `apps/web/src/design-system/primitives/index.ts`
-- Modify: `apps/web/src/design-system/styles/primitives.css` (`.h10-ds-pill.*` rules + `--h10-pill-*` token class names)
-- Modify: `apps/web/src/design-system/styles/tokens.css` via `css-vars.ts` (rename `--h10-pill-{ok,warn,arch,err}-*` → `--h10-pill-{success,warning,neutral,danger}-*`)
+- Modify: `apps/web/src/design-system/styles/primitives.css` (`.nds-pill.*` rules + `--nds-pill-*` token class names)
+- Modify: `apps/web/src/design-system/styles/tokens.css` via `css-vars.ts` (rename `--nds-pill-{ok,warn,arch,err}-*` → `--nds-pill-{success,warning,neutral,danger}-*`)
 - Modify (consumers): `app/fulfillment/stock/import/ImportClient.tsx`, `app/fulfillment/stock/locations/LocationsClient.tsx`, `app/pricing/volume-pricing/VolumePricingClient.tsx`
 
 **Interfaces:**
@@ -447,11 +447,11 @@ export interface PillProps {
 
 /** Status pill — matches the H10 `.h10-pill`. */
 export function Pill({ tone, className, children }: PillProps) {
-  return <span className={`h10-ds-pill ${tone}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-pill ${tone}${className ? ` ${className}` : ''}`}>{children}</span>
 }
 ```
 
-- [ ] **Step 3: Rename the Pill CSS classes + tokens.** In `primitives.css` rename selectors `.h10-ds-pill.ok|.warn|.arch|.err` → `.success|.warning|.neutral|.danger`; in `css-vars.ts` rename `--h10-pill-ok-*`→`--h10-pill-success-*`, `warn`→`warning`, `arch`→`neutral`, `err`→`danger` (values unchanged), regenerate.
+- [ ] **Step 3: Rename the Pill CSS classes + tokens.** In `primitives.css` rename selectors `.nds-pill.ok|.warn|.arch|.err` → `.success|.warning|.neutral|.danger`; in `css-vars.ts` rename `--nds-pill-ok-*`→`--nds-pill-success-*`, `warn`→`warning`, `arch`→`neutral`, `err`→`danger` (values unchanged), regenerate.
 
 - [ ] **Step 4: Update the barrel**
 ```ts
@@ -479,7 +479,7 @@ rg -n "PillStatus|status=\"(ok|warn|arch|err)\"" src app   # expect: no matches
 **Files:**
 - Modify: `apps/web/src/design-system/primitives/Tag.tsx`
 - Modify: `apps/web/src/design-system/primitives/index.ts`
-- Modify: `apps/web/src/design-system/styles/primitives.css` (`.h10-ds-tag.positive` → add `.success`, keep `.positive` as alias)
+- Modify: `apps/web/src/design-system/styles/primitives.css` (`.nds-tag.positive` → add `.success`, keep `.positive` as alias)
 - Modify (consumers, NON-untouchable only): `ImportClient.tsx`, `LocationsClient.tsx`, `SuggestionsClient.tsx`, `VolumePricingClient.tsx`
 
 **Interfaces:**
@@ -502,11 +502,11 @@ export interface TagProps {
 
 export function Tag({ tone = 'neutral', className, children }: TagProps) {
   const t = tone === 'positive' ? 'success' : tone   // normalize legacy
-  return <span className={`h10-ds-tag ${t}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-tag ${t}${className ? ` ${className}` : ''}`}>{children}</span>
 }
 ```
 
-- [ ] **Step 2: CSS** — rename `.h10-ds-tag.positive` rule to `.h10-ds-tag.success` (Task 2.1 already repointed its colors to `--status-success-*`). The component normalizes `positive→success`, so a `.positive` selector is no longer rendered; no `.positive` CSS needed.
+- [ ] **Step 2: CSS** — rename `.nds-tag.positive` rule to `.nds-tag.success` (Task 2.1 already repointed its colors to `--status-success-*`). The component normalizes `positive→success`, so a `.positive` selector is no longer rendered; no `.positive` CSS needed.
 
 - [ ] **Step 3: Barrel** — keep `export { Tag, type TagProps, type TagTone } from './Tag'`.
 
@@ -525,7 +525,7 @@ Update those literals to `'success'`. (Dynamic `tone={…}` exprs that may yield
 **Files:**
 - Modify: `apps/web/src/design-system/components/Toast.tsx`
 - Modify: `apps/web/src/design-system/components/index.ts`
-- Modify: `apps/web/src/design-system/styles/components.css` (`.h10-ds-toast.error` → `.danger`; add `.warning`/`.neutral` if absent — values from `--status-*`)
+- Modify: `apps/web/src/design-system/styles/components.css` (`.nds-toast.error` → `.danger`; add `.warning`/`.neutral` if absent — values from `--status-*`)
 - Modify (consumers): `ImportClient.tsx`, `LocationsClient.tsx`, `SuggestionsClient.tsx`, `VolumePricingClient.tsx`
 
 **Interfaces:**
@@ -543,12 +543,12 @@ const toast = useCallback((message: ReactNode, tone: Tone = 'info') => {
   setItems((xs) => [...xs, { id, message, tone }])
   setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), duration)
 }, [duration])
-// render: className={`h10-ds-toast ${t.tone}`}
+// render: className={`nds-toast ${t.tone}`}
 ```
 
 - [ ] **Step 2: Barrel** — `export { ToastProvider, useToast, type ToastApi } from './Toast'` (drop `ToastVariant`; export `ToastApi` for typed consumers).
 
-- [ ] **Step 3: CSS** — in `components.css` rename `.h10-ds-toast.error`→`.h10-ds-toast.danger`.
+- [ ] **Step 3: CSS** — in `components.css` rename `.nds-toast.error`→`.nds-toast.danger`.
 
 - [ ] **Step 4: Update consumers** — every `toast(msg, 'error')`→`toast(msg, 'danger')`; `'success'` stays. Grep:
 ```bash
@@ -567,7 +567,7 @@ rg -n "toast\([^)]*,\s*'error'\)" app   # update each to 'danger'
 **Files:**
 - Modify: `apps/web/src/design-system/components/Banner.tsx`
 - Modify: `apps/web/src/design-system/components/index.ts`
-- Modify: `apps/web/src/design-system/styles/components.css` (`.h10-ds-banner.error`→ add `.danger`, keep `.error` alias rule)
+- Modify: `apps/web/src/design-system/styles/components.css` (`.nds-banner.error`→ add `.danger`, keep `.error` alias rule)
 - Modify (NON-untouchable consumers): `VolumePricingClient.tsx`
 
 **Interfaces:**
@@ -596,15 +596,15 @@ const DEFAULT_ICON: Record<Tone, ReactNode> = {
 export function Banner({ tone, variant, title, children, icon, action, onDismiss }: BannerProps) {
   const t: Tone = (variant === 'error' ? 'danger' : (tone ?? variant ?? 'info')) as Tone
   return (
-    <div className={`h10-ds-banner ${t}`} role={t === 'danger' ? 'alert' : 'status'}>
-      <span className="h10-ds-banner-icon">{icon ?? DEFAULT_ICON[t]}</span>
+    <div className={`nds-banner ${t}`} role={t === 'danger' ? 'alert' : 'status'}>
+      <span className="nds-banner-icon">{icon ?? DEFAULT_ICON[t]}</span>
       {/* …body/action/dismiss unchanged… */}
     </div>
   )
 }
 ```
 
-- [ ] **Step 2: CSS** — rename `.h10-ds-banner.error`→`.h10-ds-banner.danger`; the component maps both old (`error`) and new (`danger`) to the `.danger` class, so no `.error` selector is rendered. Add `.neutral` if the Tone needs it.
+- [ ] **Step 2: CSS** — rename `.nds-banner.error`→`.nds-banner.danger`; the component maps both old (`error`) and new (`danger`) to the `.danger` class, so no `.error` selector is rendered. Add `.neutral` if the Tone needs it.
 
 - [ ] **Step 3: Barrel** — `export { Banner, type BannerProps } from './Banner'` (drop `BannerVariant`).
 
@@ -640,10 +640,10 @@ export interface BadgeProps {
 }
 
 export function Badge({ program, className, children }: BadgeProps) {
-  return <span className={`h10-ds-badge ${program}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-badge ${program}${className ? ` ${className}` : ''}`}>{children}</span>
 }
 ```
-(CSS class names `.h10-ds-badge.sp|.sd|.sb|.auto|.manual` are unchanged.)
+(CSS class names `.nds-badge.sp|.sd|.sb|.auto|.manual` are unchanged.)
 
 - [ ] **Step 2: Barrel** — `export { Badge, type BadgeProps, type AdProgram } from './Badge'` (drop `BadgeTone`).
 - [ ] **Step 3: tsc + build**; `rg -n "BadgeTone" src app` → no matches. **Step 4: Commit**.
@@ -662,7 +662,7 @@ import type { ReactNode } from 'react'
 export interface KbdProps { className?: string; children: ReactNode }
 /** Keyboard key chip (e.g. ⌘, K). */
 export function Kbd({ className, children }: KbdProps) {
-  return <kbd className={`h10-ds-kbd${className ? ` ${className}` : ''}`}>{children}</kbd>
+  return <kbd className={`nds-kbd${className ? ` ${className}` : ''}`}>{children}</kbd>
 }
 ```
 - [ ] **Step 2: Barrel** — `export { Kbd, type KbdProps } from './Kbd'`.
@@ -697,42 +697,42 @@ The one outlier. This is the ONLY task that may change pixels — verify it look
 
 **Files:**
 - Modify: `apps/web/src/design-system/primitives/TagInput.tsx`
-- Modify: `apps/web/src/design-system/styles/primitives.css` (add `.h10-ds-taginput*` rules)
+- Modify: `apps/web/src/design-system/styles/primitives.css` (add `.nds-taginput*` rules)
 
-- [ ] **Step 1: Add CSS** (mirror `.h10-ds-field` + a chip, all semantic tokens) to `primitives.css`:
+- [ ] **Step 1: Add CSS** (mirror `.nds-field` + a chip, all semantic tokens) to `primitives.css`:
 ```css
-.h10-ds-taginput { position: relative; }
-.h10-ds-taginput-field {
+.nds-taginput { position: relative; }
+.nds-taginput-field {
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   min-height: 36px; padding: 6px 8px; cursor: text;
   background: var(--surface-card); border: 1px solid var(--border-strong);
-  border-radius: var(--h10-radius-lg);
+  border-radius: var(--nds-radius-lg);
 }
-.h10-ds-taginput-field:focus-within { border-color: var(--color-primary); box-shadow: var(--h10-focus-ring); }
-.h10-ds-taginput.disabled .h10-ds-taginput-field { opacity: .6; pointer-events: none; }
-.h10-ds-taginput-chip {
+.nds-taginput-field:focus-within { border-color: var(--color-primary); box-shadow: var(--nds-focus-ring); }
+.nds-taginput.disabled .nds-taginput-field { opacity: .6; pointer-events: none; }
+.nds-taginput-chip {
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
-  font-size: 12px; font-weight: 550; border-radius: var(--h10-radius-md);
+  font-size: 12px; font-weight: 550; border-radius: var(--nds-radius-md);
   color: var(--text-link); background: var(--color-primary-soft);
 }
-.h10-ds-taginput-chip button { color: var(--text-link); display: inline-flex; }
-.h10-ds-taginput-chip button:hover { color: var(--h10-primary-hover); }
-.h10-ds-taginput input {
+.nds-taginput-chip button { color: var(--text-link); display: inline-flex; }
+.nds-taginput-chip button:hover { color: var(--nds-primary-hover); }
+.nds-taginput input {
   flex: 1; min-width: 80px; border: 0; outline: none; background: transparent;
   font-size: 12px; color: var(--text-primary);
 }
-.h10-ds-taginput input::placeholder { color: var(--text-tertiary); }
-.h10-ds-taginput-menu {
+.nds-taginput input::placeholder { color: var(--text-tertiary); }
+.nds-taginput-menu {
   position: absolute; z-index: 50; left: 0; right: 0; top: 100%; margin-top: 4px;
   max-height: 160px; overflow-y: auto; padding: 4px 0;
   background: var(--surface-card); border: 1px solid var(--border-default);
-  border-radius: var(--h10-radius-lg); box-shadow: var(--h10-shadow-menu);
+  border-radius: var(--nds-radius-lg); box-shadow: var(--nds-shadow-menu);
 }
-.h10-ds-taginput-menu button {
+.nds-taginput-menu button {
   display: block; width: 100%; text-align: left; padding: 6px 12px;
   font-size: 12px; color: var(--text-secondary); background: transparent;
 }
-.h10-ds-taginput-menu button:hover { background: var(--surface-sunken); }
+.nds-taginput-menu button:hover { background: var(--surface-sunken); }
 ```
 
 - [ ] **Step 2: Rewrite `TagInput.tsx`** — drop `@/lib/utils` and ALL Tailwind/`dark:` classes; keep the exact same props + behavior:
@@ -776,10 +776,10 @@ export function TagInput({
   const filtered = suggestions.filter((s) => s.toLowerCase().includes(input.toLowerCase()) && !value.includes(s))
 
   return (
-    <div className={`h10-ds-taginput${disabled ? ' disabled' : ''}${className ? ` ${className}` : ''}`}>
-      <div className="h10-ds-taginput-field" onClick={() => inputRef.current?.focus()}>
+    <div className={`nds-taginput${disabled ? ' disabled' : ''}${className ? ` ${className}` : ''}`}>
+      <div className="nds-taginput-field" onClick={() => inputRef.current?.focus()}>
         {value.map((tag, i) => (
-          <span key={tag} className="h10-ds-taginput-chip">
+          <span key={tag} className="nds-taginput-chip">
             {tag}
             <button type="button" aria-label={`Remove ${tag}`}
               onClick={(e) => { e.stopPropagation(); onChange(value.filter((_, j) => j !== i)) }}>
@@ -797,7 +797,7 @@ export function TagInput({
         )}
       </div>
       {open && filtered.length > 0 && (
-        <ul className="h10-ds-taginput-menu">
+        <ul className="nds-taginput-menu">
           {filtered.map((s) => (
             <li key={s}>
               <button type="button" onMouseDown={(e) => e.preventDefault()}
@@ -844,7 +844,7 @@ for f in *.tsx; do rg -q 'className' "$f" || echo "NO className: $f"; done
 - [ ] **Step 1: Add two checks** after the existing hex scan, before the final exit:
 ```js
 // D1 — raw RAMP reaches in component CSS (numbered ramps only; semantic/DS-token OK)
-const RAMP = /var\(--h10-(grey|blue|green|red|amber|purple|cyan)-[0-9]/
+const RAMP = /var\(--nds-(grey|blue|green|red|amber|purple|cyan)-[0-9]/
 // D2 — raw Tailwind palette classes in DS .tsx
 const TW = /\b(bg|text|border|ring|from|to|fill|stroke)-(slate|gray|zinc|blue|indigo|green|emerald|red|rose|amber|yellow|orange|purple|violet|cyan|sky)-[0-9]{2,3}\b/
 
@@ -854,7 +854,7 @@ for (const file of walk(ROOT)) {
   if (ALLOW.has(rel) || !SCOPE.test(rel)) continue
   const text = readFileSync(file, 'utf8')
   if (/\.css$/.test(file)) text.split('\n').forEach((l, i) => { if (RAMP.test(l)) extra.push(`${rel}:${i + 1}  raw ramp — use a semantic token`) })
-  if (/\.tsx$/.test(file)) text.split('\n').forEach((l, i) => { if (TW.test(l)) extra.push(`${rel}:${i + 1}  raw Tailwind palette — use .h10-ds-* + tokens`) })
+  if (/\.tsx$/.test(file)) text.split('\n').forEach((l, i) => { if (TW.test(l)) extra.push(`${rel}:${i + 1}  raw Tailwind palette — use .nds-* + tokens`) })
 }
 if (extra.length) { console.error(`✗ token-guard: ${extra.length} ramp/palette violation(s):`); extra.forEach((v) => console.error('  ' + v)); process.exit(1) }
 ```

@@ -113,14 +113,14 @@ export const WithWorkspaceSlot = () => {
       ]}
       pageSizeChoices={[25, 50, 100]}
       workspaceSlot={
-        <fieldset className="h10-ds-prefs-set">
+        <fieldset className="nds-prefs-set">
           <legend>Catalogue</legend>
-          <p className="h10-ds-prefs-help">Rows these preferences add to or remove from the grid.</p>
-          <label className="h10-ds-prefs-check">
+          <p className="nds-prefs-help">Rows these preferences add to or remove from the grid.</p>
+          <label className="nds-prefs-check">
             <Toggle checked={archived} onChange={setArchived} aria-label="Show archived SKUs" />
             <span>Show archived SKUs</span>
           </label>
-          <label className="h10-ds-prefs-check">
+          <label className="nds-prefs-check">
             <Toggle checked={zeroStock} onChange={setZeroStock} aria-label="Show out-of-stock" />
             <span>Show out-of-stock</span>
           </label>

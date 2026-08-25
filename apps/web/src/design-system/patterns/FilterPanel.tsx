@@ -28,20 +28,20 @@ export interface FilterPanelProps {
 export function FilterPanel({ title = 'Filters', presets, children, onReset, onApply, resetLabel = 'Reset', resetDisabled, footerExtra, defaultOpen = true }: FilterPanelProps) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className={['h10-ds-fpanel', open ? '' : 'collapsed'].filter(Boolean).join(' ')}>
-      <div className="h10-ds-fpanel-head">
+    <div className={['nds-fpanel', open ? '' : 'collapsed'].filter(Boolean).join(' ')}>
+      <div className="nds-fpanel-head">
         <h3>{title}</h3>
-        <button type="button" className={['h10-ds-fpanel-toggle', open ? 'open' : ''].filter(Boolean).join(' ')} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <button type="button" className={['nds-fpanel-toggle', open ? 'open' : ''].filter(Boolean).join(' ')} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           {open ? 'Hide' : 'Show'}
           <ChevronDown size={15} />
         </button>
       </div>
       {open && (
         <>
-          {presets != null && <div className="h10-ds-fpanel-presets">{presets}</div>}
-          <div className="h10-ds-fpanel-grid">{children}</div>
+          {presets != null && <div className="nds-fpanel-presets">{presets}</div>}
+          <div className="nds-fpanel-grid">{children}</div>
           {(onReset || onApply || footerExtra != null) && (
-            <div className="h10-ds-fpanel-foot">
+            <div className="nds-fpanel-foot">
               {footerExtra}
               <span className="grow" />
               {onReset && (
@@ -64,7 +64,7 @@ export function FilterPanel({ title = 'Filters', presets, children, onReset, onA
 
 export function FilterField({ label, wide, children }: { label: ReactNode; wide?: boolean; children: ReactNode }) {
   return (
-    <div className={['h10-ds-fpanel-field', wide ? 'wide' : ''].filter(Boolean).join(' ')}>
+    <div className={['nds-fpanel-field', wide ? 'wide' : ''].filter(Boolean).join(' ')}>
       <span className="flbl">{label}</span>
       {children}
     </div>

@@ -34,7 +34,7 @@ const HEAD = `/**
  * GENERATED — do not edit by hand.
  * Source: tokens/css-vars.ts (+ tokens/colors.ts). Regenerate: \`npm run tokens:gen\`.
  *
- * \`--h10-\` namespaced so it never collides with the app's globals.css tokens.
+ * \`--nds-\` namespaced so it never collides with the app's globals.css tokens.
  * The platform-semantic aliases (--text-, --surface-, --border-, --status-,
  * --color-primary) point AT these values; components consume the aliases.
  */`
@@ -51,7 +51,7 @@ const GLOBAL_HEAD = `/**
  * Source: tokens/css-vars.ts. Regenerate: \`npm run tokens:gen\`.
  *
  * tokens.css minus the platform-alias names the app also defines as RGB channels.
- * This is the file the ROOT LAYOUT loads, so every route gets the --h10-* tiers and
+ * This is the file the ROOT LAYOUT loads, so every route gets the --nds-* tiers and
  * the design system's components render styled without each page importing anything.
  * Anything needing the --text, --surface or --border aliases as COLOURS imports tokens.css.
  */`

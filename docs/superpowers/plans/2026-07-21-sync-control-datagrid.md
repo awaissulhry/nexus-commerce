@@ -16,12 +16,12 @@
 | `PreferencesModal` | `design-system/patterns` | column show/hide + sort prefs |
 | `Pagination` | `design-system/components` | pager |
 | primitives | `Button, Input, Pill, SegmentedControl, Tooltip` | controls |
-| styles | `tokens.css + components.css + patterns.css` imported by the page | all `.h10-ds-*` classes; `.dark` block = dark-mode aware |
-| pattern | `h10-ds-gridcard` wrapper; `ToastProvider` boundary for DS toasts | |
+| styles | `tokens.css + components.css + patterns.css` imported by the page | all `.nds-*` classes; `.dark` block = dark-mode aware |
+| pattern | `nds-gridcard` wrapper; `ToastProvider` boundary for DS toasts | |
 
 ## SCG.1 — the grid swap (the core)
 
-Rebuild the listings table as `DataGrid<Row>` inside `h10-ds-gridcard`:
+Rebuild the listings table as `DataGrid<Row>` inside `nds-gridcard`:
 
 - **Columns:** SKU (sticky left, mono, 220px, sortable) · Channel · Market · Lane (Listing/Shared + itemId chip) · Mode (DS `Pill`, tone per mode: Follow=green, Pinned=blue, Paused=amber, FBA=neutral "Amazon-managed", Uncounted=slate, Excluded=rose) · Intended (right, sortable) · Live (right) · Buffer (right) · Routed from. Totals row off (quantities across modes don't sum meaningfully).
 - **Selection & bulk:** DataGrid `selected` Set + `GridToolbar` slot-swap. Selection bar buttons: Set Follow · Pin · Pause · Resume · Zero-pin · Exclude · Include · Buffer `[n]` Apply · Clear — same `runAction` + `useConfirm` flow as today (server guards unchanged).

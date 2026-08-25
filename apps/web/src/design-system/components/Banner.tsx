@@ -40,15 +40,15 @@ const DEFAULT_ICON: Record<Tone, ReactNode> = {
 export function Banner({ tone, variant, title, children, icon, action, onDismiss, className }: BannerProps) {
   const t: Tone = (variant === 'error' ? 'danger' : (tone ?? variant ?? 'info')) as Tone
   return (
-    <div className={`h10-ds-banner ${t}${className ? ` ${className}` : ''}`} role={t === 'danger' ? 'alert' : 'status'}>
-      <span className="h10-ds-banner-icon">{icon ?? DEFAULT_ICON[t]}</span>
-      <div className="h10-ds-banner-body">
-        {title && <div className="h10-ds-banner-title">{title}</div>}
-        {children && <div className="h10-ds-banner-desc">{children}</div>}
+    <div className={`nds-banner ${t}${className ? ` ${className}` : ''}`} role={t === 'danger' ? 'alert' : 'status'}>
+      <span className="nds-banner-icon">{icon ?? DEFAULT_ICON[t]}</span>
+      <div className="nds-banner-body">
+        {title && <div className="nds-banner-title">{title}</div>}
+        {children && <div className="nds-banner-desc">{children}</div>}
       </div>
-      {action && <div className="h10-ds-banner-action">{action}</div>}
+      {action && <div className="nds-banner-action">{action}</div>}
       {onDismiss && (
-        <button type="button" className="h10-ds-banner-dismiss" onClick={onDismiss} aria-label="Dismiss">
+        <button type="button" className="nds-banner-dismiss" onClick={onDismiss} aria-label="Dismiss">
           <X size={15} aria-hidden />
         </button>
       )}

@@ -40,9 +40,9 @@ export function ToastProvider({ children, duration = 4000 }: { children: ReactNo
       {children}
       {mounted &&
         createPortal(
-          <div className="h10-ds-toasts">
+          <div className="nds-toasts">
             {items.map((t) => (
-              <div key={t.id} className={`h10-ds-toast ${t.tone}`} role="status">
+              <div key={t.id} className={`nds-toast ${t.tone}`} role="status">
                 <span className="dot" />
                 <span>{t.message}</span>
               </div>

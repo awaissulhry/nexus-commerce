@@ -98,7 +98,7 @@ export function PaneHandle({ onDelta, onCommit, onReset, label, onToggle }: Pane
           width: active ? 3 : 1,
           height: "100%",
           borderRadius: 2,
-          background: active ? "var(--h10-primary)" : "var(--h10-border-subtle)",
+          background: active ? "var(--nds-primary)" : "var(--nds-border-subtle)",
           transition: "background 120ms",
         }}
       />

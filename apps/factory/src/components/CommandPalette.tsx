@@ -105,9 +105,9 @@ export function CommandPalette() {
         style={{
           width: 560,
           maxWidth: "calc(100vw - 40px)",
-          background: "var(--h10-surface)",
-          borderRadius: "var(--h10-radius-3xl)",
-          boxShadow: "var(--h10-shadow-modal)",
+          background: "var(--nds-surface)",
+          borderRadius: "var(--nds-radius-3xl)",
+          boxShadow: "var(--nds-shadow-modal)",
           overflow: "hidden",
         }}
       >
@@ -117,10 +117,10 @@ export function CommandPalette() {
             alignItems: "center",
             gap: 10,
             padding: "12px 16px",
-            borderBottom: "1px solid var(--h10-border-subtle)",
+            borderBottom: "1px solid var(--nds-border-subtle)",
           }}
         >
-          <Search size={16} style={{ color: "var(--h10-text-3)" }} />
+          <Search size={16} style={{ color: "var(--nds-text-3)" }} />
           <input
             ref={inputRef}
             value={q}
@@ -147,10 +147,10 @@ export function CommandPalette() {
               font: "inherit",
               fontSize: 14,
               background: "transparent",
-              color: "var(--h10-text)",
+              color: "var(--nds-text)",
             }}
           />
-          <kbd className="h10-ds-kbd">esc</kbd>
+          <kbd className="nds-kbd">esc</kbd>
         </div>
         <div style={{ maxHeight: 380, overflowY: "auto", padding: 8 }}>
           {flat.all.map((group) => (
@@ -161,7 +161,7 @@ export function CommandPalette() {
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
-                  color: "var(--h10-text-3)",
+                  color: "var(--nds-text-3)",
                   padding: "8px 10px 4px",
                 }}
               >
@@ -188,13 +188,13 @@ export function CommandPalette() {
                       fontSize: 13,
                       padding: "8px 10px",
                       borderRadius: 8,
-                      background: idx === cursor ? "var(--h10-wash-primary)" : "transparent",
-                      color: idx === cursor ? "var(--h10-primary)" : "var(--h10-text)",
+                      background: idx === cursor ? "var(--nds-wash-primary)" : "transparent",
+                      color: idx === cursor ? "var(--nds-primary)" : "var(--nds-text)",
                     }}
                   >
                     <span style={{ fontWeight: 600 }}>{item.label}</span>
                     {item.sublabel && (
-                      <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>{item.sublabel}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>{item.sublabel}</span>
                     )}
                   </button>
                 );
@@ -202,7 +202,7 @@ export function CommandPalette() {
             </div>
           ))}
           {q.trim().length >= 2 && flat.items.length === 0 && (
-            <div style={{ padding: 16, fontSize: 13, color: "var(--h10-text-3)" }}>
+            <div style={{ padding: 16, fontSize: 13, color: "var(--nds-text-3)" }}>
               Nothing found for “{q}”.
             </div>
           )}

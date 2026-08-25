@@ -25,7 +25,7 @@
  *    why.
  *
  * THE TRAP THIS FILE IS SHAPED AROUND. A popup rendered inside a grid cell is
- * clipped twice over: `.h10-ds-gridcard` is `overflow: hidden`, and a sticky
+ * clipped twice over: `.nds-gridcard` is `overflow: hidden`, and a sticky
  * cell opens its own stacking context that no `z-index` escapes. So the menu
  * portals to `document.body` and positions itself from the trigger's rect —
  * the proven pattern in `dayparting/ScheduleRowActions.tsx`. The actions column

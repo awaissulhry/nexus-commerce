@@ -148,7 +148,7 @@ npm run tokens:check                       # in sync
   one you read.
 - **RecMetrics `acos`/`ctr`/`cvr` are FRACTIONS** (0.31 = 31%); the suggestions grid's own metrics are already
   percent. Convert at ONE place and label it, or the dots/bands lie.
-- **Toast link verbs are `h10-am-link`** (the dark toast surface adapts it via `.h10-ds-toast .h10-am-link` in
+- **Toast link verbs are `h10-am-link`** (the dark toast surface adapts it via `.nds-toast .h10-am-link` in
   ads.css); undoable toasts pass `{ duration: 8000 }`.
 
 ## Environment

@@ -2,7 +2,7 @@
 /**
  * Raw-hex ratchet over app CSS — the demand side of the token system.
  *
- * Measured 2026-08-25: the design system SUPPLIES 206 `--h10-*` tokens and its own stylesheets are
+ * Measured 2026-08-25: the design system SUPPLIES 206 `--nds-*` tokens and its own stylesheets are
  * 100% tokenized (components.css 389 references / 0 literals, primitives 177/0, patterns 99/0),
  * enforced by design-system/tools/token-guard.mjs. The app CONSUMES almost none of it — 10,523 raw
  * hex against 1,170 token references, about 10%. The two heaviest files are the two the operator
@@ -16,7 +16,7 @@
  * stylesheet at a time, and a per-file number says exactly which one moved.
  *
  * A file with NO baseline entry is held at ZERO. That is the point rather than an oversight: new
- * CSS has no legacy to inherit, the tokens are already there, and `var(--h10-*)` costs the same to
+ * CSS has no legacy to inherit, the tokens are already there, and `var(--nds-*)` costs the same to
  * type as `#1f6fde`.
  *
  *   node scripts/check-css-hex-ratchet.mjs            # census
@@ -24,7 +24,7 @@
  *   node scripts/check-css-hex-ratchet.mjs --check    # non-zero exit if any file rose
  *
  * KNOWN LIMIT, stated rather than hidden: counts `#rgb` literals only. `rgba(16, 24, 40, 0.08)`
- * shadows are untokenized too and are NOT counted — `--h10-shadow-*` exists for them, and folding
+ * shadows are untokenized too and are NOT counted — `--nds-shadow-*` exists for them, and folding
  * them in would inflate every baseline without a conversion path being ready. A later pass can add
  * them as a second metric; pretending they are covered would be worse than saying they are not.
  */
@@ -103,8 +103,8 @@ if (mode === '--check') {
     for (const [f, was, now] of risen) {
       console.error(`   ${f}: ${was} → ${now}`);
       console.error(was === 0
-        ? '     New stylesheet — start it on tokens. 206 --h10-* tokens exist; see /DESIGN.md.'
-        : '     Replace the literal with a --h10-* token; this file is mid-conversion, not a free-for-all.');
+        ? '     New stylesheet — start it on tokens. 206 --nds-* tokens exist; see /DESIGN.md.'
+        : '     Replace the literal with a --nds-* token; this file is mid-conversion, not a free-for-all.');
     }
     process.exit(1);
   }

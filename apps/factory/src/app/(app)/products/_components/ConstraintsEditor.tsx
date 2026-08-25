@@ -48,19 +48,19 @@ export function ConstraintsEditor({ template, onChanged }: { template: TemplateD
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--h10-text-2)" }}>
+      <div style={{ fontSize: 12, color: "var(--nds-text-2)" }}>
         Constraints keep impossible combinations from being quoted. <b>Blocks</b> stop a quote; <b>Warns</b> only flag.
       </div>
-      {template.constraints.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No constraints yet.</div>}
+      {template.constraints.length === 0 && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No constraints yet.</div>}
       <div style={{ display: "grid", gap: 6 }}>
         {template.constraints.map((c) => (
-          <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "7px 10px", fontSize: 12.5 }}>
+          <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: "7px 10px", fontSize: 12.5 }}>
             <b>{optionLabel(template.optionGroups, c.ifOptionId)}</b>
             <Pill tone={c.type === "EXCLUDES" ? "danger" : "info"}>{c.type}</Pill>
             <b>{optionLabel(template.optionGroups, c.thenOptionId)}</b>
             <Pill tone={c.severity === "BLOCK" ? "warning" : "neutral"}>{c.severity === "BLOCK" ? "blocks" : "warns"}</Pill>
-            <span style={{ color: "var(--h10-text-2)", flex: 1 }}>“{c.message}”</span>
-            <button type="button" disabled={busy} title="Delete" onClick={() => call(() => apiFetch(`/api/products/constraints/${c.id}`, { method: "DELETE" }))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--h10-danger)", display: "inline-flex", padding: 2 }}>
+            <span style={{ color: "var(--nds-text-2)", flex: 1 }}>“{c.message}”</span>
+            <button type="button" disabled={busy} title="Delete" onClick={() => call(() => apiFetch(`/api/products/constraints/${c.id}`, { method: "DELETE" }))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--nds-danger)", display: "inline-flex", padding: 2 }}>
               <Trash2 size={13} />
             </button>
           </div>
@@ -68,7 +68,7 @@ export function ConstraintsEditor({ template, onChanged }: { template: TemplateD
       </div>
 
       {adding ? (
-        <div style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 12, display: "grid", gap: 8, background: "var(--h10-surface-raised)" }}>
+        <div style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 12, display: "grid", gap: 8, background: "var(--nds-surface-raised)" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Listbox ariaLabel="If option" options={[{ value: "", label: "If option…" }, ...allOptions]} value={ifOpt} onChange={setIfOpt} />
             <Listbox ariaLabel="Type" options={[{ value: "EXCLUDES", label: "excludes" }, { value: "REQUIRES", label: "requires" }]} value={type} onChange={(v) => setType(v as "REQUIRES" | "EXCLUDES")} />
@@ -79,7 +79,7 @@ export function ConstraintsEditor({ template, onChanged }: { template: TemplateD
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Explanation shown when this fires (e.g. 'Perforated panels can't take a waterproof liner')"
-            style={{ border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)" }}
+            style={{ border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 9px", fontSize: 12.5, outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)" }}
           />
           <div style={{ display: "flex", gap: 8 }}>
             <Button variant="primary" onClick={create} disabled={busy || !ifOpt || !thenOpt || !message.trim() || ifOpt === thenOpt}>Add constraint</Button>
@@ -91,7 +91,7 @@ export function ConstraintsEditor({ template, onChanged }: { template: TemplateD
           <Button onClick={() => setAdding(true)} disabled={allOptions.length < 2}>
             <Plus size={13} /> Add constraint
           </Button>
-          {allOptions.length < 2 && <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginLeft: 8 }}>Add at least two options first.</span>}
+          {allOptions.length < 2 && <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginLeft: 8 }}>Add at least two options first.</span>}
         </div>
       )}
     </div>

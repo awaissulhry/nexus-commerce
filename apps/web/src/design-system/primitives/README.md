@@ -13,6 +13,6 @@ during migration (Phase 9) — not duplicated.
 > **Phase 3 complete — all 14 primitives shipped:** `Button`, `Pill`, `Badge`,
 > `Input`, `Select`, `Checkbox`, `Toggle`, `Radio`, `RadioCard`, `Tooltip`,
 > `Spinner`, `Skeleton`, `Kbd`, `Divider` (+ `../styles/primitives.css`,
-> `.h10-ds-*`). Lucide is the icon standard (see `icons/`). The searchable/portal
+> `.nds-*`). Lucide is the icon standard (see `icons/`). The searchable/portal
 > dropdowns (MultiSelect/Combobox), the adaptive InfoTip, and the custom
 > builder-icons land in Phase 4 / the migration.

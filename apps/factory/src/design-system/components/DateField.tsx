@@ -38,7 +38,7 @@ function monthGrid(month: Date): Array<Date | null> {
 /**
  * Single-date calendar field with ZERO native browser chrome — the
  * replacement for `<input type="date">` (banned by the Wave-1 conformance
- * ratchet). Same `.h10-ds-dp-*` month-grid vocabulary as DateRangePicker,
+ * ratchet). Same `.nds-dp-*` month-grid vocabulary as DateRangePicker,
  * single month, min/max support, optional clear row. Wave 1 gap-fill
  * (2026-07-04).
  */
@@ -62,25 +62,25 @@ export function DateField({ value, onChange, min, max, placeholder = 'not set', 
   }
 
   return (
-    <div className={`h10-ds-datefield${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
-      <button type="button" className="h10-ds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
+    <div className={`nds-datefield${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+      <button type="button" className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
         <span className={value ? undefined : 'ph'}>{value ? fmt(value) : placeholder}</span>
         <Calendar size={14} className="chev" aria-hidden />
       </button>
       {open && (
-        <div className="h10-ds-dp-pop single" role="dialog" aria-label={ariaLabel ?? 'Pick a date'}>
-          <div className="h10-ds-dp-nav">
+        <div className="nds-dp-pop single" role="dialog" aria-label={ariaLabel ?? 'Pick a date'}>
+          <div className="nds-dp-nav">
             <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label="Previous month"><ChevronLeft size={15} /></button>
-            <div className="h10-ds-dp-mh">{monthLabel(view)}</div>
+            <div className="nds-dp-mh">{monthLabel(view)}</div>
             <button type="button" onClick={() => setView(addMonths(view, 1))} aria-label="Next month"><ChevronRight size={15} /></button>
           </div>
-          <div className="h10-ds-dp-month">
-            <div className="h10-ds-dp-grid">
-              {WEEKDAYS.map((w, i) => <div key={`wd-${i}`} className="h10-ds-dp-wd">{w}</div>)}
+          <div className="nds-dp-month">
+            <div className="nds-dp-grid">
+              {WEEKDAYS.map((w, i) => <div key={`wd-${i}`} className="nds-dp-wd">{w}</div>)}
               {monthGrid(view).map((day, i) => {
-                if (!day) return <span key={i} className="h10-ds-dp-day empty" />
+                if (!day) return <span key={i} className="nds-dp-day empty" />
                 const dis = (minD != null && day < minD) || (maxD != null && day > maxD)
-                const cls = ['h10-ds-dp-day', dis ? 'dis' : '', selected && sameDay(day, selected) ? 'start' : '', sameDay(day, today) ? 'today' : ''].filter(Boolean).join(' ')
+                const cls = ['nds-dp-day', dis ? 'dis' : '', selected && sameDay(day, selected) ? 'start' : '', sameDay(day, today) ? 'today' : ''].filter(Boolean).join(' ')
                 return (
                   <button key={i} type="button" className={cls} disabled={dis} onClick={() => { onChange(toIso(day)); setOpen(false) }}>
                     {day.getDate()}
@@ -90,7 +90,7 @@ export function DateField({ value, onChange, min, max, placeholder = 'not set', 
             </div>
           </div>
           {clearable && value && (
-            <div className="h10-ds-datefield-foot">
+            <div className="nds-datefield-foot">
               <button type="button" onClick={() => { onChange(''); setOpen(false) }}>{clearLabel}</button>
             </div>
           )}

@@ -308,7 +308,7 @@ its table hand-rolled in `portfolios.css`.
 3. **The DeliveryChip pattern is the precedent to extend**, not replace — it already communicates
    live/pending/failed/sandbox for bids in the rank cockpit. Structural verification should read as
    the same idea in the same visual language.
-4. **Watch the two known DS traps** if drawers or dropdowns are used: `.h10-ds-gridcard` has
+4. **Watch the two known DS traps** if drawers or dropdowns are used: `.nds-gridcard` has
    `overflow:hidden` and clips a dropdown's last option on short cards (hit-test, don't trust the
    DOM); and DS `Drawer` (z-61) sits above `Modal` (z-50), so any confirm inside a drawer must use
    the `Drawer overlay=` slot — `StudioConfirm` is the reference.

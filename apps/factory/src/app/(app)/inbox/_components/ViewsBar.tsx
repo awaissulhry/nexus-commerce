@@ -42,14 +42,14 @@ export function ViewsBar({
       display: "inline-flex",
       alignItems: "center",
       gap: 6,
-      border: "1px solid " + (active ? "var(--h10-primary)" : "var(--h10-border)"),
+      border: "1px solid " + (active ? "var(--nds-primary)" : "var(--nds-border)"),
       borderRadius: 999,
       padding: "4px 12px",
       fontSize: 12.5,
       fontWeight: 600,
       cursor: "pointer",
-      background: active ? "var(--h10-primary)" : "var(--h10-surface)",
-      color: active ? "#fff" : (color ?? "var(--h10-text-2)"),
+      background: active ? "var(--nds-primary)" : "var(--nds-surface)",
+      color: active ? "#fff" : (color ?? "var(--nds-text-2)"),
       whiteSpace: "nowrap",
     }) as const;
 
@@ -146,8 +146,8 @@ export function PointerMenu({
         top: Math.min(y, typeof window !== "undefined" ? window.innerHeight - 200 : y),
         zIndex: 900,
         minWidth: 200,
-        background: "var(--h10-surface)",
-        border: "1px solid var(--h10-border)",
+        background: "var(--nds-surface)",
+        border: "1px solid var(--nds-border)",
         borderRadius: 10,
         boxShadow: "0 8px 24px rgba(16,22,30,0.16)",
         padding: 4,
@@ -176,9 +176,9 @@ export function PointerMenuItem({ onSelect, children, danger }: { onSelect: () =
         borderRadius: 7,
         padding: "7px 10px",
         fontSize: 12.5,
-        color: danger ? "var(--h10-danger, #c4320a)" : "var(--h10-text)",
+        color: danger ? "var(--nds-danger, #c4320a)" : "var(--nds-text)",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--h10-surface-hover)")}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--nds-surface-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
     >
       {children}

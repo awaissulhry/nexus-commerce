@@ -547,7 +547,7 @@ select.rpt-input { height: 32px; }
 /* ── The totals row ─────────────────────────────────────────────────────
    R3 — the weight, the rule above it and the sunken fill all come from the shared grid now
    (`ads.css` → `.h10-am-grid tr.h10-am-total td`), so the private block that used to do it
-   here is gone. It was scoped to `.h10-ds-grid tr.totals`, the design-system grid's markup,
+   here is gone. It was scoped to `.nds-grid tr.totals`, the design-system grid's markup,
    which this page no longer renders — a rule that would simply have stopped applying with
    nothing to say so. All that is left is the label, which is this report's own wording:
    the total covers the whole result while the rows below show one page, and it says so. */

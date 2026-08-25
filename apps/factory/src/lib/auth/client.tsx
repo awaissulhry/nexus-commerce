@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [status, me, load]);
 
   if (status === "loading" && !isPublicPath(pathname)) {
-    return <div aria-busy="true" style={{ minHeight: "100dvh", background: "var(--h10-bg)" }} />;
+    return <div aria-busy="true" style={{ minHeight: "100dvh", background: "var(--nds-bg)" }} />;
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

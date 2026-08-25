@@ -28,19 +28,19 @@
   /* Pin the rail palette light so this deliberately-light shell (ads cockpit +
      /products/next) never inherits dark-mode rail colours. Only the app-wide
      rail (rendered outside .h10-shell) follows the app theme. */
-  --h10-rail-bg: #f1f3f5; --h10-rail-border: #e3e7ec;
-  --h10-rail-text: #4a5462; --h10-rail-text-2: #5b6573; --h10-rail-text-strong: #1c2530;
-  --h10-rail-icon: #8a93a1; --h10-rail-chev: #98a2b3;
-  --h10-rail-item-hover: #e6eaf0; --h10-rail-item-hover-2: #f1f4f8;
-  --h10-rail-chip-bg: #e8ebf0; --h10-rail-chip-active-bg: #dce8fb; --h10-rail-chip-active-fg: #1f6fde;
-  --h10-rail-ft: #aeb6c2;
+  --nds-rail-bg: #f1f3f5; --nds-rail-border: #e3e7ec;
+  --nds-rail-text: #4a5462; --nds-rail-text-2: #5b6573; --nds-rail-text-strong: #1c2530;
+  --nds-rail-icon: #8a93a1; --nds-rail-chev: #98a2b3;
+  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: #f1f4f8;
+  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: #1f6fde;
+  --nds-rail-ft: #aeb6c2;
   /* The rail rules also consume these (tokenized in the P1 rail refactor): the
-     active item background (--h10-primary), the nav count badge (--h10-danger),
-     and the hover-expand shadow (--h10-shadow-rail). Pin them here too — values
+     active item background (--nds-primary), the nav count badge (--nds-danger),
+     and the hover-expand shadow (--nds-shadow-rail). Pin them here too — values
      identical to .app-rail-host — so this standalone light shell never depends on
      tokens.css being loaded or on the app-wide .app-rail-host scope. */
-  --h10-primary: #1f6fde; --h10-danger: #e5484d; --h10-warning: #b87503;
-  --h10-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
+  --nds-primary: #1f6fde; --nds-danger: #e5484d; --nds-warning: #b87503;
+  --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
   color-scheme: light;
 }
 
@@ -52,24 +52,24 @@
    shells use the .h10-shell pin instead (always light), so this never affects
    them. TODO(P7): de-duplicate these values against tokens.css via a shared file. */
 .app-rail-host {
-  --h10-rail-bg: #f1f3f5; --h10-rail-border: #e3e7ec;
-  --h10-rail-text: #4a5462; --h10-rail-text-2: #5b6573; --h10-rail-text-strong: #1c2530;
-  --h10-rail-icon: #8a93a1; --h10-rail-chev: #98a2b3;
-  --h10-rail-item-hover: #e6eaf0; --h10-rail-item-hover-2: #f1f4f8;
-  --h10-rail-chip-bg: #e8ebf0; --h10-rail-chip-active-bg: #dce8fb; --h10-rail-chip-active-fg: #1f6fde;
-  --h10-rail-ft: #aeb6c2;
-  --h10-primary: #1f6fde; --h10-danger: #e5484d; --h10-warning: #b87503;
-  --h10-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
+  --nds-rail-bg: #f1f3f5; --nds-rail-border: #e3e7ec;
+  --nds-rail-text: #4a5462; --nds-rail-text-2: #5b6573; --nds-rail-text-strong: #1c2530;
+  --nds-rail-icon: #8a93a1; --nds-rail-chev: #98a2b3;
+  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: #f1f4f8;
+  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: #1f6fde;
+  --nds-rail-ft: #aeb6c2;
+  --nds-primary: #1f6fde; --nds-danger: #e5484d; --nds-warning: #b87503;
+  --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
 }
 .dark .app-rail-host {
-  --h10-rail-bg: #18263b; --h10-rail-border: #26323f;
-  --h10-rail-text: #aab6c2; --h10-rail-text-2: #97a3b1; --h10-rail-text-strong: #e7ebf1;
-  --h10-rail-icon: #8a94a6; --h10-rail-chev: #6f7b8b;
-  --h10-rail-item-hover: #223247; --h10-rail-item-hover-2: #1d2a3c;
-  --h10-rail-chip-bg: #243345; --h10-rail-chip-active-bg: #1d3a5f; --h10-rail-chip-active-fg: #cfe1fb;
-  --h10-rail-ft: #6f7b8b;
-  --h10-warning: #e0a82e;
-  --h10-shadow-rail: 8px 0 30px rgba(0, 0, 0, 0.35);
+  --nds-rail-bg: #18263b; --nds-rail-border: #26323f;
+  --nds-rail-text: #aab6c2; --nds-rail-text-2: #97a3b1; --nds-rail-text-strong: #e7ebf1;
+  --nds-rail-icon: #8a94a6; --nds-rail-chev: #6f7b8b;
+  --nds-rail-item-hover: #223247; --nds-rail-item-hover-2: #1d2a3c;
+  --nds-rail-chip-bg: #243345; --nds-rail-chip-active-bg: #1d3a5f; --nds-rail-chip-active-fg: #cfe1fb;
+  --nds-rail-ft: #6f7b8b;
+  --nds-warning: #e0a82e;
+  --nds-shadow-rail: 8px 0 30px rgba(0, 0, 0, 0.35);
 }
 .h10-main { flex: 1; min-width: 0; min-height: 0; padding: 26px 30px; overflow-y: auto; }
 
@@ -89,7 +89,7 @@
  * ACR.1.6 — the ads console is deliberately light. This is what makes that true.
  *
  * Operator decision 2026-08-05: no dark mode here. The shell already pinned its own chrome
- * (`--h10-rail-*` above) and set `color-scheme: light` — but it never pinned the DESIGN SYSTEM
+ * (`--nds-rail-*` above) and set `color-scheme: light` — but it never pinned the DESIGN SYSTEM
  * semantic tokens, and several ads pages (reporting, trust, suggestions, launch receipt) render
  * DS components that read them. So on `.dark` those pages drew slate-900 cards and slate-50 text
  * inside a shell whose own background is hard-coded #f4f6f9. Dark cards on a light page.
@@ -140,28 +140,28 @@
 
   /* The DS's own h10-* semantic aliases (tokens.css). Expressed through the primitive ramp,
      which the .dark block never touches, so there is one source of truth for the hex. */
-  --h10-text: var(--h10-grey-900);
-  --h10-text-2: var(--h10-grey-600);
-  --h10-text-3: var(--h10-grey-500);
-  --h10-text-disabled: var(--h10-grey-400);
-  --h10-text-inverse: var(--h10-white);
-  --h10-bg: var(--h10-grey-50);
-  --h10-surface: var(--h10-white);
-  --h10-surface-raised: var(--h10-grey-25);
-  --h10-surface-sunken: var(--h10-grey-100);
-  --h10-border: var(--h10-grey-200);
-  --h10-border-subtle: var(--h10-grey-150);
-  --h10-border-strong: var(--h10-grey-300);
+  --nds-text: var(--nds-grey-900);
+  --nds-text-2: var(--nds-grey-600);
+  --nds-text-3: var(--nds-grey-500);
+  --nds-text-disabled: var(--nds-grey-400);
+  --nds-text-inverse: var(--nds-white);
+  --nds-bg: var(--nds-grey-50);
+  --nds-surface: var(--nds-white);
+  --nds-surface-raised: var(--nds-grey-25);
+  --nds-surface-sunken: var(--nds-grey-100);
+  --nds-border: var(--nds-grey-200);
+  --nds-border-subtle: var(--nds-grey-150);
+  --nds-border-strong: var(--nds-grey-300);
 }
 .h10-rail {
   position: absolute; left: 0; top: 0; height: 100%;
   width: 66px; z-index: 50;
-  background: var(--h10-rail-bg); border-right: 1px solid var(--h10-rail-border);
+  background: var(--nds-rail-bg); border-right: 1px solid var(--nds-rail-border);
   display: flex; flex-direction: column;
   overflow: hidden;
   transition: width .18s ease, box-shadow .18s ease;
 }
-.h10-rail:hover { width: 344px; overflow-y: auto; box-shadow: var(--h10-shadow-rail); }
+.h10-rail:hover { width: 344px; overflow-y: auto; box-shadow: var(--nds-shadow-rail); }
 /* Pinned: render expanded like hover, but docked (reserves space via
    --rail-reserve, no floating shadow). Mirrors the hover reveals so labels,
    chevrons and chrome stay visible without an actual :hover. */
@@ -184,10 +184,10 @@
 /* brand: compact "N" mark when collapsed, full "Nexus Ads" wordmark on hover */
 .h10-brand { display: flex; align-items: center; gap: 12px; height: 66px; padding-left: 19px; flex-shrink: 0; }
 .h10-brandmark { position: relative; display: flex; flex-shrink: 0; }
-.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--h10-primary); color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--nds-primary); color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .h10-brand .word { white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; opacity: 0; transition: opacity .14s ease; }
-.h10-brand .word .mk { color: var(--h10-rail-text-strong); }
-.h10-brand .word b { color: var(--h10-primary); font-weight: 800; }
+.h10-brand .word .mk { color: var(--nds-rail-text-strong); }
+.h10-brand .word b { color: var(--nds-primary); font-weight: 800; }
 .h10-rail:hover .h10-brand .word { opacity: 1; }
 
 /* CH1 — active-channel chip on the brand mark's corner. Same badge idiom as
@@ -196,7 +196,7 @@
    underneath rather than a smudge on it. At 15px with a 4px offset it spans
    x 37->51 (53 with the ring) — comfortably inside the 66px collapsed rail, so
    it can never crop the way the old pill row did. */
-.h10-brandmark .chip { position: absolute; right: -4px; bottom: -4px; display: flex; line-height: 0; border-radius: 3px; box-shadow: 0 0 0 2px var(--h10-rail-bg); }
+.h10-brandmark .chip { position: absolute; right: -4px; bottom: -4px; display: flex; line-height: 0; border-radius: 3px; box-shadow: 0 0 0 2px var(--nds-rail-bg); }
 .h10-bmk { display: inline-flex; line-height: 0; }
 
 /* CH1 — channel switch: hidden at rest, fades in with the wordmark. The 19px
@@ -212,11 +212,11 @@
 /* 28px square tiles at the "N"'s own 7px radius, so the row reads as one family */
 .h10-chan { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; transition: background .12s ease; }
 .h10-chan .h10-bmk { opacity: .5; filter: grayscale(1); transition: opacity .12s ease, filter .12s ease; }
-.h10-chan:hover { background: var(--h10-rail-item-hover); }
+.h10-chan:hover { background: var(--nds-rail-item-hover); }
 .h10-chan:hover .h10-bmk { opacity: .85; filter: grayscale(.35); }
-.h10-chan.on { background: var(--h10-rail-chip-active-bg); }
+.h10-chan.on { background: var(--nds-rail-chip-active-bg); }
 .h10-chan.on .h10-bmk { opacity: 1; filter: none; }
-.h10-chan:focus-visible { outline: 2px solid var(--h10-primary); outline-offset: 2px; }
+.h10-chan:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
 
 /* CH1 — keyboard parity. The rail only ever opened on :hover, so once the channel
    switch became hover-only it would have been unreachable without a mouse — and it
@@ -229,7 +229,7 @@
    Kept as separate rules rather than comma-joined onto the :hover selectors above:
    a browser without :has() support drops the whole rule it appears in, and joining
    them would take the working mouse behaviour down with it. */
-.h10-rail:has(:focus-visible) { width: 344px; overflow-y: auto; box-shadow: var(--h10-shadow-rail); }
+.h10-rail:has(:focus-visible) { width: 344px; overflow-y: auto; box-shadow: var(--nds-shadow-rail); }
 .h10-rail:has(:focus-visible) .h10-brand .word { opacity: 1; }
 .h10-rail:has(:focus-visible) .h10-brand-switch { opacity: 1; pointer-events: auto; }
 .h10-rail:has(:focus-visible) .h10-item .lbl { opacity: 1; }
@@ -244,27 +244,27 @@
 /* No overflow:hidden here — it clipped the count badge in the collapsed rail.
    Horizontal clipping of labels is already handled by the rail's own
    overflow:hidden (the rail keeps overflow-x:hidden even when hovered). */
-.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--h10-rail-text); text-decoration: none; transition: background .12s, color .12s; }
+.h10-item { position: relative; display: flex; align-items: center; height: 46px; margin: 1px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--nds-rail-text); text-decoration: none; transition: background .12s, color .12s; }
 /* F1 — pending-suggestions count badge (over the icon top-right; visible collapsed + expanded) */
 /* Positioned over the icon's top-right corner. left:29 + max width ("99+",
    ~25px) + 2px ring lands at ~64px — inside the 66px collapsed rail, so the
    full count is always visible. */
-.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--h10-danger); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--h10-rail-bg); z-index: 1; }
-.h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px var(--h10-primary); }
+.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--nds-danger); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--nds-rail-bg); z-index: 1; }
+.h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px var(--nds-primary); }
 .h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
-.h10-item .ico svg { color: var(--h10-rail-icon); transition: color .12s; }
+.h10-item .ico svg { color: var(--nds-rail-icon); transition: color .12s; }
 .h10-item .lbl { white-space: nowrap; margin-left: 10px; opacity: 0; transition: opacity .14s ease; }
 .h10-rail:hover .h10-item .lbl { opacity: 1; }
-.h10-item:hover { background: var(--h10-rail-item-hover); color: var(--h10-rail-text-strong); }
-.h10-item:hover .ico svg { color: var(--h10-rail-text-2); }
-.h10-item.on { background: var(--h10-primary); color: #fff; }
+.h10-item:hover { background: var(--nds-rail-item-hover); color: var(--nds-rail-text-strong); }
+.h10-item:hover .ico svg { color: var(--nds-rail-text-2); }
+.h10-item.on { background: var(--nds-primary); color: #fff; }
 .h10-item.on .ico svg { color: #fff; }
 /* Section-active: you're on a child of this parent. A subtle blue wash + blue
    icon/label (distinct from the solid-fill exact-active), so the collapsed icon
    still signals which section you're in. */
-.h10-item.section { background: var(--h10-rail-chip-active-bg); color: var(--h10-rail-chip-active-fg); }
-.h10-item.section .ico svg { color: var(--h10-rail-chip-active-fg); }
-.h10-item.section .chev { color: var(--h10-rail-chip-active-fg); }
+.h10-item.section { background: var(--nds-rail-chip-active-bg); color: var(--nds-rail-chip-active-fg); }
+.h10-item.section .ico svg { color: var(--nds-rail-chip-active-fg); }
+.h10-item.section .chev { color: var(--nds-rail-chip-active-fg); }
 /* the active item is ONLY a blue fill + white text — same font size/weight as every
    other item (H10 does not enlarge or embolden the selection) */
 /* collapsible parents (AMC, Reporting) are <button> toggles — strip native button
@@ -278,10 +278,10 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    centres 25px from the item's left edge (50px ico zone); the 16px chevron box gets
    margin-right:17px so its centre lands 25px from the right edge (8 + 17 = 25). Both
    affordances are therefore equidistant from their borders — never eyeball one side. */
-.h10-item .chev { margin-left: auto; margin-right: 17px; flex-shrink: 0; color: var(--h10-rail-chev); opacity: 0; transition: opacity .14s ease, transform .18s ease; }
-.h10-item .ext { margin-left: 8px; flex-shrink: 0; color: var(--h10-rail-chev); opacity: 0; transition: opacity .14s ease; }
+.h10-item .chev { margin-left: auto; margin-right: 17px; flex-shrink: 0; color: var(--nds-rail-chev); opacity: 0; transition: opacity .14s ease, transform .18s ease; }
+.h10-item .ext { margin-left: 8px; flex-shrink: 0; color: var(--nds-rail-chev); opacity: 0; transition: opacity .14s ease; }
 .h10-rail:hover .h10-item .chev, .h10-rail:hover .h10-item .ext { opacity: 1; }
-.h10-item:hover .chev, .h10-item:hover .ext { color: var(--h10-rail-text-2); }
+.h10-item:hover .chev, .h10-item:hover .ext { color: var(--nds-rail-text-2); }
 .h10-item.on .chev { color: #fff; }
 .h10-item .chev.open { transform: rotate(180deg); }
 
@@ -301,15 +301,15 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 
 .h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 60px; padding-right: 8px; }
 .h10-rail:not(:hover):not(.pinned) .h10-sub { display: none; }
-.h10-subitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12.5px; color: var(--h10-rail-text-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
-.h10-subitem:hover { background: var(--h10-rail-item-hover-2); color: var(--h10-rail-text-strong); }
-.h10-subitem.on { color: var(--h10-primary); font-weight: 600; }
+.h10-subitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12.5px; color: var(--nds-rail-text-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+.h10-subitem:hover { background: var(--nds-rail-item-hover-2); color: var(--nds-rail-text-strong); }
+.h10-subitem.on { color: var(--nds-primary); font-weight: 600; }
 .h10-subitem .sublbl { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* trailing status indicators (action/warning dots, disconnected "Connect") */
 .h10-dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
-.h10-dot.action { background: var(--h10-danger); }
-.h10-dot.warning { background: var(--h10-warning); }
+.h10-dot.action { background: var(--nds-danger); }
+.h10-dot.warning { background: var(--nds-warning); }
 /* The dot is the ONLY trailing element with margin-left:auto, so it pushes the
    whole trailing cluster right. When a chevron follows, it hugs the dot with a
    fixed gap (NOT another auto margin — two autos would split the free space and
@@ -318,7 +318,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-item .h10-dot:last-child { margin-right: 16px; }
 .h10-item .h10-dot + .chev { margin-left: 6px; }
 .h10-subitem .h10-dot { margin-left: auto; }
-.h10-connect { margin-left: auto; font-size: 11px; color: var(--h10-rail-text-2); opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
+.h10-connect { margin-left: auto; font-size: 11px; color: var(--nds-rail-text-2); opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
 .h10-item .h10-connect { margin-right: 16px; }
 .h10-item .h10-connect + .chev { margin-left: 6px; }
 .h10-rail:hover .h10-connect { opacity: 1; }
@@ -333,54 +333,54 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    same height as a plain .h10-subitem. */
 .h10-subitem.h10-subparent { display: flex; align-items: center; padding: 0; }
 .h10-subparent .subname { flex: 1 1 auto; min-width: 0; padding: 6px 4px 6px 10px; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.h10-subparent.on .subname { color: var(--h10-primary); font-weight: 600; }
-.subchev-btn { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 4px; border-radius: 6px; color: var(--h10-rail-chev); }
-.subchev-btn:hover { background: var(--h10-rail-item-hover); color: var(--h10-rail-text-2); }
+.h10-subparent.on .subname { color: var(--nds-primary); font-weight: 600; }
+.subchev-btn { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 4px; border-radius: 6px; color: var(--nds-rail-chev); }
+.subchev-btn:hover { background: var(--nds-rail-item-hover); color: var(--nds-rail-text-2); }
 .subchev { transition: transform .18s ease; }
 .subchev.open { transform: rotate(180deg); }
 /* market list — indented one notch past the channel, with a faint tree line */
-.h10-subsub { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 4px 12px; padding-left: 8px; border-left: 1px solid var(--h10-rail-border); }
-.h10-subsubitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; color: var(--h10-rail-text-2); text-decoration: none; padding: 5px 9px; border-radius: 6px; }
-.h10-subsubitem:hover { background: var(--h10-rail-item-hover-2); color: var(--h10-rail-text-strong); }
-.h10-subsubitem.on { color: var(--h10-primary); font-weight: 600; }
-.h10-subsubitem .mcode { flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: .02em; background: var(--h10-rail-chip-bg); color: var(--h10-rail-text-2); padding: 1px 5px; border-radius: 4px; }
-.h10-subsubitem.on .mcode { background: var(--h10-rail-chip-active-bg); color: var(--h10-rail-chip-active-fg); }
+.h10-subsub { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 4px 12px; padding-left: 8px; border-left: 1px solid var(--nds-rail-border); }
+.h10-subsubitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; color: var(--nds-rail-text-2); text-decoration: none; padding: 5px 9px; border-radius: 6px; }
+.h10-subsubitem:hover { background: var(--nds-rail-item-hover-2); color: var(--nds-rail-text-strong); }
+.h10-subsubitem.on { color: var(--nds-primary); font-weight: 600; }
+.h10-subsubitem .mcode { flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: .02em; background: var(--nds-rail-chip-bg); color: var(--nds-rail-text-2); padding: 1px 5px; border-radius: 4px; }
+.h10-subsubitem.on .mcode { background: var(--nds-rail-chip-active-bg); color: var(--nds-rail-chip-active-fg); }
 .h10-subsubitem .mname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* "See all N markets" — a muted button styled like a market row. */
-.h10-subsubitem.h10-seeall { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; width: 100%; font-family: inherit; color: var(--h10-rail-text-2); padding-left: 10px; }
-.h10-subsubitem.h10-seeall:hover { background: var(--h10-rail-item-hover-2); color: var(--h10-rail-text-strong); }
+.h10-subsubitem.h10-seeall { appearance: none; -webkit-appearance: none; border: 0; background: transparent; cursor: pointer; width: 100%; font-family: inherit; color: var(--nds-rail-text-2); padding-left: 10px; }
+.h10-subsubitem.h10-seeall:hover { background: var(--nds-rail-item-hover-2); color: var(--nds-rail-text-strong); }
 .h10-subsubitem.h10-seeall .mname { font-size: 11.5px; }
 
-.h10-railft { white-space: nowrap; font-size: 10px; color: var(--h10-rail-ft); padding: 12px 16px 16px; opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
+.h10-railft { white-space: nowrap; font-size: 10px; color: var(--nds-rail-ft); padding: 12px 16px 16px; opacity: 0; transition: opacity .14s ease; flex-shrink: 0; }
 
 /* ── Rail chrome (header: controls + workspace; footer: recently-viewed + user).
    Text-heavy, so only shown when the rail is expanded (hover/pinned). ── */
 .h10-railhdr-wrap { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; flex-shrink: 0; }
 .h10-rail:not(:hover):not(.pinned) .h10-railhdr-wrap { display: none; }
 .h10-railctl { display: flex; align-items: center; gap: 4px; }
-.h10-railbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent; color: var(--h10-rail-text-2); cursor: pointer; transition: background .12s, color .12s; }
-.h10-railbtn:hover { background: var(--h10-rail-item-hover); color: var(--h10-rail-text-strong); }
-.h10-ws { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 7px 10px; border: 1px solid var(--h10-rail-border); border-radius: 8px; background: transparent; cursor: pointer; text-align: left; transition: background .12s; }
-.h10-ws:hover { background: var(--h10-rail-item-hover); }
+.h10-railbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent; color: var(--nds-rail-text-2); cursor: pointer; transition: background .12s, color .12s; }
+.h10-railbtn:hover { background: var(--nds-rail-item-hover); color: var(--nds-rail-text-strong); }
+.h10-ws { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 7px 10px; border: 1px solid var(--nds-rail-border); border-radius: 8px; background: transparent; cursor: pointer; text-align: left; transition: background .12s; }
+.h10-ws:hover { background: var(--nds-rail-item-hover); }
 .h10-ws-txt { display: flex; flex-direction: column; min-width: 0; }
-.h10-ws-txt .nm { font-size: 13px; font-weight: 600; color: var(--h10-rail-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.h10-ws-txt .sub { font-size: 11px; color: var(--h10-rail-text-2); }
-.h10-ws-chev { color: var(--h10-rail-text-2); flex-shrink: 0; }
+.h10-ws-txt .nm { font-size: 13px; font-weight: 600; color: var(--nds-rail-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h10-ws-txt .sub { font-size: 11px; color: var(--nds-rail-text-2); }
+.h10-ws-chev { color: var(--nds-rail-text-2); flex-shrink: 0; }
 
-.h10-railft-wrap { flex-shrink: 0; border-top: 1px solid var(--h10-rail-border); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.h10-railft-wrap { flex-shrink: 0; border-top: 1px solid var(--nds-rail-border); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .h10-rail:not(:hover):not(.pinned) .h10-railft-wrap { display: none; }
-.h10-recent-hd { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--h10-rail-text-2); padding: 2px; }
-.h10-recent-hd:hover { color: var(--h10-rail-text-strong); }
+.h10-recent-hd { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--nds-rail-text-2); padding: 2px; }
+.h10-recent-hd:hover { color: var(--nds-rail-text-strong); }
 .h10-recent-chev { transition: transform .18s ease; flex-shrink: 0; }
 .h10-recent-chev.open { transform: rotate(180deg); }
 .h10-recent-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; max-height: 168px; overflow-y: auto; }
-.h10-recent-empty { font-size: 12px; color: var(--h10-rail-text-2); padding: 2px; }
-.h10-recent-link { display: block; font-size: 12.5px; color: var(--h10-rail-text-2); text-decoration: none; padding: 3px 2px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.h10-recent-link:hover { color: var(--h10-rail-text-strong); background: var(--h10-rail-item-hover-2); }
+.h10-recent-empty { font-size: 12px; color: var(--nds-rail-text-2); padding: 2px; }
+.h10-recent-link { display: block; font-size: 12.5px; color: var(--nds-rail-text-2); text-decoration: none; padding: 3px 2px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h10-recent-link:hover { color: var(--nds-rail-text-strong); background: var(--nds-rail-item-hover-2); }
 .h10-user { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; cursor: pointer; padding: 6px 4px; border-radius: 8px; text-align: left; transition: background .12s; }
-.h10-user:hover { background: var(--h10-rail-item-hover); }
-.h10-user-av { width: 28px; height: 28px; border-radius: 999px; background: var(--h10-rail-item-hover); color: var(--h10-rail-text-strong); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.h10-user:hover { background: var(--nds-rail-item-hover); }
+.h10-user-av { width: 28px; height: 28px; border-radius: 999px; background: var(--nds-rail-item-hover); color: var(--nds-rail-text-strong); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
 .h10-user-txt { display: flex; flex-direction: column; min-width: 0; }
-.h10-user-txt .nm { font-size: 13px; font-weight: 600; color: var(--h10-rail-text-strong); }
-.h10-user-txt .sub { font-size: 11px; color: var(--h10-rail-text-2); }
+.h10-user-txt .nm { font-size: 13px; font-weight: 600; color: var(--nds-rail-text-strong); }
+.h10-user-txt .sub { font-size: 11px; color: var(--nds-rail-text-2); }
 .h10-rail:hover .h10-railft { opacity: 1; }

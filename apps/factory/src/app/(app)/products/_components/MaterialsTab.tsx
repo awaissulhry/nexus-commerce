@@ -89,23 +89,23 @@ export function MaterialsTab() {
         {canManage && <Button onClick={() => setImporting(true)}><Upload size={13} /> Import CSV</Button>}
         {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New material</Button>}
       </div>
-      <div style={{ fontSize: 12, color: "var(--h10-text-3)", marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: "var(--nds-text-3)", marginBottom: 10 }}>
         Catalog only — leather by hide/m², linings, armor, thread. Lots, the movement ledger, purchase
         orders and stock levels arrive on the full Materials page (FP7). CSV import lands in FP2.5.
       </div>
       {loading ? (
-        <div style={{ fontSize: 13, color: "var(--h10-text-3)" }}>Loading…</div>
+        <div style={{ fontSize: 13, color: "var(--nds-text-3)" }}>Loading…</div>
       ) : rows.length === 0 ? (
-        <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--h10-text-3)" }}>No materials yet.</div>
+        <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--nds-text-3)" }}>No materials yet.</div>
       ) : (
         <DataGrid
           columns={[
             { key: "name", label: "Material", render: (m: MaterialRow) => <b>{m.name}</b> },
             { key: "unit", label: "Unit", render: (m: MaterialRow) => m.unit },
             ...(canCost ? [{ key: "cost", label: "Cost / unit", render: (m: MaterialRow) => (canManage ? <EuroInput cents={m.costCents} onCommit={(c) => void editCost(m, c)} ariaLabel={`${m.name} cost`} width={78} /> : eur(m.costCents)) }] : []),
-            { key: "used", label: "Used by", align: "right" as const, render: (m: MaterialRow) => (m.usedByTemplates > 0 ? <Pill tone="info">{m.usedByTemplates} template{m.usedByTemplates > 1 ? "s" : ""}</Pill> : <span style={{ color: "var(--h10-text-3)" }}>—</span>) },
+            { key: "used", label: "Used by", align: "right" as const, render: (m: MaterialRow) => (m.usedByTemplates > 0 ? <Pill tone="info">{m.usedByTemplates} template{m.usedByTemplates > 1 ? "s" : ""}</Pill> : <span style={{ color: "var(--nds-text-3)" }}>—</span>) },
             { key: "reorder", label: "Reorder at", render: (m: MaterialRow) => (m.reorderLevel != null ? `${m.reorderLevel} ${m.unit}` : "—") },
-            ...(canManage ? [{ key: "act", label: "", render: (m: MaterialRow) => <button type="button" onClick={() => void remove(m)} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", fontSize: 12 }}>Delete</button> }] : []),
+            ...(canManage ? [{ key: "act", label: "", render: (m: MaterialRow) => <button type="button" onClick={() => void remove(m)} style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", fontSize: 12 }}>Delete</button> }] : []),
           ]}
           rows={rows}
           rowKey={(m: MaterialRow) => m.id}

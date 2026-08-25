@@ -56,7 +56,7 @@ export const MAX_PLOTTED = 6
 
 /**
  * Categorical line colours, taken from the console's own status ramp (`ads.css`) rather than
- * invented: the blue is `--h10-primary`, the green `--h10-success-strong`, the red and amber the
+ * invented: the blue is `--nds-primary`, the green `--nds-success-strong`, the red and amber the
  * danger/warning strongs. Ordered so the first two — the ones that get a labelled axis — are the
  * furthest apart. Every one clears 3:1 against the white card these sit on, which is the bar for
  * a graphical object; hue is never the only cue, because the legend and tooltip both name them.

@@ -1,6 +1,6 @@
 /**
  * FS3 — VirtualDataGrid: the DS DataGrid's exact prop surface + markup/classes
- * (`.h10-ds-grid-wrap` / `.h10-ds-grid` — visual parity by construction) with
+ * (`.nds-grid-wrap` / `.nds-grid` — visual parity by construction) with
  * WINDOWED rows via @tanstack/react-virtual, so a 10k-row feed keeps a bounded
  * DOM. `height` is required and acts as the scroll bound (maxHeight semantics:
  * short data collapses to content exactly like the DS grid). Sort is memoized;
@@ -149,10 +149,10 @@ export function VirtualDataGrid<T>({
   return (
     <div
       ref={wrapRef}
-      className={`h10-ds-grid-wrap${className ? ` ${className}` : ""}`}
+      className={`nds-grid-wrap${className ? ` ${className}` : ""}`}
       style={{ maxHeight: maxHeight ?? height }}
     >
-      <table className="h10-ds-grid">
+      <table className="nds-grid">
         <thead>
           <tr>
             {selectable && (
@@ -189,7 +189,7 @@ export function VirtualDataGrid<T>({
         <tbody>
           {sortedRows.length === 0 ? (
             <tr>
-              <td className="h10-ds-grid-empty" colSpan={colSpan}>
+              <td className="nds-grid-empty" colSpan={colSpan}>
                 {emptyState ?? "No rows."}
               </td>
             </tr>

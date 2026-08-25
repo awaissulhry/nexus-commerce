@@ -38,9 +38,9 @@ mkdirSync(dist, { recursive: true });
 // file (tools/generate-tokens-css.ts), not a package.
 //
 // A generated Tailwind shim used to sit between patterns.css and a11y.css: the
-// DS had two components styled with Tailwind utilities instead of .h10-ds-*,
+// DS had two components styled with Tailwind utilities instead of .nds-*,
 // so they shipped unstyled to anything without the app's Tailwind build. The
-// repo fixed that at source (.h10-ds-tbtn* / .h10-ds-tdivider / .h10-ds-cgm-*),
+// repo fixed that at source (.nds-tbtn* / .nds-tdivider / .nds-cgm-*),
 // which left the shim emitting only Tailwind's unconditional preamble. Removed.
 const parts = [
   ['tokens.css', join(dsStyles, 'tokens.css')],

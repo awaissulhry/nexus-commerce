@@ -66,7 +66,7 @@ for (const c of cards) {
         if (!cell) return 0;
         // focus, never click: a click inside a file:// card can submit a form
         // and destroy the execution context mid-check.
-        const t = cell.querySelector('input:not([type=checkbox]):not([type=radio]), [role=combobox], button.h10-ds-tbtn, .h10-ds-tooltip > *:first-child, .h10-ds-hovercard > *:first-child, button');
+        const t = cell.querySelector('input:not([type=checkbox]):not([type=radio]), [role=combobox], button.nds-tbtn, .nds-tooltip > *:first-child, .nds-hovercard > *:first-child, button');
         if (!(t instanceof HTMLElement)) return 0;
         t.focus();
         return 1;
@@ -166,7 +166,7 @@ for (const c of cards) {
     if (!opened && width === WIDTHS[0]) {
       const hasOverlay = await page.evaluate(() => !!document.querySelector(
         '[role=combobox], [role=listbox], [role=menu], [role=dialog], [aria-haspopup],' +
-        '.h10-ds-tooltip, .h10-ds-hovercard, [class*="-pop"], [class*="-menu"], [class*="-drop"]',
+        '.nds-tooltip, .nds-hovercard, [class*="-pop"], [class*="-menu"], [class*="-drop"]',
       ));
       // A card whose overlay renders already-open (Modal, Drawer, PreferencesModal)
       // has no trigger to focus and needs none — its panel was inspected. Only a

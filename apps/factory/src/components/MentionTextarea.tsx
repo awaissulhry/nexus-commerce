@@ -143,11 +143,11 @@ export function MentionTextarea({
         onBlur={() => setTimeout(() => setToken(null), 150) /* let a popover click land first */}
       />
       {open && (
-        <div className="h10-ds-combo-pop" role="listbox" style={{ top: "100%" }}>
+        <div className="nds-combo-pop" role="listbox" style={{ top: "100%" }}>
           {search.loading ? (
-            <div className="h10-ds-combo-empty">Searching…</div>
+            <div className="nds-combo-empty">Searching…</div>
           ) : search.options.length === 0 ? (
-            <div className="h10-ds-combo-empty">No matches</div>
+            <div className="nds-combo-empty">No matches</div>
           ) : (
             <>
               {search.options.map((o, i) => (
@@ -156,7 +156,7 @@ export function MentionTextarea({
                   type="button"
                   role="option"
                   aria-selected={i === active}
-                  style={i === active ? { background: "var(--h10-surface-hover)" } : undefined}
+                  style={i === active ? { background: "var(--nds-surface-hover)" } : undefined}
                   onMouseEnter={() => setActive(i)}
                   onMouseDown={(e) => e.preventDefault() /* keep textarea focus */}
                   onClick={() => pick(o)}
@@ -166,7 +166,7 @@ export function MentionTextarea({
                 </button>
               ))}
               {search.nextCursor && (
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => controller.loadMore()} disabled={search.loadingMore} style={{ color: "var(--h10-primary)", fontWeight: 600 }}>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => controller.loadMore()} disabled={search.loadingMore} style={{ color: "var(--nds-primary)", fontWeight: 600 }}>
                   {search.loadingMore ? "Loading…" : "Load more"}
                 </button>
               )}

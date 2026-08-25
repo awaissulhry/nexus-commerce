@@ -75,23 +75,23 @@ export function TeamClient() {
     <div className="factory-page factory-grid-grow-1">
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Team &amp; roles</h1>
-        <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>Invite people, set who can do what. The last owner is protected; system roles are locked.</div>
+        <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginTop: 2 }}>Invite people, set who can do what. The last owner is protected; system roles are locked.</div>
       </div>
 
       <section style={{ marginBottom: 24 }}>
         <SectionHead title="Members" count={memberCount ?? members.length} />
         {memberCount != null && memberCount > members.length && (
-          <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 6 }}>Showing the first {members.length} of {memberCount} members by join date.</div>
+          <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 6 }}>Showing the first {members.length} of {memberCount} members by join date.</div>
         )}
         <VirtualDataGrid
           height="min(56dvh, 560px)"
           columns={[
-            { key: "name", label: "Name", render: (m: Member) => <span><b>{m.displayName}</b>{m.isYou && <span style={{ color: "var(--h10-text-3)" }}> · you</span>}</span> },
+            { key: "name", label: "Name", render: (m: Member) => <span><b>{m.displayName}</b>{m.isYou && <span style={{ color: "var(--nds-text-3)" }}> · you</span>}</span> },
             { key: "email", label: "Email", render: (m: Member) => m.email },
             { key: "role", label: "Role", render: (m: Member) => <div style={{ maxWidth: 180 }}><Listbox ariaLabel="Role" options={roleOpts} value={m.roleId ?? ""} onChange={(v) => void reassign(m.id, v)} /></div> },
-            { key: "last", label: "Last login", render: (m: Member) => <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>{dmy(m.lastLoginAt)}</span> },
+            { key: "last", label: "Last login", render: (m: Member) => <span style={{ fontSize: 12, color: "var(--nds-text-3)" }}>{dmy(m.lastLoginAt)}</span> },
             { key: "status", label: "Status", render: (m: Member) => (m.lockedUntil && new Date(m.lockedUntil).getTime() > Date.now() ? <Pill tone="warning">locked</Pill> : m.status === "active" ? <Pill tone="success">active</Pill> : <Pill tone="neutral">deactivated</Pill>) }, // FS4 — login lockout visible to the Owner
-            { key: "act", label: "", align: "right" as const, render: (m: Member) => (m.isYou ? null : m.status === "active" ? <Button onClick={() => void setStatus(m.id, "deactivated")} style={{ color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}>Deactivate</Button> : <Button onClick={() => void setStatus(m.id, "active")}>Reactivate</Button>) },
+            { key: "act", label: "", align: "right" as const, render: (m: Member) => (m.isYou ? null : m.status === "active" ? <Button onClick={() => void setStatus(m.id, "deactivated")} style={{ color: "var(--nds-danger)", borderColor: "var(--nds-danger)" }}>Deactivate</Button> : <Button onClick={() => void setStatus(m.id, "active")}>Reactivate</Button>) },
           ]}
           rows={members}
           rowKey={(m: Member) => m.id}
@@ -107,21 +107,21 @@ export function TeamClient() {
           <Button variant="primary" onClick={sendInvite} disabled={busy}><UserPlus size={13} /> Invite</Button>
         </div>
         {joinUrl && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", border: "1px solid var(--h10-primary)", borderRadius: 8, background: "var(--h10-primary-subtle, #eff4ff)", marginBottom: 10, fontSize: 12.5 }}>
-            <span style={{ color: "var(--h10-text-2)" }}>Share this one-time link:</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", border: "1px solid var(--nds-primary)", borderRadius: 8, background: "var(--nds-primary-subtle, #eff4ff)", marginBottom: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--nds-text-2)" }}>Share this one-time link:</span>
             <code style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "ui-monospace, monospace" }}>{joinUrl}</code>
-            <button type="button" onClick={copy} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><Copy size={13} /> Copy</button>
+            <button type="button" onClick={copy} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><Copy size={13} /> Copy</button>
           </div>
         )}
         {invites.length === 0 ? (
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No pending invitations.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No pending invitations.</div>
         ) : (
           <div style={{ display: "grid", gap: 5 }}>
             {invites.map((iv) => (
-              <div key={iv.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
+              <div key={iv.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
                 <span style={{ flex: 1 }}><b>{iv.email}</b> · {iv.roleName}</span>
-                <span style={{ color: "var(--h10-text-3)", fontSize: 11 }}>expires {dmy(iv.expiresAt)}</span>
-                <button type="button" onClick={() => void revoke(iv.id)} aria-label="Revoke" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-3)", display: "grid", placeItems: "center" }}><X size={14} /></button>
+                <span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>expires {dmy(iv.expiresAt)}</span>
+                <button type="button" onClick={() => void revoke(iv.id)} aria-label="Revoke" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-3)", display: "grid", placeItems: "center" }}><X size={14} /></button>
               </div>
             ))}
           </div>
@@ -135,11 +135,11 @@ export function TeamClient() {
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           {rolesFull.map((r) => (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
-              <Shield size={14} style={{ color: "var(--h10-text-3)" }} />
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
+              <Shield size={14} style={{ color: "var(--nds-text-3)" }} />
               <span style={{ fontWeight: 700 }}>{r.name}</span>
               {r.isSystem ? <Pill tone="neutral"><Lock size={10} style={{ marginRight: 3 }} />system</Pill> : <Pill tone="info">custom</Pill>}
-              <span style={{ color: "var(--h10-text-3)" }}>{r.isSystem && r.key === "OWNER" ? "all permissions" : `${r.permissions.length} permission${r.permissions.length === 1 ? "" : "s"}`} · {r.memberCount} member{r.memberCount === 1 ? "" : "s"}</span>
+              <span style={{ color: "var(--nds-text-3)" }}>{r.isSystem && r.key === "OWNER" ? "all permissions" : `${r.permissions.length} permission${r.permissions.length === 1 ? "" : "s"}`} · {r.memberCount} member{r.memberCount === 1 ? "" : "s"}</span>
               {!r.isSystem && (
                 <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6 }}>
                   <button type="button" onClick={() => setEditing(r)} aria-label="Edit role" style={iconBtn}><Pencil size={13} /></button>
@@ -183,20 +183,20 @@ function RoleMatrixModal({ role, catalog, onClose, onSaved }: { role: RoleFull |
   return (
     <Modal open={!!role} onClose={onClose} title={editing ? `Edit role — ${editing.name}` : "New role"} size="md" footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save} disabled={busy}>{editing ? "Save" : "Create role"}</Button></>}>
       <div style={{ display: "grid", gap: 14 }}>
-        <div><div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 }}>Role name</div><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Shipper" /></div>
+        <div><div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 }}>Role name</div><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Shipper" /></div>
         {catalog.map((g) => {
           const on = g.items.filter((it) => perms.has(it.key)).length;
           return (
             <div key={g.module}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{g.label}</span>
-                <button type="button" onClick={() => toggleGroup(g, on < g.items.length)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--h10-text-link)" }}>{on < g.items.length ? "select all" : "clear"}</button>
+                <button type="button" onClick={() => toggleGroup(g, on < g.items.length)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--nds-text-link)" }}>{on < g.items.length ? "select all" : "clear"}</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 4 }}>
                 {g.items.map((it) => (
                   <label key={it.key} style={{ display: "flex", gap: 7, alignItems: "center", fontSize: 12, padding: "3px 4px", cursor: "pointer" }}>
-                    <input type="checkbox" checked={perms.has(it.key)} onChange={() => toggle(it.key)} style={{ accentColor: "var(--h10-primary)" }} />
-                    <span style={{ color: "var(--h10-text-2)" }}>{it.label}</span>
+                    <input type="checkbox" checked={perms.has(it.key)} onChange={() => toggle(it.key)} style={{ accentColor: "var(--nds-primary)" }} />
+                    <span style={{ color: "var(--nds-text-2)" }}>{it.label}</span>
                   </label>
                 ))}
               </div>
@@ -208,8 +208,8 @@ function RoleMatrixModal({ role, catalog, onClose, onSaved }: { role: RoleFull |
   );
 }
 
-const iconBtn: React.CSSProperties = { background: "none", border: "1px solid var(--h10-border)", borderRadius: 6, cursor: "pointer", color: "var(--h10-text-3)", padding: 4, display: "grid", placeItems: "center" };
+const iconBtn: React.CSSProperties = { background: "none", border: "1px solid var(--nds-border)", borderRadius: 6, cursor: "pointer", color: "var(--nds-text-3)", padding: 4, display: "grid", placeItems: "center" };
 
 function SectionHead({ title, count }: { title: string; count: number }) {
-  return <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontSize: 13, fontWeight: 700 }}><span>{title}</span><span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--h10-text-3)", background: "var(--h10-surface-2)", borderRadius: 20, padding: "1px 8px" }}>{count}</span></div>;
+  return <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontSize: 13, fontWeight: 700 }}><span>{title}</span><span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--nds-text-3)", background: "var(--nds-surface-2)", borderRadius: 20, padding: "1px 8px" }}>{count}</span></div>;
 }

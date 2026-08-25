@@ -14,7 +14,7 @@ const cardStyle: React.CSSProperties = {
   padding: '12px 14px',
   background: 'var(--surface-card)',
   border: '1px solid var(--border-default)',
-  borderRadius: 'var(--h10-radius-lg)',
+  borderRadius: 'var(--nds-radius-lg)',
 }
 
 /** Text placeholders: uneven widths so the block reads as prose, not as a bar chart. */

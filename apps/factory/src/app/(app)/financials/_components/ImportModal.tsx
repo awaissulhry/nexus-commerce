@@ -17,7 +17,7 @@ import { apiJson } from "@/lib/api-client";
 import type { BankProposal, ImportApplyResponse, ImportResponse } from "./types";
 
 const CONF_TONE: Record<string, "success" | "info" | "neutral"> = { high: "success", medium: "info", none: "neutral" };
-const note: React.CSSProperties = { fontSize: 12, color: "var(--h10-text-3)", lineHeight: 1.5 };
+const note: React.CSSProperties = { fontSize: 12, color: "var(--nds-text-3)", lineHeight: 1.5 };
 
 type Phase = "input" | "review" | "confirm" | "result";
 
@@ -82,7 +82,7 @@ export function ImportModal({ open, canPay, onClose, onApplied }: { open: boolea
     <Modal open={open} onClose={phase === "result" ? onApplied : onClose} title="Import bank CSV" size="md" footer={footer}>
       {phase === "input" && (
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>
             Drop a statement file or paste rows — a header naming <b>date</b>, <b>amount</b>, <b>description</b> columns.
             We propose matches by reference or amount; <b>nothing is recorded until you apply</b>.
           </div>
@@ -94,11 +94,11 @@ export function ImportModal({ open, canPay, onClose, onApplied }: { open: boolea
       {phase === "review" && proposals && (
         <div style={{ display: "grid", gap: 6 }}>
           {proposals.map((p, i) => (
-            <label key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 8px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5, opacity: p.orderId ? 1 : 0.6 }}>
-              <input type="checkbox" disabled={!p.orderId} checked={!!pick[i]} onChange={(e) => setPick((s) => ({ ...s, [i]: e.target.checked }))} style={{ accentColor: "var(--h10-primary)" }} />
+            <label key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 8px", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, fontSize: 12.5, opacity: p.orderId ? 1 : 0.6 }}>
+              <input type="checkbox" disabled={!p.orderId} checked={!!pick[i]} onChange={(e) => setPick((s) => ({ ...s, [i]: e.target.checked }))} style={{ accentColor: "var(--nds-primary)" }} />
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.row.description || "(no description)"}</span>
-              <span style={{ color: "var(--h10-text-3)", whiteSpace: "nowrap" }}>{p.row.date || "no date"} · {eur(p.row.amountCents ?? 0)}</span>
-              {p.number ? <span style={{ color: "var(--h10-text-link)", fontWeight: 600 }}>{p.number}</span> : <span style={{ color: "var(--h10-text-3)", fontSize: 11.5 }}>{p.reason}</span>}
+              <span style={{ color: "var(--nds-text-3)", whiteSpace: "nowrap" }}>{p.row.date || "no date"} · {eur(p.row.amountCents ?? 0)}</span>
+              {p.number ? <span style={{ color: "var(--nds-text-link)", fontWeight: 600 }}>{p.number}</span> : <span style={{ color: "var(--nds-text-3)", fontSize: 11.5 }}>{p.reason}</span>}
               {/* EPF1 (D-10) — settled-order references are flagged, not silently re-proposed */}
               {p.zeroBalance && <Pill tone="warning">already settled</Pill>}
               <Pill tone={CONF_TONE[p.confidence]}>{p.confidence === "none" ? "no match" : p.confidence}</Pill>
@@ -113,7 +113,7 @@ export function ImportModal({ open, canPay, onClose, onApplied }: { open: boolea
 
       {phase === "confirm" && (
         <div style={{ display: "grid", gap: 8 }} data-testid="import-confirm">
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", lineHeight: 1.5 }}>
             Records <b>{selected.length} payment(s)</b> totalling <b>{eur(selected.reduce((s, p) => s + (p.amountCents ?? 0), 0))}</b> against their matched orders — bank dates become the payment dates,
             deposits that complete a gate unblock the floor, and every row is audited. Rows already imported (same fingerprint) are skipped, over-balance rows are refused per row.
           </div>
@@ -130,7 +130,7 @@ export function ImportModal({ open, canPay, onClose, onApplied }: { open: boolea
           {result.errors.length > 0 && (
             <div style={{ display: "grid", gap: 4 }}>
               {result.errors.map((e) => (
-                <div key={e.index} style={{ fontSize: 12, color: "var(--h10-danger)" }}>Row {e.index + 1}: {e.reason}</div>
+                <div key={e.index} style={{ fontSize: 12, color: "var(--nds-danger)" }}>Row {e.index + 1}: {e.reason}</div>
               ))}
             </div>
           )}

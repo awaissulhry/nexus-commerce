@@ -68,8 +68,8 @@ export function Builder({ open, onClose, title, sections, primaryLabel = 'Save',
   if (!open || typeof document === 'undefined') return null
 
   return createPortal(
-    <div className={`h10-ds-builder${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true">
-      <div className="h10-ds-builder-top">
+    <div className={`nds-builder${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true">
+      <div className="nds-builder-top">
         <button type="button" className="x" onClick={onClose} aria-label="Close">
           <X size={18} />
         </button>
@@ -81,17 +81,17 @@ export function Builder({ open, onClose, title, sections, primaryLabel = 'Save',
           </Button>
         )}
       </div>
-      <div className="h10-ds-builder-body">
-        <nav className="h10-ds-builder-nav">
+      <div className="nds-builder-body">
+        <nav className="nds-builder-nav">
           {sections.map((s) => (
-            <button key={s.id} type="button" className={['h10-ds-builder-navitem', s.id === active ? 'on' : ''].filter(Boolean).join(' ')} onClick={() => goTo(s.id)}>
+            <button key={s.id} type="button" className={['nds-builder-navitem', s.id === active ? 'on' : ''].filter(Boolean).join(' ')} onClick={() => goTo(s.id)}>
               {s.label}
             </button>
           ))}
         </nav>
-        <div className="h10-ds-builder-content" ref={contentRef}>
+        <div className="nds-builder-content" ref={contentRef}>
           {sections.map((s) => (
-            <section key={s.id} id={`bsec-${s.id}`} className="h10-ds-builder-section">
+            <section key={s.id} id={`bsec-${s.id}`} className="nds-builder-section">
               {s.title != null && <h3>{s.title}</h3>}
               {s.content}
             </section>

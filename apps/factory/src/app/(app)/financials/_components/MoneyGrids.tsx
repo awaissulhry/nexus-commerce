@@ -14,7 +14,7 @@ import { VirtualDataGrid } from "@/components/VirtualDataGrid";
 import type { DepositRow, OrderFin, PartyAgg, PeriodAgg } from "./types";
 
 export const money = (c?: number) => (c == null ? "—" : eur(c));
-const drillBtn: React.CSSProperties = { background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" };
+const drillBtn: React.CSSProperties = { background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" };
 const GRID_H = "calc(100dvh - 396px)";
 
 /** EPF2 (D-08 close) — skeleton rows on first load; the false empty-state flash is dead. */
@@ -35,7 +35,7 @@ export function MarginCell({ r }: { r: OrderFin }) {
   return (
     <span style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
       <span style={{ fontVariantNumeric: "tabular-nums" }}>
-        {eur(cents)} <span style={{ color: "var(--h10-text-3)" }}>{pctv != null ? `${pctv.toFixed(0)}%` : ""}</span>
+        {eur(cents)} <span style={{ color: "var(--nds-text-3)" }}>{pctv != null ? `${pctv.toFixed(0)}%` : ""}</span>
       </span>
       <Pill tone={r.actualIsPending ? "neutral" : "info"}>{r.actualIsPending ? "est" : "actual"}</Pill>
     </span>
@@ -49,7 +49,7 @@ export function OrdersGrid({ rows, canMargin, onOpen }: { rows: OrderFin[]; canM
       columns={[
         { key: "number", label: "Order", render: (r: OrderFin) => <button type="button" onClick={() => onOpen(r.orderId)} style={drillBtn}>{r.number}</button> },
         { key: "party", label: "Customer", render: (r: OrderFin) => r.partyName },
-        { key: "state", label: "State", render: (r: OrderFin) => <span style={{ fontSize: 12, color: "var(--h10-text-3)" }}>{r.state.replace(/_/g, " ").toLowerCase()}</span> },
+        { key: "state", label: "State", render: (r: OrderFin) => <span style={{ fontSize: 12, color: "var(--nds-text-3)" }}>{r.state.replace(/_/g, " ").toLowerCase()}</span> },
         { key: "quoted", label: "Quoted", align: "right" as const, render: (r: OrderFin) => money(r.quotedNetCents) },
         { key: "invoiced", label: "Invoiced", align: "right" as const, render: (r: OrderFin) => money(r.invoicedCents) },
         { key: "paid", label: "Paid", align: "right" as const, render: (r: OrderFin) => money(r.paidCents) },
@@ -57,7 +57,7 @@ export function OrdersGrid({ rows, canMargin, onOpen }: { rows: OrderFin[]; canM
           key: "balance", label: "Balance", align: "right" as const,
           render: (r: OrderFin) =>
             r.balanceCents === 0 ? <Pill tone="success">paid</Pill> : (
-              <span style={{ color: (r.balanceCents ?? 0) > 0 ? "var(--h10-warning-text, var(--h10-text))" : "var(--h10-text)", fontWeight: 600 }}>{money(r.balanceCents)}</span>
+              <span style={{ color: (r.balanceCents ?? 0) > 0 ? "var(--nds-warning-text, var(--nds-text))" : "var(--nds-text)", fontWeight: 600 }}>{money(r.balanceCents)}</span>
             ),
         },
         ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: OrderFin) => <MarginCell r={r} /> }] : []),
@@ -117,7 +117,7 @@ export function DepositsGrid({ rows, onOpen }: { rows: DepositRow[]; onOpen: (id
         { key: "party", label: "Customer", render: (r: DepositRow) => r.partyName },
         { key: "req", label: "Deposit required", align: "right" as const, sortable: true, sortValue: (r: DepositRow) => r.depositRequiredCents ?? 0, render: (r: DepositRow) => money(r.depositRequiredCents) },
         { key: "paid", label: "Paid", align: "right" as const, sortable: true, sortValue: (r: DepositRow) => r.depositPaidCents ?? 0, render: (r: DepositRow) => money(r.depositPaidCents) },
-        { key: "short", label: "Shortfall", align: "right" as const, sortable: true, sortValue: (r: DepositRow) => r.shortfallCents ?? 0, render: (r: DepositRow) => <span style={{ color: "var(--h10-danger)", fontWeight: 600 }}>{money(r.shortfallCents)}</span> },
+        { key: "short", label: "Shortfall", align: "right" as const, sortable: true, sortValue: (r: DepositRow) => r.shortfallCents ?? 0, render: (r: DepositRow) => <span style={{ color: "var(--nds-danger)", fontWeight: 600 }}>{money(r.shortfallCents)}</span> },
         {
           key: "blocked", label: "Blocked WOs", align: "right" as const,
           render: (r: DepositRow) =>

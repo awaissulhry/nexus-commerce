@@ -59,7 +59,7 @@ export function BomEditor({ template, onChanged }: { template: TemplateDetail; o
   };
 
   if (materials.length === 0) {
-    return <div style={{ fontSize: 13, color: "var(--h10-text-2)" }}>Add materials in the <b>Materials</b> tab first — BOM lines point at them.</div>;
+    return <div style={{ fontSize: 13, color: "var(--nds-text-2)" }}>Add materials in the <b>Materials</b> tab first — BOM lines point at them.</div>;
   }
   const matOptions = [{ value: "", label: "Choose material…" }, ...materials.map((m) => ({ value: m.id, label: `${m.name} (${m.unit})` }))];
 
@@ -67,13 +67,13 @@ export function BomEditor({ template, onChanged }: { template: TemplateDetail; o
     <div style={{ display: "grid", gap: 18 }}>
       <section>
         <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Base BOM</div>
-        <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 8 }}>Materials every unit needs, whatever options are chosen.</div>
+        <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 8 }}>Materials every unit needs, whatever options are chosen.</div>
         <div style={{ display: "grid", gap: 6 }}>
           {base.map((line, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <Listbox ariaLabel="Material" options={matOptions} value={line.materialId} onChange={(v) => setBase((b) => b.map((x, j) => (j === i ? { ...x, materialId: v } : x)))} />
               <input type="number" step="0.01" min="0" value={line.qty} onChange={(e) => setBase((b) => b.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)))} style={numStyle} aria-label="Quantity" />
-              <span style={{ fontSize: 12, color: "var(--h10-text-3)", width: 40 }}>{unitOf(line.materialId)}</span>
+              <span style={{ fontSize: 12, color: "var(--nds-text-3)", width: 40 }}>{unitOf(line.materialId)}</span>
               <button type="button" onClick={() => setBase((b) => b.filter((_, j) => j !== i))} style={delBtn}><Trash2 size={13} /></button>
             </div>
           ))}
@@ -86,7 +86,7 @@ export function BomEditor({ template, onChanged }: { template: TemplateDetail; o
 
       <section>
         <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Per-option draws</div>
-        <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 8 }}>Extra materials a specific option consumes (e.g. Kangaroo → kangaroo hide). Saved per option.</div>
+        <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 8 }}>Extra materials a specific option consumes (e.g. Kangaroo → kangaroo hide). Saved per option.</div>
         <div style={{ display: "grid", gap: 8 }}>
           {options.map(({ group, o }) => (
             <OptionDraws key={o.id} label={`${group}: ${o.name}`} option={o} matOptions={matOptions} unitOf={unitOf} onSave={(draws) => saveDraws(o, draws)} busy={busy} />
@@ -109,7 +109,7 @@ function OptionDraws({ label, option, matOptions, unitOf, onSave, busy }: {
   const dirty = JSON.stringify(draws) !== JSON.stringify(option.materialDraws?.map((d) => ({ materialId: d.materialId, qty: d.qty })) ?? []);
 
   return (
-    <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "8px 10px" }}>
+    <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: "8px 10px" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: draws.length ? 6 : 0 }}>
         <b style={{ fontSize: 12.5, flex: 1 }}>{label}</b>
         {draws.length === 0 && <button type="button" onClick={() => setDraws([{ materialId: "", qty: 1 }])} style={addSmall}><Plus size={11} /> draw</button>}
@@ -118,7 +118,7 @@ function OptionDraws({ label, option, matOptions, unitOf, onSave, busy }: {
         <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
           <Listbox ariaLabel="Material" options={matOptions} value={d.materialId} onChange={(v) => setDraws((x) => x.map((y, j) => (j === i ? { ...y, materialId: v } : y)))} />
           <input type="number" step="0.01" min="0" value={d.qty} onChange={(e) => setDraws((x) => x.map((y, j) => (j === i ? { ...y, qty: Number(e.target.value) } : y)))} style={numStyle} aria-label="Quantity" />
-          <span style={{ fontSize: 12, color: "var(--h10-text-3)", width: 40 }}>{unitOf(d.materialId)}</span>
+          <span style={{ fontSize: 12, color: "var(--nds-text-3)", width: 40 }}>{unitOf(d.materialId)}</span>
           <button type="button" onClick={() => setDraws((x) => x.filter((_, j) => j !== i))} style={delBtn}><Trash2 size={12} /></button>
         </div>
       ))}
@@ -132,6 +132,6 @@ function OptionDraws({ label, option, matOptions, unitOf, onSave, busy }: {
   );
 }
 
-const numStyle: React.CSSProperties = { width: 70, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono), monospace", textAlign: "right", background: "var(--h10-surface)", color: "var(--h10-text)" };
-const delBtn: React.CSSProperties = { border: "none", background: "none", cursor: "pointer", color: "var(--h10-danger)", display: "inline-flex", padding: 2 };
-const addSmall: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 3, border: "1px dashed var(--h10-border)", borderRadius: 6, background: "none", cursor: "pointer", fontSize: 11, padding: "2px 7px", color: "var(--h10-text-2)" };
+const numStyle: React.CSSProperties = { width: 70, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "4px 6px", font: "12.5px var(--font-mono), monospace", textAlign: "right", background: "var(--nds-surface)", color: "var(--nds-text)" };
+const delBtn: React.CSSProperties = { border: "none", background: "none", cursor: "pointer", color: "var(--nds-danger)", display: "inline-flex", padding: 2 };
+const addSmall: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 3, border: "1px dashed var(--nds-border)", borderRadius: 6, background: "none", cursor: "pointer", fontSize: 11, padding: "2px 7px", color: "var(--nds-text-2)" };

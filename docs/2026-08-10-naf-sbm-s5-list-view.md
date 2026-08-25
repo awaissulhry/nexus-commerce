@@ -169,7 +169,7 @@ table still throws it away.
 | last column | **"It feeds"** |
 | cut by | **175px** |
 
-They are reachable — `.h10-ds-grid-wrap` is `overflow-x: auto` — but a
+They are reachable — `.nds-grid-wrap` is `overflow-x: auto` — but a
 horizontal scroll nested inside a vertically scrolling page is where the *reason
 this view exists* now lives at narrow widths.
 
@@ -186,7 +186,7 @@ the table gives it a differently-coloured word at the far left.
 
 ### 1.6 · Focus, and what is already right
 
-- **No focus rule exists** for `.h10-ds-grid` or `.sbm-list*` — grepped every
+- **No focus rule exists** for `.nds-grid` or `.sbm-list*` — grepped every
   stylesheet. Same gap S4.f closed in the inspector rail; the UA ring is the
   only affordance.
 - **Sorting is largely correct already**, which is worth saying because it is the

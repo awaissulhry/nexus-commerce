@@ -72,11 +72,11 @@ export function ImageUpload({ value, onChange, onUpload, label, criteria, accept
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDrag(false); void handle(e.dataTransfer.files?.[0]) }
 
   return (
-    <div className={`h10-ds-imgup${className ? ` ${className}` : ''}`}>
-      {label && <span className="h10-ds-imgup-lbl">{label}</span>}
-      <div className="h10-ds-imgup-row">
+    <div className={`nds-imgup${className ? ` ${className}` : ''}`}>
+      {label && <span className="nds-imgup-lbl">{label}</span>}
+      <div className="nds-imgup-row">
         {value ? (
-          <div className="h10-ds-imgup-preview" style={{ aspectRatio: aspect }}>
+          <div className="nds-imgup-preview" style={{ aspectRatio: aspect }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={value} alt={label || 'Uploaded image'} />
             {!disabled && <button type="button" className="rm" onClick={() => { onChange(null); setErr('') }} aria-label="Remove image"><X size={14} /></button>}
@@ -84,7 +84,7 @@ export function ImageUpload({ value, onChange, onUpload, label, criteria, accept
         ) : (
           <button
             type="button"
-            className={`h10-ds-imgup-zone ${drag ? 'drag' : ''} ${busy ? 'busy' : ''}`}
+            className={`nds-imgup-zone ${drag ? 'drag' : ''} ${busy ? 'busy' : ''}`}
             style={{ aspectRatio: aspect }}
             onClick={() => inputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); if (!disabled) setDrag(true) }}
@@ -93,20 +93,20 @@ export function ImageUpload({ value, onChange, onUpload, label, criteria, accept
             disabled={disabled}
             aria-label={label ? `Upload ${label}` : 'Upload image'}
           >
-            {busy ? <span className="h10-ds-imgup-spin" aria-hidden /> : <UploadCloud size={22} aria-hidden />}
+            {busy ? <span className="nds-imgup-spin" aria-hidden /> : <UploadCloud size={22} aria-hidden />}
             <span className="t">{busy ? 'Uploading…' : 'Upload Image'}</span>
             {!busy && <span className="d">Drag &amp; drop or click</span>}
           </button>
         )}
         {criteria && criteria.length > 0 && (
-          <div className="h10-ds-imgup-crit">
+          <div className="nds-imgup-crit">
             <span className="h">Criteria</span>
             {criteria.map((c) => <span className="c" key={c.label}><b>{c.label}:</b> {c.value}</span>)}
           </div>
         )}
       </div>
-      {!value && onSelectFromAssets && <button type="button" className="h10-ds-imgup-assets" onClick={onSelectFromAssets} disabled={disabled}>or Select from Assets</button>}
-      {err && <span className="h10-ds-imgup-err"><ImageOff size={13} /> {err}</span>}
+      {!value && onSelectFromAssets && <button type="button" className="nds-imgup-assets" onClick={onSelectFromAssets} disabled={disabled}>or Select from Assets</button>}
+      {err && <span className="nds-imgup-err"><ImageOff size={13} /> {err}</span>}
     </div>
   )
 }

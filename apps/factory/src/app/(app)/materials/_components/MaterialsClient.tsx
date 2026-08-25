@@ -89,9 +89,9 @@ export function MaterialsClient() {
     <div className="factory-page factory-grid-grow-1">
       <PageHeader eyebrow="Factory OS" title="Materials" subtitle="The ledger's face: In stock · Committed · Expected · Available — every number a derived truth with a paper trail." />
       <Card padded>
-        <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--h10-border-subtle)" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--nds-border-subtle)" }}>
           {(["materials", "po"] as const).map((v) => (
-            <button key={v} type="button" onClick={() => setView(v)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "8px 12px", color: view === v ? "var(--h10-primary)" : "var(--h10-text-2)", borderBottom: view === v ? "2px solid var(--h10-primary)" : "2px solid transparent", marginBottom: -1 }}>{v === "materials" ? "Materials" : "Purchase orders"}</button>
+            <button key={v} type="button" onClick={() => setView(v)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "8px 12px", color: view === v ? "var(--nds-primary)" : "var(--nds-text-2)", borderBottom: view === v ? "2px solid var(--nds-primary)" : "2px solid transparent", marginBottom: -1 }}>{v === "materials" ? "Materials" : "Purchase orders"}</button>
           ))}
         </div>
         {view === "po" ? (
@@ -99,25 +99,25 @@ export function MaterialsClient() {
         ) : (
         <>
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setLowOnly((v) => !v)} style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", background: lowOnly ? "var(--h10-primary)" : "var(--h10-surface)", color: lowOnly ? "#fff" : "var(--h10-text-2)" }}><SlidersHorizontal size={12} /> Low / short</button>
+          <button type="button" onClick={() => setLowOnly((v) => !v)} style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", background: lowOnly ? "var(--nds-primary)" : "var(--nds-surface)", color: lowOnly ? "#fff" : "var(--nds-text-2)" }}><SlidersHorizontal size={12} /> Low / short</button>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <a href="/api/exports/ledger" style={{ fontSize: 12, color: "var(--h10-text-link)" }}>Export ledger</a>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search material…" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--h10-surface)", color: "var(--h10-text)", minWidth: 200 }} />
+            <a href="/api/exports/ledger" style={{ fontSize: 12, color: "var(--nds-text-link)" }}>Export ledger</a>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search material…" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 9px", fontSize: 12.5, outline: "none", background: "var(--nds-surface)", color: "var(--nds-text)", minWidth: 200 }} />
             {canManage && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New material</Button>}
           </div>
         </div>
         <DataGrid
           columns={[
-            { key: "name", label: "Material", render: (m: MaterialRow) => <button type="button" onClick={() => open(m.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{m.name}</button> },
-            { key: "unit", label: "Unit", render: (m: MaterialRow) => <span style={{ color: "var(--h10-text-3)" }}>{m.unit.toLowerCase()}</span> },
+            { key: "name", label: "Material", render: (m: MaterialRow) => <button type="button" onClick={() => open(m.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{m.name}</button> },
+            { key: "unit", label: "Unit", render: (m: MaterialRow) => <span style={{ color: "var(--nds-text-3)" }}>{m.unit.toLowerCase()}</span> },
             { key: "inStock", label: "In stock", align: "right" as const, render: (m: MaterialRow) => num(m.inStock) },
             { key: "committed", label: "Committed", align: "right" as const, render: (m: MaterialRow) => (m.committed ? num(m.committed) : "—") },
-            { key: "expected", label: "Expected", align: "right" as const, render: (m: MaterialRow) => (m.expected ? <span style={{ color: "var(--h10-text-2)" }}>+{num(m.expected)}</span> : "—") },
-            { key: "available", label: "Available", align: "right" as const, render: (m: MaterialRow) => <b style={{ color: m.short ? "var(--h10-danger)" : m.low ? "var(--h10-warning, #9a6700)" : "var(--h10-text)" }}>{num(m.available)}</b> },
+            { key: "expected", label: "Expected", align: "right" as const, render: (m: MaterialRow) => (m.expected ? <span style={{ color: "var(--nds-text-2)" }}>+{num(m.expected)}</span> : "—") },
+            { key: "available", label: "Available", align: "right" as const, render: (m: MaterialRow) => <b style={{ color: m.short ? "var(--nds-danger)" : m.low ? "var(--nds-warning, #9a6700)" : "var(--nds-text)" }}>{num(m.available)}</b> },
             { key: "reorder", label: "Reorder", render: (m: MaterialRow) => {
-              const chip = m.short ? <Pill tone="danger">short</Pill> : m.low ? <Pill tone="warning">low</Pill> : m.reorderLevel != null ? <span style={{ color: "var(--h10-text-3)" }}>@{num(m.reorderLevel)}</span> : "—";
+              const chip = m.short ? <Pill tone="danger">short</Pill> : m.low ? <Pill tone="warning">low</Pill> : m.reorderLevel != null ? <span style={{ color: "var(--nds-text-3)" }}>@{num(m.reorderLevel)}</span> : "—";
               const gap = m.short ? Math.max(1, Math.ceil(m.committed - m.inStock)) : m.reorderLevel != null ? Math.max(1, Math.ceil(m.reorderLevel - m.available)) : 1;
-              return <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>{chip}{(m.short || m.low) && canManage && <button type="button" onClick={() => { setBuyPrefill({ materialId: m.id, qty: gap }); setView("po"); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-link)", fontWeight: 600 }}>+ Buy</button>}</span>;
+              return <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>{chip}{(m.short || m.low) && canManage && <button type="button" onClick={() => { setBuyPrefill({ materialId: m.id, qty: gap }); setView("po"); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--nds-text-link)", fontWeight: 600 }}>+ Buy</button>}</span>;
             } },
             ...(canCost ? [{ key: "cost", label: "Cost", align: "right" as const, render: (m: MaterialRow) => (m.costCents != null ? `${eur(m.costCents)}/${m.unit.toLowerCase()}` : "—") }] : []),
           ]}
@@ -142,7 +142,7 @@ export function MaterialsClient() {
 
       <Modal open={!!adjust} onClose={() => setAdjust(null)} title={`Adjust ${adjust?.name ?? ""}`} size="sm" footer={<><Button onClick={() => setAdjust(null)}>Cancel</Button><Button variant="primary" onClick={submitAdjust} disabled={!adjReason.trim() || busy}>Record adjustment</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>A signed adjustment (use − to reduce) with a reason — appended to the ledger, never an edit.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>A signed adjustment (use − to reduce) with a reason — appended to the ledger, never an edit.</div>
           <div><div style={lbl}>Quantity {adjust ? `(${adjust.unit.toLowerCase()})` : ""}</div><input type="number" step="0.01" value={adjQty} onChange={(e) => setAdjQty(e.target.value)} placeholder="e.g. -2 or 5" style={inp} /></div>
           <div><div style={lbl}>Reason</div><input value={adjReason} onChange={(e) => setAdjReason(e.target.value)} placeholder="stock count correction" style={inp} /></div>
         </div>
@@ -153,40 +153,40 @@ export function MaterialsClient() {
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
               {([["In stock", detail.stock.inStock], ["Committed", detail.stock.committed], ["Expected", detail.stock.expected], ["Available", detail.stock.available]] as const).map(([k, v]) => (
-                <div key={k} style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "8px 10px" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: k === "Available" && detail.stock.short ? "var(--h10-danger)" : undefined }}>{num(v)}</div>
-                  <div style={{ fontSize: 10.5, color: "var(--h10-text-3)" }}>{k}</div>
+                <div key={k} style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: k === "Available" && detail.stock.short ? "var(--nds-danger)" : undefined }}>{num(v)}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--nds-text-3)" }}>{k}</div>
                 </div>
               ))}
             </div>
             {canAdjust && <Button onClick={() => { setAdjust({ id: detail.material.id, name: detail.material.name, unit: detail.material.unit } as MaterialRow); setAdjQty(""); setAdjReason(""); }}>Adjust stock</Button>}
             {canCost && canManage && detail.material.costCents != null && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-                <span style={{ color: "var(--h10-text-3)" }}>Supplier cost / {detail.material.unit.toLowerCase()}</span>
+                <span style={{ color: "var(--nds-text-3)" }}>Supplier cost / {detail.material.unit.toLowerCase()}</span>
                 <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>€<input type="number" step="0.01" defaultValue={(detail.material.costCents / 100).toFixed(2)} onBlur={(e) => void editCost(e.target.value)} style={{ ...inp, width: 90, textAlign: "right", fontFamily: "ui-monospace, monospace" }} /></span>
               </div>
             )}
-            {ripple && <div style={{ padding: 10, background: "var(--h10-wash-warning, #fdf3d3)", borderRadius: 8, fontSize: 12, color: "var(--h10-warning, #9a6700)" }}>Cost changed — <b>{ripple.templates} template{ripple.templates === 1 ? "" : "s"}</b>{ripple.quotes ? <> and <b>{ripple.quotes} open quote{ripple.quotes === 1 ? "" : "s"}</b></> : ""} reference this. Review their pricing.</div>}
-            {detail.whereUsed.length > 0 && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Used in: {detail.whereUsed.map((t) => t.name).join(" · ")}</div>}
+            {ripple && <div style={{ padding: 10, background: "var(--nds-wash-warning, #fdf3d3)", borderRadius: 8, fontSize: 12, color: "var(--nds-warning, #9a6700)" }}>Cost changed — <b>{ripple.templates} template{ripple.templates === 1 ? "" : "s"}</b>{ripple.quotes ? <> and <b>{ripple.quotes} open quote{ripple.quotes === 1 ? "" : "s"}</b></> : ""} reference this. Review their pricing.</div>}
+            {detail.whereUsed.length > 0 && <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Used in: {detail.whereUsed.map((t) => t.name).join(" · ")}</div>}
             <div style={{ display: "flex", gap: 4 }}>
-              {(["movements", "lots"] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} style={{ border: "none", background: tab === t ? "var(--h10-primary)" : "transparent", color: tab === t ? "#fff" : "var(--h10-text-2)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{t === "movements" ? "Movements" : `Lots (${detail.lots.length})`}</button>)}
+              {(["movements", "lots"] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} style={{ border: "none", background: tab === t ? "var(--nds-primary)" : "transparent", color: tab === t ? "#fff" : "var(--nds-text-2)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{t === "movements" ? "Movements" : `Lots (${detail.lots.length})`}</button>)}
             </div>
             {tab === "movements" ? (
               <div style={{ display: "grid", gap: 4 }}>
-                {detail.movements.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No movements yet.</div>}
+                {detail.movements.length === 0 && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No movements yet.</div>}
                 {detail.movements.map((m) => (
-                  <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--h10-border-subtle)", fontSize: 12.5 }}>
-                    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><Pill tone={MOVE_TONE[m.type]}>{m.type}</Pill><span style={{ color: "var(--h10-text-3)" }}>{m.reason ?? m.refType ?? ""}</span></span>
-                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><span style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600 }}>{m.type === "OUT" ? "−" : m.type === "IN" ? "+" : ""}{num(Math.abs(m.qty))}</span><span style={{ color: "var(--h10-text-3)", fontSize: 11 }}>{new Date(m.at).toLocaleDateString()}</span></span>
+                  <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--nds-border-subtle)", fontSize: 12.5 }}>
+                    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><Pill tone={MOVE_TONE[m.type]}>{m.type}</Pill><span style={{ color: "var(--nds-text-3)" }}>{m.reason ?? m.refType ?? ""}</span></span>
+                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><span style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600 }}>{m.type === "OUT" ? "−" : m.type === "IN" ? "+" : ""}{num(Math.abs(m.qty))}</span><span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>{new Date(m.at).toLocaleDateString()}</span></span>
                   </div>
                 ))}
               </div>
             ) : (
               <div style={{ display: "grid", gap: 6 }}>
-                {detail.lots.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No lots — received stock lands here as batches.</div>}
+                {detail.lots.length === 0 && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No lots — received stock lands here as batches.</div>}
                 {detail.lots.map((l) => (
-                  <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--h10-border-subtle)", fontSize: 12.5 }}>
-                    <span><b>{l.lotCode}</b>{l.supplier ? <span style={{ color: "var(--h10-text-3)" }}> · {l.supplier}</span> : ""}</span>
+                  <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--nds-border-subtle)", fontSize: 12.5 }}>
+                    <span><b>{l.lotCode}</b>{l.supplier ? <span style={{ color: "var(--nds-text-3)" }}> · {l.supplier}</span> : ""}</span>
                     <span style={{ fontFamily: "ui-monospace, monospace" }}>{num(l.onHand)} on hand</span>
                   </div>
                 ))}
@@ -199,5 +199,5 @@ export function MaterialsClient() {
   );
 }
 
-const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
-const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 8, padding: "7px 9px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
+const lbl: React.CSSProperties = { fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 };
+const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--nds-border)", borderRadius: 8, padding: "7px 9px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" };

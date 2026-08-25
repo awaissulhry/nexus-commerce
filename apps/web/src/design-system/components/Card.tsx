@@ -18,7 +18,7 @@ export interface CardProps {
 
 /** Surface container (H10 panel/`.h10-am-card` look). */
 export function Card({ padded, elevated, header, description, headerAction, children, className }: CardProps) {
-  const cls = ['h10-ds-card', padded && header == null ? 'pad' : '', elevated ? 'shadow' : '', className ?? '']
+  const cls = ['nds-card', padded && header == null ? 'pad' : '', elevated ? 'shadow' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   if (header != null) {
@@ -26,12 +26,12 @@ export function Card({ padded, elevated, header, description, headerAction, chil
     // headerless cards, so a card with a header always got 16px however it was configured, and
     // a chart or table that needs to meet its own edges could not use this component. Defaults
     // to padded, and no existing caller passes both props, so nothing shifts.
-    const body = ['h10-ds-card-body', padded === false ? 'flush' : ''].filter(Boolean).join(' ')
+    const body = ['nds-card-body', padded === false ? 'flush' : ''].filter(Boolean).join(' ')
     return (
       <div className={cls}>
-        <div className={['h10-ds-card-head', description != null ? 'stacked' : ''].filter(Boolean).join(' ')}>
+        <div className={['nds-card-head', description != null ? 'stacked' : ''].filter(Boolean).join(' ')}>
           {description != null ? (
-            <div className="h10-ds-card-headmain">
+            <div className="nds-card-headmain">
               <span className="t">{header}</span>
               <span className="d">{description}</span>
             </div>

@@ -581,9 +581,9 @@ function ChatInner() {
         display: "grid",
         gridTemplateColumns: gridColumns,
         gridTemplateRows: "minmax(0, 1fr)",
-        border: "1px solid var(--h10-border)",
+        border: "1px solid var(--nds-border)",
         borderRadius: 12,
-        background: "var(--h10-surface)",
+        background: "var(--nds-surface)",
         overflow: "hidden",
       }}
     >

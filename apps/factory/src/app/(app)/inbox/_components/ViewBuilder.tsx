@@ -128,7 +128,7 @@ export function CriteriaRows({
             type="button"
             aria-label="Remove condition"
             onClick={() => setRows(rows.filter((_, j) => j !== i))}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--h10-text-3)", display: "inline-flex", padding: 4 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-3)", display: "inline-flex", padding: 4 }}
           >
             <X size={13} />
           </button>
@@ -265,14 +265,14 @@ export function ViewBuilder({
           </label>
         )}
 
-        <div style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: 10, display: "grid", gap: 6, background: "var(--h10-surface-raised)" }}>
+        <div style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: 10, display: "grid", gap: 6, background: "var(--nds-surface-raised)" }}>
           <b style={{ fontSize: 12.5 }}>
             {complete ? (preview ? `${preview.count} conversation${preview.count === 1 ? "" : "s"} match right now` : "Counting…") : "Add a condition to preview matches"}
           </b>
           {preview?.sample.map((s) => (
             <div key={s.id} style={{ display: "flex", gap: 6, alignItems: "baseline", minWidth: 0 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{s.subject ?? "(no subject)"}</span>
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", flexShrink: 0 }}>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", flexShrink: 0 }}>
                 {s.party?.name ?? s.messages[0]?.fromAddress ?? ""} · {ago(s.lastMessageAt)}
               </span>
             </div>
@@ -286,7 +286,7 @@ export function ViewBuilder({
           <Button onClick={onClose}>Cancel</Button>
           {initial?.id && (
             <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-              {confirmDelete && <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Conversations return to Inbox.</span>}
+              {confirmDelete && <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Conversations return to Inbox.</span>}
               <Button onClick={() => (confirmDelete ? void remove() : setConfirmDelete(true))} disabled={busy}>
                 {confirmDelete ? "Confirm delete" : "Delete view…"}
               </Button>

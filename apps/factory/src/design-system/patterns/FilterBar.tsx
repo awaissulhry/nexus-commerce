@@ -82,7 +82,7 @@ function optionLabel(o: FilterBarOption): ReactNode {
   if (o.count == null) return o.label
   return (
     <>
-      {o.label} <span className="h10-ds-ms-count">{o.count}</span>
+      {o.label} <span className="nds-ms-count">{o.count}</span>
     </>
   )
 }
@@ -100,8 +100,8 @@ function RangeField({
 }) {
   const cls = unit === '€' ? ' cur' : unit === '%' ? ' pct' : ''
   return (
-    <div className="h10-ds-field h10-ds-range">
-      <div className={`h10-ds-range-in${cls}`}>
+    <div className="nds-field nds-range">
+      <div className={`nds-range-in${cls}`}>
         {unit === '€' && <span className="ad">€</span>}
         <input
           inputMode="decimal"
@@ -112,7 +112,7 @@ function RangeField({
         />
         {unit === '%' && <span className="ad">%</span>}
       </div>
-      <div className={`h10-ds-range-in${cls}`}>
+      <div className={`nds-range-in${cls}`}>
         {unit === '€' && <span className="ad">€</span>}
         <input
           inputMode="decimal"
@@ -151,7 +151,7 @@ function DimensionControl<T extends FilterDimension>({ d }: { d: T }) {
       return <RangeField min={d.min} max={d.max} onChange={d.onChange} unit={d.unit} />
     case 'toggle':
       return (
-        <div className="h10-ds-field h10-ds-toggle-field">
+        <div className="nds-field nds-toggle-field">
           <Toggle checked={d.value} onChange={d.onChange} />
         </div>
       )

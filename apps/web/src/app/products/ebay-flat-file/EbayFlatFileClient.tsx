@@ -45,7 +45,7 @@ import { HistoryModal } from '@/components/flat-file/HistoryModal'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
 // IE.1 — load the H10 design-system CSS so DS components (Menu, the import wizard)
-// render styled on this page (namespaced --h10-*/.h10-ds-* — inert for the rest).
+// render styled on this page (namespaced --nds-*/.nds-* — inert for the rest).
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'

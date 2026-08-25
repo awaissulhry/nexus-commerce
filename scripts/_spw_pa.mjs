@@ -20,8 +20,8 @@ await p.locator('.h10-spw-pgd-port').click(); await p.waitForTimeout(300)
 const triggerBefore = (await p.locator('.h10-spw-pf button[aria-haspopup]').innerText()).trim()
 // create a portfolio
 await p.locator('.h10-spw-pf-new').click(); await p.waitForTimeout(250)
-await p.fill('.h10-ds-modal input', 'Spring Launch')
-await p.locator('.h10-ds-modal .h10-ds-btn.primary').click(); await p.waitForTimeout(350)
+await p.fill('.nds-modal input', 'Spring Launch')
+await p.locator('.nds-modal .nds-btn.primary').click(); await p.waitForTimeout(350)
 const triggerAfter = (await p.locator('.h10-spw-pf button[aria-haspopup]').innerText()).trim()
 await p.locator('.h10-spw-pgd').screenshot({ path: '/tmp/spw/pa.png' })
 // launch → assert portfolioId in payload

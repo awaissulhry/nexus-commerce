@@ -25,7 +25,7 @@
  *   things they did. GOV.UK is explicit: headings should not be questions,
  *   "they're hard to frontload and users want answers, not questions."
  *
- * · **No <Term> in here.** `.h10-ds-drawer-b` is `overflow-y: auto` and
+ * · **No <Term> in here.** `.nds-drawer-b` is `overflow-y: auto` and
  *   `.acr-term-tip` is absolutely positioned opening UPWARD out of its line, so
  *   a tooltip inside a drawer is clipped by its own scroll container.
  *   `HowAssignmentsWork` avoids this too; now the reason is written down. The

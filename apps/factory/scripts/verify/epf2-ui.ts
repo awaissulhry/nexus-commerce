@@ -173,7 +173,7 @@ async function main() {
     // drawers/modals slide in over 0.18s — screenshots must show the SETTLED UI
     const settle = async () => {
       await page.waitForFunction(() =>
-        [...document.querySelectorAll(".h10-ds-drawer, .h10-ds-modal")].every((el) => el.getAnimations().every((a) => a.playState !== "running")),
+        [...document.querySelectorAll(".nds-drawer, .nds-modal")].every((el) => el.getAnimations().every((a) => a.playState !== "running")),
       );
       await page.waitForTimeout(60);
     };
@@ -184,13 +184,13 @@ async function main() {
     for (const width of [1512, 1728, 1920]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.goto(`${BASE}/financials`, { waitUntil: "domcontentloaded" });
-      await page.waitForSelector(".h10-ds-grid tbody tr", { timeout: 20_000 });
+      await page.waitForSelector(".nds-grid tbody tr", { timeout: 20_000 });
       const m = await page.evaluate(() => ({
         sw: document.documentElement.scrollWidth,
         iw: window.innerWidth,
-        metrics: document.querySelectorAll(".h10-ds-metric").length,
+        metrics: document.querySelectorAll(".nds-metric").length,
         tabs: document.querySelectorAll("[role='tab']").length,
-        rows: document.querySelectorAll(".h10-ds-grid tbody tr").length,
+        rows: document.querySelectorAll(".nds-grid tbody tr").length,
       }));
       ok(`no horizontal overflow @${width}`, m.sw <= m.iw, `scrollWidth ${m.sw} > innerWidth ${m.iw}`);
       ok(`tiles render @${width} (5th cancelled tile expected)`, m.metrics === 5, `metrics=${m.metrics}`);
@@ -208,22 +208,22 @@ async function main() {
 
     // ── cancelled-money tile → drawer ──────────────────────────────
     await page.click('[title="See the cancelled orders still carrying money"]');
-    await page.waitForSelector(".h10-ds-drawer");
+    await page.waitForSelector(".nds-drawer");
     ok("cancelled bucket drawer", await page.getByText("Cancelled orders with money").count() >= 1);
     ok("cancelled bucket lists ORD-9002", await page.getByText("ORD-9002").count() >= 1);
     await shot("cancelled-drawer.png");
     await page.keyboard.press("Escape");
-    await page.waitForSelector(".h10-ds-drawer", { state: "detached" });
+    await page.waitForSelector(".nds-drawer", { state: "detached" });
 
     // ── keyboard tabs + by-customer + drill-through ────────────────
     await page.keyboard.press("2");
     await page.waitForFunction(() => window.location.search.includes("tab=party"));
-    await page.waitForSelector(".h10-ds-grid tbody tr");
+    await page.waitForSelector(".nds-grid tbody tr");
     ok("by-customer renders", await page.getByText("AWA Racing").count() >= 1);
     await shot("party-tab.png");
     await page.getByRole("button", { name: "Rossi Custom" }).first().click();
     await page.waitForFunction(() => window.location.search.includes("party=ep-rossi") && !window.location.search.includes("tab="));
-    await page.waitForSelector(".h10-ds-grid tbody tr");
+    await page.waitForSelector(".nds-grid tbody tr");
     ok("customer row drills to filtered orders", (await search()).includes("party=ep-rossi"));
     ok("party filter excludes other customers", (await page.getByText("ORD-9001").count()) === 0);
     await shot("party-drill-orders.png");
@@ -233,9 +233,9 @@ async function main() {
     // ── by-month + month drill (URL date round-trip) ───────────────
     await page.keyboard.press("3");
     await page.waitForFunction(() => window.location.search.includes("tab=month"));
-    await page.waitForSelector(".h10-ds-grid tbody tr");
+    await page.waitForSelector(".nds-grid tbody tr");
     await shot("month-tab.png");
-    await page.locator(".h10-ds-grid tbody tr td button").first().click();
+    await page.locator(".nds-grid tbody tr td button").first().click();
     await page.waitForFunction(() => /from=\d{4}-\d{2}-01/.test(window.location.search) && /to=\d{4}-\d{2}-\d{2}/.test(window.location.search));
     ok("month row drills to a from/to window", true);
     await page.getByRole("button", { name: "Last 12 months" }).click();
@@ -244,7 +244,7 @@ async function main() {
     // ── deposits tab + production deep link ────────────────────────
     await page.keyboard.press("4");
     await page.waitForFunction(() => window.location.search.includes("tab=deposits"));
-    await page.waitForSelector(".h10-ds-grid tbody tr");
+    await page.waitForSelector(".nds-grid tbody tr");
     ok("deposits row (FD13)", await page.getByText("ORD-9001").count() >= 1);
     ok("blocked pill deep-links /production?wo=", await page.locator('a[href*="/production?wo="]').count() >= 1);
     await shot("deposits-tab.png");
@@ -252,33 +252,33 @@ async function main() {
     await page.waitForFunction(() => !window.location.search.includes("tab="));
 
     // ── All-time toggle + Load-more (cursor) ───────────────────────
-    const countBefore = await page.locator(".h10-ds-toolbar .cnt").innerText();
+    const countBefore = await page.locator(".nds-toolbar .cnt").innerText();
     ok("default window bounds the fold (222 in 12mo)", countBefore.includes("222"), countBefore);
     await page.getByRole("button", { name: "All time" }).click();
     await page.waitForFunction(() => window.location.search.includes("range=all"));
-    await page.waitForFunction(() => (document.querySelector(".h10-ds-toolbar .cnt") as HTMLElement | null)?.innerText.includes("242") ?? false, undefined, { timeout: 15_000 });
+    await page.waitForFunction(() => (document.querySelector(".nds-toolbar .cnt") as HTMLElement | null)?.innerText.includes("242") ?? false, undefined, { timeout: 15_000 });
     ok("All-time widens the window (242 orders)", true);
     await shot("alltime-orders.png");
     const loadMore = page.locator("button", { hasText: "Load more orders" });
     ok("Load more control present", (await loadMore.count()) === 1);
     await loadMore.click();
     // the count line is the honest assert — the DOM itself stays windowed (FS3)
-    await page.waitForFunction(() => /1–242/.test((document.querySelector(".h10-ds-toolbar .cnt") as HTMLElement | null)?.innerText ?? ""), undefined, { timeout: 15_000 });
+    await page.waitForFunction(() => /1–242/.test((document.querySelector(".nds-toolbar .cnt") as HTMLElement | null)?.innerText ?? ""), undefined, { timeout: 15_000 });
     ok("cursor page appended (1–242 of 242)", true);
     await page.getByRole("button", { name: "Last 12 months" }).click();
     await page.waitForFunction(() => !window.location.search.includes("range=all"));
 
     // ── DateField writes the URL ───────────────────────────────────
-    await page.locator(".h10-ds-datefield").first().locator("button").first().click();
-    await page.waitForSelector(".h10-ds-dp-pop");
-    await page.locator("button.h10-ds-dp-day", { hasText: /^15$/ }).first().click();
+    await page.locator(".nds-datefield").first().locator("button").first().click();
+    await page.waitForSelector(".nds-dp-pop");
+    await page.locator("button.nds-dp-day", { hasText: /^15$/ }).first().click();
     await page.waitForFunction(() => /from=\d{4}-\d{2}-15/.test(window.location.search));
     ok("date picker round-trips the URL (?from=…-15)", true);
     await page.getByRole("button", { name: "Last 12 months" }).click();
 
     // ── ?o= deep link + drawer + VAT line ──────────────────────────
     await page.goto(`${BASE}/financials?o=eo-main`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".h10-ds-drawer");
+    await page.waitForSelector(".nds-drawer");
     await page.waitForSelector("[data-testid=vat-line]");
     ok("?o= deep link opens the drawer", await page.getByText("Money · ORD-9003").count() >= 1);
     ok("VAT/gross display line", (await page.locator("[data-testid=vat-line]").innerText()).includes("22%"));
@@ -287,87 +287,87 @@ async function main() {
 
     // ── New invoice consequence modal (no write) ───────────────────
     await page.getByRole("button", { name: "New invoice" }).click();
-    await page.waitForSelector(".h10-ds-modal");
+    await page.waitForSelector(".nds-modal");
     ok("invoice modal previews INV-2026-…", await page.getByText("INV-2026-…").count() >= 1);
-    const amountVal = await page.locator(".h10-ds-modal input").first().inputValue();
+    const amountVal = await page.locator(".nds-modal input").first().inputValue();
     ok("invoice default = net − paid (550.00)", amountVal === "550.00", `got ${amountVal}`);
     await shot("invoice-confirm.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Cancel" }).click();
-    await page.waitForSelector(".h10-ds-modal", { state: "detached" });
+    await page.locator(".nds-modal").getByRole("button", { name: "Cancel" }).click();
+    await page.waitForSelector(".nds-modal", { state: "detached" });
 
     // ── Mark paid → consequence → 409 overpay escalation (no write) ─
-    await page.locator(".h10-ds-drawer").getByRole("button", { name: "Mark paid" }).first().click();
-    await page.waitForSelector(".h10-ds-modal");
+    await page.locator(".nds-drawer").getByRole("button", { name: "Mark paid" }).first().click();
+    await page.waitForSelector(".nds-modal");
     ok("mark-paid states the BALANCE payment", await page.getByText(/Records a/).count() >= 1);
     await shot("markpaid-confirm.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Mark paid" }).click();
+    await page.locator(".nds-modal").getByRole("button", { name: "Mark paid" }).click();
     await page.waitForSelector("[data-testid=overpay-confirm]");
     ok("409 escalates to the explicit overpay confirm", await page.getByText("Record overpayment").count() >= 1);
     await shot("markpaid-overpay.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Cancel" }).click();
-    await page.waitForSelector(".h10-ds-modal", { state: "detached" });
+    await page.locator(".nds-modal").getByRole("button", { name: "Cancel" }).click();
+    await page.waitForSelector(".nds-modal", { state: "detached" });
 
     // ── Payment modal: BALANCE default here, REFUND state (no write)
     await page.getByRole("button", { name: "Record payment" }).click();
-    await page.waitForSelector(".h10-ds-modal");
-    ok("kind defaults BALANCE (no gate on ORD-9003)", await page.locator(".h10-ds-modal").getByText("Balance", { exact: true }).count() >= 1);
+    await page.waitForSelector(".nds-modal");
+    ok("kind defaults BALANCE (no gate on ORD-9003)", await page.locator(".nds-modal").getByText("Balance", { exact: true }).count() >= 1);
     await shot("payment-modal.png");
-    await page.locator(".h10-ds-modal .h10-ds-listbox-btn").first().click();
+    await page.locator(".nds-modal .nds-listbox-btn").first().click();
     await page.getByRole("option", { name: "Refund (money back)" }).click();
-    await page.locator(".h10-ds-modal textarea").waitFor();
+    await page.locator(".nds-modal textarea").waitFor();
     ok("REFUND shows its consequence + note field", (await page.locator("[data-testid=payment-consequence]").innerText()).includes("REFUND"));
     await shot("payment-modal-refund.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Cancel" }).click();
-    await page.waitForSelector(".h10-ds-modal", { state: "detached" });
+    await page.locator(".nds-modal").getByRole("button", { name: "Cancel" }).click();
+    await page.waitForSelector(".nds-modal", { state: "detached" });
 
     // ── FD13: kind defaults DEPOSIT while the gate is open ─────────
     await page.goto(`${BASE}/financials?o=eo-dep`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".h10-ds-drawer");
+    await page.waitForSelector(".nds-drawer");
     await page.waitForSelector("[data-testid=vat-line]");
     await page.getByRole("button", { name: "Record payment" }).click();
-    await page.waitForSelector(".h10-ds-modal");
+    await page.waitForSelector(".nds-modal");
     // the default lands via a post-mount effect — wait for the trigger to read "Deposit"
-    const sawDeposit = await page.locator(".h10-ds-modal .h10-ds-listbox-btn").getByText("Deposit", { exact: true }).waitFor({ timeout: 3_000 }).then(() => true).catch(() => false);
+    const sawDeposit = await page.locator(".nds-modal .nds-listbox-btn").getByText("Deposit", { exact: true }).waitFor({ timeout: 3_000 }).then(() => true).catch(() => false);
     ok("kind defaults DEPOSIT while the FD13 gate is open", sawDeposit);
     await shot("payment-modal-deposit.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Cancel" }).click();
-    await page.waitForSelector(".h10-ds-modal", { state: "detached" });
+    await page.locator(".nds-modal").getByRole("button", { name: "Cancel" }).click();
+    await page.waitForSelector(".nds-modal", { state: "detached" });
     await page.keyboard.press("Escape");
 
     // ── Back closes the drawer (pushState idiom) ───────────────────
     await page.goto(`${BASE}/financials`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".h10-ds-grid tbody tr");
+    await page.waitForSelector(".nds-grid tbody tr");
     await page.getByRole("button", { name: "ORD-9003" }).first().click();
-    await page.waitForSelector(".h10-ds-drawer");
+    await page.waitForSelector(".nds-drawer");
     await page.goBack();
-    await page.waitForSelector(".h10-ds-drawer", { state: "detached" });
+    await page.waitForSelector(".nds-drawer", { state: "detached" });
     ok("browser Back closes the drawer", !(await search()).includes("o="));
 
     // ── Import: dropzone + paste → diff → apply-confirm (no write) ─
     await page.getByRole("button", { name: "Import bank CSV" }).click();
-    await page.waitForSelector(".h10-ds-modal");
-    ok("import offers a FileDropzone", await page.locator(".h10-ds-modal .h10-ds-dropzone").count() >= 1);
+    await page.waitForSelector(".nds-modal");
+    ok("import offers a FileDropzone", await page.locator(".nds-modal .nds-dropzone").count() >= 1);
     await shot("import-dropzone.png");
-    await page.locator(".h10-ds-modal textarea").fill("date,amount,description\n2026-07-10,550.00,Bonifico ORD-9003\n2026-07-11,123.00,Unknown transfer");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Match" }).click();
-    await page.waitForSelector(".h10-ds-modal input[type=checkbox]");
-    ok("dry-run matches ORD-9003 high", await page.locator(".h10-ds-modal").getByText("ORD-9003").count() >= 1);
-    ok("fingerprint note shown", await page.locator(".h10-ds-modal").getByText(/fingerprinted/).count() >= 1);
+    await page.locator(".nds-modal textarea").fill("date,amount,description\n2026-07-10,550.00,Bonifico ORD-9003\n2026-07-11,123.00,Unknown transfer");
+    await page.locator(".nds-modal").getByRole("button", { name: "Match" }).click();
+    await page.waitForSelector(".nds-modal input[type=checkbox]");
+    ok("dry-run matches ORD-9003 high", await page.locator(".nds-modal").getByText("ORD-9003").count() >= 1);
+    ok("fingerprint note shown", await page.locator(".nds-modal").getByText(/fingerprinted/).count() >= 1);
     await shot("import-diff.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: /Apply 1 selected/ }).click();
+    await page.locator(".nds-modal").getByRole("button", { name: /Apply 1 selected/ }).click();
     await page.waitForSelector("[data-testid=import-confirm]");
     await shot("import-apply-confirm.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Back" }).click(); // review
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Back" }).click(); // input
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Cancel" }).click();
-    await page.waitForSelector(".h10-ds-modal", { state: "detached" });
+    await page.locator(".nds-modal").getByRole("button", { name: "Back" }).click(); // review
+    await page.locator(".nds-modal").getByRole("button", { name: "Back" }).click(); // input
+    await page.locator(".nds-modal").getByRole("button", { name: "Cancel" }).click();
+    await page.waitForSelector(".nds-modal", { state: "detached" });
 
     // ── Export confirm states the current view ─────────────────────
     await page.getByRole("button", { name: "Export period" }).click();
     await page.waitForSelector("[data-testid=export-confirm]");
     ok("export confirm names the window", (await page.locator("[data-testid=export-confirm]").innerText()).includes("Last 12 months"));
     await shot("export-confirm.png");
-    await page.locator(".h10-ds-modal").getByRole("button", { name: "Cancel" }).click();
+    await page.locator(".nds-modal").getByRole("button", { name: "Cancel" }).click();
 
     // ── throttled first load: SKELETON, never the false empty state ─
     const page2 = await context.newPage();
@@ -381,7 +381,7 @@ async function main() {
     ok("throttled load shows skeleton (D-08)", true);
     ok("no false empty-state during load", !bodyText.includes("No orders in this window"));
     await page2.screenshot({ path: path.join(SHOTS, "skeleton-throttled.png") });
-    await page2.waitForSelector(".h10-ds-grid tbody tr", { timeout: 20_000 });
+    await page2.waitForSelector(".nds-grid tbody tr", { timeout: 20_000 });
     await page2.close();
   } finally {
     await browser?.close().catch(() => {});

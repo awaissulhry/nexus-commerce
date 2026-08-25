@@ -62,9 +62,9 @@ export function ColumnCustomizer({ open, onClose, columns, onApply, className }:
         </>
       }
     >
-      <div className="h10-ds-colcust">
+      <div className="nds-colcust">
         {draft.map((c, i) => (
-          <div className="h10-ds-colcust-row" key={c.key}>
+          <div className="nds-colcust-row" key={c.key}>
             <span className="grip">
               <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || c.locked} aria-label="Move up">
                 <ChevronUp size={14} />

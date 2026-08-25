@@ -1128,9 +1128,9 @@ const FamilySection = forwardRef<FamilySectionHandle, FamilySectionProps>(
             copy menu (the grid's last row would otherwise clip the dropdown
             against the scroll container's bottom edge). */}
         <style>{`
-          .efx-bucket-menu .h10-ds-btn { font-size: 11px; padding: 2px 8px; gap: 4px; }
-          .efx-menu-up .h10-ds-menu { top: auto; bottom: calc(100% + 5px); }
-          .efx-copy-menu .h10-ds-menu { max-height: 264px; overflow-y: auto; }
+          .efx-bucket-menu .nds-btn { font-size: 11px; padding: 2px 8px; gap: 4px; }
+          .efx-menu-up .nds-menu { top: auto; bottom: calc(100% + 5px); }
+          .efx-copy-menu .nds-menu { max-height: 264px; overflow-y: auto; }
         `}</style>
       </div>
     )

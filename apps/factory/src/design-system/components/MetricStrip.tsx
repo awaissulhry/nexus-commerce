@@ -15,9 +15,9 @@ export interface MetricStripProps {
 /** Row of KPI tiles (H10 metric strip). Auto-fits to the container width. */
 export function MetricStrip({ metrics, className }: MetricStripProps) {
   return (
-    <div className={`h10-ds-metrics${className ? ` ${className}` : ''}`}>
+    <div className={`nds-metrics${className ? ` ${className}` : ''}`}>
       {metrics.map((m, i) => (
-        <div key={i} className="h10-ds-metric">
+        <div key={i} className="nds-metric">
           <div className="lbl">{m.label}</div>
           <div className="val">{m.value}</div>
           {m.delta != null && <div className={`dlt ${m.delta.positive ? 'up' : 'down'}`}>{m.delta.value}</div>}

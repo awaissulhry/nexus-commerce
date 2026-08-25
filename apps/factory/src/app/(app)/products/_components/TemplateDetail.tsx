@@ -80,18 +80,18 @@ export function TemplateDetail({ templateId, onBack, onChanged }: { templateId: 
             key={tpl.name}
             onBlur={(e) => e.target.value.trim() && e.target.value !== tpl.name && patchTemplate({ name: e.target.value.trim() })}
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            style={{ fontSize: 20, fontWeight: 700, border: "none", outline: "none", background: "transparent", color: "var(--h10-text)", minWidth: 280 }}
+            style={{ fontSize: 20, fontWeight: 700, border: "none", outline: "none", background: "transparent", color: "var(--nds-text)", minWidth: 280 }}
           />
         }
         actions={
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {canCost && (
-              <label style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, color: "var(--h10-text-2)" }}>
+              <label style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, color: "var(--nds-text-2)" }}>
                 Base cost
                 <EuroInput cents={tpl.baseCostCents} onCommit={(c) => patchTemplate({ baseCostCents: c })} ariaLabel="Base cost" />
               </label>
             )}
-            <label style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, color: "var(--h10-text-2)" }}>
+            <label style={{ display: "inline-flex", gap: 5, alignItems: "center", fontSize: 12, color: "var(--nds-text-2)" }}>
               Base price
               <EuroInput cents={tpl.basePriceCents} onCommit={(c) => patchTemplate({ basePriceCents: c })} ariaLabel="Base price" />
             </label>
@@ -100,9 +100,9 @@ export function TemplateDetail({ templateId, onBack, onChanged }: { templateId: 
         }
       />
       {tpl.archivedAt && (
-        <div style={{ fontSize: 12.5, color: "var(--h10-warning, #b87503)" }}>
+        <div style={{ fontSize: 12.5, color: "var(--nds-warning, #b87503)" }}>
           Archived {new Date(tpl.archivedAt).toLocaleDateString()} — still referenced by history.{" "}
-          <button type="button" onClick={() => patchTemplate({ archived: false })} style={{ background: "none", border: "none", color: "var(--h10-text-link)", cursor: "pointer", padding: 0 }}>Restore</button>
+          <button type="button" onClick={() => patchTemplate({ archived: false })} style={{ background: "none", border: "none", color: "var(--nds-text-link)", cursor: "pointer", padding: 0 }}>Restore</button>
         </div>
       )}
       <Tabs tabs={tabs} active={tab} onChange={setTab} />

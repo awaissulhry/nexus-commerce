@@ -70,16 +70,16 @@ export function ConfigClient() {
     <div className="factory-page--centered">
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Configuration</h1>
-        <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginTop: 2 }}>The stage pipeline, pricing defaults, VAT, and backups.</div>
+        <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginTop: 2 }}>The stage pipeline, pricing defaults, VAT, and backups.</div>
       </div>
 
       <div style={{ display: "grid", gap: 14 }}>
         <Card header="Stage pipeline">
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 10 }}>The stages every new work order runs through. Existing work orders keep their stages.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", marginBottom: 10 }}>The stages every new work order runs through. Existing work orders keep their stages.</div>
           <div style={{ display: "grid", gap: 6 }}>
             {stages.map((s, i) => (
               <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ width: 20, color: "var(--h10-text-3)", fontSize: 12, textAlign: "right" }}>{i + 1}</span>
+                <span style={{ width: 20, color: "var(--nds-text-3)", fontSize: 12, textAlign: "right" }}>{i + 1}</span>
                 <Input value={s} onChange={(e) => rename(i, e.target.value)} style={{ flex: 1, maxWidth: 260 }} />
                 <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" style={sbtn(i === 0)}><ArrowUp size={13} /></button>
                 <button type="button" onClick={() => move(i, 1)} disabled={i === stages.length - 1} aria-label="Move down" style={sbtn(i === stages.length - 1)}><ArrowDown size={13} /></button>
@@ -105,29 +105,29 @@ export function ConfigClient() {
         </Card>
 
         <Card header="Backups">
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--h10-text-2)", marginBottom: 10 }}><Database size={14} /> Nightly SQLite snapshots (rotated 14). {backupDir && <code style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{backupDir}</code>}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--nds-text-2)", marginBottom: 10 }}><Database size={14} /> Nightly SQLite snapshots (rotated 14). {backupDir && <code style={{ fontSize: 11, color: "var(--nds-text-3)" }}>{backupDir}</code>}</div>
           {backups.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No snapshots yet — the first appears after the next nightly run (03:00).</div>
+            <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No snapshots yet — the first appears after the next nightly run (03:00).</div>
           ) : (
             <div style={{ display: "grid", gap: 5 }}>
               {backups.map((b) => (
-                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
+                <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
                   <span style={{ flex: 1, fontFamily: "ui-monospace, monospace" }}>{b.name}</span>
-                  <span style={{ color: "var(--h10-text-3)" }}>{kb(b.sizeBytes)}</span>
-                  <span style={{ color: "var(--h10-text-3)", fontSize: 11 }}>{new Date(b.modifiedAt).toLocaleDateString()}</span>
+                  <span style={{ color: "var(--nds-text-3)" }}>{kb(b.sizeBytes)}</span>
+                  <span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>{new Date(b.modifiedAt).toLocaleDateString()}</span>
                 </div>
               ))}
             </div>
           )}
-          <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--h10-text-3)" }}>To restore: stop the app, then <code>cp .snapshots/&lt;snapshot&gt;.db data/factory.db</code>.</div>
+          <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--nds-text-3)" }}>To restore: stop the app, then <code>cp .snapshots/&lt;snapshot&gt;.db data/factory.db</code>.</div>
         </Card>
 
         <Card header="Access control">
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
-            <Shield size={14} style={{ color: "var(--h10-text-3)" }} />
+            <Shield size={14} style={{ color: "var(--nds-text-3)" }} />
             RBAC mode: {cfg && (cfg.rbacMode === "enforce" ? <Pill tone="success">enforce</Pill> : <Pill tone="warning">shadow</Pill>)}
           </div>
-          <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--h10-text-3)" }}>
+          <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--nds-text-3)" }}>
             {cfg?.rbacMode === "enforce"
               ? "Permissions are enforced — a missing grant is a real 403."
               : "Shadow mode logs would-be denials but allows them. Flip to enforce (FACTORY_RBAC_MODE=enforce + restart) before a second person logs in."}
@@ -143,11 +143,11 @@ function Row({ label, hint, children }: { label: string; hint: string; children:
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <div style={{ width: 200 }}>
         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{hint}</div>
+        <div style={{ fontSize: 11, color: "var(--nds-text-3)" }}>{hint}</div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>{children}</div>
     </div>
   );
 }
-const sfx: React.CSSProperties = { fontSize: 12.5, color: "var(--h10-text-3)" };
-const sbtn = (disabled: boolean): React.CSSProperties => ({ border: "1px solid var(--h10-border)", borderRadius: 6, background: "var(--h10-surface)", cursor: disabled ? "default" : "pointer", color: "var(--h10-text-3)", padding: 5, display: "grid", placeItems: "center", opacity: disabled ? 0.4 : 1 });
+const sfx: React.CSSProperties = { fontSize: 12.5, color: "var(--nds-text-3)" };
+const sbtn = (disabled: boolean): React.CSSProperties => ({ border: "1px solid var(--nds-border)", borderRadius: 6, background: "var(--nds-surface)", cursor: disabled ? "default" : "pointer", color: "var(--nds-text-3)", padding: 5, display: "grid", placeItems: "center", opacity: disabled ? 0.4 : 1 });

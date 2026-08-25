@@ -15,17 +15,17 @@ export interface CardProps {
 
 /** Surface container (H10 panel/`.h10-am-card` look). */
 export function Card({ padded, elevated, header, headerAction, children, className }: CardProps) {
-  const cls = ['h10-ds-card', padded && header == null ? 'pad' : '', elevated ? 'shadow' : '', className ?? '']
+  const cls = ['nds-card', padded && header == null ? 'pad' : '', elevated ? 'shadow' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   if (header != null) {
     return (
       <div className={cls}>
-        <div className="h10-ds-card-head">
+        <div className="nds-card-head">
           <span className="t">{header}</span>
           {headerAction}
         </div>
-        <div className="h10-ds-card-body">{children}</div>
+        <div className="nds-card-body">{children}</div>
       </div>
     )
   }

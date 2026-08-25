@@ -14,7 +14,7 @@ export interface TooltipProps {
  */
 export function Tooltip({ label, className, children }: TooltipProps) {
   return (
-    <span className={`h10-ds-tooltip${className ? ` ${className}` : ''}`}>
+    <span className={`nds-tooltip${className ? ` ${className}` : ''}`}>
       {children}
       <span className="tip" role="tooltip">
         {label}

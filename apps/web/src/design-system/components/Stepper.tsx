@@ -22,20 +22,20 @@ export interface StepperProps {
 
 export function Stepper({ steps, current, className }: StepperProps) {
   return (
-    <ol className={`h10-ds-stepper${className ? ` ${className}` : ''}`}>
+    <ol className={`nds-stepper${className ? ` ${className}` : ''}`}>
       {steps.map((step, i) => {
         const state = i < current ? 'done' : i === current ? 'active' : 'upcoming'
         return (
           <li
             key={step.key}
-            className={`h10-ds-step ${state}`}
+            className={`nds-step ${state}`}
             aria-current={state === 'active' ? 'step' : undefined}
           >
-            <span className="h10-ds-step-badge">
-              {state === 'done' ? <Check size={14} aria-hidden /> : <span className="h10-ds-step-num">{i + 1}</span>}
+            <span className="nds-step-badge">
+              {state === 'done' ? <Check size={14} aria-hidden /> : <span className="nds-step-num">{i + 1}</span>}
             </span>
-            <span className="h10-ds-step-label">{step.label}</span>
-            {i < steps.length - 1 && <span className="h10-ds-step-line" aria-hidden />}
+            <span className="nds-step-label">{step.label}</span>
+            {i < steps.length - 1 && <span className="nds-step-line" aria-hidden />}
           </li>
         )
       })}

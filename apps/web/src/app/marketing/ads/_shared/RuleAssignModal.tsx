@@ -15,7 +15,7 @@
  * 🔴 **Built through the DS, not by transcribing the prototype's inline styles**, per the handoff.
  * `Modal`, `Input`, `SegmentedControl`, `Toggle` and `Button` are all `design-system` primitives —
  * already used 97 times inside `marketing/ads`, so this is existing practice here, not a new
- * dependency. Every colour the handoff names as a hex resolves to an existing `--h10-*` token
+ * dependency. Every colour the handoff names as a hex resolves to an existing `--nds-*` token
  * (checked: all 14), so the CSS uses tokens and never the literals.
  *
  * ── Three places the handoff did not match the repo, and what I did ─────────────────────────────

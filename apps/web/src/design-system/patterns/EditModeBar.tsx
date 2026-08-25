@@ -23,7 +23,7 @@ export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = '
       'Unsaved changes'
     ))
   return (
-    <div className="h10-ds-actionbar" role="region" aria-label="Edit mode">
+    <div className="nds-actionbar" role="region" aria-label="Edit mode">
       <span className="lbl">{label}</span>
       <span className="grow" />
       <span className="acts">

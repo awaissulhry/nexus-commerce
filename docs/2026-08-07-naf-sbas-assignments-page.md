@@ -1626,7 +1626,7 @@ campaigns and 10 portfolios. One click makes 25 rows.
 argument answered
 
 The standing rule is **tables use the shared DS DataGrid + GridToolbar +
-FilterBar, in `h10-ds-gridcard`, with all four DS stylesheets**
+FilterBar, in `nds-gridcard`, with all four DS stylesheets**
 (`feedback_tables_use_datagrid`). Three of the ten fleet pages already comply:
 **Workers** (`WorkersClient.tsx:1381`), **Activity** (`ActivityClient.tsx:1842`)
 and the **Fleet map's list view** — which records *"uses the shared DS DataGrid
@@ -1673,7 +1673,7 @@ Three further reasons, checked in code rather than asserted:
   claim. Until then, sort is session-local and the default order is *stated in
   words* in the toolbar rather than implied.
 - **A menu inside a grid cell is a known trap, twice over** —
-  `.h10-ds-gridcard` is `overflow: hidden` (`patterns.css:465-470`), which clips
+  `.nds-gridcard` is `overflow: hidden` (`patterns.css:465-470`), which clips
   a dropdown, and a sticky cell opens its own stacking context, which no
   `z-index` escapes. **Answer: the actions column is NOT sticky, and the menu
   portals to `document.body`** — the proven pattern in
@@ -1900,7 +1900,7 @@ Each phase is a commit that leaves the page better than it found it, verified on
 prod before the next starts.
 
 **S1.a — Substrate and geometry.** DataGrid + GridToolbar inside
-`h10-ds-gridcard`; `table-layout: fixed` with the declared widths;
+`nds-gridcard`; `table-layout: fixed` with the declared widths;
 sticky header; `maxHeight`; the seven columns; `wantBack` off the row; the
 title anchor fills its cell; the chip icon gets `flex: none`; the portfolio
 tooltip (D7); the four contrast failures fixed **page-locally under an
@@ -2008,7 +2008,7 @@ started**.
 | Row actions | none | Open · Close · Cancel · Reopen · Delete + bulk delete |
 
 **Verified live, not inferred:** the sticky header holding at row 22 with the
-page still; the row menu portalling clear of `.h10-ds-gridcard` at z-index 1200
+page still; the row menu portalling clear of `.nds-gridcard` at z-index 1200
 with **Delete correctly disabled** and carrying the API's own refusal sentence;
 the four-column drop order at 896px with the target chip and the deadline riding
 the title line; `?sort=title&dir=asc` restoring the order on load with the
@@ -2293,7 +2293,7 @@ Consequences, each of which is a real design change and not a CSS tweak:
 - **The pre-flight never scrolls**, and neither does the receipt.
 
 **Verification is mechanical**, which is the point: *count the elements inside
-`.h10-ds-drawer` whose computed `overflow-y` is `auto|scroll` and whose
+`.nds-drawer` whose computed `overflow-y` is `auto|scroll` and whose
 `scrollHeight > clientHeight`. The answer must be exactly one — the body.*
 
 ---

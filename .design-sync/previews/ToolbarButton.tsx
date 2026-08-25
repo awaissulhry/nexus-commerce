@@ -54,7 +54,7 @@ const bar: React.CSSProperties = {
   padding: '5px 8px',
   background: 'var(--surface-card)',
   border: '1px solid var(--border-default)',
-  borderRadius: 'var(--h10-radius-lg)',
+  borderRadius: 'var(--nds-radius-lg)',
 }
 
 /** The grid toolbar it was built for: icon-only actions in groups, separated by ToolbarDivider. */
@@ -95,7 +95,7 @@ export const WithBadge = () => (
 export const WithTooltip = () => {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    ref.current?.querySelector<HTMLButtonElement>('button.h10-ds-tbtn')?.focus()
+    ref.current?.querySelector<HTMLButtonElement>('button.nds-tbtn')?.focus()
   }, [])
   return (
     // The tip is centred on its trigger (`left:50%; translateX(-50%)`), so a

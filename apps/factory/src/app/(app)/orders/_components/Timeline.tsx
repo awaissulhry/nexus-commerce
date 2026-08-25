@@ -29,36 +29,36 @@ const ICON: Record<TimelineEvent["kind"], LucideIcon> = {
 };
 
 const TONE: Partial<Record<TimelineEvent["kind"], string>> = {
-  order: "var(--h10-primary)",
-  payment: "var(--h10-success)",
-  "quote-accepted": "var(--h10-success)",
-  workorder: "var(--h10-warning)",
-  stage: "var(--h10-success)", // EPO.3
-  promise: "var(--h10-warning)", // EPO.3
-  amendment: "var(--h10-warning)", // EPO.5
-  return: "var(--h10-danger)", // EPO.5
+  order: "var(--nds-primary)",
+  payment: "var(--nds-success)",
+  "quote-accepted": "var(--nds-success)",
+  workorder: "var(--nds-warning)",
+  stage: "var(--nds-success)", // EPO.3
+  promise: "var(--nds-warning)", // EPO.3
+  amendment: "var(--nds-warning)", // EPO.5
+  return: "var(--nds-danger)", // EPO.5
 };
 
 export function Timeline({ events }: { events: TimelineEvent[] }) {
-  if (events.length === 0) return <div style={{ fontSize: 13, color: "var(--h10-text-3)" }}>No activity yet.</div>;
+  if (events.length === 0) return <div style={{ fontSize: 13, color: "var(--nds-text-3)" }}>No activity yet.</div>;
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ position: "absolute", left: 13, top: 6, bottom: 6, width: 2, background: "var(--h10-border-subtle)" }} />
+      <div style={{ position: "absolute", left: 13, top: 6, bottom: 6, width: 2, background: "var(--nds-border-subtle)" }} />
       <div style={{ display: "grid", gap: 2 }}>
         {events.map((e, i) => {
           const Icon = ICON[e.kind] ?? ClipboardCheck;
-          const color = TONE[e.kind] ?? "var(--h10-text-3)";
+          const color = TONE[e.kind] ?? "var(--nds-text-3)";
           const body = (
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "8px 0", position: "relative" }}>
-              <div style={{ width: 28, height: 28, borderRadius: 999, background: "var(--h10-surface)", border: "1px solid var(--h10-border-subtle)", display: "grid", placeItems: "center", color, flex: "0 0 auto", zIndex: 1 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 999, background: "var(--nds-surface)", border: "1px solid var(--nds-border-subtle)", display: "grid", placeItems: "center", color, flex: "0 0 auto", zIndex: 1 }}>
                 <Icon size={14} />
               </div>
               <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--h10-text)" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--nds-text)" }}>
                   {e.label}
                   {e.amountCents != null && <span style={{ marginLeft: 8, fontFamily: "ui-monospace, monospace", fontWeight: 700 }}>{eur(e.amountCents)}</span>}
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginTop: 1 }}>{formatDate(e.at)} · {new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
+                <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginTop: 1 }}>{formatDate(e.at)} · {new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
               </div>
             </div>
           );

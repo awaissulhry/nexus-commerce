@@ -17,7 +17,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export function Button({ variant = 'secondary', size = 'md', className, children, ...rest }: ButtonProps) {
-  const cls = ['h10-ds-btn', variant === 'secondary' ? '' : variant, size === 'sm' ? 'sm' : '', className ?? '']
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'sm' ? 'sm' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (

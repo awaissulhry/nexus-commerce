@@ -1331,7 +1331,7 @@ Four arguments, all checked in code rather than asserted:
    D7 would mean extending a component shared by ~50 pages, which needs a claim
    and lands everywhere.
 2. **The DataGrid substrate is hostile to prose, and the proof is on prod.**
-   `.h10-ds-grid` is `table-layout: auto` with `white-space: nowrap` on every
+   `.nds-grid` is `table-layout: auto` with `white-space: nowrap` on every
    cell. The Workers page had to defeat that page-locally — `table-layout:
    fixed`, `overflow: hidden`, and a per-class `white-space: normal` allow-list
    for its four prose cells (`workers.css:151-178`, with a 12-line comment
@@ -3594,7 +3594,7 @@ component:
 | role | owner | verdict |
 |---|---|---|
 | 15 / 12.5 / 12 / 11.5 / 11 / 10.5 · 700 / 650 / 550 / 400 | page scale | **subset of S1R's** |
-| **13px / 600** | `.h10-ds-btn` — the DS `Menu` trigger, ×2 | DS primitive, mandatory |
+| **13px / 600** | `.nds-btn` — the DS `Menu` trigger, ×2 | DS primitive, mandatory |
 
 #### The recovered draft is a choice
 

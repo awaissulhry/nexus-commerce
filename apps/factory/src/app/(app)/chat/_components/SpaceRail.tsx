@@ -87,7 +87,7 @@ export function SpaceRail({
       aria-label="Spaces"
       style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, outline: "none", borderRight: "0" }}
     >
-      <div style={{ padding: "10px 12px 8px", display: "grid", gap: 8, borderBottom: "1px solid var(--h10-border-subtle)" }}>
+      <div style={{ padding: "10px 12px 8px", display: "grid", gap: 8, borderBottom: "1px solid var(--nds-border-subtle)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ fontSize: 14.5, fontWeight: 700, flex: 1 }}>Spaces</div>
           {canCreate && (
@@ -132,7 +132,7 @@ export function SpaceRail({
       <div ref={listWrapRef} style={{ flex: 1, minHeight: 0 }}>
         {error ? (
           <div style={{ padding: 16, display: "grid", gap: 8, justifyItems: "start" }}>
-            <div style={{ fontSize: 12.5, color: "var(--h10-danger, #b42318)" }}>{error}</div>
+            <div style={{ fontSize: 12.5, color: "var(--nds-danger, #b42318)" }}>{error}</div>
             <Button onClick={onRetry}>
               <RefreshCw size={13} /> Retry
             </Button>
@@ -152,7 +152,7 @@ export function SpaceRail({
             className="fc2-rail-scroll"
             emptyState={
               q.trim() ? (
-                <div style={{ padding: 20, fontSize: 12.5, color: "var(--h10-text-3)", textAlign: "center" }}>
+                <div style={{ padding: 20, fontSize: 12.5, color: "var(--nds-text-3)", textAlign: "center" }}>
                   No spaces match — clear the search.
                 </div>
               ) : (
@@ -191,7 +191,7 @@ export function SpaceRail({
                     <span className="fc2-rail-time">{relTime(s.lastMessage?.createdAt ?? s.updatedAt, now)}</span>
                   </span>
                   <span className="fc2-rail-bottom">
-                    <span className="fc2-rail-snippet" style={s.unread > 0 ? { color: "var(--h10-text)", fontWeight: 500 } : undefined}>
+                    <span className="fc2-rail-snippet" style={s.unread > 0 ? { color: "var(--nds-text)", fontWeight: 500 } : undefined}>
                       {railSnippet(s.lastMessage)}
                     </span>
                     {unread && <span className="fc2-rail-badge">{unread}</span>}

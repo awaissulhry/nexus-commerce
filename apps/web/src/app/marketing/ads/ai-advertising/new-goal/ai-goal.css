@@ -9,32 +9,32 @@
 .aig2-dials { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-end; margin-top: 16px; }
 .aig2-dial { display: flex; flex-direction: column; gap: 6px; }
 .aig2-dial .lbl { font-size: 12.5px; font-weight: 700; color: #344054; display: inline-flex; align-items: center; gap: 6px; }
-.aig2-dial .sub { font-size: 11.5px; color: var(--h10-text-3); max-width: 240px; }
+.aig2-dial .sub { font-size: 11.5px; color: var(--nds-text-3); max-width: 240px; }
 
 /* suggested keyword rows with evidence */
-.aig2-suglist { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; border: 1px solid var(--h10-border); border-radius: 8px; }
-.aig2-suglist li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--h10-border); }
+.aig2-suglist { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; border: 1px solid var(--nds-border); border-radius: 8px; }
+.aig2-suglist li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--nds-border); }
 .aig2-suglist li:last-child { border-bottom: 0; }
-.aig2-suglist .kw { font-size: 13px; font-weight: 600; color: var(--h10-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aig2-suglist .ev { font-size: 11.5px; color: var(--h10-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.aig2-suglist .bid { font-size: 11.5px; color: var(--h10-primary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.aig2-suglist .kw { font-size: 13px; font-weight: 600; color: var(--nds-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aig2-suglist .ev { font-size: 11.5px; color: var(--nds-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.aig2-suglist .bid { font-size: 11.5px; color: var(--nds-primary); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .aig2-suglist .grow { flex: 1; }
-.aig2-suglist button { border: 1px solid var(--h10-border); background: #fff; border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; color: #3a4452; }
+.aig2-suglist button { border: 1px solid var(--nds-border); background: #fff; border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; color: #3a4452; }
 .aig2-suglist button:disabled { opacity: 0.45; cursor: default; }
-.aig2-srcnote { font-size: 11.5px; color: var(--h10-text-3); margin: 6px 2px 0; }
+.aig2-srcnote { font-size: 11.5px; color: var(--nds-text-3); margin: 6px 2px 0; }
 .aig2-srcnote.warn { color: #9a6b00; }
 
 /* suggested budget cell */
 .aig2-sug { display: flex; flex-direction: column; gap: 2px; }
 .aig2-sug .rng { font-size: 12.5px; color: #344054; font-variant-numeric: tabular-nums; }
-.aig2-sug .src { font-size: 10.5px; color: var(--h10-text-3); }
+.aig2-sug .src { font-size: 10.5px; color: var(--nds-text-3); }
 .aig2-sug .h10-am-link.aig2-use { align-self: flex-start; padding: 0; font-size: 11px; }
 
 /* scaffold preview ("what will be built") */
 .aig2-scaffold { display: flex; flex-direction: column; gap: 12px; }
 .aig2-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .aig2-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #344054; background: #f1f4f8; border-radius: 999px; padding: 4px 11px; }
-.aig2-chip b { color: var(--h10-text); }
+.aig2-chip b { color: var(--nds-text); }
 .aig2-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #9a6b00; background: #fdf6e3; border: 1px solid #f1e2b6; border-radius: 8px; padding: 8px 11px; }
 .aig2-ptable { width: 100%; border-collapse: collapse; }
 .aig2-ptable th { text-align: left; font-size: 11.5px; font-weight: 700; color: #475467; background: #f7f9fb; border-bottom: 1px solid #e6e9ee; padding: 8px 12px; white-space: nowrap; }
@@ -42,23 +42,23 @@
 .aig2-ptable tr:last-child td { border-bottom: 0; }
 .aig2-ptable .nm { font-weight: 600; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .aig2-ptable .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.aig2-pwrap { border: 1px solid var(--h10-border); border-radius: 10px; overflow: hidden; }
-.aig2-pempty { padding: 18px 14px; font-size: 12.5px; color: var(--h10-text-3); text-align: center; }
-.aig2-rules { font-size: 12.5px; color: var(--h10-text-2); }
+.aig2-pwrap { border: 1px solid var(--nds-border); border-radius: 10px; overflow: hidden; }
+.aig2-pempty { padding: 18px 14px; font-size: 12.5px; color: var(--nds-text-3); text-align: center; }
+.aig2-rules { font-size: 12.5px; color: var(--nds-text-2); }
 
 /* launch overlay */
 .aig2-launch-back { position: fixed; inset: 0; background: rgba(16, 24, 40, 0.45); z-index: 120; display: flex; align-items: center; justify-content: center; }
 .aig2-launch { background: #fff; border-radius: 14px; box-shadow: 0 18px 48px rgba(20, 28, 38, 0.28); width: 520px; max-width: calc(100vw - 40px); padding: 26px 28px; }
 .aig2-launch h3 { margin: 0 0 16px; font-size: 17px; font-weight: 800; color: #1c2530; }
 .aig2-steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.aig2-step { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--h10-text-2); }
-.aig2-step.on { color: var(--h10-text); font-weight: 600; }
+.aig2-step { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--nds-text-2); }
+.aig2-step.on { color: var(--nds-text); font-weight: 600; }
 .aig2-step.ok { color: #15803d; }
 .aig2-step.err { color: #b42318; }
 .aig2-step .dot { width: 8px; height: 8px; border-radius: 50%; background: #c3cbd6; flex: none; }
-.aig2-step.on .dot { background: var(--h10-primary); }
+.aig2-step.on .dot { background: var(--nds-primary); }
 .aig2-step.ok .dot { background: #15803d; }
 .aig2-step.err .dot { background: #b42318; }
-.aig2-launch .sum { font-size: 12.5px; color: var(--h10-text-2); margin-bottom: 14px; line-height: 1.5; }
+.aig2-launch .sum { font-size: 12.5px; color: var(--nds-text-2); margin-bottom: 14px; line-height: 1.5; }
 .aig2-launch .errs { font-size: 12px; color: #9a6b00; background: #fdf6e3; border-radius: 8px; padding: 8px 11px; margin-bottom: 14px; max-height: 120px; overflow-y: auto; }
 .aig2-launch .btns { display: flex; gap: 10px; justify-content: flex-end; }

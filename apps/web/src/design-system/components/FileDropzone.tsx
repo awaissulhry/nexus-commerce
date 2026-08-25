@@ -83,10 +83,10 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
     : ''
 
   return (
-    <div className={`h10-ds-dropzone-wrap${className ? ` ${className}` : ''}`}>
+    <div className={`nds-dropzone-wrap${className ? ` ${className}` : ''}`}>
       <button
         type="button"
-        className={`h10-ds-dropzone ${drag ? 'drag' : ''}`}
+        className={`nds-dropzone ${drag ? 'drag' : ''}`}
         onClick={() => inputRef.current?.click()}
         onKeyDown={onKeyDown}
         onDragOver={(e) => { e.preventDefault(); if (!disabled) setDrag(true) }}
@@ -95,8 +95,8 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
         disabled={disabled}
       >
         <UploadCloud size={26} aria-hidden />
-        <span className="h10-ds-dropzone-primary">Drag &amp; drop or click to upload</span>
-        {(hint ?? defaultHint) && <span className="h10-ds-dropzone-hint">{hint ?? defaultHint}</span>}
+        <span className="nds-dropzone-primary">Drag &amp; drop or click to upload</span>
+        {(hint ?? defaultHint) && <span className="nds-dropzone-hint">{hint ?? defaultHint}</span>}
       </button>
       <input
         ref={inputRef}
@@ -104,11 +104,11 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
         accept={accept || undefined}
         multiple={multiple}
         disabled={disabled}
-        className="h10-ds-dropzone-input"
+        className="nds-dropzone-input"
         onChange={(e) => { handle(e.target.files); e.target.value = '' }}
       />
       {err && (
-        <span className="h10-ds-dropzone-err" role="alert">
+        <span className="nds-dropzone-err" role="alert">
           <AlertCircle size={13} aria-hidden /> {err}
         </span>
       )}

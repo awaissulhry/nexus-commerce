@@ -49,9 +49,9 @@ function Freshness({ at }: { at: number | null }) {
     const t = setInterval(() => tick((x) => x + 1), 1000);
     return () => clearInterval(t);
   }, []);
-  if (at == null) return <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>syncing…</span>;
+  if (at == null) return <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>syncing…</span>;
   const s = Math.max(0, Math.round((Date.now() - at) / 1000));
-  return <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }} data-testid="freshness">money synced {s < 2 ? "just now" : `${s}s ago`}</span>;
+  return <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }} data-testid="freshness">money synced {s < 2 ? "just now" : `${s}s ago`}</span>;
 }
 
 const ORDER_STATES = ["CONFIRMED", "IN_PRODUCTION", "READY", "SHIPPED", "DELIVERED", "CLOSED"];
@@ -230,16 +230,16 @@ function FinancialsInner() {
   const exportHref = `/api/exports/financials${winQuery()}`;
 
   const metrics = [
-    { label: "Outstanding balance", value: core ? <span style={{ color: "var(--h10-text)" }}>{money(t?.outstandingCents)}</span> : <Skeleton width={90} height={22} /> },
-    { label: "Deposits due", value: core ? <span style={{ color: (t?.depositsDueCents ?? 0) > 0 ? "var(--h10-danger)" : "var(--h10-text)" }}>{money(t?.depositsDueCents)}</span> : <Skeleton width={90} height={22} /> },
+    { label: "Outstanding balance", value: core ? <span style={{ color: "var(--nds-text)" }}>{money(t?.outstandingCents)}</span> : <Skeleton width={90} height={22} /> },
+    { label: "Deposits due", value: core ? <span style={{ color: (t?.depositsDueCents ?? 0) > 0 ? "var(--nds-danger)" : "var(--nds-text)" }}>{money(t?.depositsDueCents)}</span> : <Skeleton width={90} height={22} /> },
     { label: `Invoiced this month (${core?.monthKey ?? "…"})`, value: core ? <>{money(t?.monthInvoicedCents)}</> : <Skeleton width={90} height={22} /> },
-    { label: "Paid this month", value: core ? <span style={{ color: "var(--h10-success-text, var(--h10-text))" }}>{money(t?.monthPaidCents)}</span> : <Skeleton width={90} height={22} /> },
+    { label: "Paid this month", value: core ? <span style={{ color: "var(--nds-success-text, var(--nds-text))" }}>{money(t?.monthPaidCents)}</span> : <Skeleton width={90} height={22} /> },
     ...(cancelled && cancelled.count > 0
       ? [{
           label: "Cancelled w/ money",
           value: (
             <button type="button" onClick={() => setCancelledOpen(true)} title="See the cancelled orders still carrying money"
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--h10-warning-text, var(--h10-text))", textDecoration: "underline", textUnderlineOffset: 3 }}>
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--nds-warning-text, var(--nds-text))", textDecoration: "underline", textUnderlineOffset: 3 }}>
               {money(cancelled.paidCents)} · {cancelled.count}
             </button>
           ),
@@ -261,7 +261,7 @@ function FinancialsInner() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <Freshness at={syncedAt} />
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>· all figures EUR</span>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>· all figures EUR</span>
             </div>
           </div>
         }
@@ -269,9 +269,9 @@ function FinancialsInner() {
 
       <div style={{ margin: "12px 0 14px" }}>
         {/* the DS KPI row (MetricStrip markup); the 5th tile appears only when cancelled money exists */}
-        <div className="h10-ds-metrics">
+        <div className="nds-metrics">
           {metrics.map((m, i) => (
-            <div key={i} className="h10-ds-metric">
+            <div key={i} className="nds-metric">
               <div className="lbl">{m.label}</div>
               <div className="val" style={{ fontVariantNumeric: "tabular-nums" }}>{m.value}</div>
             </div>
@@ -296,9 +296,9 @@ function FinancialsInner() {
           }
           right={
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-2)", fontWeight: 600 }} data-testid="window-label">{windowLabel}</span>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-2)", fontWeight: 600 }} data-testid="window-label">{windowLabel}</span>
               <div style={{ minWidth: 128 }}><DateField value={effFrom} onChange={(v) => nav({ from: v || null, range: v ? null : "all" }, false)} ariaLabel="Window from (Rome day)" placeholder="from" /></div>
-              <span style={{ color: "var(--h10-text-3)" }}>–</span>
+              <span style={{ color: "var(--nds-text-3)" }}>–</span>
               <div style={{ minWidth: 128 }}><DateField value={effTo} onChange={(v) => nav({ to: v || null }, false)} ariaLabel="Window to (Rome day)" placeholder="today" /></div>
               {allTime || fromParam || toParam ? (
                 <Button onClick={() => nav({ from: null, to: null, range: null })}>Last 12 months</Button>
@@ -307,7 +307,7 @@ function FinancialsInner() {
               )}
               {partyId ? (
                 <button type="button" onClick={() => nav({ party: null })} title="Clear customer filter"
-                  style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--h10-primary)", background: "var(--h10-wash-primary, rgba(31,111,222,0.08))", color: "var(--h10-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ display: "inline-flex", gap: 5, alignItems: "center", border: "1px solid var(--nds-primary)", background: "var(--nds-wash-primary, rgba(31,111,222,0.08))", color: "var(--nds-primary)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   {partyLabel || "Customer"} <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>×</span>
                 </button>
               ) : (
@@ -332,12 +332,12 @@ function FinancialsInner() {
           <OrdersGrid rows={shownRows} canMargin={canMargin} onOpen={openDrawer} />
           {cursor && !stateFilter && (
             <div style={{ display: "flex", justifyContent: "center", paddingTop: 10 }}>
-              <button type="button" onClick={() => void loadMore()} style={{ border: "1px dashed var(--h10-border)", borderRadius: 8, background: "none", padding: "7px 16px", fontSize: 12, color: "var(--h10-text-2)", cursor: "pointer" }}>
+              <button type="button" onClick={() => void loadMore()} style={{ border: "1px dashed var(--nds-border)", borderRadius: 8, background: "none", padding: "7px 16px", fontSize: 12, color: "var(--nds-text-2)", cursor: "pointer" }}>
                 Load more orders ({orderRows.length} of {core.ordersTotal ?? "?"} loaded)
               </button>
             </div>
           )}
-          {stateFilter && <div style={{ fontSize: 12, color: "var(--h10-text-3)", padding: "8px 2px" }}>State filter applies to the {orderRows.length} loaded rows — tiles and totals cover the whole window.</div>}
+          {stateFilter && <div style={{ fontSize: 12, color: "var(--nds-text-3)", padding: "8px 2px" }}>State filter applies to the {orderRows.length} loaded rows — tiles and totals cover the whole window.</div>}
         </>
       ))}
       {tab === "party" && (parties == null ? <GridSkeleton /> : <PartyGrid rows={parties} canMargin={canMargin} onDrill={drillParty} />)}
@@ -373,7 +373,7 @@ function FinancialsInner() {
       {/* EPF2 (D-06 close) — export states exactly what it exports before it runs */}
       <Modal open={exportOpen} onClose={() => setExportOpen(false)} title="Export period" size="sm"
         footer={<><Button onClick={() => setExportOpen(false)}>Cancel</Button><Button variant="primary" onClick={() => { window.location.assign(exportHref); setExportOpen(false); }}>Download CSV</Button></>}>
-        <div style={{ fontSize: 12.5, color: "var(--h10-text-2)", lineHeight: 1.6 }} data-testid="export-confirm">
+        <div style={{ fontSize: 12.5, color: "var(--nds-text-2)", lineHeight: 1.6 }} data-testid="export-confirm">
           Exports <b>the current view</b>: window <b>{windowLabel}</b>{effFrom || effTo ? <> ({effFrom || "start"} → {effTo || "today"}, Rome days)</> : null}
           {partyId ? <>, customer <b>{partyLabel || "selected"}</b></> : ", all customers"}.
           Two sections: per-invoice rows (VAT on invoiced amounts, issue-dated) + the per-order rollup. The run is audited.

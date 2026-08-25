@@ -153,32 +153,32 @@
    `.acr-fleet` is worn by three fleet pages. */
 .as-page .as-gridcard { margin-top: 4px; }
 
-/* The table-layout trap, third instance in this series. `.h10-ds-grid` is
+/* The table-layout trap, third instance in this series. `.nds-grid` is
    `table-layout: auto` with `white-space: nowrap`, so a declared width is only
    a hint and the longest string wins the slack. Measured on the shipped
    `acr-pg-tbl` at 1728px: 675px — 41.8% of the table — was allocated to
    nothing, and "Points at" ran 3.43× its widest content while carrying the one
    fact this page exists for. `fixed` makes every declared width exact. */
-.as-page .h10-ds-grid { table-layout: fixed; width: 100%; }
-.as-page .h10-ds-grid th,
-.as-page .h10-ds-grid td {
+.as-page .nds-grid { table-layout: fixed; width: 100%; }
+.as-page .nds-grid th,
+.as-page .nds-grid td {
   overflow: hidden;
   vertical-align: middle;
 }
 /* No cell wraps here — one line, ellipsis, full value in the tooltip. That is
    what makes row height uniform at every width; the shipped table varied 34%
    down one list at 896px because titles wrapped and subtitles did not. */
-.as-page .h10-ds-grid td { white-space: nowrap; }
+.as-page .nds-grid td { white-space: nowrap; }
 /* The header's own colour is the DS `--text-secondary` (#5b6573 on #f7f9fb =
    5.6:1), which is why moving to this substrate fixes the 2.73:1 header that
    `acr-pg-tbl` shipped. Recorded so nobody "helpfully" re-greys it. */
-.as-page .h10-ds-grid-empty { color: #5b6573; padding: 34px 20px; }
+.as-page .nds-grid-empty { color: #5b6573; padding: 34px 20px; }
 
-.as-page .h10-ds-toolbar { flex-wrap: wrap; row-gap: 6px; }
+.as-page .nds-toolbar { flex-wrap: wrap; row-gap: 6px; }
 .as-search { min-width: 240px; }
 /* The count is the toolbar's anchor, so it does not shrink under the search
    box — a truncated "Showing 22 of 24" is worse than a narrower input. */
-.as-page .h10-ds-toolbar .cnt { flex: none; }
+.as-page .nds-toolbar .cnt { flex: none; }
 .as-order,
 .as-asof {
   font-size: 11.5px;
@@ -216,7 +216,7 @@
 .as-kebab:focus-visible { outline: 2px solid #2f6feb; outline-offset: 1px; }
 .as-kebab[aria-expanded='true'] { background: #eef2f7; border-color: #c6d2e2; }
 
-/* Portalled to document.body, so it escapes both `.h10-ds-gridcard`'s
+/* Portalled to document.body, so it escapes both `.nds-gridcard`'s
    overflow:hidden and the stacking context a sticky cell would open. The
    z-index only works BECAUSE it is out here. */
 .as-menu {
@@ -558,14 +558,14 @@
    override this page owns missed it. `.as-drawer` is that root.
    Two DS roles measured below the floor inside it on prod: the drawer
    subtitle at 3.10:1 and the DateField placeholder at 3.10:1. */
-.as-drawer .h10-ds-drawer-h .st { color: #5b6573; }
+.as-drawer .nds-drawer-h .st { color: #5b6573; }
 .as-drawer input::placeholder,
 .as-drawer textarea::placeholder { color: #6b7480; }
 /* The DateField's "No deadline" is NOT a `::placeholder` — it is a
    `<span class="ph">` inside the DS listbox button, so the rule above sailed
    straight past it and it stayed at 3.10:1. Measured, not assumed: the probe
    found one survivor and the survivor named itself. */
-.as-drawer .h10-ds-listbox-btn .ph { color: #6b7480; }
+.as-drawer .nds-listbox-btn .ph { color: #6b7480; }
 /* The worker descriptions were 2.82–2.95:1 — and they are the only text on
    this screen that tells you which worker to pick. */
 .as-drawer .as-workerbtn .ds { color: #5b6573; }

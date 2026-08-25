@@ -12,14 +12,14 @@ await p.locator('.h10-spw-bulk-btn', { hasText: 'Negatives' }).click(); await p.
 
 // measure padding: textarea left/right vs modal body left/right
 const m = await p.evaluate(() => {
-  const modal = document.querySelector('.h10-ds-modal')
-  const body = document.querySelector('.h10-ds-modal-b')
-  const ta = document.querySelector('.h10-ds-textarea')
+  const modal = document.querySelector('.nds-modal')
+  const body = document.querySelector('.nds-modal-b')
+  const ta = document.querySelector('.nds-textarea')
   const r = (el) => el ? (({ left, right, width }) => ({ left: Math.round(left), right: Math.round(right), w: Math.round(width) }))(el.getBoundingClientRect()) : null
   const br = body?.getBoundingClientRect(), tr = ta?.getBoundingClientRect()
   return { modal: r(modal), body: r(body), textarea: r(ta), leftInset: br && tr ? Math.round(tr.left - br.left) : null, rightInset: br && tr ? Math.round(br.right - tr.right) : null, usesDsModal: !!modal, usesDsTextarea: !!ta }
 })
-await p.locator('.h10-ds-modal').screenshot({ path: '/tmp/spw/dsmodal.png' })
+await p.locator('.nds-modal').screenshot({ path: '/tmp/spw/dsmodal.png' })
 console.log(JSON.stringify(m, null, 2))
 await b.close()
 execSync('sips -Z 1200 /tmp/spw/dsmodal.png --out /tmp/spw/dsmodal_v.png', { stdio: 'ignore' })

@@ -261,8 +261,8 @@ export function AccountSwitcher({
 
   if (loading) {
     return (
-      <div className={`h10-ds-acct${className ? ` ${className}` : ''}`}>
-        <span className="h10-ds-acct-skeleton" aria-hidden />
+      <div className={`nds-acct${className ? ` ${className}` : ''}`}>
+        <span className="nds-acct-skeleton" aria-hidden />
       </div>
     )
   }
@@ -270,21 +270,21 @@ export function AccountSwitcher({
   // A failed load must not blank the chrome. Say so quietly and stay out of the way.
   if (error || accounts.length === 0) {
     return (
-      <div className={`h10-ds-acct${className ? ` ${className}` : ''}`}>
-        <a className="h10-ds-acct-trigger is-muted" href={manageHref}>
-          <span className="h10-ds-acct-dot" data-health={error ? 'error' : 'unknown'} aria-hidden />
-          <span className="h10-ds-acct-summary">{error ? 'Accounts unavailable' : 'No accounts connected'}</span>
+      <div className={`nds-acct${className ? ` ${className}` : ''}`}>
+        <a className="nds-acct-trigger is-muted" href={manageHref}>
+          <span className="nds-acct-dot" data-health={error ? 'error' : 'unknown'} aria-hidden />
+          <span className="nds-acct-summary">{error ? 'Accounts unavailable' : 'No accounts connected'}</span>
         </a>
       </div>
     )
   }
 
   return (
-    <div className={`h10-ds-acct${className ? ` ${className}` : ''}`} ref={wrapRef}>
+    <div className={`nds-acct${className ? ` ${className}` : ''}`} ref={wrapRef}>
       <button
         type="button"
         ref={triggerRef}
-        className="h10-ds-acct-trigger"
+        className="nds-acct-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Connected accounts: ${summary}`}
@@ -293,33 +293,33 @@ export function AccountSwitcher({
         {channelPills.map((p) => (
           <span
             key={p.channel}
-            className="h10-ds-acct-pill"
+            className="nds-acct-pill"
             data-channel={p.channel}
             // A left edge rather than a fill: the pill's own text contrast is
             // already verified against the panel ground, and tinting the whole
             // pill would put arbitrary text on an arbitrary colour.
             style={p.color ? { boxShadow: `inset 3px 0 0 0 ${p.color}` } : undefined}
           >
-            <span className="h10-ds-acct-dot" data-health={p.health} aria-hidden />
+            <span className="nds-acct-dot" data-health={p.health} aria-hidden />
             {channelName(p.channel)}
-            {p.count > 1 && <span className="h10-ds-acct-pill-n">{p.count}</span>}
+            {p.count > 1 && <span className="nds-acct-pill-n">{p.count}</span>}
           </span>
         ))}
-        <svg className="h10-ds-acct-caret" viewBox="0 0 12 12" aria-hidden width="12" height="12">
+        <svg className="nds-acct-caret" viewBox="0 0 12 12" aria-hidden width="12" height="12">
           <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
       {open && (
-        <div className="h10-ds-acct-panel" role="dialog" aria-label="Connected accounts">
-          <div className="h10-ds-acct-panel-head">
+        <div className="nds-acct-panel" role="dialog" aria-label="Connected accounts">
+          <div className="nds-acct-panel-head">
             <span>Connected accounts</span>
-            <span className="h10-ds-acct-count">{accounts.length}</span>
+            <span className="nds-acct-count">{accounts.length}</span>
           </div>
 
           {grouped.map(([channel, rows]) => (
-            <div key={channel} className="h10-ds-acct-group">
-              <div className="h10-ds-acct-group-head">{channelName(channel)}</div>
+            <div key={channel} className="nds-acct-group">
+              <div className="nds-acct-group-head">{channelName(channel)}</div>
               {rows.map((a) => {
                 const isSelected = selectedId ? a.id === selectedId : a.isPrimary
                 const RowTag = (canSwitch ? 'button' : 'div') as 'button' | 'div'
@@ -327,23 +327,23 @@ export function AccountSwitcher({
                 <RowTag
                   key={a.id}
                   type={canSwitch ? 'button' : undefined}
-                  className={`h10-ds-acct-row${canSwitch ? ' is-link' : ''}`}
+                  className={`nds-acct-row${canSwitch ? ' is-link' : ''}`}
                   data-primary={a.isPrimary || undefined}
                   data-selected={isSelected || undefined}
                   aria-current={canSwitch && isSelected ? 'true' : undefined}
                   onClick={canSwitch ? () => switchTo(a.id) : undefined}
                 >
-                  <span className="h10-ds-acct-dot" data-health={a.health} aria-hidden />
+                  <span className="nds-acct-dot" data-health={a.health} aria-hidden />
                   {a.accountColor && (
                     <span
-                      className="h10-ds-acct-swatch"
+                      className="nds-acct-swatch"
                       style={{ background: a.accountColor }}
                       aria-hidden
                     />
                   )}
-                  <span className="h10-ds-acct-row-main">
-                    <span className="h10-ds-acct-row-label">{primaryLabel(a)}</span>
-                    <span className="h10-ds-acct-row-sub">
+                  <span className="nds-acct-row-main">
+                    <span className="nds-acct-row-label">{primaryLabel(a)}</span>
+                    <span className="nds-acct-row-sub">
                       {a.labelIsPlaceholder ? (
                         // Naming what we actually hold, rather than dressing it up.
                         <>
@@ -352,17 +352,17 @@ export function AccountSwitcher({
                       ) : (
                         <>{HEALTH_TEXT[a.health]}</>
                       )}
-                      {a.managedBy === 'env' && <span className="h10-ds-acct-tag">env-managed</span>}
+                      {a.managedBy === 'env' && <span className="nds-acct-tag">env-managed</span>}
                     </span>
                     {a.healthReason && (
-                      <span className="h10-ds-acct-row-warn" data-tone={a.health}>
+                      <span className="nds-acct-row-warn" data-tone={a.health}>
                         {a.healthReason}
                       </span>
                     )}
                     {a.markets.length > 0 && (
-                      <span className="h10-ds-acct-markets">
+                      <span className="nds-acct-markets">
                         {a.markets.map((m) => (
-                          <span key={m} className="h10-ds-acct-market">
+                          <span key={m} className="nds-acct-market">
                             {m}
                           </span>
                         ))}
@@ -370,7 +370,7 @@ export function AccountSwitcher({
                     )}
                   </span>
                   {canSwitch && isSelected && (
-                    <span className="h10-ds-acct-check" aria-hidden>
+                    <span className="nds-acct-check" aria-hidden>
                       ✓
                     </span>
                   )}
@@ -381,21 +381,21 @@ export function AccountSwitcher({
           ))}
 
           {notConnected.length > 0 && (
-            <div className="h10-ds-acct-group">
-              <div className="h10-ds-acct-group-head">Not connected</div>
+            <div className="nds-acct-group">
+              <div className="nds-acct-group-head">Not connected</div>
               {notConnected.map((c) => (
-                <a key={c} className="h10-ds-acct-row is-link" href={manageHref}>
-                  <span className="h10-ds-acct-dot" data-health="off" aria-hidden />
-                  <span className="h10-ds-acct-row-main">
-                    <span className="h10-ds-acct-row-label">{channelName(c)}</span>
-                    <span className="h10-ds-acct-row-sub">Connect →</span>
+                <a key={c} className="nds-acct-row is-link" href={manageHref}>
+                  <span className="nds-acct-dot" data-health="off" aria-hidden />
+                  <span className="nds-acct-row-main">
+                    <span className="nds-acct-row-label">{channelName(c)}</span>
+                    <span className="nds-acct-row-sub">Connect →</span>
                   </span>
                 </a>
               ))}
             </div>
           )}
 
-          <div className="h10-ds-acct-foot">
+          <div className="nds-acct-foot">
             <a href={manageHref}>Manage channels</a>
           </div>
         </div>

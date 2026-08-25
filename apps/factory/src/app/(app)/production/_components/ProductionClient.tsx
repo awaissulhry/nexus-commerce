@@ -23,8 +23,8 @@ import { QCChecklist } from "./QCChecklist";
 import { STAGE_LABEL, type ProductionResponse, type WOCard } from "./types";
 
 const STATUS_TONE = { running: "info", paused: "warning", not_started: "neutral", done: "success" } as const;
-const COVER = { OK: { c: "var(--h10-success)", t: "covered" }, PARTIAL: { c: "var(--h10-warning, #e9a100)", t: "partly short" }, SHORT: { c: "var(--h10-danger)", t: "short" } } as const;
-const kioskBtn = (primary: boolean): React.CSSProperties => ({ flex: 1, display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "center", padding: "14px 20px", fontSize: 16, fontWeight: 700, borderRadius: 12, cursor: "pointer", border: primary ? "none" : "1px solid var(--h10-border)", background: primary ? "var(--h10-primary)" : "var(--h10-surface)", color: primary ? "#fff" : "var(--h10-text)" });
+const COVER = { OK: { c: "var(--nds-success)", t: "covered" }, PARTIAL: { c: "var(--nds-warning, #e9a100)", t: "partly short" }, SHORT: { c: "var(--nds-danger)", t: "short" } } as const;
+const kioskBtn = (primary: boolean): React.CSSProperties => ({ flex: 1, display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "center", padding: "14px 20px", fontSize: 16, fontWeight: 700, borderRadius: 12, cursor: "pointer", border: primary ? "none" : "1px solid var(--nds-border)", background: primary ? "var(--nds-primary)" : "var(--nds-surface)", color: primary ? "#fff" : "var(--nds-text)" });
 
 // FS3 — the worker-assign picker: the old whole-list Menu became a paged,
 // type-to-find AsyncCombobox on /api/users-lite?q= (500 users stay pickable).
@@ -44,7 +44,7 @@ function AssignPicker({ assignee, onAssign }: { assignee: { id: string; displayN
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--h10-text-3)" }}
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--nds-text-3)" }}
       >
         <span style={{ display: "inline-flex", gap: 3, alignItems: "center", fontSize: 11 }}><User size={11} />{assignee?.displayName?.split(" ")[0] ?? "assign"}</span>
       </button>
@@ -182,15 +182,15 @@ function ProductionInner() {
       {data?.worker ? (
         <div style={{ maxWidth: 640, margin: "0 auto", display: "grid", gap: 14 }}>
           {(data.workOrders ?? []).map((w, i) => (
-            <div key={w.id} style={{ border: i === 0 ? "2px solid var(--h10-primary)" : "1px solid var(--h10-border)", borderRadius: 16, padding: 18, background: "var(--h10-surface)", boxShadow: i === 0 ? "0 4px 16px rgb(31 111 222 / 0.12)" : "0 1px 2px rgb(20 28 38 / 0.05)" }}>
-              {i === 0 && <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--h10-primary)", marginBottom: 8 }}>YOUR NEXT TASK</div>}
+            <div key={w.id} style={{ border: i === 0 ? "2px solid var(--nds-primary)" : "1px solid var(--nds-border)", borderRadius: 16, padding: 18, background: "var(--nds-surface)", boxShadow: i === 0 ? "0 4px 16px rgb(31 111 222 / 0.12)" : "0 1px 2px rgb(20 28 38 / 0.05)" }}>
+              {i === 0 && <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--nds-primary)", marginBottom: 8 }}>YOUR NEXT TASK</div>}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 20, fontWeight: 800 }}>{w.number}</span>
                 <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><CoverageDot w={w} />{w.current && <Pill tone={STATUS_TONE[w.current.status]}>{STAGE_LABEL(w.current.stage)}</Pill>}</span>
               </div>
-              <div style={{ fontSize: 15, color: "var(--h10-text-2)", marginTop: 2 }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
-              {w.current && <div style={{ fontSize: 13, color: "var(--h10-text-3)", marginTop: 4 }}>{w.doneCount}/{w.stageCount} stages · <StageTimer cur={w.current} /></div>}
-              {w.shortMaterials && w.shortMaterials.length > 0 && <div style={{ fontSize: 12.5, color: "var(--h10-danger)", marginTop: 4 }}>⚠ short: {w.shortMaterials.join(", ")}</div>}
+              <div style={{ fontSize: 15, color: "var(--nds-text-2)", marginTop: 2 }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
+              {w.current && <div style={{ fontSize: 13, color: "var(--nds-text-3)", marginTop: 4 }}>{w.doneCount}/{w.stageCount} stages · <StageTimer cur={w.current} /></div>}
+              {w.shortMaterials && w.shortMaterials.length > 0 && <div style={{ fontSize: 12.5, color: "var(--nds-danger)", marginTop: 4 }}>⚠ short: {w.shortMaterials.join(", ")}</div>}
               {canAdvance && w.current && (
                 <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
                   {w.current.status === "not_started" && <button type="button" onClick={() => void act(w.current!.id, "start")} style={kioskBtn(true)}><Play size={18} /> Start</button>}
@@ -200,7 +200,7 @@ function ProductionInner() {
               )}
             </div>
           ))}
-          {data.workOrders.length === 0 && <div style={{ fontSize: 15, color: "var(--h10-text-3)", textAlign: "center", padding: "40px 0" }}>No tasks — you&rsquo;re all caught up. 👍</div>}
+          {data.workOrders.length === 0 && <div style={{ fontSize: 15, color: "var(--nds-text-3)", textAlign: "center", padding: "40px 0" }}>No tasks — you&rsquo;re all caught up. 👍</div>}
         </div>
       ) : (<>
       <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
@@ -210,28 +210,28 @@ function ProductionInner() {
             <div key={col} style={{ flex: "1 0 240px", minWidth: 240 }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "0 4px 8px" }}>
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{col === "DONE" ? "Done" : STAGE_LABEL(col)}</span>
-                <span style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{cards.length}</span>
+                <span style={{ fontSize: 11, color: "var(--nds-text-3)" }}>{cards.length}</span>
               </div>
-              <div style={{ display: "grid", gap: 8, alignContent: "start", background: "var(--h10-bg-subtle, rgba(20,28,38,0.02))", borderRadius: 12, padding: 8, minHeight: 100 }}>
+              <div style={{ display: "grid", gap: 8, alignContent: "start", background: "var(--nds-bg-subtle, rgba(20,28,38,0.02))", borderRadius: 12, padding: 8, minHeight: 100 }}>
                 {cards.map((w) => (
-                  <div key={w.id} onClick={() => open(w.id)} style={{ cursor: "pointer", border: "1px solid var(--h10-border-subtle)", borderRadius: 10, background: "var(--h10-surface)", padding: 10, boxShadow: "0 1px 2px rgb(20 28 38 / 0.04)" }}>
+                  <div key={w.id} onClick={() => open(w.id)} style={{ cursor: "pointer", border: "1px solid var(--nds-border-subtle)", borderRadius: 10, background: "var(--nds-surface)", padding: 10, boxShadow: "0 1px 2px rgb(20 28 38 / 0.04)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", minWidth: 0 }}>
                         <CoverageDot w={w} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--h10-text-link)" }}>{w.number}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--nds-text-link)" }}>{w.number}</span>
                       </span>
                       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
                         {canAdvance && (
                           <span style={{ display: "inline-flex" }}>
-                            <button type="button" title="raise priority" onClick={() => void bumpPriority(w, 1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--h10-text-3)", lineHeight: 0 }}><ChevronUp size={13} /></button>
-                            <button type="button" title="lower priority" onClick={() => void bumpPriority(w, -1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--h10-text-3)", lineHeight: 0 }}><ChevronDown size={13} /></button>
+                            <button type="button" title="raise priority" onClick={() => void bumpPriority(w, 1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--nds-text-3)", lineHeight: 0 }}><ChevronUp size={13} /></button>
+                            <button type="button" title="lower priority" onClick={() => void bumpPriority(w, -1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--nds-text-3)", lineHeight: 0 }}><ChevronDown size={13} /></button>
                           </span>
                         )}
-                        {w.estCostCents != null && <span style={{ fontSize: 11, color: "var(--h10-text-3)", fontFamily: "ui-monospace, monospace" }}>{eur(w.estCostCents)}</span>}
+                        {w.estCostCents != null && <span style={{ fontSize: 11, color: "var(--nds-text-3)", fontFamily: "ui-monospace, monospace" }}>{eur(w.estCostCents)}</span>}
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--h10-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
-                    <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 2 }}>{w.orderNumber} · {w.doneCount}/{w.stageCount} stages{w.promiseDateAt ? ` · due ${new Date(w.promiseDateAt).toLocaleDateString()}` : ""}</div>
+                    <div style={{ fontSize: 12, color: "var(--nds-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
+                    <div style={{ fontSize: 11, color: "var(--nds-text-3)", marginTop: 2 }}>{w.orderNumber} · {w.doneCount}/{w.stageCount} stages{w.promiseDateAt ? ` · due ${new Date(w.promiseDateAt).toLocaleDateString()}` : ""}</div>
                     {w.current && (
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 6 }}>
                         <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
@@ -246,15 +246,15 @@ function ProductionInner() {
                     <div style={{ marginTop: 8 }}><StageButtons w={w} /></div>
                   </div>
                 ))}
-                {cards.length === 0 && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", textAlign: "center", padding: "16px 0" }}>—</div>}
+                {cards.length === 0 && <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", textAlign: "center", padding: "16px 0" }}>—</div>}
               </div>
             </div>
           );
         })}
       </div>
-      {data && data.workOrders.length === 0 && <div style={{ fontSize: 13, color: "var(--h10-text-3)", marginTop: 20, textAlign: "center" }}>Nothing in production yet — Start production on a confirmed order.</div>}
+      {data && data.workOrders.length === 0 && <div style={{ fontSize: 13, color: "var(--nds-text-3)", marginTop: 20, textAlign: "center" }}>Nothing in production yet — Start production on a confirmed order.</div>}
       {data && (data.activeTotal ?? 0) > data.workOrders.length && (
-        <div style={{ fontSize: 12, color: "var(--h10-text-2)", marginTop: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 12, color: "var(--nds-text-2)", marginTop: 12, textAlign: "center" }}>
           Showing the {data.workOrders.length} highest-priority of {data.activeTotal} active work orders — raise a job&rsquo;s priority to surface it.
         </div>
       )}
@@ -264,12 +264,12 @@ function ProductionInner() {
       <Modal open={!!material} onClose={() => setMaterial(null)} title="Cutting done — material used" size="sm"
         footer={<><Button onClick={() => setMaterial(null)}>Cancel</Button><Button variant="primary" onClick={submitMaterial} disabled={busy}>Finish cutting</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Enter the real quantity used for <b>{material?.number}</b>. This consumes the material and frees the reservation; the diff vs the estimate is recorded.</div>
-          {reserved.length === 0 && <div style={{ fontSize: 12.5, color: "var(--h10-text-3)" }}>No material was reserved for this work order.</div>}
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>Enter the real quantity used for <b>{material?.number}</b>. This consumes the material and frees the reservation; the diff vs the estimate is recorded.</div>
+          {reserved.length === 0 && <div style={{ fontSize: 12.5, color: "var(--nds-text-3)" }}>No material was reserved for this work order.</div>}
           {reserved.map((m) => (
             <div key={m.materialId} style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12.5 }}>{m.name} <span style={{ color: "var(--h10-text-3)" }}>· est {m.reservedQty} {m.unit.toLowerCase()}</span></span>
-              <input type="number" min="0" step="0.01" value={useVals[m.materialId] ?? ""} onChange={(e) => setUseVals((v) => ({ ...v, [m.materialId]: e.target.value }))} style={{ border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+              <span style={{ fontSize: 12.5 }}>{m.name} <span style={{ color: "var(--nds-text-3)" }}>· est {m.reservedQty} {m.unit.toLowerCase()}</span></span>
+              <input type="number" min="0" step="0.01" value={useVals[m.materialId] ?? ""} onChange={(e) => setUseVals((v) => ({ ...v, [m.materialId]: e.target.value }))} style={{ border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
             </div>
           ))}
         </div>
@@ -278,24 +278,24 @@ function ProductionInner() {
       <Modal open={!!scrap} onClose={() => setScrap(null)} title="Report scrap" size="sm"
         footer={<><Button onClick={() => setScrap(null)}>Cancel</Button><Button variant="primary" onClick={submitScrap} disabled={!scrapReason.trim()}>Record scrap</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>What went wrong? A material write-off can be recorded from Materials (FP7).</div>
-          <textarea value={scrapReason} onChange={(e) => setScrapReason(e.target.value)} rows={3} placeholder="e.g. hide flaw on the left front panel" style={{ border: "1px solid var(--h10-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--h10-surface)", color: "var(--h10-text)" }} />
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>What went wrong? A material write-off can be recorded from Materials (FP7).</div>
+          <textarea value={scrapReason} onChange={(e) => setScrapReason(e.target.value)} rows={3} placeholder="e.g. hide flaw on the left front panel" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
         </div>
       </Modal>
 
       <Drawer open={!!openWo} onClose={() => setOpenWo(null)} title={detail?.wo.number ?? "Work order"}>
         {detail && (
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>{detail.wo.orderNumber} · {detail.wo.party}{detail.wo.label ? ` · ${detail.wo.label}` : ""}</div>
+            <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>{detail.wo.orderNumber} · {detail.wo.party}{detail.wo.label ? ` · ${detail.wo.label}` : ""}</div>
             {detail.wo.estCostCents != null && (
-              <div style={{ display: "flex", gap: 18, fontSize: 12.5, padding: "8px 10px", background: "var(--h10-bg-subtle, rgba(20,28,38,0.03))", borderRadius: 8 }}>
-                <span style={{ color: "var(--h10-text-3)" }}>Est. cost <b style={{ color: "var(--h10-text)", fontFamily: "ui-monospace, monospace" }}>{eur(detail.wo.estCostCents)}</b></span>
-                <span style={{ color: "var(--h10-text-3)" }}>Actual material <b style={{ fontFamily: "ui-monospace, monospace", color: (detail.wo.actualMaterialCents ?? 0) > detail.wo.estCostCents ? "var(--h10-danger)" : "var(--h10-success)" }}>{eur(detail.wo.actualMaterialCents ?? 0)}</b></span>
+              <div style={{ display: "flex", gap: 18, fontSize: 12.5, padding: "8px 10px", background: "var(--nds-bg-subtle, rgba(20,28,38,0.03))", borderRadius: 8 }}>
+                <span style={{ color: "var(--nds-text-3)" }}>Est. cost <b style={{ color: "var(--nds-text)", fontFamily: "ui-monospace, monospace" }}>{eur(detail.wo.estCostCents)}</b></span>
+                <span style={{ color: "var(--nds-text-3)" }}>Actual material <b style={{ fontFamily: "ui-monospace, monospace", color: (detail.wo.actualMaterialCents ?? 0) > detail.wo.estCostCents ? "var(--nds-danger)" : "var(--nds-success)" }}>{eur(detail.wo.actualMaterialCents ?? 0)}</b></span>
               </div>
             )}
             <div style={{ display: "grid", gap: 8 }}>
               {detail.wo.stages.map((s) => (
-                <div key={s.id} style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: 10, background: s.isCurrent ? "var(--h10-wash-primary, rgba(31,111,222,0.05))" : undefined }}>
+                <div key={s.id} style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: 10, background: s.isCurrent ? "var(--nds-wash-primary, rgba(31,111,222,0.05))" : undefined }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{STAGE_LABEL(s.stage)}</span>
                     <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
@@ -303,11 +303,11 @@ function ProductionInner() {
                       {s.isCurrent && s.status !== "done" && <StageTimer cur={{ id: s.id, stage: s.stage, status: s.status, startedAt: s.startedAt, pausedMs: s.pausedMs, pausedAt: s.pausedAt, assignee: s.assignee }} />}
                     </span>
                   </div>
-                  {s.assignee && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", marginTop: 3 }}>{s.assignee.displayName}</div>}
-                  {s.scrapNotes && <div style={{ fontSize: 11.5, color: "var(--h10-danger)", marginTop: 3, whiteSpace: "pre-line" }}>Scrap: {s.scrapNotes}</div>}
+                  {s.assignee && <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginTop: 3 }}>{s.assignee.displayName}</div>}
+                  {s.scrapNotes && <div style={{ fontSize: 11.5, color: "var(--nds-danger)", marginTop: 3, whiteSpace: "pre-line" }}>Scrap: {s.scrapNotes}</div>}
                   {s.stage === "QC" && s.isCurrent && <QCChecklist stageId={s.id} canEdit={canAdvance} onChanged={() => detail && void loadDetail(detail.wo.id)} />}
                   {canMaterials && s.isCurrent && (s.status === "running" || s.status === "paused") && (
-                    <button type="button" onClick={() => { setScrapReason(""); setScrap({ stageId: s.id }); }} style={{ marginTop: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--h10-text-3)" }}>Report scrap</button>
+                    <button type="button" onClick={() => { setScrapReason(""); setScrap({ stageId: s.id }); }} style={{ marginTop: 6, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--nds-text-3)" }}>Report scrap</button>
                   )}
                 </div>
               ))}

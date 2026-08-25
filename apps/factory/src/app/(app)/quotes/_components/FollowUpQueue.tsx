@@ -63,12 +63,12 @@ export function FollowUpQueue({ rows, config, canSend, onOpen, onChanged }: {
             type="button"
             onClick={() => setCollapsed((c) => !c)}
             aria-expanded={!collapsed}
-            style={{ display: "inline-flex", gap: 7, alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--h10-text)", fontWeight: 700 }}
+            style={{ display: "inline-flex", gap: 7, alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--nds-text)", fontWeight: 700 }}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-            <BellRing size={14} style={{ color: "var(--h10-warning, #b45309)" }} />
+            <BellRing size={14} style={{ color: "var(--nds-warning, #b45309)" }} />
             Needs follow-up
-            <span style={{ fontWeight: 600, fontSize: 11.5, color: "var(--h10-text-3)" }}>{rows.length} quote{rows.length === 1 ? "" : "s"}</span>
+            <span style={{ fontWeight: 600, fontSize: 11.5, color: "var(--nds-text-3)" }}>{rows.length} quote{rows.length === 1 ? "" : "s"}</span>
           </button>
         }
         headerAction={canSend ? <CadenceGear config={config} onSaved={onChanged} /> : undefined}
@@ -76,11 +76,11 @@ export function FollowUpQueue({ rows, config, canSend, onOpen, onChanged }: {
         {!collapsed && (
           <div style={{ display: "grid" }}>
             {rows.map((r, i) => (
-              <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--h10-border-subtle)", fontSize: 12.5 }}>
-                <button type="button" onClick={() => onOpen(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>
-                <span style={{ color: "var(--h10-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{r.party.name}</span>
+              <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--nds-border-subtle)", fontSize: 12.5 }}>
+                <button type="button" onClick={() => onOpen(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.number}</button>
+                <span style={{ color: "var(--nds-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{r.party.name}</span>
                 <Pill tone={RULE_TONE[r.rule]}>{FOLLOW_UP_RULE_LABEL[r.rule]}</Pill>
-                <span style={{ color: "var(--h10-text-3)", fontSize: 11.5 }}>{daysCopy(r)}</span>
+                <span style={{ color: "var(--nds-text-3)", fontSize: 11.5 }}>{daysCopy(r)}</span>
                 <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontWeight: 600 }}>{r.netCents ? eur(r.netCents) : "—"}</span>
                 {canSend && (
                   <span style={{ display: "inline-flex", gap: 6 }}>
@@ -140,11 +140,11 @@ function CadenceGear({ config, onSaved }: { config: PipelineResponse["followupCo
   };
 
   const numRow = (label: string, value: string, set: (v: string) => void) => (
-    <label style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", fontSize: 12, color: "var(--h10-text-2)" }}>
+    <label style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", fontSize: 12, color: "var(--nds-text-2)" }}>
       {label}
       <input
         type="number" min={1} max={90} value={value} onChange={(e) => set(e.target.value)}
-        style={{ width: 58, border: "1px solid var(--h10-border)", borderRadius: 7, padding: "3px 6px", font: "12.5px var(--font-mono)", textAlign: "center", background: "var(--h10-surface)", color: "var(--h10-text)" }}
+        style={{ width: 58, border: "1px solid var(--nds-border)", borderRadius: 7, padding: "3px 6px", font: "12.5px var(--font-mono)", textAlign: "center", background: "var(--nds-surface)", color: "var(--nds-text)" }}
       />
     </label>
   );
@@ -153,13 +153,13 @@ function CadenceGear({ config, onSaved }: { config: PipelineResponse["followupCo
     <div ref={ref} style={{ position: "relative" }}>
       <button
         type="button" aria-label="Follow-up cadence settings" onClick={() => setOpen((o) => !o)}
-        style={{ display: "inline-flex", padding: 4, border: "none", background: "none", cursor: "pointer", color: "var(--h10-text-3)", borderRadius: 6 }}
+        style={{ display: "inline-flex", padding: 4, border: "none", background: "none", cursor: "pointer", color: "var(--nds-text-3)", borderRadius: 6 }}
       >
         <Settings2 size={15} />
       </button>
       {open && (
-        <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 30, width: 260, background: "var(--h10-surface)", border: "1px solid var(--h10-border)", borderRadius: 10, boxShadow: "0 8px 24px rgb(20 28 38 / 0.14)", padding: 12, display: "grid", gap: 9 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--h10-text-3)" }}>Follow-up cadence (days)</div>
+        <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 30, width: 260, background: "var(--nds-surface)", border: "1px solid var(--nds-border)", borderRadius: 10, boxShadow: "0 8px 24px rgb(20 28 38 / 0.14)", padding: 12, display: "grid", gap: 9 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--nds-text-3)" }}>Follow-up cadence (days)</div>
           {numRow("Nudge when unviewed for", unviewed, setUnviewed)}
           {numRow("Nudge when viewed, silent for", viewed, setViewed)}
           {numRow("Alert before expiry", preExpiry, setPreExpiry)}
@@ -212,11 +212,11 @@ function NudgeModal({ row, onClose, onSent }: { row: FollowUpRow; onClose: () =>
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" onClick={send} disabled={busy || text === null}>{busy ? "Sending…" : "Send"}</Button></>}
     >
       <div style={{ display: "grid", gap: 8, fontSize: 12.5 }}>
-        <div style={{ color: "var(--h10-text-2)" }}>
+        <div style={{ color: "var(--nds-text-2)" }}>
           To <b>{row.party.name}</b> — threads into the original conversation. The PDF isn't re-attached; the message references the offer already sent.
         </div>
         {text === null ? (
-          <div style={{ fontSize: 12, color: "var(--h10-text-3)" }}>Rendering…</div>
+          <div style={{ fontSize: 12, color: "var(--nds-text-3)" }}>Rendering…</div>
         ) : (
           <Textarea aria-label="Follow-up message" value={text} onChange={(e) => setText(e.target.value)} rows={8} />
         )}

@@ -56,10 +56,10 @@ if (await grid.count()) { await grid.screenshot({ path: `${OUT}/datagrid.png` })
 const patterns = page.locator('[data-cat="patterns"]')
 if (await patterns.count()) { await patterns.screenshot({ path: `${OUT}/patterns.png` }); console.log('ok patterns') }
 // AppShell rail expanded (hover) — shows brand wordmark, labels, the open group
-const rail = page.locator('.h10-ds-rail').first()
+const rail = page.locator('.nds-rail').first()
 if (await rail.count()) {
   await rail.hover(); await page.waitForTimeout(300)
-  const shell = page.locator('.h10-ds-shell').first()
+  const shell = page.locator('.nds-shell').first()
   if (await shell.count()) { await shell.screenshot({ path: `${OUT}/appshell-expanded.png` }); console.log('ok appshell-expanded') }
 }
 const filters = page.locator('[data-cat="filters"]')
@@ -68,14 +68,14 @@ if (await filters.count()) { await filters.screenshot({ path: `${OUT}/filters.pn
 const ob = page.getByRole('button', { name: 'Open builder' })
 if (await ob.count()) {
   await ob.first().click(); await page.waitForTimeout(350)
-  const b = page.locator('.h10-ds-builder').first()
+  const b = page.locator('.nds-builder').first()
   if (await b.count()) { await b.screenshot({ path: `${OUT}/builder.png` }); console.log('ok builder') }
   await page.keyboard.press('Escape'); await page.waitForTimeout(200)
 }
 const cc = page.getByRole('button', { name: 'Customize columns' })
 if (await cc.count()) {
   await cc.first().click(); await page.waitForTimeout(300)
-  const m = page.locator('.h10-ds-modal').first()
+  const m = page.locator('.nds-modal').first()
   if (await m.count()) { await m.screenshot({ path: `${OUT}/colcust.png` }); console.log('ok colcust') }
   await page.keyboard.press('Escape'); await page.waitForTimeout(200)
 }
@@ -89,28 +89,28 @@ const shotOverlay = async (btnName, sel, name) => {
   if (await el.count()) { await el.screenshot({ path: `${OUT}/${name}.png` }); console.log('ok ' + name) }
   await page.keyboard.press('Escape'); await page.waitForTimeout(200)
 }
-await shotOverlay('Open modal', '.h10-ds-modal', 'modal')
-await shotOverlay('Open drawer', '.h10-ds-drawer', 'drawer')
+await shotOverlay('Open modal', '.nds-modal', 'modal')
+await shotOverlay('Open drawer', '.nds-drawer', 'drawer')
 const menuBtn = page.getByRole('button', { name: 'Actions' })
 if (await menuBtn.count()) {
   await menuBtn.first().click(); await page.waitForTimeout(200)
-  const menu = page.locator('.h10-ds-menu').first()
+  const menu = page.locator('.nds-menu').first()
   if (await menu.count()) { await menu.screenshot({ path: `${OUT}/menu.png` }); console.log('ok menu') }
   await menuBtn.first().click(); await page.waitForTimeout(150)
 }
 
 // dropdowns
-const msb = page.locator('.h10-ds-ms-btn').first()
+const msb = page.locator('.nds-ms-btn').first()
 if (await msb.count()) {
   await msb.click(); await page.waitForTimeout(200)
-  const pop = page.locator('.h10-ds-ms-pop').first()
+  const pop = page.locator('.nds-ms-pop').first()
   if (await pop.count()) { await pop.screenshot({ path: `${OUT}/multiselect.png` }); console.log('ok multiselect') }
   await msb.click(); await page.waitForTimeout(150) // close before next interaction
 }
-const cin = page.locator('.h10-ds-combo-in').first()
+const cin = page.locator('.nds-combo-in').first()
 if (await cin.count()) {
   await cin.click(); await page.waitForTimeout(200)
-  const cp = page.locator('.h10-ds-combo-pop').first()
+  const cp = page.locator('.nds-combo-pop').first()
   if (await cp.count()) { await cp.screenshot({ path: `${OUT}/combobox.png` }); console.log('ok combobox') }
   await page.mouse.click(5, 5); await page.waitForTimeout(150) // outside-click to close
 }
@@ -118,22 +118,22 @@ if (await cin.count()) {
 const tb = page.getByRole('button', { name: 'Show toast' })
 if (await tb.count()) {
   await tb.first().click(); await page.waitForTimeout(300)
-  const toastEl = page.locator('.h10-ds-toast').first()
+  const toastEl = page.locator('.nds-toast').first()
   if (await toastEl.count()) { await toastEl.screenshot({ path: `${OUT}/toast.png` }); console.log('ok toast') }
 }
 // date range picker
-const dp = page.locator('.h10-ds-dp button').first()
+const dp = page.locator('.nds-dp button').first()
 if (await dp.count()) {
   await dp.click(); await page.waitForTimeout(250)
-  const pop = page.locator('.h10-ds-dp-pop').first()
+  const pop = page.locator('.nds-dp-pop').first()
   if (await pop.count()) { await pop.screenshot({ path: `${OUT}/daterange.png` }); console.log('ok daterange') }
   await page.mouse.click(5, 5); await page.waitForTimeout(150)
 }
 // hover card
-const hc = page.locator('.h10-ds-hovercard').first()
+const hc = page.locator('.nds-hovercard').first()
 if (await hc.count()) {
   await hc.hover(); await page.waitForTimeout(250)
-  const card = page.locator('.h10-ds-hovercard .hc').first()
+  const card = page.locator('.nds-hovercard .hc').first()
   if (await card.count()) { await card.screenshot({ path: `${OUT}/hovercard.png` }); console.log('ok hovercard') }
 }
 

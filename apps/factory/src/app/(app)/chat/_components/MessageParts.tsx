@@ -272,7 +272,7 @@ export function MessageRow({
                 }
               }}
             />
-            <div style={{ display: "flex", gap: 6, fontSize: 11.5, color: "var(--h10-text-3)", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 6, fontSize: 11.5, color: "var(--nds-text-3)", alignItems: "center" }}>
               Enter saves · Esc cancels
               <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6 }}>
                 <Button onClick={onCancelEdit}>Cancel</Button>

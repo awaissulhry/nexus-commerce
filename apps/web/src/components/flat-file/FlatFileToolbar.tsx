@@ -64,7 +64,7 @@ export function TbBtn({
   )
 
   return (
-    <Tooltip label={tooltipContent ?? <span className="text-xs">{title}</span>} className="h10-ds-tooltip--light">
+    <Tooltip label={tooltipContent ?? <span className="text-xs">{title}</span>} className="nds-tooltip--light">
       {btn}
     </Tooltip>
   )

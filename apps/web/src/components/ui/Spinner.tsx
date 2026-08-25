@@ -20,7 +20,7 @@ import { Spinner as DsSpinner } from '@/design-system/primitives/Spinner'
 
 /* The adapter carries its own stylesheet dependency, because the call sites do not.
  * Measured 2026-08-24: `components.css` is imported by 198 files and reaches most routes
- * incidentally, but `primitives.css` by only 46 — `.h10-ds-btn` does not resolve on
+ * incidentally, but `primitives.css` by only 46 — `.nds-btn` does not resolve on
  * /design at all. A DS component whose CSS arrives only when some unrelated sibling
  * happens to import it is the same defect class as the Tailwind content-glob gap, one
  * level up. Next dedupes these imports, so paying for them here is free. */
@@ -33,9 +33,9 @@ type Tone = 'default' | 'primary' | 'subtle' | 'inherit'
 /** The legacy scale was Tailwind classes (w-3, w-3.5, w-4, w-6); the DS takes px. */
 const PX: Record<Size, number> = { xs: 12, sm: 14, md: 16, lg: 24 }
 const TONE_VAR: Record<Tone, string | undefined> = {
-  default: 'var(--h10-text-3)',
-  primary: 'var(--h10-primary)',
-  subtle: 'var(--h10-text-disabled)',
+  default: 'var(--nds-text-3)',
+  primary: 'var(--nds-primary)',
+  subtle: 'var(--nds-text-disabled)',
   inherit: undefined,
 }
 

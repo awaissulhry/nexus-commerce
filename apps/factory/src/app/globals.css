@@ -22,8 +22,8 @@ body {
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
   text-rendering: optimizeLegibility;
-  background: var(--h10-bg);
-  color: var(--h10-text);
+  background: var(--nds-bg);
+  color: var(--nds-text);
 }
 
 a {
@@ -42,31 +42,31 @@ a {
  * The DS AppShell pattern drifts from the measured ads-console rail spec that
  * F0-DESIGN-BRIDGE sets as the acceptance bar (66→344px, 46px rows, 15px/600
  * labels, badge 29/6, 17px chevron balance, 60px sub indent) — it even
- * ignores the DS's own --h10-rail-expanded token (hardcodes 248px). The DS
+ * ignores the DS's own --nds-rail-expanded token (hardcodes 248px). The DS
  * copy stays byte-identical (PROVENANCE rule 2); parity is restored here.
  * Upstream fix belongs to the Nexus DS (apps/web — untouchable from F-series).
  */
-.factory-frame .h10-ds-rail:hover {
-  width: var(--h10-rail-expanded, 344px);
+.factory-frame .nds-rail:hover {
+  width: var(--nds-rail-expanded, 344px);
 }
-.factory-frame .h10-ds-navitem {
-  height: var(--h10-row-nav, 46px);
+.factory-frame .nds-navitem {
+  height: var(--nds-row-nav, 46px);
   font-size: 15px;
 }
-.factory-frame .h10-ds-brand {
+.factory-frame .nds-brand {
   height: 66px;
   padding-left: 19px;
 }
-.factory-frame .h10-ds-brand .name {
+.factory-frame .nds-brand .name {
   font-size: 18px;
 }
-.factory-frame .h10-ds-navbadge {
+.factory-frame .nds-navbadge {
   left: 29px;
 }
-.factory-frame .h10-ds-navitem .chev {
+.factory-frame .nds-navitem .chev {
   margin-right: 17px; /* balance rule: 8px item margin + 17px = 25px from the right edge, mirroring the 25px glyph centre */
 }
-.factory-frame .h10-ds-sub {
+.factory-frame .nds-sub {
   margin-left: 60px;
 }
 
@@ -92,12 +92,12 @@ a {
  * these are column-INDEX coupled — if a grid's columns are reordered, update N.
  * DS Modal grids portal to <body>, so import-diff grids are never affected.
  */
-.factory-grid-grow-1 .h10-ds-grid th:nth-child(1),
-.factory-grid-grow-1 .h10-ds-grid td:nth-child(1) {
+.factory-grid-grow-1 .nds-grid th:nth-child(1),
+.factory-grid-grow-1 .nds-grid td:nth-child(1) {
   width: 100%;
 }
-.factory-grid-grow-2 .h10-ds-grid th:nth-child(2),
-.factory-grid-grow-2 .h10-ds-grid td:nth-child(2) {
+.factory-grid-grow-2 .nds-grid th:nth-child(2),
+.factory-grid-grow-2 .nds-grid td:nth-child(2) {
   width: 100%;
 }
 
@@ -109,7 +109,7 @@ a {
 
 /* FP4 — one-timeline: linked rows highlight on hover. */
 .factory-timeline-row:hover {
-  background: var(--h10-bg-subtle, rgba(31, 111, 222, 0.05));
+  background: var(--nds-bg-subtle, rgba(31, 111, 222, 0.05));
 }
 .factory-coming .fp-chip {
   display: inline-flex;
@@ -117,9 +117,9 @@ a {
   gap: 6px;
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--h10-primary);
-  background: var(--h10-primary-soft);
-  border: 1px solid var(--h10-primary-ghost-border);
+  color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+  border: 1px solid var(--nds-primary-ghost-border);
   border-radius: 999px;
   padding: 3px 10px;
   margin-bottom: 14px;
@@ -130,13 +130,13 @@ a {
   display: grid;
   gap: 6px;
   font-size: 13px;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
 }
 .factory-coming .golden {
   margin-top: 16px;
   font-size: 12.5px;
-  color: var(--h10-text-3);
-  border-top: 1px solid var(--h10-border-subtle);
+  color: var(--nds-text-3);
+  border-top: 1px solid var(--nds-border-subtle);
   padding-top: 12px;
 }
 
@@ -145,14 +145,14 @@ a {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  background: var(--h10-bg);
+  background: var(--nds-bg);
 }
 .factory-login .card {
   width: 360px;
-  background: var(--h10-surface);
-  border: 1px solid var(--h10-border);
-  border-radius: var(--h10-radius-2xl);
-  box-shadow: var(--h10-shadow-card);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  box-shadow: var(--nds-shadow-card);
   padding: 28px;
   display: grid;
   gap: 14px;
@@ -167,7 +167,7 @@ a {
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: var(--h10-primary);
+  background: var(--nds-primary);
   color: #fff;
   display: grid;
   place-items: center;
@@ -180,12 +180,12 @@ a {
   font-weight: 700;
 }
 .factory-login .word b {
-  color: var(--h10-primary);
+  color: var(--nds-primary);
   font-weight: 800;
 }
 .factory-login .err {
   font-size: 12.5px;
-  color: var(--h10-danger);
+  color: var(--nds-danger);
 }
 
 /* F1 — rail footer chip (user + sign out). */
@@ -203,14 +203,14 @@ a {
 .factory-railuser button {
   background: none;
   border: none;
-  color: var(--h10-text-link);
+  color: var(--nds-text-link);
   font: inherit;
   cursor: pointer;
   padding: 0;
 }
 
 /* FS3 — compact AsyncCombobox variant for tight spots (production card assign). */
-.fs3-combo-compact .h10-ds-combo-in {
+.fs3-combo-compact .nds-combo-in {
   min-width: 150px;
   font-size: 12px;
   padding: 4px 26px 4px 8px;
@@ -225,19 +225,19 @@ a {
 /* EPI1.4 — keyboard-focusable pane separators (APG window splitter): a
    visible ring when focused by keyboard, none for pointer users. */
 .fs3-pane-handle:focus-visible {
-  outline: 2px solid var(--h10-primary);
+  outline: 2px solid var(--nds-primary);
   outline-offset: -2px;
   border-radius: 3px;
 }
 
 /* EPI1.5 (verify regression R1) — at narrow list widths the bulk bar's
    controls clipped past the pane edge; let them wrap instead. */
-.epi-inbox .h10-ds-actionbar,
-.epi-inbox .h10-ds-actionbar .acts {
+.epi-inbox .nds-actionbar,
+.epi-inbox .nds-actionbar .acts {
   flex-wrap: wrap;
   row-gap: 6px;
 }
-.epi-inbox .h10-ds-actionbar .lbl {
+.epi-inbox .nds-actionbar .lbl {
   white-space: nowrap;
 }
 
@@ -249,7 +249,7 @@ a {
 
 .fc2-chat:focus-visible,
 .fc2-chat [tabindex="0"]:focus-visible {
-  outline: 2px solid var(--h10-primary);
+  outline: 2px solid var(--nds-primary);
   outline-offset: -2px;
   border-radius: 6px;
 }
@@ -262,21 +262,21 @@ a {
   width: 100%;
   padding: 0 12px;
   border: none;
-  border-bottom: 1px solid var(--h10-border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
   background: none;
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  color: var(--h10-text);
+  color: var(--nds-text);
 }
 .fc2-rail-row:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 .fc2-rail-row.is-active {
-  background: var(--h10-wash-primary);
+  background: var(--nds-wash-primary);
 }
 .fc2-rail-row.is-cursor {
-  box-shadow: inset 2px 0 0 var(--h10-primary);
+  box-shadow: inset 2px 0 0 var(--nds-primary);
 }
 .fc2-rail-top {
   display: flex;
@@ -286,7 +286,7 @@ a {
 }
 .fc2-rail-kind {
   flex-shrink: 0;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 .fc2-rail-name {
   font-size: 13px;
@@ -299,7 +299,7 @@ a {
 .fc2-rail-time {
   flex-shrink: 0;
   font-size: 11px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 .fc2-rail-bottom {
   display: flex;
@@ -309,7 +309,7 @@ a {
 }
 .fc2-rail-snippet {
   font-size: 12px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -318,7 +318,7 @@ a {
 }
 .fc2-rail-badge {
   flex-shrink: 0;
-  background: var(--h10-primary);
+  background: var(--nds-primary);
   color: #fff;
   border-radius: 999px;
   font-size: 10.5px;
@@ -336,11 +336,11 @@ a {
 .fc2-day-chip {
   font-size: 11px;
   font-weight: 600;
-  color: var(--h10-text-2);
-  border: 1px solid var(--h10-border-subtle);
+  color: var(--nds-text-2);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: 999px;
   padding: 3px 10px;
-  background: var(--h10-surface);
+  background: var(--nds-surface);
 }
 
 /* message rows: 36px avatar gutter + content; hover reveals own actions */
@@ -354,7 +354,7 @@ a {
   padding-top: 7px;
 }
 .fc2-msg-row:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 .fc2-msg-gutter {
   display: flex;
@@ -384,7 +384,7 @@ a {
 }
 .fc2-msg-time {
   font-size: 11px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 .fc2-msg-body {
   font-size: 13px;
@@ -393,7 +393,7 @@ a {
   overflow-wrap: anywhere;
 }
 .fc2-msg-body.is-deleted {
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   font-style: italic;
 }
 .fc2-msg-body.is-pending {
@@ -401,7 +401,7 @@ a {
 }
 .fc2-edited {
   font-size: 11px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   margin-left: 5px;
 }
 .fc2-money {
@@ -409,8 +409,8 @@ a {
   margin-left: 6px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--h10-wash-primary);
-  color: var(--h10-primary);
+  background: var(--nds-wash-primary);
+  color: var(--nds-primary);
   font-size: 11.5px;
   font-weight: 600;
 }
@@ -420,8 +420,8 @@ a {
   right: 14px;
   display: none;
   gap: 2px;
-  background: var(--h10-surface);
-  border: 1px solid var(--h10-border);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
   border-radius: 8px;
   padding: 2px;
   box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
@@ -433,31 +433,31 @@ a {
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
   padding: 4px 6px;
   border-radius: 6px;
   display: inline-flex;
 }
 .fc2-msg-actions button:hover {
-  background: var(--h10-surface-hover);
-  color: var(--h10-text);
+  background: var(--nds-surface-hover);
+  color: var(--nds-text);
 }
 .fc2-edit-box {
   width: 100%;
   resize: vertical;
-  border: 1px solid var(--h10-primary);
+  border: 1px solid var(--nds-primary);
   border-radius: 8px;
   padding: 8px 10px;
   font: 13px var(--font-sans), sans-serif;
-  background: var(--h10-surface);
-  color: var(--h10-text);
+  background: var(--nds-surface);
+  color: var(--nds-text);
 }
 
 /* SYSTEM messages — centered grey, deep-link chip inline */
 .fc2-system {
   text-align: center;
   font-size: 11.5px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   padding: 3px 24px;
 }
 .fc2-system-chip {
@@ -466,16 +466,16 @@ a {
   gap: 3px;
   margin-left: 7px;
   padding: 1px 8px;
-  border: 1px solid var(--h10-border);
+  border: 1px solid var(--nds-border);
   border-radius: 999px;
-  color: var(--h10-primary);
+  color: var(--nds-primary);
   text-decoration: none;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
 }
 .fc2-system-chip:hover {
-  background: var(--h10-wash-primary);
+  background: var(--nds-wash-primary);
 }
 .fc2-system-time {
   margin-left: 7px;
@@ -488,7 +488,7 @@ a {
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--h10-border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
   min-width: 0;
 }
 .fc2-space-title {
@@ -502,22 +502,22 @@ a {
 .fc2-space-meta {
   flex-shrink: 0;
   font-size: 11.5px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 .fc2-icon-btn {
   margin-left: auto;
   flex-shrink: 0;
-  border: 1px solid var(--h10-border);
+  border: 1px solid var(--nds-border);
   background: none;
   border-radius: 8px;
   padding: 5px 7px;
   cursor: pointer;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
   display: inline-flex;
 }
 .fc2-icon-btn:hover {
-  color: var(--h10-primary);
-  border-color: var(--h10-primary);
+  color: var(--nds-primary);
+  border-color: var(--nds-primary);
 }
 .fc2-load-earlier {
   border: none;
@@ -525,11 +525,11 @@ a {
   cursor: pointer;
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--h10-primary);
+  color: var(--nds-primary);
   padding: 2px 10px;
 }
 .fc2-load-earlier:disabled {
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   cursor: default;
 }
 
@@ -542,15 +542,15 @@ a {
   display: inline;
   padding: 1px 5px;
   border-radius: 999px;
-  background: var(--h10-wash-primary);
-  color: var(--h10-primary);
+  background: var(--nds-wash-primary);
+  color: var(--nds-primary);
   font-weight: 600;
   white-space: nowrap;
 }
 .fc3-mention.is-all {
-  background: var(--h10-surface-hover);
-  color: var(--h10-text);
-  border: 1px solid var(--h10-border);
+  background: var(--nds-surface-hover);
+  color: var(--nds-text);
+  border: 1px solid var(--nds-border);
 }
 
 /* the root message's thread affordance */
@@ -560,15 +560,15 @@ a {
   gap: 7px;
   margin-top: 3px;
   padding: 2px 9px 2px 4px;
-  border: 1px solid var(--h10-border-subtle);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: 999px;
-  background: var(--h10-surface);
+  background: var(--nds-surface);
   cursor: pointer;
   font-family: inherit;
 }
 .fc3-thread-bar:hover {
-  border-color: var(--h10-primary);
-  background: var(--h10-wash-primary);
+  border-color: var(--nds-primary);
+  background: var(--nds-wash-primary);
 }
 .fc3-facepile {
   display: inline-flex;
@@ -583,7 +583,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--h10-surface);
+  border: 1.5px solid var(--nds-surface);
   user-select: none;
 }
 .fc3-face + .fc3-face {
@@ -592,11 +592,11 @@ a {
 .fc3-thread-count {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--h10-primary);
+  color: var(--nds-primary);
 }
 .fc3-thread-time {
   font-size: 10.5px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 
 /* the right-side thread panel */
@@ -612,7 +612,7 @@ a {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--h10-border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
   min-width: 0;
 }
 .fc3-thread-title {
@@ -621,31 +621,31 @@ a {
 }
 .fc3-thread-sub {
   font-size: 10.5px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 .fc3-follow-btn {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid var(--h10-border);
+  border: 1px solid var(--nds-border);
   border-radius: 999px;
   background: none;
   padding: 3px 10px;
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
   cursor: pointer;
   font-family: inherit;
 }
 .fc3-follow-btn:hover {
-  border-color: var(--h10-primary);
-  color: var(--h10-primary);
+  border-color: var(--nds-primary);
+  color: var(--nds-primary);
 }
 .fc3-follow-btn.is-following {
-  background: var(--h10-wash-primary);
-  border-color: var(--h10-primary);
-  color: var(--h10-primary);
+  background: var(--nds-wash-primary);
+  border-color: var(--nds-primary);
+  color: var(--nds-primary);
 }
 .fc3-follow-btn:disabled {
   opacity: 0.6;
@@ -663,17 +663,17 @@ a {
   padding: 2px 12px 4px;
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 .fc3-thread-divider::after {
   content: "";
   flex: 1;
-  border-top: 1px solid var(--h10-border-subtle);
+  border-top: 1px solid var(--nds-border-subtle);
 }
 
 /* the rail's followed-Threads section (Google's Home-ish) */
 .fc3-rail-threads {
-  border-bottom: 1px solid var(--h10-border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
   flex-shrink: 0;
 }
 .fc3-rail-threads-head {
@@ -683,7 +683,7 @@ a {
   padding: 8px 12px 4px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -701,10 +701,10 @@ a {
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  color: var(--h10-text);
+  color: var(--nds-text);
 }
 .fc3-rail-thread:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 .fc3-rail-thread-top {
   display: flex;
@@ -723,7 +723,7 @@ a {
 }
 .fc3-rail-thread-snippet {
   font-size: 11.5px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -746,8 +746,8 @@ a {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--h10-success);
-  border: 2px solid var(--h10-surface);
+  background: var(--nds-success);
+  border: 2px solid var(--nds-surface);
   box-sizing: content-box;
 }
 .fc3-face .fc4-dot,
@@ -762,7 +762,7 @@ a {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--h10-success);
+  background: var(--nds-success);
 }
 .fc4-online {
   display: inline-flex;
@@ -786,20 +786,20 @@ a {
   padding: 1px 8px;
   min-height: 20px;
   border-radius: 999px;
-  border: 1px solid var(--h10-border);
-  background: var(--h10-surface);
+  border: 1px solid var(--nds-border);
+  background: var(--nds-surface);
   cursor: pointer;
   font-family: inherit;
 }
 .fc4-reaction:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 .fc4-reaction:disabled {
   cursor: default;
 }
 .fc4-reaction.is-mine {
-  border-color: var(--h10-primary);
-  background: var(--h10-wash-primary);
+  border-color: var(--nds-primary);
+  background: var(--nds-wash-primary);
 }
 .fc4-reaction-emoji {
   font-size: 13px;
@@ -808,14 +808,14 @@ a {
 .fc4-reaction-count {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
 }
 .fc4-reaction.is-mine .fc4-reaction-count {
-  color: var(--h10-primary);
+  color: var(--nds-primary);
 }
 /* the ghost "+" pill — appears on row hover (or while its picker is open) */
 .fc4-react-add {
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   visibility: hidden;
   padding: 1px 6px;
 }
@@ -836,8 +836,8 @@ a {
   right: 12px;
   bottom: calc(100% - 6px);
   z-index: 40;
-  background: var(--h10-surface);
-  border: 1px solid var(--h10-border);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(16, 24, 40, 0.14);
   padding: 4px;
@@ -852,7 +852,7 @@ a {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 2px;
-  border-top: 1px solid var(--h10-border-subtle);
+  border-top: 1px solid var(--nds-border-subtle);
   padding-top: 4px;
 }
 .fc4-picker-btn {
@@ -866,13 +866,13 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--h10-text-2);
+  color: var(--nds-text-2);
 }
 .fc4-picker-btn:hover {
-  background: var(--h10-surface-hover);
+  background: var(--nds-surface-hover);
 }
 .fc4-picker-more {
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
 }
 
 /* read receipts — reader initials under the last message each member read */
@@ -899,8 +899,8 @@ a {
 .fc4-receipt-extra {
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--h10-text-3);
-  background: var(--h10-surface-hover);
+  color: var(--nds-text-3);
+  background: var(--nds-surface-hover);
   border-radius: 999px;
   padding: 1px 6px;
 }
@@ -910,7 +910,7 @@ a {
   min-height: 18px;
   padding: 0 16px 2px;
   font-size: 11.5px;
-  color: var(--h10-text-3);
+  color: var(--nds-text-3);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -928,7 +928,7 @@ a {
   width: 4px;
   height: 4px;
   border-radius: 999px;
-  background: var(--h10-text-3);
+  background: var(--nds-text-3);
   animation: fc4-typing-bounce 1.2s infinite ease-in-out;
 }
 .fc4-typing-dots span:nth-child(2) {
@@ -955,5 +955,5 @@ a {
   gap: 8px;
 }
 .fc4-notify-check {
-  color: var(--h10-primary);
+  color: var(--nds-primary);
 }

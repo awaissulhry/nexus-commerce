@@ -3,20 +3,20 @@
  * Three checks, run together (all violations reported before exiting non-zero):
  *
  *   A — RAW HEX in primitives/components/patterns + the tokenized stylesheets.
- *       Every color must come from a token (`var(--h10-*)` in CSS, or an import
+ *       Every color must come from a token (`var(--nds-*)` in CSS, or an import
  *       from `tokens/` in TS). `styles/tokens.css` is the one place hex is
  *       allowed — it DEFINES the palette.
- *   B — RAW NUMBERED RAMP in component CSS (`var(--h10-{grey|blue|green|red|
+ *   B — RAW NUMBERED RAMP in component CSS (`var(--nds-{grey|blue|green|red|
  *       amber|purple|cyan}-NNN)`). Components must consume the semantic /
  *       platform tier (`--text-*`, `--surface-*`, `--status-*`, `--color-*`)
- *       or DS-only component tokens (`--h10-radius/shadow/focus/pill/badge/
+ *       or DS-only component tokens (`--nds-radius/shadow/focus/pill/badge/
  *       rail/surface-hover/surface-raised/text-strong/...`), NOT the numbered
  *       primitive ramps. Only the styles/{primitives,components,patterns}.css
  *       stylesheets are in scope; tokens.css (which DEFINES roles off the ramps)
  *       is not.
  *   C — RAW TAILWIND PALETTE classes in DS `.tsx` (`(bg|text|border|ring|from|
  *       to|fill|stroke)-(slate|gray|zinc|...)-NNN`). DS components style via
- *       `.h10-ds-*` classes + tokens, never raw Tailwind palette utilities.
+ *       `.nds-*` classes + tokens, never raw Tailwind palette utilities.
  *
  * The `catalog/` (a demo surface) is intentionally out of scope throughout.
  *
@@ -37,10 +37,10 @@ const HEX_ALLOW = new Set(['styles/tokens.css', 'styles/tokens-global.css'])
 const HEX_SCOPE = /^(primitives|components|patterns|styles)\//
 
 // B — raw NUMBERED primitive ramps reached from component stylesheets.
-//     `-[0-9]` after the color word means a numbered ramp step (--h10-blue-700);
-//     DS component tokens (--h10-radius-lg, --h10-surface-hover, --h10-text-strong,
-//     --h10-pill-success-bg, …) never match because no digit follows the role word.
-const RAMP = /var\(--h10-(grey|blue|green|red|amber|purple|cyan)-[0-9]/
+//     `-[0-9]` after the color word means a numbered ramp step (--nds-blue-700);
+//     DS component tokens (--nds-radius-lg, --nds-surface-hover, --nds-text-strong,
+//     --nds-pill-success-bg, …) never match because no digit follows the role word.
+const RAMP = /var\(--nds-(grey|blue|green|red|amber|purple|cyan)-[0-9]/
 const RAMP_FILES = new Set([
   'styles/primitives.css',
   'styles/components.css',
@@ -55,7 +55,7 @@ const RAMP_FILES = new Set([
 //     becomes `background: 255 255 255`, invalid at computed-value time, silently dropped.
 //     285 declarations were dead this way until 9.0b. `--color-primary` / `--status-*` are
 //     NOT contested (nothing else defines them) and stay published for app CSS — but DS
-//     stylesheets consume the DS-owned `--h10-*` tier only, so the whole alias tier is
+//     stylesheets consume the DS-owned `--nds-*` tier only, so the whole alias tier is
 //     banned here and one rule covers both cases.
 // Global: a single declaration can reach several aliases, and reporting only the first
 // understates the work — someone fixes one, re-runs, and meets the same line again.
@@ -150,7 +150,7 @@ for (const file of walk(ROOT)) {
   if (HEX_SCOPE.test(rel) && !HEX_ALLOW.has(rel)) {
     lines.forEach((line, i) => {
       if (HEX.test(line) && !isComment[i]) {
-        violations.push(`${rel}:${i + 1}  raw hex — use var(--h10-*) / tokens: ${line.trim().slice(0, 80)}`)
+        violations.push(`${rel}:${i + 1}  raw hex — use var(--nds-*) / tokens: ${line.trim().slice(0, 80)}`)
       }
     })
   }
@@ -170,7 +170,7 @@ for (const file of walk(ROOT)) {
       if (isComment[i]) return
       for (const m of line.matchAll(ALIAS)) {
         violations.push(
-          `${rel}:${i + 1}  platform alias --${m[1]} — use the DS-owned --h10-* token ` +
+          `${rel}:${i + 1}  platform alias --${m[1]} — use the DS-owned --nds-* token ` +
             `(it is RGB channels inside .h10-shell, so this declaration is DROPPED): ` +
             line.trim().slice(0, 60),
         )
@@ -186,7 +186,7 @@ for (const file of walk(ROOT)) {
   if (isTsx && TW_SCOPE.test(rel)) {
     lines.forEach((line, i) => {
       if (TW.test(line) && !isComment[i]) {
-        violations.push(`${rel}:${i + 1}  raw Tailwind palette — use .h10-ds-* + tokens: ${line.trim().slice(0, 80)}`)
+        violations.push(`${rel}:${i + 1}  raw Tailwind palette — use .nds-* + tokens: ${line.trim().slice(0, 80)}`)
       }
     })
   }

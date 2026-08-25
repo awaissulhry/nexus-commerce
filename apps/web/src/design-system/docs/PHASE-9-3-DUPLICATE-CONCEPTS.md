@@ -59,10 +59,10 @@ concepts wearing one name. The DS equivalent of the legacy one is `Tag` (tone-ba
 (entity status) — both already exist. **Decide:** map the 91 files onto `Tag`, onto `Pill`, or
 rename the DS's ad-program chip and give `Badge` back its generic meaning.
 
-**Input has no error state anywhere in the design system.** There is no `.h10-ds-field.invalid`
+**Input has no error state anywhere in the design system.** There is no `.nds-field.invalid`
 rule and no `error` prop; the legacy `Input` has `label`, `error`, `hint` and `charLimit`. The
 DS's current answer is composition — label above, message below in
-`var(--h10-danger-strong)`, `aria-invalid` on the control. **Decide:** design a real field-error
+`var(--nds-danger-strong)`, `aria-invalid` on the control. **Decide:** design a real field-error
 affordance in the DS (a first-class primitive concern, and 38 files want it), or keep composing
 and have the adapter assemble it.
 
@@ -107,7 +107,7 @@ file imported it.
 | `patterns.css` | 24 |
 | `a11y.css` | **1** |
 
-Measured on `/design`: `.h10-ds-card` resolves, `.h10-ds-btn` **does not** — `components.css`
+Measured on `/design`: `.nds-card` resolves, `.nds-btn` **does not** — `components.css`
 reaches most routes incidentally, `primitives.css` does not reach that one at all. Of the 205
 files calling the legacy `Button`, **5** import `primitives.css`.
 
@@ -136,7 +136,7 @@ make Tailwind's `rgb(var(--text-primary) / <alpha-value>)` resolve to `rgb(#1c25
 and kill the utilities behind 636 files. **Phase 9.0b is what made a global stylesheet possible
 at all**, by removing the design system's own dependence on those names.
 
-Verified on `/sync-logs` and `/dashboard`, routes that import nothing themselves: `.h10-ds-btn`
+Verified on `/sync-logs` and `/dashboard`, routes that import nothing themselves: `.nds-btn`
 now resolves (`padding: 7px 13px`, `radius: 8px`), and the DS `focus-visible` + reduced-motion
 rules are present — `a11y.css` went from **one** importing file to every route.
 
@@ -170,7 +170,7 @@ phase**, and it should come before any further 9.3 tranche that touches text or 
 **The real fix is app-wide loading, and 9.0b is what makes it possible.** It could not be done
 before, because `tokens.css` publishes the platform-alias tier at `:root` and loading it
 globally would race `globals.css` for `--text-*` / `--surface-*` / `--border-*`. Now that DS
-stylesheets consume only `--h10-*`, `tokens.css` can be split — the `--h10-*` tiers load
+stylesheets consume only `--nds-*`, `tokens.css` can be split — the `--nds-*` tiers load
 globally with `primitives`/`components`/`patterns`/`a11y`, and the alias tier stays opt-in.
 **That should land before the `Button` tranche**, which is 205 files needing `primitives.css`.
 

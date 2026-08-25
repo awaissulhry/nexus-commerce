@@ -149,7 +149,7 @@
 .sbw-gridcard { margin-top: 12px; }
 
 /* ── the table-layout trap ────────────────────────────────────────────────
-   `.h10-ds-grid` is `table-layout: auto` with `white-space: nowrap` on every
+   `.nds-grid` is `table-layout: auto` with `white-space: nowrap` on every
    cell, so a column's declared `width` is only a hint and long content wins:
    the status reason lines expanded their column and overran the three columns
    to their right. Caught in the browser; tsc is blind to it.
@@ -159,9 +159,9 @@
    the cells that carry sentences wrap on purpose. A plain global class, not a
    CSS-module one — a hashed class has resolved to `undefined` at render here
    before. Verify with `getComputedStyle(table).tableLayout === 'fixed'`. */
-.sbw-gridcard .h10-ds-grid { table-layout: fixed; width: 100%; }
-.sbw-gridcard .h10-ds-grid th,
-.sbw-gridcard .h10-ds-grid td {
+.sbw-gridcard .nds-grid { table-layout: fixed; width: 100%; }
+.sbw-gridcard .nds-grid th,
+.sbw-gridcard .nds-grid td {
   overflow: hidden;
   vertical-align: top;
   padding-top: 9px;
@@ -170,10 +170,10 @@
 
 /* The cells that carry prose opt back INTO wrapping. Everything else stays
    nowrap, which is what keeps the numeric columns aligned. */
-.sbw-gridcard .h10-ds-grid td .sbw-status,
-.sbw-gridcard .h10-ds-grid td .sbw-reason,
-.sbw-gridcard .h10-ds-grid td .sbw-note,
-.sbw-gridcard .h10-ds-grid td .sbw-scope {
+.sbw-gridcard .nds-grid td .sbw-status,
+.sbw-gridcard .nds-grid td .sbw-reason,
+.sbw-gridcard .nds-grid td .sbw-note,
+.sbw-gridcard .nds-grid td .sbw-scope {
   white-space: normal;
 }
 

@@ -30,7 +30,7 @@ DS across the app, **without ever forking**.
   visual-regression into `.githooks/pre-push`.
 
 ### 9.1 — Tokenize `ads.css` (keystone — the deferred Phase 1 rewrite)
-- Rewrite `ads.css` to reference `var(--h10-*)` instead of hardcoded hex,
+- Rewrite `ads.css` to reference `var(--nds-*)` instead of hardcoded hex,
   canonicalizing the 251→~70 drift per `studies/01-color-drift.md`.
 - Import `styles/tokens.css` in the ads layout.
 - **Gate:** every ads screen pixel-identical vs the 9.0 baseline (drift-collapse

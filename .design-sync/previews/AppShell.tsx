@@ -92,7 +92,7 @@ export const Workspace = () => (
           </>
         }
       />
-      <div className="h10-ds-gridcard">
+      <div className="nds-gridcard">
         <GridToolbar
           count={<>Viewing <b>1–3</b> of 212 campaigns</>}
           right={<Button size="sm">Customise</Button>}

@@ -151,17 +151,17 @@ export function RulesDrawer({ open, onClose, onChanged }: { open: boolean; onClo
         {rules == null ? (
           <Skeleton />
         ) : rules.length === 0 && !editing ? (
-          <div style={{ color: "var(--h10-text-3)" }}>No rules yet — new mail lands untouched. Add one below.</div>
+          <div style={{ color: "var(--nds-text-3)" }}>No rules yet — new mail lands untouched. Add one below.</div>
         ) : (
           rules.map((r, i) => (
-            <div key={r.id} style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, padding: "8px 10px", display: "grid", gap: 4 }}>
+            <div key={r.id} style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, padding: "8px 10px", display: "grid", gap: 4 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <Checkbox checked={r.enabled} onChange={(e) => void patch(r.id, { enabled: e.target.checked })} aria-label="Enabled" />
                 <b style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</b>
-                <button type="button" aria-label="Move up" onClick={() => void move(r, -1)} disabled={i === 0} style={{ background: "none", border: "none", cursor: i === 0 ? "default" : "pointer", color: "var(--h10-text-3)", display: "inline-flex", padding: 2, opacity: i === 0 ? 0.4 : 1 }}>
+                <button type="button" aria-label="Move up" onClick={() => void move(r, -1)} disabled={i === 0} style={{ background: "none", border: "none", cursor: i === 0 ? "default" : "pointer", color: "var(--nds-text-3)", display: "inline-flex", padding: 2, opacity: i === 0 ? 0.4 : 1 }}>
                   <ArrowUp size={13} />
                 </button>
-                <button type="button" aria-label="Move down" onClick={() => void move(r, 1)} disabled={i === rules.length - 1} style={{ background: "none", border: "none", cursor: i === rules.length - 1 ? "default" : "pointer", color: "var(--h10-text-3)", display: "inline-flex", padding: 2, opacity: i === rules.length - 1 ? 0.4 : 1 }}>
+                <button type="button" aria-label="Move down" onClick={() => void move(r, 1)} disabled={i === rules.length - 1} style={{ background: "none", border: "none", cursor: i === rules.length - 1 ? "default" : "pointer", color: "var(--nds-text-3)", display: "inline-flex", padding: 2, opacity: i === rules.length - 1 ? 0.4 : 1 }}>
                   <ArrowDown size={13} />
                 </button>
                 <Button onClick={() => void runNow(r)} disabled={busy}>
@@ -172,7 +172,7 @@ export function RulesDrawer({ open, onClose, onChanged }: { open: boolean; onClo
                   {confirmDeleteId === r.id ? "Confirm" : "Delete"}
                 </Button>
               </div>
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>
                 {r.criteria.all.length + r.criteria.any.length} condition{r.criteria.all.length + r.criteria.any.length === 1 ? "" : "s"} → {actionSummary(r)}
                 {r.stopProcessing ? " · stops here" : ""}
                 {r.enabled ? "" : " · disabled"}
@@ -182,7 +182,7 @@ export function RulesDrawer({ open, onClose, onChanged }: { open: boolean; onClo
         )}
 
         {editing ? (
-          <div style={{ border: "1px solid var(--h10-border)", borderRadius: 10, padding: 10, display: "grid", gap: 10 }}>
+          <div style={{ border: "1px solid var(--nds-border)", borderRadius: 10, padding: 10, display: "grid", gap: 10 }}>
             <Input placeholder="Rule name" value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             <b>IF — all of</b>
             <CriteriaRows rows={editing.criteria?.all ?? []} setRows={(all) => setEditing({ ...editing, criteria: { all, any: editing.criteria?.any ?? [] } })} users={users} />
@@ -250,7 +250,7 @@ export function RulesDrawer({ open, onClose, onChanged }: { open: boolean; onClo
         {run && (
           <div style={{ display: "grid", gap: 6, fontSize: 12.5, maxHeight: 360, overflowY: "auto" }}>
             {run.rows.length === 0 ? (
-              <span style={{ color: "var(--h10-text-3)" }}>Nothing to change — every match already looks like the rule wants.</span>
+              <span style={{ color: "var(--nds-text-3)" }}>Nothing to change — every match already looks like the rule wants.</span>
             ) : (
               run.rows.map((row) => (
                 <label key={row.id} style={{ display: "flex", gap: 8, alignItems: "baseline", minWidth: 0 }}>
@@ -267,7 +267,7 @@ export function RulesDrawer({ open, onClose, onChanged }: { open: boolean; onClo
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {row.subject ?? "(no subject)"}
                   </span>
-                  <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", flexShrink: 0 }}>
+                  <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", flexShrink: 0 }}>
                     {row.partyName ?? ""} · {row.current.state}
                     {"state" in row.after ? " → CLOSED" : ""}
                     {"assigneeId" in row.after ? ` → ${users.find((u) => u.id === row.after.assigneeId)?.displayName ?? "assigned"}` : ""}

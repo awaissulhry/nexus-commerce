@@ -321,8 +321,8 @@ export function DataGrid<T>({
     sort?.key === key ? sort.dir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} /> : <ChevronsUpDown size={13} />
 
   const grid = (
-    <div className={`h10-ds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
-      <table className="h10-ds-grid">
+    <div className={`nds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
+      <table className="nds-grid">
         <thead>
           <tr>
             {selectable && (
@@ -375,7 +375,7 @@ export function DataGrid<T>({
         <tbody>
           {sortedRows.length === 0 ? (
             <tr>
-              <td className="h10-ds-grid-empty" colSpan={cols.length + (selectable ? 1 : 0)}>
+              <td className="nds-grid-empty" colSpan={cols.length + (selectable ? 1 : 0)}>
                 {emptyState ?? 'No rows.'}
               </td>
             </tr>
@@ -427,7 +427,7 @@ export function DataGrid<T>({
   return (
     <>
       {!prefsControlled && (
-        <div className="h10-ds-grid-prefsbar">
+        <div className="nds-grid-prefsbar">
           <ToolbarButton
             icon={<SlidersHorizontal size={14} />}
             label={customizeTitle ?? 'Customise'}

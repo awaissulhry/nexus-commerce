@@ -118,7 +118,7 @@ export function ContextRail({
 
   const isoDate = (d: string | null) => (d ? new Date(d).toISOString().slice(0, 10) : "");
   const label = (text: string) => (
-    <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--h10-text-3)", textTransform: "uppercase" }}>{text}</span>
+    <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--nds-text-3)", textTransform: "uppercase" }}>{text}</span>
   );
 
   return (
@@ -131,9 +131,9 @@ export function ContextRail({
               <Pill tone="info">{party.kind}</Pill>
             </div>
             {party.emails.map((e) => (
-              <div key={e.email} style={{ color: "var(--h10-text-2)" }}>
+              <div key={e.email} style={{ color: "var(--nds-text-2)" }}>
                 {e.email}
-                {e.matchDomain && <span style={{ color: "var(--h10-text-3)" }}> · matches @domain</span>}
+                {e.matchDomain && <span style={{ color: "var(--nds-text-3)" }}> · matches @domain</span>}
               </div>
             ))}
             {"paymentTerms" in party && party.paymentTerms && (
@@ -146,11 +146,11 @@ export function ContextRail({
                 Price list: <b>{party.priceList.name}</b>
               </div>
             )}
-            {party.notes && <div style={{ color: "var(--h10-text-2)" }}>{party.notes}</div>}
+            {party.notes && <div style={{ color: "var(--nds-text-2)" }}>{party.notes}</div>}
           </div>
         ) : creating ? (
           <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>from {senderEmail ?? "sender"}</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>from {senderEmail ?? "sender"}</div>
             <Input placeholder="Name (person or company)" value={name} onChange={(e) => setName(e.target.value)} />
             <Listbox
               ariaLabel="Kind"
@@ -179,7 +179,7 @@ export function ContextRail({
           </div>
         ) : linking ? (
           <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>
               Link {senderEmail ?? "this sender"} to an existing contact — it learns the email and back-matches their other threads.
             </div>
             <AsyncCombobox
@@ -256,7 +256,7 @@ export function ContextRail({
                 min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
                 onChange={(v) => void patch({ snoozeUntil: v ? new Date(`${v}T08:00:00`).toISOString() : null }, "snooze")}
               />
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Any reply un-snoozes automatically.</span>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Any reply un-snoozes automatically.</span>
             </div>
             <div style={{ display: "grid", gap: 4 }}>
               {label("Follow-up reminder")}
@@ -266,7 +266,7 @@ export function ContextRail({
                 min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
                 onChange={(v) => void patch({ followUpAt: v ? new Date(`${v}T08:00:00`).toISOString() : null }, "follow")}
               />
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Cancels itself if they reply first — no double-chasing.</span>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Cancels itself if they reply first — no double-chasing.</span>
             </div>
           </div>
         ) : (
@@ -278,7 +278,7 @@ export function ContextRail({
             </div>
             {conversation.snoozeUntil && <div>Snoozed until {new Date(conversation.snoozeUntil).toLocaleDateString()}</div>}
             {conversation.followUpAt && <div>Follow-up {new Date(conversation.followUpAt).toLocaleDateString()}</div>}
-            <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Your role can't change assignment or status.</div>
+            <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Your role can't change assignment or status.</div>
           </div>
         )}
       </Card>
@@ -312,7 +312,7 @@ function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     (el as HTMLElement).animate(
-      [{ boxShadow: "0 0 0 2px var(--h10-primary)" }, { boxShadow: "0 0 0 2px transparent" }],
+      [{ boxShadow: "0 0 0 2px var(--nds-primary)" }, { boxShadow: "0 0 0 2px transparent" }],
       { duration: 1400 },
     );
   };
@@ -328,7 +328,7 @@ function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?
                 type="button"
                 onClick={() => onFileOpen?.(a.id)}
                 title={`${a.filename} · ${kb(a.sizeBytes)}`}
-                style={{ padding: 0, border: "1px solid var(--h10-border)", borderRadius: 8, overflow: "hidden", width: 56, height: 56, cursor: "zoom-in", background: "var(--h10-surface)" }}
+                style={{ padding: 0, border: "1px solid var(--nds-border)", borderRadius: 8, overflow: "hidden", width: 56, height: 56, cursor: "zoom-in", background: "var(--nds-surface)" }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -345,28 +345,28 @@ function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?
           const canPreview = previewKind(a.mimeType) !== "none";
           return (
             <div key={a.id} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, minWidth: 0 }}>
-              <FileText size={13} style={{ color: "var(--h10-text-3)", flexShrink: 0 }} />
+              <FileText size={13} style={{ color: "var(--nds-text-3)", flexShrink: 0 }} />
               {canPreview && onFileOpen ? (
                 <button
                   type="button"
                   onClick={() => onFileOpen(a.id)}
                   title="Preview"
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--h10-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--nds-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1, textAlign: "left" }}
                 >
                   {a.filename}
                 </button>
               ) : (
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{a.filename}</span>
               )}
-              <span style={{ fontSize: 11.5, color: "var(--h10-text-3)", flexShrink: 0 }}>{kb(a.sizeBytes)}</span>
-              <a href={`/api/inbox/${thread.conversation.id}/attachments/${a.id}`} title="Download" style={{ display: "inline-flex", color: "var(--h10-text-3)", flexShrink: 0 }}>
+              <span style={{ fontSize: 11.5, color: "var(--nds-text-3)", flexShrink: 0 }}>{kb(a.sizeBytes)}</span>
+              <a href={`/api/inbox/${thread.conversation.id}/attachments/${a.id}`} title="Download" style={{ display: "inline-flex", color: "var(--nds-text-3)", flexShrink: 0 }}>
                 <Download size={12} />
               </a>
               <button
                 type="button"
                 onClick={() => showInConversation(a.anchor)}
                 title="Show in conversation"
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", color: "var(--h10-text-3)", flexShrink: 0 }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "inline-flex", color: "var(--nds-text-3)", flexShrink: 0 }}
               >
                 <Crosshair size={12} />
               </button>
@@ -374,7 +374,7 @@ function FilesCard({ thread, onFileOpen }: { thread: ThreadResponse; onFileOpen?
           );
         })}
         {images.length > 0 && files.length === 0 && (
-          <span style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Click a thumbnail to preview · images jump via the thread</span>
+          <span style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Click a thumbnail to preview · images jump via the thread</span>
         )}
       </div>
     </Card>
@@ -407,16 +407,16 @@ function LinkedQuotes({ thread, onToast }: { thread: ThreadResponse; onToast: (m
       {quotes.length > 0 && (
         <div style={{ display: "grid", gap: 5 }}>
           {quotes.map((q) => (
-            <button key={q.id} type="button" onClick={() => router.push(`/quotes?q=${q.id}`)} style={{ display: "flex", gap: 6, alignItems: "center", border: "1px solid var(--h10-border-subtle)", borderRadius: 8, padding: "6px 8px", background: "var(--h10-surface)", cursor: "pointer", textAlign: "left" }}>
-              <FileText size={13} style={{ color: "var(--h10-text-3)" }} />
+            <button key={q.id} type="button" onClick={() => router.push(`/quotes?q=${q.id}`)} style={{ display: "flex", gap: 6, alignItems: "center", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, padding: "6px 8px", background: "var(--nds-surface)", cursor: "pointer", textAlign: "left" }}>
+              <FileText size={13} style={{ color: "var(--nds-text-3)" }} />
               <b style={{ fontSize: 12.5 }}>{q.number}</b>
               <Pill tone={QUOTE_TONE[q.state]}>{q.state}</Pill>
               {q.convertedOrderId && <Pill tone="success">order</Pill>}
               {q.state === "DRAFT" && q.netCents === 0 ? (
                 // EPI1.3 (D8) — "€0.00 · 0%" on an unpriced draft read as data
-                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-3)" }}>not priced yet</span>
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--nds-text-3)" }}>not priced yet</span>
               ) : (
-                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--h10-text-2)", fontFamily: "var(--font-mono)" }}>
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--nds-text-2)", fontFamily: "var(--font-mono)" }}>
                   {eur(q.netCents)}{canMargin ? ` · ${q.netCents ? Math.round((q.marginCents / q.netCents) * 100) : 0}%` : ""}
                 </span>
               )}
@@ -428,7 +428,7 @@ function LinkedQuotes({ thread, onToast }: { thread: ThreadResponse; onToast: (m
         party ? (
           <Button onClick={() => void newQuote()} disabled={busy}><FileText size={13} /> {quotes.length ? "Another quote" : "New quote"}</Button>
         ) : (
-          <div style={{ fontSize: 11.5, color: "var(--h10-text-3)" }}>Match this thread to a contact first, then quote them.</div>
+          <div style={{ fontSize: 11.5, color: "var(--nds-text-3)" }}>Match this thread to a contact first, then quote them.</div>
         )
       )}
     </div>

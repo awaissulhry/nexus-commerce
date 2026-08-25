@@ -39,7 +39,7 @@ Turn the already-syncing Gmail threads into the factory's front door: read full 
 | Region | Components |
 |---|---|
 | List toolbar | DS `Tabs` (states), `Input` (search), `Listbox` (filter), `Pill` (counts) |
-| List rows | Custom row on tokens (13px base, hover wash, selected `--h10-wash-primary`) + DS `Checkbox` + `Skeleton` rows while loading |
+| List rows | Custom row on tokens (13px base, hover wash, selected `--nds-wash-primary`) + DS `Checkbox` + `Skeleton` rows while loading |
 | Bulk bar | DS `BulkActionBar` (count + Assign/Close/Clear) |
 | Thread bubbles | Custom on tokens; sanitized HTML in a sandboxed `<iframe>`; DS `Banner` for blocked-images notice |
 | Comments | F1 comment service + new `CommentBubble` (amber-washed, "Internal" tag — Missive's unmistakable-distinction rule) |

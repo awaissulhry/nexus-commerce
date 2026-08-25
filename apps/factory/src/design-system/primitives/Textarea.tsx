@@ -11,5 +11,5 @@ export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>
  * from the system and risks colliding with app-level classes).
  */
 export function Textarea({ className, ...rest }: TextareaProps) {
-  return <textarea className={['h10-ds-textarea', className ?? ''].filter(Boolean).join(' ')} {...rest} />
+  return <textarea className={['nds-textarea', className ?? ''].filter(Boolean).join(' ')} {...rest} />
 }

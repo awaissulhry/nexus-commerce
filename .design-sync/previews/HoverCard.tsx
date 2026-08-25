@@ -6,7 +6,7 @@ import { Badge, HoverCard, Pill, Tag } from '@nexus/design-system'
 /**
  * Preview harness — NOT part of the component API.
  *
- * The panel is revealed by `.h10-ds-hovercard:hover` OR `:focus-within`, and
+ * The panel is revealed by `.nds-hovercard:hover` OR `:focus-within`, and
  * the wrapper the DS renders already carries `tabIndex={0}`. Focusing it on
  * mount therefore lights the real rule — the same one hover uses — instead of
  * faking an open panel. `room` is the vertical space the card needs: it sits
@@ -18,7 +18,7 @@ const Revealed = ({ room, children }: { room: number; children: ReactNode }) => 
   useEffect(() => {
     if (fired.current) return
     fired.current = true
-    host.current?.querySelector<HTMLElement>('.h10-ds-hovercard')?.focus()
+    host.current?.querySelector<HTMLElement>('.nds-hovercard')?.focus()
   }, [])
   return (
     <div ref={host} style={{ paddingTop: room, display: 'flex', justifyContent: 'center' }}>

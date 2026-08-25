@@ -44,5 +44,5 @@ import { Button, Input, Textarea } from '@/design-system/primitives'
 `className="h10-modal bulk"` — a class that already belonged to the Ad-Manager
 bulk dialog. It inherited that dialog's `padding: 0` body (textarea border
 touched the edges) and silently resized the other dialog. The DS `Modal` is
-namespaced (`.h10-ds-*`), so reusing it is collision-proof. If a needed control
+namespaced (`.nds-*`), so reusing it is collision-proof. If a needed control
 is missing (as `Textarea` was), **add the primitive here** rather than hand-roll.

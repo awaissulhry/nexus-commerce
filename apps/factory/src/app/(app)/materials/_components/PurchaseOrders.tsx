@@ -17,7 +17,7 @@ import { usePermission } from "@/lib/auth/client";
 import { PO_TONE, type PODetail, type PORow, type POResponse } from "./types";
 
 const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--h10-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--h10-surface)", color: "var(--h10-text)" };
+const inp: React.CSSProperties = { width: "100%", border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" };
 
 type NewLine = { materialId: string; qty: string; unitCostCents: string };
 
@@ -81,7 +81,7 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
       <VirtualDataGrid
         height="calc(100dvh - 320px)"
         columns={[
-          { key: "number", label: "PO", render: (r: PORow) => <button type="button" onClick={() => open(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button> },
+          { key: "number", label: "PO", render: (r: PORow) => <button type="button" onClick={() => open(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.number}</button> },
           { key: "supplier", label: "Supplier", render: (r: PORow) => r.supplier },
           { key: "state", label: "State", render: (r: PORow) => <Pill tone={PO_TONE[r.state]}>{r.state.toLowerCase()}</Pill> },
           { key: "lines", label: "Lines", align: "right" as const, render: (r: PORow) => r.lineCount },
@@ -95,7 +95,7 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
 
       <Modal open={creating} onClose={() => setCreating(false)} title="New purchase order" size="md" footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" onClick={create} disabled={busy}>Create draft</Button></>}>
         <div style={{ display: "grid", gap: 10 }}>
-          <div><div style={lblStyle}>Supplier</div><Listbox ariaLabel="Supplier" options={[{ value: "", label: "Choose a supplier…" }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} value={supplierId} onChange={setSupplierId} />{suppliers.length === 0 && <div style={{ fontSize: 11, color: "var(--h10-text-3)", marginTop: 3 }}>Add a Supplier contact first.</div>}</div>
+          <div><div style={lblStyle}>Supplier</div><Listbox ariaLabel="Supplier" options={[{ value: "", label: "Choose a supplier…" }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} value={supplierId} onChange={setSupplierId} />{suppliers.length === 0 && <div style={{ fontSize: 11, color: "var(--nds-text-3)", marginTop: 3 }}>Add a Supplier contact first.</div>}</div>
           <div>
             <div style={lblStyle}>Lines</div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -104,10 +104,10 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
                   <Listbox ariaLabel="Material" options={[{ value: "", label: "material…" }, ...materials.map((m) => ({ value: m.id, label: m.name }))]} value={l.materialId} onChange={(v) => setLines((xs) => xs.map((x, j) => (j === i ? { ...x, materialId: v } : x)))} />
                   <input type="number" min="0" value={l.qty} onChange={(e) => setLines((xs) => xs.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} placeholder="qty" style={inp} />
                   {canCost && <input type="number" step="0.01" value={l.unitCostCents} onChange={(e) => setLines((xs) => xs.map((x, j) => (j === i ? { ...x, unitCostCents: e.target.value } : x)))} placeholder="€/unit" style={inp} />}
-                  <button type="button" onClick={() => setLines((xs) => xs.filter((_, j) => j !== i))} style={{ border: "1px solid var(--h10-border)", borderRadius: 7, background: "var(--h10-surface)", cursor: "pointer", height: 30, display: "grid", placeItems: "center", color: "var(--h10-text-3)" }}><X size={13} /></button>
+                  <button type="button" onClick={() => setLines((xs) => xs.filter((_, j) => j !== i))} style={{ border: "1px solid var(--nds-border)", borderRadius: 7, background: "var(--nds-surface)", cursor: "pointer", height: 30, display: "grid", placeItems: "center", color: "var(--nds-text-3)" }}><X size={13} /></button>
                 </div>
               ))}
-              <button type="button" onClick={() => setLines((xs) => [...xs, { materialId: "", qty: "", unitCostCents: "" }])} style={{ justifySelf: "start", background: "none", border: "none", padding: "2px 0", cursor: "pointer", fontSize: 12, color: "var(--h10-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><Plus size={12} /> Add line</button>
+              <button type="button" onClick={() => setLines((xs) => [...xs, { materialId: "", qty: "", unitCostCents: "" }])} style={{ justifySelf: "start", background: "none", border: "none", padding: "2px 0", cursor: "pointer", fontSize: 12, color: "var(--nds-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><Plus size={12} /> Add line</button>
             </div>
           </div>
         </div>
@@ -115,10 +115,10 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
 
       <Modal open={receiving} onClose={() => setReceiving(false)} title={`Receive ${po?.number ?? ""}`} size="sm" footer={<><Button onClick={() => setReceiving(false)}>Cancel</Button><Button variant="primary" onClick={submitReceive} disabled={busy}>Receive into stock</Button></>}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ fontSize: 12.5, color: "var(--h10-text-2)" }}>Each receipt becomes a lot + an IN movement. Stock rises immediately.</div>
+          <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>Each receipt becomes a lot + an IN movement. Stock rises immediately.</div>
           {po?.lines.map((l) => (
             <div key={l.materialId} style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12.5 }}>{l.materialName} <span style={{ color: "var(--h10-text-3)" }}>· {l.received}/{l.qty} in</span></span>
+              <span style={{ fontSize: 12.5 }}>{l.materialName} <span style={{ color: "var(--nds-text-3)" }}>· {l.received}/{l.qty} in</span></span>
               <input type="number" min="0" step="0.01" value={recVals[l.materialId] ?? ""} onChange={(e) => setRecVals((v) => ({ ...v, [l.materialId]: e.target.value }))} style={inp} />
             </div>
           ))}
@@ -129,18 +129,18 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
         <div style={{ display: "flex", gap: 8 }}>
           {po.state === "DRAFT" && canManage && <Button variant="primary" onClick={() => void setState("send")}>Send</Button>}
           {(po.state === "SENT" || po.state === "PARTIAL") && canReceive && <Button variant="primary" onClick={openReceive}>Receive</Button>}
-          {canManage && <Button onClick={() => void setState("cancel")} style={{ marginLeft: "auto", color: "var(--h10-danger)", borderColor: "var(--h10-danger)" }}>Cancel PO</Button>}
+          {canManage && <Button onClick={() => void setState("cancel")} style={{ marginLeft: "auto", color: "var(--nds-danger)", borderColor: "var(--nds-danger)" }}>Cancel PO</Button>}
         </div>
       ) : undefined}>
         {po && (
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}><Pill tone={PO_TONE[po.state]}>{po.state.toLowerCase()}</Pill><span style={{ color: "var(--h10-text-2)" }}>{po.supplier.name}</span></div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}><Pill tone={PO_TONE[po.state]}>{po.state.toLowerCase()}</Pill><span style={{ color: "var(--nds-text-2)" }}>{po.supplier.name}</span></div>
             <div style={{ display: "grid", gap: 6 }}>
               {po.lines.map((l) => (
-                <div key={l.materialId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid var(--h10-border-subtle)", fontSize: 12.5 }}>
-                  <span><b>{l.materialName}</b><span style={{ color: "var(--h10-text-3)" }}> · {num(l.qty)} {l.unit.toLowerCase()}</span></span>
+                <div key={l.materialId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid var(--nds-border-subtle)", fontSize: 12.5 }}>
+                  <span><b>{l.materialName}</b><span style={{ color: "var(--nds-text-3)" }}> · {num(l.qty)} {l.unit.toLowerCase()}</span></span>
                   <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                    {l.received >= l.qty ? <Pill tone="success">received</Pill> : l.received > 0 ? <Pill tone="warning">{num(l.received)}/{num(l.qty)}</Pill> : <span style={{ color: "var(--h10-text-3)" }}>—</span>}
+                    {l.received >= l.qty ? <Pill tone="success">received</Pill> : l.received > 0 ? <Pill tone="warning">{num(l.received)}/{num(l.qty)}</Pill> : <span style={{ color: "var(--nds-text-3)" }}>—</span>}
                     {canCost && l.lineTotalCents != null && <span style={{ fontFamily: "ui-monospace, monospace" }}>{eur(l.lineTotalCents)}</span>}
                   </span>
                 </div>
@@ -154,4 +154,4 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
   );
 }
 
-const lblStyle: React.CSSProperties = { fontSize: 11.5, color: "var(--h10-text-3)", marginBottom: 3 };
+const lblStyle: React.CSSProperties = { fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 };

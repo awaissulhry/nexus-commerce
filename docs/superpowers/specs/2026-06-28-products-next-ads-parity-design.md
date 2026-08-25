@@ -50,15 +50,15 @@ hosting **every** dimension. Implemented as a new DS pattern:
   with `multiselect`→`MultiSelect`, `select`→`Combobox`, `range`→min/max field,
   `toggle`→`Toggle`; options accept facet `count`. Footer "Clear" + Hide/Show.
 - `FilterPanel` gained additive `resetLabel`/`resetDisabled`.
-- New token-clean CSS: `.h10-ds-range*`, `.h10-ds-ms-count`.
+- New token-clean CSS: `.nds-range*`, `.nds-ms-count`.
 - Recorded: patterns barrel, catalog (Filters → FilterBar), CHANGELOG `[FILTERBAR]`.
 - Wired on `/products/next` with: Channel, Status, Stock, Fulfilment, Product type,
   Brand, Tags, Family, Workflow stage, Missing channel, Price range, Stock-units
   range. Quick-lens chips + dead "Filter" button removed.
 
 ### Phase 2 — Main buttons (toolbar)  ✅ built + verified live
-New DS pattern **`GridToolbar`** (`patterns/GridToolbar.tsx`, `.h10-ds-toolbar`) +
-**`.h10-ds-gridcard`** wrapper so the toolbar sits inside the grid card above the
+New DS pattern **`GridToolbar`** (`patterns/GridToolbar.tsx`, `.nds-toolbar`) +
+**`.nds-gridcard`** wrapper so the toolbar sits inside the grid card above the
 `DataGrid`, matching the campaigns page. Recorded (barrel · catalog · CHANGELOG
 `[GRIDTOOLBAR]`). On `/products/next`:
 - Toolbar count "Viewing X of Y products" (← "Selected N products" when rows picked).

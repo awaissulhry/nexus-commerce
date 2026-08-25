@@ -57,7 +57,7 @@
      is dropped, and Tailwind preflight's `border: 0px solid` wins — which is
      why DS buttons have no border across the ads console. This copies
      `.productsNextLight` instead: semantic aliases expressed through the
-     `--h10-*` primitive ramp, which the `.dark` block never touches, so there
+     `--nds-*` primitive ramp, which the `.dark` block never touches, so there
      is one source of truth for the hex. See
      `reference_ds_token_triplet_collision` and Study 0 of
      docs/2026-08-07-naf-sbw-section-studies.md.
@@ -68,36 +68,36 @@
      anywhere under it. Nothing here does today; keep it that way. */
 
   /* surfaces */
-  --surface-canvas: var(--h10-grey-50);
-  --surface-card: var(--h10-white);
-  --surface-raised: var(--h10-grey-25);
-  --surface-sunken: var(--h10-grey-100);
+  --surface-canvas: var(--nds-grey-50);
+  --surface-card: var(--nds-white);
+  --surface-raised: var(--nds-grey-25);
+  --surface-sunken: var(--nds-grey-100);
 
   /* text */
-  --text-primary: var(--h10-grey-900);
-  --text-secondary: var(--h10-grey-600);
-  --text-tertiary: var(--h10-grey-500);
-  --text-disabled: var(--h10-grey-400);
-  --text-inverse: var(--h10-white);
+  --text-primary: var(--nds-grey-900);
+  --text-secondary: var(--nds-grey-600);
+  --text-tertiary: var(--nds-grey-500);
+  --text-disabled: var(--nds-grey-400);
+  --text-inverse: var(--nds-white);
 
   /* borders */
-  --border-subtle: var(--h10-grey-150);
-  --border-default: var(--h10-grey-200);
-  --border-strong: var(--h10-grey-300);
+  --border-subtle: var(--nds-grey-150);
+  --border-default: var(--nds-grey-200);
+  --border-strong: var(--nds-grey-300);
 
   /* the DS's own h10-* semantic aliases (tokens.css `.dark` overrides these) */
-  --h10-text: var(--h10-grey-900);
-  --h10-text-2: var(--h10-grey-600);
-  --h10-text-3: var(--h10-grey-500);
-  --h10-text-disabled: var(--h10-grey-400);
-  --h10-text-inverse: var(--h10-white);
-  --h10-bg: var(--h10-grey-50);
-  --h10-surface: var(--h10-white);
-  --h10-surface-raised: var(--h10-grey-25);
-  --h10-surface-sunken: var(--h10-grey-100);
-  --h10-border: var(--h10-grey-200);
-  --h10-border-subtle: var(--h10-grey-150);
-  --h10-border-strong: var(--h10-grey-300);
+  --nds-text: var(--nds-grey-900);
+  --nds-text-2: var(--nds-grey-600);
+  --nds-text-3: var(--nds-grey-500);
+  --nds-text-disabled: var(--nds-grey-400);
+  --nds-text-inverse: var(--nds-white);
+  --nds-bg: var(--nds-grey-50);
+  --nds-surface: var(--nds-white);
+  --nds-surface-raised: var(--nds-grey-25);
+  --nds-surface-sunken: var(--nds-grey-100);
+  --nds-border: var(--nds-grey-200);
+  --nds-border-subtle: var(--nds-grey-150);
+  --nds-border-strong: var(--nds-grey-300);
 }
 
 .fleet-surface {

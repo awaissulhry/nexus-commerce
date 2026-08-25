@@ -24,19 +24,19 @@ function CardBody({ r, onOpen }: { r: OrderRow; onOpen?: (id: string) => void })
     <div style={{ display: "grid", gap: 5 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
         <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minWidth: 0 }}>
-          <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={() => onOpen?.(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: onOpen ? "pointer" : "grab", font: "inherit", fontWeight: 700, color: "var(--h10-text-link)" }}>{r.number}</button>
+          <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={() => onOpen?.(r.id)} style={{ background: "none", border: "none", padding: 0, cursor: onOpen ? "pointer" : "grab", font: "inherit", fontWeight: 700, color: "var(--nds-text-link)" }}>{r.number}</button>
           {r.urgent && <Pill tone="danger">urgent</Pill>}
         </span>
         {r.netCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 600 }}>{eur(r.netCents)}</span>}
       </div>
       {/* EPO.3 (E2) — party hops to contacts; mousedown stopped so a click never starts a drag */}
       <div style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        <a href={`/contacts?c=${r.party.id}`} onMouseDown={(e) => e.stopPropagation()} style={{ color: "var(--h10-text-2)", textDecoration: "none" }} title={r.party.name}>{r.party.name}</a>
+        <a href={`/contacts?c=${r.party.id}`} onMouseDown={(e) => e.stopPropagation()} style={{ color: "var(--nds-text-2)", textDecoration: "none" }} title={r.party.name}>{r.party.name}</a>
       </div>
       <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
         <DepositDot r={r} />
         {r.woBlocked && <Pill tone="warning">blocked</Pill>}
-        {r.promiseDateAt && <span style={{ fontSize: 11, color: r.overdue ? "var(--h10-danger)" : "var(--h10-text-3)", fontWeight: r.overdue ? 700 : 400 }}>{formatDate(r.promiseDateAt)}</span>}
+        {r.promiseDateAt && <span style={{ fontSize: 11, color: r.overdue ? "var(--nds-danger)" : "var(--nds-text-3)", fontWeight: r.overdue ? 700 : 400 }}>{formatDate(r.promiseDateAt)}</span>}
       </div>
     </div>
   );
@@ -45,7 +45,7 @@ function CardBody({ r, onOpen }: { r: OrderRow; onOpen?: (id: string) => void })
 function DraggableCard({ r, onOpen }: { r: OrderRow; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: r.id, data: { from: r.state } });
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners} style={{ border: "1px solid var(--h10-border-subtle)", borderRadius: 10, background: "var(--h10-surface)", padding: 10, cursor: "grab", opacity: isDragging ? 0.35 : 1, boxShadow: "0 1px 2px rgb(20 28 38 / 0.04)" }}>
+    <div ref={setNodeRef} {...attributes} {...listeners} style={{ border: "1px solid var(--nds-border-subtle)", borderRadius: 10, background: "var(--nds-surface)", padding: 10, cursor: "grab", opacity: isDragging ? 0.35 : 1, boxShadow: "0 1px 2px rgb(20 28 38 / 0.04)" }}>
       <CardBody r={r} onOpen={onOpen} />
     </div>
   );
@@ -59,16 +59,16 @@ function Lane({ state, orders, total, hasMore, onLoadMore, onOpen }: { state: Or
         <span style={{ fontSize: 12, fontWeight: 700 }}>
           {ORDER_STATE_LABEL[state]}
           {/* EPO1.4 (C1) — this lane is label-driven: dropping here routes to the buy flow */}
-          {state === "SHIPPED" && <span style={{ fontWeight: 400, fontSize: 10.5, color: "var(--h10-text-3)", marginLeft: 5 }}>via label</span>}
+          {state === "SHIPPED" && <span style={{ fontWeight: 400, fontSize: 10.5, color: "var(--nds-text-3)", marginLeft: 5 }}>via label</span>}
         </span>
         {/* FS1 (C-1) — the TRUE lane count, never just the loaded page */}
-        <span style={{ fontSize: 11, color: "var(--h10-text-3)" }}>{orders.length < total ? `${orders.length} of ${total}` : total}</span>
+        <span style={{ fontSize: 11, color: "var(--nds-text-3)" }}>{orders.length < total ? `${orders.length} of ${total}` : total}</span>
       </div>
-      <div ref={setNodeRef} style={{ flex: 1, minHeight: 120, display: "grid", gap: 8, alignContent: "start", padding: 8, borderRadius: 12, background: isOver ? "var(--h10-wash-primary, rgba(31,111,222,0.06))" : "var(--h10-bg-subtle, rgba(20,28,38,0.02))", outline: isOver ? "1px dashed var(--h10-primary)" : "1px solid transparent", transition: "background 0.12s" }}>
+      <div ref={setNodeRef} style={{ flex: 1, minHeight: 120, display: "grid", gap: 8, alignContent: "start", padding: 8, borderRadius: 12, background: isOver ? "var(--nds-wash-primary, rgba(31,111,222,0.06))" : "var(--nds-bg-subtle, rgba(20,28,38,0.02))", outline: isOver ? "1px dashed var(--nds-primary)" : "1px solid transparent", transition: "background 0.12s" }}>
         {orders.map((r) => <DraggableCard key={r.id} r={r} onOpen={onOpen} />)}
-        {orders.length === 0 && <div style={{ fontSize: 11.5, color: "var(--h10-text-3)", textAlign: "center", padding: "12px 0" }}>—</div>}
+        {orders.length === 0 && <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", textAlign: "center", padding: "12px 0" }}>—</div>}
         {hasMore && (
-          <button type="button" onClick={onLoadMore} style={{ border: "1px dashed var(--h10-border)", borderRadius: 8, background: "none", padding: "7px 0", fontSize: 11.5, color: "var(--h10-text-2)", cursor: "pointer" }}>
+          <button type="button" onClick={onLoadMore} style={{ border: "1px dashed var(--nds-border)", borderRadius: 8, background: "none", padding: "7px 0", fontSize: 11.5, color: "var(--nds-text-2)", cursor: "pointer" }}>
             Load {Math.min(100, total - orders.length)} more
           </button>
         )}
@@ -105,7 +105,7 @@ export function KanbanBoard({ lanes, onLoadMore, onMove, onOpen }: { lanes: Reco
           );
         })}
       </div>
-      <DragOverlay>{dragging ? <div style={{ border: "1px solid var(--h10-primary)", borderRadius: 10, background: "var(--h10-surface)", padding: 10, width: 220, boxShadow: "0 8px 24px rgb(20 28 38 / 0.18)" }}><CardBody r={dragging} /></div> : null}</DragOverlay>
+      <DragOverlay>{dragging ? <div style={{ border: "1px solid var(--nds-primary)", borderRadius: 10, background: "var(--nds-surface)", padding: 10, width: 220, boxShadow: "0 8px 24px rgb(20 28 38 / 0.18)" }}><CardBody r={dragging} /></div> : null}</DragOverlay>
     </DndContext>
   );
 }

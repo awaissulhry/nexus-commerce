@@ -10,7 +10,7 @@ export interface ToggleProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
  * `role="switch"` button — controlled via `checked` / `onChange`.
  */
 export function Toggle({ checked, onChange, className, disabled, ...rest }: ToggleProps) {
-  const cls = ['h10-ds-toggle', checked ? 'on' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-toggle', checked ? 'on' : '', className ?? ''].filter(Boolean).join(' ')
   return (
     <button
       type="button"
