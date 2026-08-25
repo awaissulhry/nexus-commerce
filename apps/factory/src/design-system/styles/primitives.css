@@ -677,3 +677,22 @@
   width: 1px; height: 16px; flex: none; margin: 0 4px;
   background: var(--nds-border);
 }
+
+/* Boxed icon button. The bare `.nds-tbtn` above was the DS's only icon button, so three ads
+   pages each hand-rolled a boxed one (`.az-iconbtn` 34px, `.h10-sug-iconbtn` and `.rec-iconbtn`
+   28px). Sized 28px here to match the bare default; pass a width/height override for the 34px
+   case rather than adding a second size nobody else uses. */
+.nds-tbtn.boxed {
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-strong);
+}
+.nds-tbtn.boxed:hover:not(:disabled) {
+  background: var(--nds-surface-hover);
+}
+.nds-tbtn.boxed[aria-pressed='true'] {
+  background: var(--nds-primary);
+  border-color: var(--nds-primary);
+  color: var(--nds-text-inverse);
+}

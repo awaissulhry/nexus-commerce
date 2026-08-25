@@ -36,6 +36,23 @@ export interface ToolbarButtonProps {
    * right-aligned toolbar) know it statically.
    */
   tooltipAlign?: 'center' | 'end'
+  /**
+   * `bare` (default) is the existing look: no border, no fill, 28x28, `--nds-text-2`.
+   * `boxed` adds the surface + border the ads console hand-rolls three ways (`.az-iconbtn` 34px,
+   * `.h10-sug-iconbtn` and `.rec-iconbtn` 28px). Measured 2026-08-25 — the DS had no boxed
+   * icon button, which is why three pages each invented one.
+   */
+  variant?: 'bare' | 'boxed'
+  /**
+   * Wrap in a `Tooltip`. Default true, matching every existing call site.
+   *
+   * Pass `false` for an icon button whose meaning is already obvious (a `x` close, a `-` remove).
+   * `Tooltip` renders a real `display: inline-flex` wrapper element, so adding one around a
+   * button that is a flex child or absolutely positioned can move it — and the 43 `.x`/`.rm`
+   * buttons in the ads console are exactly that. The `label` is still required and still becomes
+   * the `aria-label`: opting out of the bubble never opts out of the accessible name.
+   */
+  tooltip?: boolean
 }
 
 export function ToolbarButton({
@@ -50,6 +67,8 @@ export function ToolbarButton({
   className,
   tooltipContent,
   tooltipAlign,
+  variant = 'bare',
+  tooltip = true,
 }: ToolbarButtonProps) {
   const autoTooltip: ReactNode =
     tooltipContent ?? (
@@ -71,7 +90,7 @@ export function ToolbarButton({
       disabled={disabled}
       aria-label={label}
       aria-pressed={active}
-      className={cx('nds-tbtn', className)}
+      className={cx('nds-tbtn', variant === 'boxed' && 'boxed', className)}
     >
       {icon}
       {badge != null && badge > 0 && (
@@ -85,6 +104,7 @@ export function ToolbarButton({
     </button>
   )
 
+  if (!tooltip) return btn
   return <Tooltip label={autoTooltip} className={`nds-tooltip--light${tooltipAlign === 'end' ? ' nds-tooltip--end' : ''}`}>{btn}</Tooltip>
 }
 
