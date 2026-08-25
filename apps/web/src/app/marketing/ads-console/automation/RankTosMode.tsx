@@ -13,12 +13,30 @@ import { useEffect, useState } from 'react'
 import { RefreshCw, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['All', 'IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
 interface TosRow { campaignId: string; name: string; marketplace: string | null; topImpr: number; topSpendCents: number; topAcos: number | null; topIS: number | null; currentPct: number; recommendedPct: number; action: 'raise' | 'lower' | 'keep'; reason: string }
 interface TosResp { windowDays: number; targetAcos: number; targetIS: number | null; rows: TosRow[] }
+
+/** A factory, not a constant: the IS colour threshold depends on `targetIS`, which is per-render.
+ *  Alignment inverts between the two grids — the five columns with no `.l` are right-aligned.
+ *  Both `.sub` spans become `.az-cell-sub`; the original only exists as `.az-table .sub`. */
+const tosColumns = (targetIS: number): Array<Column<TosRow>> => [
+  { key: 'campaign', label: 'Campaign', render: (r) => <span style={{ fontWeight: 500 }}><a className="cn" href={campaignHref(r.campaignId)} target="_blank" rel="noopener noreferrer">{r.name}</a></span> },
+  { key: 'market', label: 'Market', render: (r) => <span className="az-cell-sub">{r.marketplace ?? '—'}</span> },
+  { key: 'topis', label: 'Top-of-Search IS', align: 'right', render: (r) => <span style={{ fontWeight: 700, color: r.topIS == null ? 'var(--ink3)' : r.topIS >= targetIS / 100 ? 'var(--green)' : '#cc6a00' }}>{pct(r.topIS)}</span> },
+  { key: 'topspend', label: 'Top spend', align: 'right', render: (r) => eur(r.topSpendCents) },
+  { key: 'topacos', label: 'Top ACOS', align: 'right', render: (r) => pct(r.topAcos) },
+  { key: 'current', label: 'Current %', align: 'right', render: (r) => `+${r.currentPct}%` },
+  { key: 'recommended', label: 'Recommended', align: 'right', render: (r) => <span style={{ fontWeight: r.action !== 'keep' ? 700 : 400 }}>{r.recommendedPct !== r.currentPct ? `+${r.recommendedPct}%` : '—'}</span> },
+  { key: 'action', label: 'Action', render: (r) => (<>
+      <span style={{ fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: actionColor(r.action) }}>{r.action}</span>
+      <div className="az-cell-sub" style={{ maxWidth: 280, whiteSpace: 'normal' }}>{r.reason}</div>
+    </>) },
+]
 
 const pct = (v: number | null, dp = 0) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
@@ -80,29 +98,12 @@ export function RankTosMode({ onSaved }: { onSaved: () => void }) {
       {msg && <div style={{ color: msg.includes('Created') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{msg}</div>}
       {!hasIS && rows.length > 0 && <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginBottom: 10 }}>Top-of-Search IS isn’t populated yet — it fills in after the TOS-IS ingest runs. Recommendations fall back to ACOS until then.</div>}
 
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr>
-            <th className="l">Campaign</th><th className="l">Market</th><th>Top-of-Search IS</th><th>Top spend</th><th>Top ACOS</th><th>Current %</th><th>Recommended</th><th className="l">Action</th>
-          </tr></thead>
-          <tbody>
-            {d === null && <tr><td className="az-empty" colSpan={8}>Loading…</td></tr>}
-            {d !== null && rows.length === 0 && <tr><td className="az-empty" colSpan={8}>No top-of-search activity {market === 'All' ? '' : `in ${market}`} in the last 30 days.</td></tr>}
-            {rows.map((r) => (
-              <tr key={r.campaignId}>
-                <td className="l" style={{ fontWeight: 500 }}><a className="cn" href={campaignHref(r.campaignId)} target="_blank" rel="noopener noreferrer">{r.name}</a></td>
-                <td className="l"><span className="sub">{r.marketplace ?? '—'}</span></td>
-                <td className="num" style={{ fontWeight: 700, color: r.topIS == null ? 'var(--ink3)' : r.topIS >= targetIS / 100 ? 'var(--green)' : '#cc6a00' }}>{pct(r.topIS)}</td>
-                <td className="num">{eur(r.topSpendCents)}</td>
-                <td className="num">{pct(r.topAcos)}</td>
-                <td className="num">+{r.currentPct}%</td>
-                <td className="num" style={{ fontWeight: r.action !== 'keep' ? 700 : 400 }}>{r.recommendedPct !== r.currentPct ? `+${r.recommendedPct}%` : '—'}</td>
-                <td className="l"><span style={{ fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: actionColor(r.action) }}>{r.action}</span><div className="sub" style={{ maxWidth: 280, whiteSpace: 'normal' }}>{r.reason}</div></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<TosRow>
+        rows={d === null ? [] : rows}
+        rowKey={(r) => r.campaignId}
+        columns={tosColumns(targetIS)}
+        emptyState={d === null ? 'Loading…' : `No top-of-search activity ${market === 'All' ? '' : `in ${market}`} in the last 30 days.`}
+      />
     </div>
   )
 }

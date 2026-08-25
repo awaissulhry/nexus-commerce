@@ -11,12 +11,32 @@ import { useEffect, useMemo, useState } from 'react'
 import { Swords, RefreshCw, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Checkbox, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
-import { TableSkel } from './_ui'
+import { GridSkel } from './_ui'
 import { downloadCsv } from './_csv'
 
 interface SovRow { query: string; impressions: number; clicks: number; costCents: number; orders: number; ctr: number; cvr: number; cpcCents: number; sovPct: number; campaignCount: number; topCampaignSharePct: number; cannibalized: boolean; flag?: string }
 interface SovResp { windowDays: number; totalImpressions: number; queries: number; rows: SovRow[] }
+
+/** Alignment inverts between `.az-table` and `.nds-grid` — the eight columns that carried no
+ *  `.l` are the right-aligned ones. `.num`'s tabular figures come from the `td.r` rule in
+ *  amazon.css, not from a per-cell class. */
+const SOV_COLUMNS: Array<Column<SovRow>> = [
+  { key: 'query', label: 'Search query', render: (r) => <span style={{ fontWeight: 500 }}>{r.query}</span> },
+  { key: 'sov', label: 'SoV', align: 'right', render: (r) => <span style={{ fontWeight: 700 }}>{pct(r.sovPct)}</span> },
+  { key: 'impressions', label: 'Impressions', align: 'right', render: (r) => num(r.impressions) },
+  { key: 'clicks', label: 'Clicks', align: 'right', render: (r) => num(r.clicks) },
+  { key: 'ctr', label: 'CTR', align: 'right', render: (r) => pct(r.ctr, 2) },
+  { key: 'cvr', label: 'CVR', align: 'right', render: (r) => pct(r.cvr, 1) },
+  { key: 'cpc', label: 'CPC', align: 'right', render: (r) => eur(r.cpcCents) },
+  { key: 'orders', label: 'Orders', align: 'right', render: (r) => num(r.orders) },
+  { key: 'campaigns', label: 'Campaigns', align: 'right', render: (r) => <span style={r.cannibalized ? { color: '#cc1100', fontWeight: 700 } : undefined}>{r.campaignCount}</span> },
+  { key: 'flags', label: 'Flags', render: (r) => (<>
+      {r.cannibalized && <span className="az-badge warn" style={{ marginRight: 4 }}>cannibalised</span>}
+      {r.flag && <span className="az-badge paused">{flagLabel[r.flag] ?? r.flag}</span>}
+    </>) },
+]
 const pct = (v: number, dp = 1) => `${(v * 100).toFixed(dp)}%`
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
 const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
@@ -48,32 +68,12 @@ export function SovTab() {
         <ToolbarButton variant="boxed" icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv('share-of-voice.csv', rows.map((r) => ({ query: r.query, sovPct: r.sovPct, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, cvr: r.cvr, cpcCents: r.cpcCents, orders: r.orders, campaigns: r.campaignCount, flag: r.flag ?? '' })))} />
         <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr><th className="l">Search query</th><th>SoV</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>CVR</th><th>CPC</th><th>Orders</th><th>Campaigns</th><th className="l">Flags</th></tr></thead>
-          <tbody>
-            {!d && <TableSkel cols={10} />}
-            {d && rows.length === 0 && <tr><td className="az-empty" colSpan={10}>No queries match.</td></tr>}
-            {rows.map((r, i) => (
-              <tr key={`${r.query}-${i}`}>
-                <td className="l" style={{ fontWeight: 500 }}>{r.query}</td>
-                <td className="num"><span style={{ fontWeight: 700 }}>{pct(r.sovPct)}</span></td>
-                <td className="num">{num(r.impressions)}</td>
-                <td className="num">{num(r.clicks)}</td>
-                <td className="num">{pct(r.ctr, 2)}</td>
-                <td className="num">{pct(r.cvr, 1)}</td>
-                <td className="num">{eur(r.cpcCents)}</td>
-                <td className="num">{num(r.orders)}</td>
-                <td className="num" style={r.cannibalized ? { color: '#cc1100', fontWeight: 700 } : undefined}>{r.campaignCount}</td>
-                <td className="l">
-                  {r.cannibalized && <span className="az-badge warn" style={{ marginRight: 4 }}>cannibalised</span>}
-                  {r.flag && <span className="az-badge paused">{flagLabel[r.flag] ?? r.flag}</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<SovRow>
+        rows={d ? rows : []}
+        rowKey={(r) => r.query}
+        columns={SOV_COLUMNS}
+        emptyState={d ? 'No queries match.' : <GridSkel />}
+      />
       <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '12px 2px' }}>Cannibalised queries (multiple of your campaigns bidding against each other) waste spend — consolidate them, then let harvesting + negation keep them clean.</div>
     </div>
   )
