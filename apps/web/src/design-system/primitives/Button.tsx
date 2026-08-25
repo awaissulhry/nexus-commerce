@@ -23,6 +23,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    */
   inline?: boolean
   /**
+   * Fills its container and left-aligns its content — a button shaped like a list row.
+   *
+   * For a full-bleed row that is itself the control: a card footer's "+ 12 more…", a section
+   * header that is the disclosure. Three surfaces hand-rolled it because `Button` is
+   * `inline-flex` and centred, so the row's hit target only covered the text.
+   *
+   * A separator between rows belongs to the LIST, not to each button — this sets no border.
+   */
+  block?: boolean
+  /**
    * Engaged/selected — the primary fill, matching the ads console's `.on`.
    *
    * Visual ONLY. It does not emit aria, because the correct attribute depends on what the button
@@ -45,8 +55,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * The canonical button. Matches the H10 action button (.h10-am-btn) spec,
  * tokenized. Requires `styles/primitives.css`.
  */
-export function Button({ variant = 'secondary', size = 'md', type = 'button', active, inline, className, children, ...rest }: ButtonProps) {
-  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', inline ? 'inline' : '', className ?? '']
+export function Button({ variant = 'secondary', size = 'md', type = 'button', active, inline, block, className, children, ...rest }: ButtonProps) {
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', block ? 'block' : '', inline ? 'inline' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (

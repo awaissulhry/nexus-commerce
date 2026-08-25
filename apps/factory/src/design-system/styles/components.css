@@ -1437,3 +1437,34 @@
   line-height: 1.4;
   color: var(--nds-text-muted);
 }
+
+/* A Card that is a <button> — a KPI tile that filters a chart, a card that scrolls to its
+   section. Four surfaces hand-rolled this. Resets the button chrome and inherits type, so the
+   card looks identical whether or not it is clickable. */
+.nds-card.btn {
+  display: block;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.nds-card.btn:hover {
+  background: var(--nds-surface-hover);
+  border-color: var(--nds-border);
+}
+.nds-card.btn:focus-visible {
+  outline: none;
+  border-color: var(--nds-primary);
+  box-shadow: var(--nds-focus-ring);
+}
+/* Keyed off aria-pressed, never a class, so the visual cannot drift from the a11y tree. */
+.nds-card.btn[aria-pressed='true'] {
+  border-color: var(--nds-primary);
+  background: var(--nds-surface-hover);
+}
+.nds-card.btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}

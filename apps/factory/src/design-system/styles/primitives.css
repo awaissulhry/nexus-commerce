@@ -715,6 +715,17 @@
   border-color: transparent;
 }
 
+/* Block — fills its container, content left-aligned. A button shaped like a list row: a card
+   footer's "+ 12 more...", a section header that IS the disclosure. Sets no border, because a
+   separator between rows belongs to the list, not to each button.
+   Placed BEFORE .inline on purpose: where both apply, .inline still unsets the box. */
+.nds-btn.block {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 /* Inline — for a button inside running text. MUST stay last: it unsets the box that every
    variant above sets, and at equal specificity source order is what decides. */
 .nds-btn.inline {
