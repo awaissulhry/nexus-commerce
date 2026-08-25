@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1400,7 +1400,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       {/* top bar */}
       <header className="h10-rb-top">
         <div className="l">
-          <button type="button" className="x" aria-label="Close" onClick={close}><X size={19} /></button>
+          <ToolbarButton className="x" icon={<X size={19} />} label="Close" tooltip={false} onClick={close} />
           <AtomMark size={20} />
           <b>{isEdit ? 'Edit' : 'Create'} Rule - {rt?.label ?? 'Rule'}</b>
         </div>

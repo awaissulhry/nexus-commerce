@@ -13,8 +13,7 @@
 
 .h10-rb-top { display: flex; align-items: center; justify-content: space-between; height: 56px; flex: 0 0 56px; padding: 0 18px; border-bottom: 1px solid var(--nds-grey-150); }
 .h10-rb-top .l { display: flex; align-items: center; gap: 12px; }
-.h10-rb-top .x { border: 0; background: none; color: var(--nds-grey-600); cursor: pointer; display: inline-flex; padding: 4px; border-radius: var(--nds-radius-md); }
-.h10-rb-top .x:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); }
+/* DS-ALIGN — the builder's close is the DS `ToolbarButton` (bare), which owns colour and hover. */
 .h10-rb-top .ic { color: #111a27; }
 .h10-rb-top b { font-size: 15px; font-weight: 800; color: var(--nds-grey-900); letter-spacing: -0.01em; } /* BP.P3: 16→15 */
 .h10-rb-top .r { display: flex; align-items: center; gap: 10px; }
@@ -685,9 +684,10 @@
 .h10-btn.primary:hover:not(:disabled) { background: var(--nds-blue-700); }
 .h10-btn.sm { font-size: 11.5px; padding: 4px 9px; }
 .h10-btn:disabled { opacity: .5; cursor: default; }
-.h10-kebab { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; color: var(--nds-grey-600); background: none; border: 0; border-radius: var(--nds-radius-sm); cursor: pointer; }
-.h10-kebab:hover:not(:disabled) { background: var(--nds-grey-75); color: var(--nds-grey-900); }
-.h10-kebab:disabled { opacity: .4; cursor: default; }
+/* DS-ALIGN — these are the DS `ToolbarButton` (bare). The primitive carries the colour, the
+   hover, the focus ring and the disabled state; all that is left is the SIZE, because 28x28 is
+   too wide for the 90px action column these five share and the DS has no dense tier. */
+.h10-kebab { width: 26px; height: 24px; }
 .h10-rte-scope { display: flex; align-items: center; gap: 10px; padding: 0 16px 10px; flex-wrap: wrap; }
 .h10-mode-seg.h10-scope-seg { display: inline-flex; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); overflow: hidden; }
 .h10-mode-seg button { font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-white); border: 0; padding: 5px 12px; cursor: pointer; }

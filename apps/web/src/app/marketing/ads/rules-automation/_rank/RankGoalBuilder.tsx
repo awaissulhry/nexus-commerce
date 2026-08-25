@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
@@ -237,7 +237,7 @@ export function RankGoalBuilder() {
     <div className="h10-rb h10-rgd">
       <header className="h10-rb-top">
         <div className="l">
-          <button type="button" className="x" aria-label="Close" onClick={close}><X size={19} /></button>
+          <ToolbarButton className="x" icon={<X size={19} />} label="Close" tooltip={false} onClick={close} />
           <AtomMark size={20} />
           <b>{isEdit ? 'Edit' : 'Create'} Rank Schedule</b>
           {toggle}

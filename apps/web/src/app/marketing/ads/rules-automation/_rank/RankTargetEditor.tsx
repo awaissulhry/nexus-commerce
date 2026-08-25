@@ -13,10 +13,10 @@
  */
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
+import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -322,7 +322,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   return (
     <div className="h10-rd-copymodal" role="dialog" aria-modal="true" aria-label="Edit rank targets" onClick={() => onClose(changed)}>
       <div className="box h10-rte" onClick={e => e.stopPropagation()} style={{ width: 'min(680px, 95vw)' }}>
-        <div className="hd">Rank targets — what each paint colour does<span className="grow" /><button type="button" className="h10-kebab" onClick={() => onClose(changed)} aria-label="Close">✕</button></div>
+        <div className="hd">Rank targets — what each paint colour does<span className="grow" /><ToolbarButton className="h10-kebab" icon={<X size={14} />} label="Close" tooltip={false} onClick={() => onClose(changed)} /></div>
         <div className="h10-rte-scope">
           <span className="h10-mode-seg h10-scope-seg" role="tablist" style={{ display: 'inline-flex', border: '1px solid #d8dde4', borderRadius: 6, overflow: 'hidden' }}>
             <button type="button" role="tab" aria-selected={view === 'scope'} className={view === 'scope' ? 'on' : ''} disabled={!scopeAvailable} onClick={() => setView('scope')} title={scopeAvailable ? '' : `Save the ${scopeKind} first to set overrides here`}>{scopeKind === 'product' ? 'This product' : 'This campaign'}</button>
@@ -385,11 +385,11 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 })}
                 <span className="act">
                   {/* MB.2 — Min bid gets the same drawer affordance as every other target; only its CONTENTS differ. */}
-                  <button type="button" className="h10-kebab" title={t.pause ? 'Min bid — the floor bids are held at, and what a click then costs' : 'Motion — how the bid moves (jump / climb / ease / ceiling)'} aria-expanded={mOpen} style={mOpen ? { color: t.pause ? '#c2410c' : '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>
-                  {!t.pause && <button type="button" className="h10-kebab" disabled={view === 'scope' && !scopeAvailable} title={view === 'scope' ? `Blend for ${scopeLabel} — drive Top + Rest of Search + Product pages at once (+ base bid), just here` : 'Blend — drive Top + Rest of Search + Product pages at once (+ base bid)'} aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><Layers size={13} /></button>}
-                  {view === 'scope' && hasOverride(t) && <button type="button" className="h10-kebab" title="Clear override (use default)" onClick={() => clearOverride(t.key)}><RotateCcw size={13} /></button>}
-                  {view === 'global' && t.builtIn && <button type="button" className="h10-kebab" title="Reset to default" onClick={() => void resetTarget(t.id)}><RotateCcw size={13} /></button>}
-                  {view === 'global' && !t.builtIn && <button type="button" className="h10-kebab" title="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)}><Trash2 size={13} /></button>}
+                  <ToolbarButton className="h10-kebab" icon={<SlidersHorizontal size={13} />} label={t.pause ? 'Min bid' : 'Motion'} description={t.pause ? 'The floor bids are held at, and what a click then costs' : 'How the bid moves (jump / climb / ease / ceiling)'} aria-expanded={mOpen} style={mOpen ? { color: t.pause ? '#c2410c' : '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))} />
+                  {!t.pause && <ToolbarButton className="h10-kebab" icon={<Layers size={13} />} label="Blend" description={view === 'scope' ? `For ${scopeLabel} only — drive Top + Rest of Search + Product pages at once (+ base bid)` : 'Drive Top + Rest of Search + Product pages at once (+ base bid)'} disabled={view === 'scope' && !scopeAvailable} aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))} />}
+                  {view === 'scope' && hasOverride(t) && <ToolbarButton className="h10-kebab" icon={<RotateCcw size={13} />} label="Clear override" description="Use the default again" onClick={() => clearOverride(t.key)} />}
+                  {view === 'global' && t.builtIn && <ToolbarButton className="h10-kebab" icon={<RotateCcw size={13} />} label="Reset to default" onClick={() => void resetTarget(t.id)} />}
+                  {view === 'global' && !t.builtIn && <ToolbarButton className="h10-kebab" icon={<Trash2 size={13} />} label="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)} />}
                 </span>
               </div>
               {/*

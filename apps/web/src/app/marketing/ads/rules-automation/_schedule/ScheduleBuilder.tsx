@@ -23,7 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -406,7 +406,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
     <div className="h10-rb h10-sb">
       <header className="h10-rb-top">
         <div className="l">
-          <button type="button" className="x" aria-label="Close" onClick={close}><X size={19} /></button>
+          <ToolbarButton className="x" icon={<X size={19} />} label="Close" tooltip={false} onClick={close} />
           <AtomMark size={20} />
           <b>{isEdit ? cfg.title.replace('Create', 'Edit') : cfg.title}</b>
           {modeToggle}

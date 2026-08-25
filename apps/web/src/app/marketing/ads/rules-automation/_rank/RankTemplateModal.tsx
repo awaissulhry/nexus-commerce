@@ -8,9 +8,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Save, Trash2, Download, Pencil } from 'lucide-react'
+import { Save, Trash2, Download, Pencil, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 
 type Win = { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Tpl { id: string; name: string; windows: Win[]; defaultTargetKey: string | null; updatedAt: string }
@@ -46,7 +46,7 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
   return (
     <div className="h10-rd-copymodal" role="dialog" aria-modal="true" aria-label="Schedule templates" onClick={onClose}>
       <div className="box h10-rte" onClick={e => e.stopPropagation()} style={{ width: 'min(520px, 94vw)' }}>
-        <div className="hd">Schedule templates<span className="grow" /><button type="button" className="h10-kebab" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="hd">Schedule templates<span className="grow" /><ToolbarButton className="h10-kebab" icon={<X size={14} />} label="Close" tooltip={false} onClick={onClose} /></div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '10px 15px', borderBottom: '1px solid #d8dde4' }}>
           <Input size="sm" fieldClassName="h10-rtm-namefield" value={name} onChange={e => setName(e.target.value)} placeholder="Name this schedule (e.g. Evenings push)" aria-label="Template name" onKeyDown={e => { if (e.key === 'Enter') void saveNew() }} />
      <Button variant="primary" size="sm" disabled={busy || !currentWindows.length} onClick={() => void saveNew()} title={currentWindows.length ? 'Save the current painted schedule as a new template' : 'Paint a schedule first'}><Save size={13} /> Save current</Button>
@@ -59,9 +59,9 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
               <span style={{ fontSize: 11, color: '#8a93a1' }}>{(t.windows || []).length} window{(t.windows || []).length === 1 ? '' : 's'}{t.defaultTargetKey ? ` · baseline ${t.defaultTargetKey}` : ''}</span>
               <span style={{ flex: 1 }} />
        <Button size="sm" disabled={busy} onClick={() => doLoad(t)} title="Paint this schedule into the grid"><Download size={12} /> Load</Button>
-              <button type="button" className="h10-kebab" disabled={busy} onClick={() => void overwrite(t.id)} title="Overwrite with the current schedule"><Save size={13} /></button>
-              <button type="button" className="h10-kebab" disabled={busy} onClick={() => void rename(t.id, t.name)} title="Rename"><Pencil size={13} /></button>
-              <button type="button" className="h10-kebab" disabled={busy} style={{ color: '#cc1100' }} onClick={() => void del(t.id, t.name)} title="Delete"><Trash2 size={13} /></button>
+              <ToolbarButton className="h10-kebab" icon={<Save size={13} />} label="Overwrite" description="Replace this template with the schedule currently painted" disabled={busy} onClick={() => void overwrite(t.id)} />
+              <ToolbarButton className="h10-kebab" icon={<Pencil size={13} />} label="Rename" disabled={busy} onClick={() => void rename(t.id, t.name)} />
+              <ToolbarButton className="h10-kebab" icon={<Trash2 size={13} />} label="Delete" disabled={busy} style={{ color: '#cc1100' }} onClick={() => void del(t.id, t.name)} />
             </div>
           ))}
         </div>
