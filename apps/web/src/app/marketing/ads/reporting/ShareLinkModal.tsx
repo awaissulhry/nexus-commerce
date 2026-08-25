@@ -126,10 +126,11 @@ export function ShareLinkModal({
               is stored, so it cannot be shown again.
             </div>
             <div className="rpt-share-copyrow">
-              {/* Stays a raw <input>: the DS `Input` is a plain function component, so a `ref`
-                  passed to it is dropped on React 18 and `tokenRef.current` would be null —
-                  the "shown once" token would silently stop selecting itself. See DS-GAPS.md. */}
-              <input ref={tokenRef} readOnly value={minted} onFocus={(e) => e.currentTarget.select()} aria-label="Share link" />
+              <Input
+                ref={tokenRef} readOnly value={minted}
+                onFocus={(e) => e.currentTarget.select()} aria-label="Share link"
+                fieldClassName="rpt-share-token" className="mono"
+              />
               <Button variant="primary" size="sm" onClick={copy}>
                 <Copy size={13} /> {copied ? 'Copied' : 'Copy'}
               </Button>

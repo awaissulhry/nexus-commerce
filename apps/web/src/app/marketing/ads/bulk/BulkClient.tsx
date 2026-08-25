@@ -29,6 +29,7 @@ import { Tabs } from '@/design-system/components/Tabs'
 import { FileDropzone } from '@/design-system/components/FileDropzone'
 import { ProgressBar } from '@/design-system/components/ProgressBar'
 import { EmptyState } from '@/design-system/components/EmptyState'
+import { DataGrid } from '@/design-system/components/DataGrid'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ExportScopeModal } from './ExportScopeModal'
@@ -381,32 +382,35 @@ function BulkInner() {
 
                 <div className="bulk-card">
                   <h3 className="bulk-card-h">What will change</h3>
-                  <div className="bulk-tablewrap">
-                    <table className="bulk-table">
-                      <thead><tr><th>Row</th><th>Entity</th><th>Name</th><th>Change</th><th>Status</th></tr></thead>
-                      <tbody>
-                        {preview.rows.slice(0, 200).map((r) => (
-                          <tr key={r.rowIndex} className={r.status === 'CONFLICT' ? 'is-conflict' : r.status === 'ARCHIVE' ? 'is-archive' : ''}>
-                            <td className="bulk-num">{r.rowIndex}</td>
-                            <td>{r.entity}</td>
-                            <td className="bulk-name" title={r.label}>{r.label}</td>
-                            <td>
-                              {r.diffs.length === 0 ? <span className="bulk-hint">—</span> : r.diffs.map((d) => (
-                                <span key={d.field} className="bulk-diff">
-                                  <span className="bulk-diff-f">{d.field}</span>
-                                  <span className="bulk-diff-o">{d.current || '∅'}</span>
-                                  <ArrowRight size={11} />
-                                  <span className="bulk-diff-n">{d.next || '∅'}</span>
-                                </span>
-                              ))}
-                              {r.note && <div className="bulk-note">{r.note}</div>}
-                            </td>
-                            <td><span className={`bulk-pill is-${r.status.toLowerCase()}`}>{r.status.toLowerCase()}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataGrid<DiffRow>
+                    className="bulk-table"
+                    size="sm"
+                    rows={preview.rows.slice(0, 200)}
+                    rowKey={(r) => String(r.rowIndex)}
+                    rowClassName={(r) => (r.status === 'CONFLICT' ? 'is-conflict' : r.status === 'ARCHIVE' ? 'is-archive' : undefined)}
+                    columns={[
+                      { key: 'row', label: 'Row', align: 'right', sortable: true, sortValue: (r) => r.rowIndex, render: (r) => <span className="bulk-num">{r.rowIndex}</span> },
+                      { key: 'entity', label: 'Entity', sortable: true, sortValue: (r) => r.entity, render: (r) => r.entity },
+                      { key: 'name', label: 'Name', sortable: true, sortValue: (r) => r.label, render: (r) => <span className="bulk-name" title={r.label}>{r.label}</span> },
+                      {
+                        key: 'change', label: 'Change',
+                        render: (r) => (
+                          <>
+                            {r.diffs.length === 0 ? <span className="bulk-hint">—</span> : r.diffs.map((d) => (
+                              <span key={d.field} className="bulk-diff">
+                                <span className="bulk-diff-f">{d.field}</span>
+                                <span className="bulk-diff-o">{d.current || '∅'}</span>
+                                <ArrowRight size={11} />
+                                <span className="bulk-diff-n">{d.next || '∅'}</span>
+                              </span>
+                            ))}
+                            {r.note && <div className="bulk-note">{r.note}</div>}
+                          </>
+                        ),
+                      },
+                      { key: 'status', label: 'Status', sortable: true, sortValue: (r) => r.status, render: (r) => <span className={`bulk-pill is-${r.status.toLowerCase()}`}>{r.status.toLowerCase()}</span> },
+                    ]}
+                  />
                   {preview.rows.length > 200 && <p className="bulk-hint">Showing the first 200 of {preview.rows.length}.</p>}
                 </div>
 
@@ -491,32 +495,34 @@ function BulkInner() {
               {jobs.length === 0 ? (
                 <EmptyState icon={<FileSpreadsheet size={22} />} title="No imports yet" description="Uploaded bulksheets show up here with what they changed and a button to undo them." />
               ) : (
-                <div className="bulk-tablewrap">
-                  <table className="bulk-table">
-                    <thead><tr><th>File</th><th>When</th><th>Rows</th><th>Applied</th><th>Failed</th><th>Status</th><th /></tr></thead>
-                    <tbody>
-                      {jobs.map((j) => (
-                        <tr key={j.id}>
-                          <td className="bulk-name" title={j.filename ?? ''}>{j.filename ?? '—'}</td>
-                          <td className="bulk-when">{when(j.createdAt)}</td>
-                          <td className="bulk-num">{j.totalRows}</td>
-                          <td className="bulk-num">{j.successRows}</td>
-                          <td className={`bulk-num ${j.failedRows ? 'is-danger' : ''}`}>{j.failedRows}</td>
-                          <td><span className={`bulk-pill is-${STATUS_TONE[j.status] ?? 'info'}`}>{j.status.toLowerCase().replace(/_/g, ' ')}</span></td>
-                          <td className="bulk-rowacts">
-                            <Button variant="secondary" size="sm" onClick={() => { setJobId(j.id); setTab('import'); void runPreview(j.id) }}>Review</Button>
-                            <Button variant="secondary" size="sm" onClick={() => void downloadAnnotated(j.id, j.filename)}>Reviewed file</Button>
-                            {j.successRows > 0 && j.status !== 'ROLLED_BACK' && (
-                              <Button variant="secondary" size="sm" onClick={() => void doRollback(j.id)} disabled={busy}>
-                                <Undo2 size={13} />Undo
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataGrid<JobRow>
+                  className="bulk-table"
+                  size="sm"
+                  rows={jobs}
+                  rowKey={(j) => j.id}
+                  columns={[
+                    { key: 'file', label: 'File', sortable: true, sortValue: (j) => j.filename ?? '', render: (j) => <span className="bulk-name" title={j.filename ?? ''}>{j.filename ?? '—'}</span> },
+                    { key: 'when', label: 'When', sortable: true, sortValue: (j) => j.createdAt, render: (j) => <span className="bulk-when">{when(j.createdAt)}</span> },
+                    { key: 'rows', label: 'Rows', align: 'right', sortable: true, sortValue: (j) => j.totalRows, render: (j) => <span className="bulk-num">{j.totalRows}</span> },
+                    { key: 'applied', label: 'Applied', align: 'right', sortable: true, sortValue: (j) => j.successRows, render: (j) => <span className="bulk-num">{j.successRows}</span> },
+                    { key: 'failed', label: 'Failed', align: 'right', sortable: true, sortValue: (j) => j.failedRows, render: (j) => <span className={`bulk-num ${j.failedRows ? 'is-danger' : ''}`}>{j.failedRows}</span> },
+                    { key: 'status', label: 'Status', sortable: true, sortValue: (j) => j.status, render: (j) => <span className={`bulk-pill is-${STATUS_TONE[j.status] ?? 'info'}`}>{j.status.toLowerCase().replace(/_/g, ' ')}</span> },
+                    {
+                      key: 'acts', label: '',
+                      render: (j) => (
+                        <span className="bulk-rowacts">
+                          <Button variant="secondary" size="sm" onClick={() => { setJobId(j.id); setTab('import'); void runPreview(j.id) }}>Review</Button>
+                          <Button variant="secondary" size="sm" onClick={() => void downloadAnnotated(j.id, j.filename)}>Reviewed file</Button>
+                          {j.successRows > 0 && j.status !== 'ROLLED_BACK' && (
+                            <Button variant="secondary" size="sm" onClick={() => void doRollback(j.id)} disabled={busy}>
+                              <Undo2 size={13} />Undo
+                            </Button>
+                          )}
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
               )}
               <Banner tone="neutral" className="bulk-banner">
                 Undo restores the values an import changed, and only within 24 hours of it running.

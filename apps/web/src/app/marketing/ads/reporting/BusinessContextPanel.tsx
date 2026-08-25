@@ -21,7 +21,8 @@
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Info, TrendingDown } from 'lucide-react'
-import { fetchBusinessContext, money, money2, pct, type BusinessContext } from './business-api'
+import { DataGrid } from '@/design-system/components'
+import { fetchBusinessContext, money, money2, pct, type BusinessContext, type MarketContext } from './business-api'
 
 export function BusinessContextPanel() {
   const [ctx, setCtx] = useState<BusinessContext | null>(null)
@@ -79,28 +80,19 @@ export function BusinessContextPanel() {
           </div>
         </div>
 
-        <div className="rpt-biz-markets">
-          <table>
-            <thead>
-              <tr>
-                <th>Market</th><th>Ad spend</th><th>Total sales</th>
-                <th>ACOS</th><th>TACoS</th><th>Ad-driven</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ctx.byMarket.map((m) => (
-                <tr key={m.marketplace}>
-                  <td><b>{m.marketplace}</b></td>
-                  <td>{money2(m.adSpend, ctx.currency)}</td>
-                  <td>{money2(m.totalSales, ctx.currency)}</td>
-                  <td>{pct(m.acos)}</td>
-                  <td>{pct(m.tacos)}</td>
-                  <td>{pct(m.adShare)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<MarketContext>
+          size="sm"
+          rows={ctx.byMarket}
+          rowKey={(m) => m.marketplace}
+          columns={[
+            { key: 'mkt', label: 'Market', sortable: true, sortValue: (m) => m.marketplace, render: (m) => <b>{m.marketplace}</b> },
+            { key: 'spend', label: 'Ad spend', align: 'right', sortable: true, sortValue: (m) => m.adSpend, render: (m) => money2(m.adSpend, ctx.currency) },
+            { key: 'sales', label: 'Total sales', align: 'right', sortable: true, sortValue: (m) => m.totalSales, render: (m) => money2(m.totalSales, ctx.currency) },
+            { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (m) => m.acos ?? -1, render: (m) => pct(m.acos) },
+            { key: 'tacos', label: 'TACoS', align: 'right', sortable: true, sortValue: (m) => m.tacos ?? -1, render: (m) => pct(m.tacos) },
+            { key: 'adshare', label: 'Ad-driven', align: 'right', sortable: true, sortValue: (m) => m.adShare ?? -1, render: (m) => pct(m.adShare) },
+          ]}
+        />
 
         <div className="rpt-biz-waste">
           <div className="hd">

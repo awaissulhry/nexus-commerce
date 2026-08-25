@@ -21,6 +21,7 @@
 import { useMemo } from 'react'
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import { Area, AreaChart, ResponsiveContainer } from 'recharts'
+import { SegmentedControl } from '@/design-system/primitives'
 import { MetricChart, type ChartMetric, type MetricUnit } from '../_shared/MetricChart'
 import { formatCell, type ColumnFormat } from './report-api'
 import { deltaIsGood, type CompareMode, type KpiMetric, type SummaryResult } from './summary-api'
@@ -75,6 +76,9 @@ function KpiTile({
   const good = deltaIsGood(m)
   const Icon = m.deltaPct == null || Math.abs(m.deltaPct) < 0.001 ? Minus : m.deltaPct > 0 ? ArrowUpRight : ArrowDownRight
   const tone = good === null ? 'neutral' : good ? 'good' : 'bad'
+  // Stays a raw <button> rather than the DS `Card onClick`: `CardProps` is
+  // `Omit<HTMLAttributes, 'title'>`, and this tooltip is the only thing telling a sighted
+  // operator the tile is clickable at all. Logged in DS-GAPS.md.
   return (
     <button
       type="button"
@@ -148,14 +152,14 @@ export function ReportSummary({
             ? `Compared with ${summary.comparisonWindow.from} → ${summary.comparisonWindow.to}`
             : 'No comparison'}
         </span>
-        <span className="rpt-seg" role="group" aria-label="Comparison period">
-          {([['previous', 'Previous period'], ['yoy', 'Last year'], ['none', 'None']] as const).map(([v, l]) => (
-            <button
-              key={v} type="button" className={compare === v ? 'on' : ''}
-              aria-pressed={compare === v} onClick={() => onCompare(v)}
-            >{l}</button>
-          ))}
-        </span>
+        <SegmentedControl
+          className="rpt-seg"
+          size="sm"
+          ariaLabel="Comparison period"
+          value={compare}
+          onChange={(v) => onCompare(v as CompareMode)}
+          options={[{ value: 'previous', label: 'Previous period' }, { value: 'yoy', label: 'Last year' }, { value: 'none', label: 'None' }]}
+        />
       </div>
 
       <div className="rpt-kpis">

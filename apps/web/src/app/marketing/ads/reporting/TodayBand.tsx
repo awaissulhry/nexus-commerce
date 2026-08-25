@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, RefreshCw } from 'lucide-react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { formatCell, runReport, type ColumnMeta, type ReportParams } from './report-api'
 
 /**
@@ -184,9 +185,7 @@ export function TodayBand() {
             ? `through ${String(data.newestHour).padStart(2, '0')}:59`
             : 'no hours reported yet'}
         </span>
-        <button type="button" className="rf" onClick={refresh} aria-label="Refresh today's figures">
-          <RefreshCw size={12} aria-hidden />
-        </button>
+        <ToolbarButton icon={<RefreshCw size={12} />} label="Refresh today's figures" tooltip={false} className="rf" onClick={refresh} />
         <Link href="/marketing/ads/reporting/hourly" className="open">
           Hourly report <ArrowRight size={12} aria-hidden />
         </Link>

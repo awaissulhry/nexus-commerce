@@ -20,7 +20,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, Download, FlaskConical } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 
 interface Row {
   campaignId: string; name: string; marketplace: string | null; branded: boolean
@@ -93,11 +94,13 @@ export function IncrementalityPanel() {
           </p>
 
           <div className="rpt-iro-ctl">
-            <span className="rpt-iro-seg" role="radiogroup" aria-label="Window">
-              {DAYS.map((d) => (
-                <button key={d} type="button" role="radio" aria-checked={days === d} className={days === d ? 'on' : ''} onClick={() => setDays(d)}>{d}d</button>
-              ))}
-            </span>
+            <SegmentedControl
+              size="sm"
+              ariaLabel="Window"
+              value={String(days)}
+              onChange={(v) => setDays(Number(v))}
+              options={DAYS.map((d) => ({ value: String(d), label: `${d}d` }))}
+            />
             <label className="rpt-iro-f">
               <span>Brand terms</span>
               <Input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} placeholder="comma-separated" aria-label="Brand terms" fieldClassName="rpt-iro-text" />
@@ -122,32 +125,24 @@ export function IncrementalityPanel() {
             </div>
           )}
 
-          <div className="rpt-iro-scroll">
-            <table className="rpt-iro-tbl">
-              <thead>
-                <tr>
-                  <th>Campaign</th><th>Type</th><th className="r">Spend</th><th className="r">Ad sales</th>
-                  <th className="r">ROAS</th><th className="r">Assumed lift</th><th className="r">Incr. sales</th><th className="r">iROAS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.rows ?? []).length === 0 ? (
-                  <tr><td colSpan={8} className="empty">{loading ? 'Loading…' : 'No spend in this window.'}</td></tr>
-                ) : (data?.rows ?? []).map((r) => (
-                  <tr key={r.campaignId}>
-                    <td className="nm" title={r.name}>{r.name}</td>
-                    <td><span className={`rpt-iro-b ${r.branded ? 'br' : 'nb'}`}>{r.branded ? 'Branded' : 'Non-brand'}</span></td>
-                    <td className="r">{eur(r.spendCents)}</td>
-                    <td className="r">{eur(r.adSalesCents)}</td>
-                    <td className="r dim">{x2(r.roas)}</td>
-                    <td className="r dim">×{r.incrementalityFactor}</td>
-                    <td className="r em">{eur(r.incrementalSalesCents)}</td>
-                    <td className="r em b">{x2(r.iroas)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid<Row>
+            className="rpt-iro-tbl"
+            size="sm"
+            rows={data?.rows ?? []}
+            rowKey={(r) => r.campaignId}
+            maxHeight={360}
+            emptyState={loading ? 'Loading…' : 'No spend in this window.'}
+            columns={[
+              { key: 'nm', label: 'Campaign', sortable: true, sortValue: (r) => r.name, render: (r) => <span className="nm" title={r.name}>{r.name}</span> },
+              { key: 'type', label: 'Type', sortable: true, sortValue: (r) => (r.branded ? 0 : 1), render: (r) => <span className={`rpt-iro-b ${r.branded ? 'br' : 'nb'}`}>{r.branded ? 'Branded' : 'Non-brand'}</span> },
+              { key: 'spend', label: 'Spend', align: 'right', sortable: true, sortValue: (r) => r.spendCents, render: (r) => eur(r.spendCents) },
+              { key: 'adsales', label: 'Ad sales', align: 'right', sortable: true, sortValue: (r) => r.adSalesCents, render: (r) => eur(r.adSalesCents) },
+              { key: 'roas', label: 'ROAS', align: 'right', sortable: true, sortValue: (r) => r.roas ?? -1, render: (r) => <span className="dim">{x2(r.roas)}</span> },
+              { key: 'lift', label: 'Assumed lift', align: 'right', sortable: true, sortValue: (r) => r.incrementalityFactor, render: (r) => <span className="dim">×{r.incrementalityFactor}</span> },
+              { key: 'incr', label: 'Incr. sales', align: 'right', sortable: true, sortValue: (r) => r.incrementalSalesCents, render: (r) => <span className="em">{eur(r.incrementalSalesCents)}</span> },
+              { key: 'iroas', label: 'iROAS', align: 'right', sortable: true, sortValue: (r) => r.iroas ?? -1, render: (r) => <span className="em b">{x2(r.iroas)}</span> },
+            ]}
+          />
 
           {data?.note && <p className="rpt-iro-note">{data.note}</p>}
         </div>

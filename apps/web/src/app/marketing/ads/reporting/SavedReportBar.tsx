@@ -14,6 +14,7 @@ import { Modal } from '@/design-system/components/Modal'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
 import { Input } from '@/design-system/primitives/Input'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import {
   archiveSaved,
   createSaved,
@@ -176,9 +177,7 @@ export function SavedReportBar({
       {error && (
         <span className="rpt-saved-err" role="alert">
           {error}
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss">
-            <X size={11} aria-hidden />
-          </button>
+          <ToolbarButton icon={<X size={12} />} label="Dismiss" tooltip={false} onClick={() => setError(null)} />
         </span>
       )}
 

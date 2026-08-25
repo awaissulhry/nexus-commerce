@@ -22,11 +22,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Download, Bookmark, Trash2 } from 'lucide-react'
+import { Download, Bookmark } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Banner } from '@/design-system/components/Banner'
 import { MultiSelect } from '@/design-system/components/MultiSelect'
 import { Button } from '@/design-system/primitives/Button'
+import { TokenChip } from '@/design-system/primitives/TokenChip'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
 import { RadioCard } from '@/design-system/primitives/RadioCard'
@@ -269,10 +270,12 @@ export function ExportScopeModal({ open, onClose, api, grid, onDownloaded, onErr
         {saved.length > 0 && (
           <div className="esm-saved">
             {saved.map((s) => (
-              <span key={s.name} className="esm-chip">
-                <button type="button" onClick={() => applySaved(s)}>{s.name}</button>
-                <button type="button" aria-label={`Delete ${s.name}`} onClick={() => removeSaved(s.name)}><Trash2 size={11} /></button>
-              </span>
+              <TokenChip
+                key={s.name}
+                onSelect={() => applySaved(s)}
+                onRemove={() => removeSaved(s.name)}
+                removeLabel={`Delete ${s.name}`}
+              >{s.name}</TokenChip>
             ))}
           </div>
         )}

@@ -223,47 +223,12 @@
 }
 
 /* ── diff table ────────────────────────────────────────────────── */
-.bulk-tablewrap {
-  overflow-x: auto;
-  border: 1px solid var(--ds-border, var(--nds-grey-150));
-  border-radius: var(--nds-radius-lg);
-  max-height: 520px;
-  overflow-y: auto;
-}
-
-.bulk-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
-  table-layout: auto;
-}
-
-.bulk-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--ds-surface-muted, var(--nds-grey-25));
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ds-text-tertiary, #94a3b8);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--ds-border, var(--nds-grey-150));
-  white-space: nowrap;
-}
-
-.bulk-table tbody td {
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--ds-border-subtle, var(--nds-grey-75));
-  vertical-align: top;
-  color: var(--ds-text, #0f172a);
-}
-
-.bulk-table tbody tr:hover { background: var(--ds-surface-hover, var(--nds-grey-25)); }
-.bulk-table tbody tr.is-conflict { background: var(--ds-warning-soft, #fffbeb); }
-.bulk-table tbody tr.is-archive { background: var(--ds-danger-soft, #fef2f2); }
+/* Both bulksheet tables are the DS `DataGrid` at `sm`: it owns the wrapper, the header, the cell
+   padding, the hover and the right-alignment. The two row tints stay — they are this page's own
+   meaning (a row Amazon changed under you, a row that archives something) and ride `rowClassName`
+   now rather than a hand-written `<tr className>`. */
+.bulk-table tbody tr.is-conflict td { background: var(--ds-warning-soft, #fffbeb); }
+.bulk-table tbody tr.is-archive td { background: var(--ds-danger-soft, #fef2f2); }
 
 .bulk-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bulk-num.is-danger { color: var(--ds-danger, #dc2626); font-weight: 600; }
@@ -375,17 +340,7 @@
 .esm { display: flex; flex-direction: column; gap: 16px; }
 
 .esm-saved { display: flex; flex-wrap: wrap; gap: 6px; }
-.esm-chip {
-  display: inline-flex; align-items: center; gap: 2px;
-  border: 1px solid var(--ds-border, var(--nds-grey-150)); border-radius: var(--nds-radius-full);
-  background: var(--ds-surface-subtle, var(--nds-grey-25));
-}
-.esm-chip button {
-  border: 0; background: none; cursor: pointer; padding: 3px 9px;
-  font-size: 12px; color: var(--ds-text-secondary, #475569);
-}
-.esm-chip button:last-child { padding-left: 0; padding-right: 8px; color: var(--ds-text-tertiary, #94a3b8); }
-.esm-chip button:last-child:hover { color: var(--ds-danger, #dc2626); }
+/* The saved-scope tokens are the DS `TokenChip` — the gap this session filed, now filled. */
 
 /* Auto-fit rather than a fixed column count: the two grid-only cards are absent
    when the modal opens from the Export tab, and a fixed grid would leave holes. */
