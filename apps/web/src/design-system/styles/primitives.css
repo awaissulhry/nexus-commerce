@@ -495,6 +495,24 @@
   opacity: 1;
 }
 
+/* A trigger flush against an edge — the last button in a right-aligned toolbar — cannot centre a
+   200px bubble without running off. Measured 2026-08-25 by the card overlay check:
+   `DataGrid @1200px: renders outside the viewport — tip [997..1221]`, 21px past.
+   `Tooltip` is deliberately in-flow and does not measure (InfoTip is the portal-positioned one),
+   so the CONSUMER declares the alignment. Deterministic where it is used: a `justify-content:
+   flex-end` toolbar's button is always at the right edge, so nothing has to be detected. */
+.nds-tooltip--end > .tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.nds-tooltip--end > .tip::after {
+  left: auto;
+  /* under the trigger, which sits at the bubble's right end — not the bubble's centre */
+  right: 10px;
+  transform: none;
+}
+
 /* Light variant: always-white bubble with dark text (theme-invariant) */
 .nds-tooltip--light > .tip {
   background: var(--nds-tooltip-light-bg);

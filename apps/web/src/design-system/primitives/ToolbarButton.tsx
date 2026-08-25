@@ -29,6 +29,13 @@ export interface ToolbarButtonProps {
   className?: string
   /** override auto-generated tooltip content */
   tooltipContent?: ReactNode
+  /**
+   * Where the tooltip bubble sits relative to the button. `'end'` right-aligns it, for a button
+   * flush against a container edge where a centred bubble would overflow. Declared rather than
+   * detected: `Tooltip` is in-flow by design, and the places this is needed (the last button of a
+   * right-aligned toolbar) know it statically.
+   */
+  tooltipAlign?: 'center' | 'end'
 }
 
 export function ToolbarButton({
@@ -42,6 +49,7 @@ export function ToolbarButton({
   badge,
   className,
   tooltipContent,
+  tooltipAlign,
 }: ToolbarButtonProps) {
   const autoTooltip: ReactNode =
     tooltipContent ?? (
@@ -77,7 +85,7 @@ export function ToolbarButton({
     </button>
   )
 
-  return <Tooltip label={autoTooltip} className="nds-tooltip--light">{btn}</Tooltip>
+  return <Tooltip label={autoTooltip} className={`nds-tooltip--light${tooltipAlign === 'end' ? ' nds-tooltip--end' : ''}`}>{btn}</Tooltip>
 }
 
 // ── ToolbarDivider ─────────────────────────────────────────────────────────

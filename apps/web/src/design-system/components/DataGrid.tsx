@@ -434,6 +434,10 @@ export function DataGrid<T>({
             description="Choose which columns show, and drag to reorder them."
             onClick={() => setPrefsOpen(true)}
             active={prefsOpen}
+            // The bar is `justify-content: flex-end`, so this button is ALWAYS at the right edge
+            // and a centred bubble always overflows — measured at 21px past the viewport on the
+            // DataGrid card before this.
+            tooltipAlign="end"
           />
         </div>
       )}
