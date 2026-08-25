@@ -491,9 +491,7 @@
   display: inline-flex;
 }
 .nds-menu {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
+  position: fixed;
   z-index: var(--nds-z-popover);
   min-width: 180px;
   background: var(--nds-surface);
@@ -504,10 +502,6 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-}
-.nds-menu.right {
-  left: auto;
-  right: 0;
 }
 .nds-menu button {
   display: flex;
@@ -623,9 +617,7 @@
   flex-shrink: 0;
 }
 .nds-ms-pop {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
+  position: fixed;
   z-index: var(--nds-z-popover);
   min-width: 200px;
   max-height: 260px;
@@ -704,10 +696,7 @@
   pointer-events: none;
 }
 .nds-combo-pop {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
-  right: 0;
+  position: fixed;
   z-index: var(--nds-z-popover);
   max-height: 240px;
   overflow-y: auto;

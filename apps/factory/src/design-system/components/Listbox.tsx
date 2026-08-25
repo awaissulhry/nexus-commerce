@@ -1,8 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { useClickAway } from './useClickAway'
+import { usePopoverPosition } from './usePopoverPosition'
 import { searchOptions } from '../lib/option-search'
 
 export interface ListboxOption {
@@ -55,7 +57,8 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
   const [q, setQ] = useState('')
   const [active, setActive] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
-  useClickAway(ref, () => setOpen(false), open)
+  const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'anchor' })
+  useClickAway([ref, popRef], () => setOpen(false), open)
   const selected = options.find((o) => o.value === value)
   // Ranked, separator-aware matching — a raw `includes` fails on names like "GALE | IT | Broad".
   const showSearch = searchable || options.length > SEARCH_THRESHOLD
@@ -78,28 +81,31 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
         <ChevronDown size={15} className="chev" aria-hidden />
       </button>
       {open && (
-        <div className="nds-combo-pop" role="listbox">
-          {showSearch && (
-            <div className="nds-combo-search">
-              <Search size={13} aria-hidden />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search options" />
-            </div>
-          )}
-          {showClear && (
-            <button type="button" role="option" aria-selected={!value} className={!value ? 'on' : undefined}
-              onClick={() => pick('')}>
-              {emptyLabel}
-            </button>
-          )}
-          {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
-          {matches.map((o, i) => (
-            <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
-              className={[o.value === value ? 'on' : '', showSearch && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined} title={o.title ?? o.label}
-              onClick={() => pick(o.value)}>
-              {o.label}
-            </button>
-          ))}
-        </div>
+        createPortal(
+          <div ref={popRef} style={popStyle} className="nds-combo-pop" role="listbox">
+            {showSearch && (
+              <div className="nds-combo-search">
+                <Search size={13} aria-hidden />
+                <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search options" />
+              </div>
+            )}
+            {showClear && (
+              <button type="button" role="option" aria-selected={!value} className={!value ? 'on' : undefined}
+                onClick={() => pick('')}>
+                {emptyLabel}
+              </button>
+            )}
+            {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
+            {matches.map((o, i) => (
+              <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
+                className={[o.value === value ? 'on' : '', showSearch && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined} title={o.title ?? o.label}
+                onClick={() => pick(o.value)}>
+                {o.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )
       )}
     </div>
   )

@@ -1,8 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useClickAway } from './useClickAway'
+import { usePopoverPosition } from './usePopoverPosition'
 
 export interface ComboboxOption {
   value: string
@@ -22,7 +24,8 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
-  useClickAway(ref, () => setOpen(false), open)
+  const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'anchor' })
+  useClickAway([ref, popRef], () => setOpen(false), open)
 
   const selected = options.find((o) => o.value === value)
   const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
@@ -41,28 +44,31 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
       />
       <ChevronDown size={15} className="chev" aria-hidden />
       {open && (
-        <div className="nds-combo-pop" role="listbox">
-          {filtered.length === 0 ? (
-            <div className="nds-combo-empty">No matches</div>
-          ) : (
-            filtered.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                role="option"
-                aria-selected={o.value === value}
-                className={o.value === value ? 'on' : undefined}
-                onClick={() => {
-                  onChange(o.value)
-                  setQuery('')
-                  setOpen(false)
-                }}
-              >
-                {o.label}
-              </button>
-            ))
-          )}
-        </div>
+        createPortal(
+          <div ref={popRef} style={popStyle} className="nds-combo-pop" role="listbox">
+            {filtered.length === 0 ? (
+              <div className="nds-combo-empty">No matches</div>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="option"
+                  aria-selected={o.value === value}
+                  className={o.value === value ? 'on' : undefined}
+                  onClick={() => {
+                    onChange(o.value)
+                    setQuery('')
+                    setOpen(false)
+                  }}
+                >
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>,
+          document.body,
+        )
       )}
     </div>
   )

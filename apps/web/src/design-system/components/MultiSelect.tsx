@@ -1,8 +1,10 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { useClickAway } from './useClickAway'
+import { usePopoverPosition } from './usePopoverPosition'
 import { searchOptions } from '../lib/option-search'
 
 export interface MultiSelectOption {
@@ -32,7 +34,8 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useRef<HTMLDivElement>(null)
-  useClickAway(ref, () => setOpen(false), open)
+  const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'anchor' })
+  useClickAway([ref, popRef], () => setOpen(false), open)
 
   const allChecked = value.length === options.length && options.length > 0
   const label = value.length === 0 ? placeholder : allChecked ? 'All' : `${value.length} selected`
@@ -50,32 +53,35 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
         <ChevronDown size={15} aria-hidden />
       </button>
       {open && (
-        <div className="nds-ms-pop" role="listbox" aria-multiselectable="true">
-          {showSearch && (
-            <div className="nds-combo-search">
-              <Search size={13} aria-hidden />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search options" />
-            </div>
-          )}
-          <label className="nds-ms-opt all">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              ref={(el) => {
-                if (el) el.indeterminate = value.length > 0 && !allChecked
-              }}
-              onChange={toggleAll}
-            />
-            <span>Select all</span>
-          </label>
-          {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
-          {matches.map((o) => (
-            <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}>
-              <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} />
-              <span>{o.label}</span>
+        createPortal(
+          <div ref={popRef} style={popStyle} className="nds-ms-pop" role="listbox" aria-multiselectable="true">
+            {showSearch && (
+              <div className="nds-combo-search">
+                <Search size={13} aria-hidden />
+                <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search options" />
+              </div>
+            )}
+            <label className="nds-ms-opt all">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                ref={(el) => {
+                  if (el) el.indeterminate = value.length > 0 && !allChecked
+                }}
+                onChange={toggleAll}
+              />
+              <span>Select all</span>
             </label>
-          ))}
-        </div>
+            {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
+            {matches.map((o) => (
+              <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}>
+                <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} />
+                <span>{o.label}</span>
+              </label>
+            ))}
+          </div>,
+          document.body,
+        )
       )}
     </div>
   )
