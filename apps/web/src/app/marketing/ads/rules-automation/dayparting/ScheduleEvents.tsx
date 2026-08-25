@@ -289,7 +289,7 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
           </p>
           {err && <div className="h10-ntm-err">{err}</div>}
           <div className="h10-evt-act">
-            <button type="button" className="h10-rb-btn ghost" onClick={() => { setAdding(false); setErr('') }} disabled={busy}>Cancel</button>
+            <Button onClick={() => { setAdding(false); setErr('') }} disabled={busy}>Cancel</Button>
       <Button variant="primary" onClick={() => void create()} disabled={busy}>{busy ? 'Saving…' : 'Add event'}</Button>
           </div>
         </div>

@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
@@ -243,7 +243,7 @@ export function RankGoalBuilder() {
           {toggle}
         </div>
         <div className="r">
-          <button type="button" className="h10-rb-create" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</button>
+          <Button variant="primary" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</Button>
         </div>
       </header>
 
@@ -333,9 +333,9 @@ export function RankGoalBuilder() {
             {groupId && <ScheduleVersionsSection groupId={groupId} palette={palette} />}
 
             <div className="h10-rb-foot">
-              <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
+              <Button variant="quiet" onClick={close}>Cancel</Button>
               <span className="grow" />
-              <button type="button" className="h10-rb-create" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</button>
+              <Button variant="primary" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</Button>
             </div>
           </div>
         </main>

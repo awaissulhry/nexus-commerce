@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1408,13 +1408,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
           {/* BP (2026-08-21) — H10's "Learn" video pill was here as a dead placeholder (no
               handler since the builder shipped); the operator chose removal over wiring it. */}
           <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
-          <button
-            type="button"
-            className={`h10-rb-create${rankBlocked ? ' held' : ''}`}
+          <Button
+            variant="primary"
+            /* `held` is NOT `disabled` — see the footer copy of this button. */
+            className={rankBlocked ? 'h10-rb-create held' : undefined}
             disabled={!rankBlocked && (!valid || creating)}
             {...(rankBlocked ? { 'aria-disabled': true } : {})}
             onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
-          >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+          >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</Button>
         </div>
       </header>
 
@@ -1471,7 +1472,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <div className="h10-rb-setuphd">
                 <h2>{setup.sectionTitle ?? steps[1].label}</h2>
                 {setup.mapping && <div className="maprow">
-                  <button type="button" className="h10-rb-btn primary" onClick={addBlock}><Plus size={14} /> Ad Group Mapping</button>
+                  <Button variant="primary" onClick={addBlock}><Plus size={14} /> Ad Group Mapping</Button>
                   <button type="button" className="chevbtn" aria-label={setupCollapsed ? 'Expand' : 'Collapse'} aria-expanded={!setupCollapsed} onClick={() => setSetupCollapsed((v) => !v)}><ChevronDown size={18} className={`chev ${setupCollapsed ? 'up' : ''}`} /></button>
                 </div>}
               </div>
@@ -1653,7 +1654,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   )}
                 </div>
               ))}
-              <button type="button" className="h10-rb-btn primary addcrit" onClick={addGroup}><Plus size={14} /> Criteria</button>
+              <Button variant="primary" className="addcrit" onClick={addGroup}><Plus size={14} /> Criteria</Button>
               {/* BP.P4b — multi-block selection is real now, and its law is stated where the
                   blocks are made: first matched block acts. */}
               {isCampaign && groups.length > 1 && (
@@ -1701,10 +1702,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     <label className="rad"><input type="radio" name="stmode" checked={searchMode === 'not'} onChange={() => setSearchMode('not')} /> Does Not Contain</label>
                   </div>
                   <Textarea className="h10-rb-ta" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Enter or paste search terms here" aria-label="Search terms" />
-                  <div className="staction"><button type="button" className="h10-rb-btn ghost" disabled={!searchText.trim()} onClick={addSearchTerms}>Add Search Terms</button></div>
+                  <div className="staction"><Button disabled={!searchText.trim()} onClick={addSearchTerms}>Add Search Terms</Button></div>
                 </div>
                 <div className="right">
-                  <div className="sth"><b>{searchTerms.length} Search Terms Added</b><button type="button" className="h10-rb-btn ghost sm" disabled={!searchTerms.length} onClick={() => setSearchTerms([])}><Trash2 size={13} /> Remove All</button></div>
+                  <div className="sth"><b>{searchTerms.length} Search Terms Added</b><Button size="sm" disabled={!searchTerms.length} onClick={() => setSearchTerms([])}><Trash2 size={13} /> Remove All</Button></div>
                   <div className="sttable">
                     <div className="thr"><span>Search Term</span><span>Operator</span></div>
                     {searchTerms.length === 0 ? <div className="nodata">No data</div> : searchTerms.map((st, i) => (
@@ -1933,16 +1934,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
             )}
             {/* footer */}
             <div className="h10-rb-foot">
-              <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
+              <Button variant="quiet" onClick={close}>Cancel</Button>
               <span className="grow" />
-              {(isCampaign || isHarvest || isNegative) && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
-              <button
-            type="button"
-            className={`h10-rb-create${rankBlocked ? ' held' : ''}`}
-            disabled={!rankBlocked && (!valid || creating)}
-            {...(rankBlocked ? { 'aria-disabled': true } : {})}
-            onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
-          >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+              {(isCampaign || isHarvest || isNegative) && <Button variant="quiet" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</Button>}
+              <Button
+                variant="primary"
+                /* `held` is NOT `disabled`: a disabled button takes no focus, answers no click and
+                   shows no tooltip, so the reason it refuses would land where nobody can read it. */
+                className={rankBlocked ? 'h10-rb-create held' : undefined}
+                disabled={!rankBlocked && (!valid || creating)}
+                {...(rankBlocked ? { 'aria-disabled': true } : {})}
+                onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
+              >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</Button>
             </div>
           </div>
         </main>
@@ -2144,7 +2147,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 <label htmlFor="tmpl-name">Template name</label>
                 <Input id="tmpl-name" fieldClassName="h10-rb-input" value={tmplName} onChange={(e) => setTmplName(e.target.value)} placeholder="e.g. Scale winners — ACoS under 25%" aria-label="Template name" autoFocus />
                 <p className="tmhint">Saves this rule’s criteria + budget action so you can reuse it on another rule.</p>
-                <div className="tmfoot"><button type="button" className="h10-rb-btn ghost" onClick={() => setTmpl(null)}>Cancel</button><button type="button" className="h10-rb-create" disabled={!tmplName.trim()} onClick={saveTemplate}>Save Template</button></div>
+                <div className="tmfoot"><Button onClick={() => setTmpl(null)}>Cancel</Button><Button variant="primary" disabled={!tmplName.trim()} onClick={saveTemplate}>Save Template</Button></div>
               </div>
             ) : (
               <div className="tmbody">
@@ -2155,7 +2158,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <div className="tmlist">{(STARTER_TEMPLATES[slug] ?? []).map((t) => (
                     <div className="tmrow" key={t.name}>
                       <span className="tmn" title={t.name}>{t.name}<em className="tmdesc">{t.desc}</em></span>
-                      <button type="button" className="h10-rb-btn ghost sm" onClick={() => applyTemplate(t)}>Apply</button>
+                      <Button size="sm" onClick={() => applyTemplate(t)}>Apply</Button>
                     </div>
                   ))}</div>
                   <div className="tmgrp">Saved templates</div>
@@ -2164,7 +2167,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   : <div className="tmlist">{templates.map((t) => (
                       <div className="tmrow" key={t.id}>
                         <span className="tmn" title={t.name}>{t.name}</span>
-                        <button type="button" className="h10-rb-btn ghost sm" onClick={() => applyTemplate(t)}>Apply</button>
+                        <Button size="sm" onClick={() => applyTemplate(t)}>Apply</Button>
                       </div>
                     ))}</div>}
               </div>
@@ -2191,7 +2194,7 @@ function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onCl
         <b>{groups.length} Ad Groups</b>
         <span className="grow" />
         <div className="addwrap">
-          <button type="button" className="h10-rb-btn primary" onClick={onTogglePop}><Plus size={14} /> Add Group</button>
+          <Button variant="primary" onClick={onTogglePop}><Plus size={14} /> Add Group</Button>
           {popOpen && <AddGroupPopover selectedIds={new Set(groups.map((g) => g.id))} onAdd={onAdd} onClose={onClosePop} />}
         </div>
         {isMulti && <button type="button" className="mbrm" onClick={onRemoveBlock} aria-label={`Remove mapping ${index + 1}`}><Trash2 size={16} /></button>}

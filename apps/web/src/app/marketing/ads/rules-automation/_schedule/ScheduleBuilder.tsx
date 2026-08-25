@@ -23,7 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
-import { Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -412,7 +412,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
           {modeToggle}
         </div>
         <div className="r">
-          <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : cfg.createLabel)}</button>
+          <Button variant="primary" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : cfg.createLabel)}</Button>
         </div>
       </header>
 
@@ -527,12 +527,12 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                       <div className="tmrow" key={st.key}>
                         <span className="tmn" title={st.name}>{st.name}<em className="tmdesc">{st.windows ? st.desc : st.reason}</em></span>
                         <HoverCard text={st.windows ? `${st.desc} ${DAY_MOVE_NOTE}` : st.reason} placement="above">
-                          <button
-                            type="button"
-                            className="h10-rb-btn ghost sm"
+                          <Button
+                            size="sm"
+                            className="h10-sb-starter"
                             aria-disabled={!st.windows}
                             onClick={() => (st.windows ? applyStarter(st.key) : undefined)}
-                          >Apply</button>
+                          >Apply</Button>
                         </HoverCard>
                       </div>
                     ))}
@@ -651,9 +651,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                         <button type="button" className="h10-sb-exdel" aria-label="Remove this exclude range" onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))}><X size={14} /></button>
                       </div>
                     ))}
-                    {/* `h10-rb-btn ghost` — this file's own labelled-button idiom (the ratchet
-                        counts EXCESS idioms per file; importing h10-am-btn here was +1). */}
-                    <button type="button" className="h10-rb-btn ghost" onClick={() => setExcludeRanges((rs) => [...rs, { id: _wid++, start: '', end: '' }])}><Plus size={13} /> Add exclude range</button>
+                    <Button onClick={() => setExcludeRanges((rs) => [...rs, { id: _wid++, start: '', end: '' }])}><Plus size={13} /> Add exclude range</Button>
                   </div>
                 )}
               </div>
@@ -661,9 +659,9 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
 
             {/* footer */}
             <div className="h10-rb-foot">
-              <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
+              <Button variant="quiet" onClick={close}>Cancel</Button>
               <span className="grow" />
-              <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : cfg.createLabel)}</button>
+              <Button variant="primary" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : cfg.createLabel)}</Button>
             </div>
           </div>
         </main>
