@@ -349,8 +349,10 @@ export function GuardrailGrid() {
       void saveBounds(row, which === 'min' ? { min: parsed } : { max: parsed })
     }
     return (
-      <input
-        className="acr-gg-num"
+      <Input
+        size="xs"
+        fieldClassName="acr-gg-num"
+        className="acr-gg-fig"
         inputMode="decimal"
         placeholder="—"
         aria-label={`${which === 'min' ? 'Minimum' : 'Maximum'} bid for ${row.name}`}
@@ -381,8 +383,10 @@ export function GuardrailGrid() {
     }
     return (
       <span className="acr-gg-cpc">
-        <input
-          className="acr-gg-num narrow"
+        <Input
+          size="xs"
+          fieldClassName="acr-gg-num narrow"
+          className="acr-gg-fig"
           inputMode="decimal"
           placeholder="—"
           aria-label={`CPC ceiling multiple for ${row.name}`}
@@ -454,15 +458,17 @@ export function GuardrailGrid() {
           <span className="acr-gg-bulk-grp">
             <label>
               Min €
-              <input
-                className="acr-gg-num" inputMode="decimal" value={bulkMin} placeholder="—"
+              <Input
+                size="sm" fieldClassName="acr-gg-num" className="acr-gg-fig"
+                inputMode="decimal" value={bulkMin} placeholder="—"
                 onChange={(e) => setBulkMin(e.target.value)} aria-label="Bulk minimum bid"
               />
             </label>
             <label>
               Max €
-              <input
-                className="acr-gg-num" inputMode="decimal" value={bulkMax} placeholder="—"
+              <Input
+                size="sm" fieldClassName="acr-gg-num" className="acr-gg-fig"
+                inputMode="decimal" value={bulkMax} placeholder="—"
                 onChange={(e) => setBulkMax(e.target.value)} aria-label="Bulk maximum bid"
               />
             </label>

@@ -599,12 +599,12 @@ a.acr-refresh { text-decoration: none; }
 .acr-gg-ro { color: #46536a; white-space: nowrap; }
 .acr-gg-dash { color: #b6bfcb; }
 
-.acr-gg-num {
-  width: 72px; font-size: 12.5px; color: var(--nds-grey-700); text-align: right;
-  border: 1px solid var(--nds-grey-150); border-radius: 5px; padding: 5px 7px; background: var(--nds-white);
-}
-.acr-gg-num:hover { border-color: var(--nds-grey-300); }
-.acr-gg-num:focus { outline: 2px solid #bcd4f5; outline-offset: -1px; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the bound boxes are the DS `Input`; the primitive carries the border, the hover
+   and the focus ring. Width and the right-aligned figure are the grid's own.
+   🔴 `.nds-field >` is load-bearing on the figure rule: `.nds-field > input` declares
+   `font: inherit`, and the `font` shorthand resets `font-variant`, beating a bare class. */
+.acr-gg-num { width: 72px; }
+.nds-field > .acr-gg-fig { text-align: right; font-variant-numeric: tabular-nums; }
 
 .acr-gg-toggle {
   font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;

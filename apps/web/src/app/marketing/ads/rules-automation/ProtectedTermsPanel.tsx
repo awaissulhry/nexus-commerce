@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 // lucide-react 0.263.1 has no ShieldX; Ban reads better for "always negate" anyway.
 import { ShieldCheck, Ban, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -128,8 +128,8 @@ export function ProtectedTermsPanel() {
       )}
 
       <div className="h10-pt-add">
-        <input
-          className="h10-pt-input" value={term} placeholder="Term to protect, e.g. xavia"
+        <Input
+          size="sm" fieldClassName="h10-pt-input" value={term} placeholder="Term to protect, e.g. xavia"
           onChange={(e) => setTerm(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void add() }}
           aria-label="Term"
@@ -148,8 +148,8 @@ export function ProtectedTermsPanel() {
           className="h10-pt-ck" label="Prefix"
           checked={isPrefix} onChange={(e) => setIsPrefix(e.target.checked)}
         />
-        <input
-          className="h10-pt-input reason" value={reason} placeholder="Why (optional)"
+        <Input
+          size="sm" fieldClassName="h10-pt-input reason" value={reason} placeholder="Why (optional)"
           onChange={(e) => setReason(e.target.value)} aria-label="Reason"
         />
         <Button variant="primary" disabled={busy || !term.trim()} onClick={() => void add()}>

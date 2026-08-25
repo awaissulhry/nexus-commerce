@@ -17,7 +17,7 @@
  * so a cell means the same thing in both places.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 
 import { DaypartingHeatmap, type HeatCell } from '../_schedule/DaypartingHeatmap'
 import { CHART_METRICS } from '../_schedule/scheduleConfig'
@@ -200,8 +200,9 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
           <span className="grow" />
           <span className="lbl">Hold</span>
           <Listbox width={168} options={targetOpts} value={selTarget} onChange={setSelTarget} ariaLabel="Rank target for the selection" />
-          <input
-            className="nm"
+          <Input
+            size="sm"
+            fieldClassName="nm"
             value={tplName}
             onChange={(e) => setTplName(e.target.value)}
             placeholder="Template name…"

@@ -16,7 +16,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
-import { Button, Select } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -342,7 +342,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
               <div className={`h10-rte-row ${view === 'scope' && hasOverride(t) ? 'ovr' : ''}`}>
                 <span className="nm">
                   <i className="sw" style={{ background: t.color ?? '#999' }} />
-                  {view === 'global' && !t.pause ? <input className="h10-rte-name" value={(lib[t.id]?.name as string) ?? t.name} onChange={e => setLibField(t.id, 'name', e.target.value)} /> : <b>{t.name}</b>}
+                  {view === 'global' && !t.pause ? <Input size="sm" fieldClassName="h10-rte-name" value={(lib[t.id]?.name as string) ?? t.name} onChange={e => setLibField(t.id, 'name', e.target.value)} aria-label="Rank target name" /> : <b>{t.name}</b>}
                   <span className="bdg">{t.builtIn ? 'default' : scoped ? 'scoped' : 'custom'}</span>
                   {!t.pause && !(blendLanes && blendLanes.length) && <span className="bdg" style={{ background: '#eef2ff', color: '#3730a3' }}>{placeLabel(t.placement)}</span>}
                   {!t.pause && blendLanes && blendLanes.length > 0 && <span className="bdg" style={{ background: '#f3e8ff', color: '#7c3aed' }} title={blendOverridden ? `${scopeLabel}-specific blend` : 'global blend'}>blend ×{blendLanes.length}{blendOverridden ? '*' : ''}</span>}
@@ -467,7 +467,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
           })}
           {adding && (
             <div className="h10-rte-row h10-rte-add">
-              <span className="nm"><input className="h10-rte-name" placeholder="New target name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /><input type="color" value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} style={{ width: 26, height: 22, padding: 0, border: '1px solid #d8dde4', borderRadius: 4 }} /></span>
+              <span className="nm"><Input size="sm" fieldClassName="h10-rte-name" placeholder="New target name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} aria-label="New target name" /><input type="color" value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} style={{ width: 26, height: 22, padding: 0, border: '1px solid #d8dde4', borderRadius: 4 }} /></span>
               {FIELDS.map(f => <span key={f.f} className="fld"><input type="number" placeholder={f.unit} value={(form[f.f] == null ? '' : f.f === 'maxCpcCents' ? eur(form[f.f]) : form[f.f]) as string | number} onChange={e => setForm(s => ({ ...s, [f.f]: e.target.value === '' ? undefined : f.f === 'maxCpcCents' ? Math.round(Number(e.target.value) * 100) : Math.round(Number(e.target.value)) }))} step={f.f === 'maxCpcCents' ? '0.01' : '1'} /></span>)}
               <span className="act" />
               <div className="h10-rte-addscope">

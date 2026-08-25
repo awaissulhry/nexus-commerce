@@ -24,7 +24,7 @@
  * own words, and an override still clamps to the action's own bounds server-side.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { AlertTriangle, Check, ExternalLink, RotateCcw, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -137,7 +137,7 @@ export function QueueView({ onDecided }: { onDecided?: () => void }) {
                     <span className="qacts">
                       {editing?.id === s.id ? (
                         <>
-                          <input className="qedit" inputMode="decimal" value={editing.value} onChange={(e) => setEditing({ id: s.id, value: e.target.value })} aria-label="Edited value" autoFocus />
+                          <Input size="sm" fieldClassName="qedit" inputMode="decimal" value={editing.value} onChange={(e) => setEditing({ id: s.id, value: e.target.value })} aria-label="Edited value" autoFocus />
                           <Button variant="primary" size="sm" disabled={busy === s.id || !editing.value.trim()} onClick={() => void decide(s, 'apply', Number(editing.value))}>Apply edited</Button>
                           <Button size="sm" onClick={() => setEditing(null)}><RotateCcw size={12} aria-hidden /></Button>
                         </>

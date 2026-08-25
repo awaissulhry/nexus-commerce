@@ -49,7 +49,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import {
   ShieldCheck, Ban, Trash2, Plus, AlertTriangle, Check, Info, WifiOff, ChevronRight,
@@ -377,8 +377,8 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
 
         {/* ── Add a protection — defect (b) fixed ───────────────────────────────────────────── */}
         <div className="h10-ngp-add">
-          <input
-            className="h10-ngp-input" value={term} placeholder="Term to protect, e.g. xavia"
+          <Input
+            size="sm" fieldClassName="h10-ngp-input" value={term} placeholder="Term to protect, e.g. xavia"
             onChange={(e) => setTerm(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') void addProtection() }}
             aria-label="Term"
@@ -398,8 +398,8 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
             onChange={(v) => setMarketplace(v)}
             options={MARKETS.map((m) => ({ value: m, label: m || 'All markets' }))}
           />
-          <input
-            className="h10-ngp-input reason" value={reason} placeholder="Why (optional)"
+          <Input
+            size="sm" fieldClassName="h10-ngp-input reason" value={reason} placeholder="Why (optional)"
             onChange={(e) => setReason(e.target.value)} aria-label="Reason"
           />
           <Button variant="primary" disabled={busy || !term.trim()} onClick={() => void addProtection()}>

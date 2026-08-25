@@ -42,6 +42,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Info } from 'lucide-react'
 import { Modal } from '@/design-system/components'
+import { Input } from '@/design-system/primitives'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import type { BmCampaignRow, ResolvedScope } from './slot-contract'
 
@@ -193,9 +194,9 @@ export function CampaignLimitsModal({
           bulk: true,
           fields: [
             { key: 'minCents', initial: (r) => (r.minCents == null ? '' : (r.minCents / 100).toFixed(2)),
-              render: (v, set) => <input className="h10-bsp-cellin" value={v} onChange={(e) => set(e.target.value)} placeholder="floor" aria-label="Minimum daily budget" inputMode="decimal" /> },
+              render: (v, set) => <Input size="xs" fieldClassName="h10-bsp-cellin" className="h10-bsp-cellfig" value={v} onChange={(e) => set(e.target.value)} placeholder="floor" aria-label="Minimum daily budget" inputMode="decimal" /> },
             { key: 'maxCents', initial: (r) => (r.maxCents == null ? '' : (r.maxCents / 100).toFixed(2)),
-              render: (v, set) => <input className="h10-bsp-cellin" value={v} onChange={(e) => set(e.target.value)} placeholder="none" aria-label="Maximum daily budget" inputMode="decimal" /> },
+              render: (v, set) => <Input size="xs" fieldClassName="h10-bsp-cellin" className="h10-bsp-cellfig" value={v} onChange={(e) => set(e.target.value)} placeholder="none" aria-label="Maximum daily budget" inputMode="decimal" /> },
           ],
           onApply,
         }}

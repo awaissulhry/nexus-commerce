@@ -47,7 +47,7 @@ import { boostedDays, burnDownSeries, forecastDisclosure, materialiseCalendar, s
 import { CalendarEditor } from './CalendarEditor'
 import { EnforcementPreview } from './EnforcementPreview'
 import type { AdsMode, BudgetManagerResult, BudgetPlanRow, EnforcementResult, WriteOutcome } from './slot-contract'
-import { Checkbox } from '@/design-system/primitives'
+import { Checkbox, Input } from '@/design-system/primitives'
 
 const eur = (c: number) => `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const eur0 = (c: number) => `€${Math.round(c / 100).toLocaleString('en-IE')}`
@@ -201,8 +201,8 @@ export function PlanEditor({
       {/* ── the cap ───────────────────────────────────────────────────────────────────────── */}
       <label className="h10-bsp-field2">
         <span className="cap">Monthly cap</span>
-        <input
-          className="h10-bsp-in"
+        <Input
+          fieldClassName="h10-bsp-in"
           value={capDraft}
           disabled={busy}
           inputMode="decimal"

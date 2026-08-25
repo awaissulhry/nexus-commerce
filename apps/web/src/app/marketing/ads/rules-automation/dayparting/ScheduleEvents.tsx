@@ -19,7 +19,7 @@
  * weeks early is the mistake the feature exists to prevent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill } from '@/design-system/primitives'
 import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
@@ -273,9 +273,9 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
         <button type="button" className="h10-rp-link" onClick={() => setAdding(true)}><Plus size={12} /> Add an event</button>
       ) : (
         <div className="h10-evt-form">
-          <label>Name<input className="h10-rb-input" value={name} onChange={(ev) => setName(ev.target.value)} placeholder="Black Friday" /></label>
-          <label>Starts<input className="h10-rb-input" type="datetime-local" value={starts} onChange={(ev) => setStarts(ev.target.value)} /></label>
-          <label>Ends<input className="h10-rb-input" type="datetime-local" value={ends} onChange={(ev) => setEnds(ev.target.value)} /></label>
+          <label>Name<Input fieldClassName="h10-rb-input" value={name} onChange={(ev) => setName(ev.target.value)} placeholder="Black Friday" /></label>
+          <label>Starts<Input fieldClassName="h10-rb-input" type="datetime-local" value={starts} onChange={(ev) => setStarts(ev.target.value)} /></label>
+          <label>Ends<Input fieldClassName="h10-rb-input" type="datetime-local" value={ends} onChange={(ev) => setEnds(ev.target.value)} /></label>
           <div className="h10-evt-mode" role="tablist" aria-label="Event plan">
             <button type="button" role="tab" aria-selected={mode === 'rank'} className={mode === 'rank' ? 'on' : ''} onClick={() => setMode('rank')}>Hold one rank</button>
             <button type="button" role="tab" aria-selected={mode === 'template'} className={mode === 'template' ? 'on' : ''} onClick={() => setMode('template')}>Use a template</button>

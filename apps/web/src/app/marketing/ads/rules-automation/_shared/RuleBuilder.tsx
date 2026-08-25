@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Checkbox, Textarea } from '@/design-system/primitives'
+import { Checkbox, Input, Textarea } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1463,7 +1463,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             {/* ── Rule Name ── */}
             <section id="rb-rule-name" className="h10-rb-sec">
               <h2>Rule Name</h2>
-              <input className="h10-rb-input rn" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="Enter a rule name" aria-label="Rule name" />
+              <Input fieldClassName="h10-rb-input rn" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="Enter a rule name" aria-label="Rule name" />
             </section>
 
             {/* ── Negative Rule Setup ── */}
@@ -1756,7 +1756,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     <Listbox width={150} options={FREQUENCY} value={frequency} onChange={setFrequency} ariaLabel="Frequency" />
                     {frequency === 'Custom' && (<>
                       <span className="lbl">Every</span>
-                      <input className="h10-rb-num" inputMode="numeric" placeholder="Please enter" value={everyN} onChange={(e) => setEveryN(e.target.value)} aria-label="Every (number)" />
+                      <Input fieldClassName="h10-rb-num" inputMode="numeric" placeholder="Please enter" value={everyN} onChange={(e) => setEveryN(e.target.value)} aria-label="Every (number)" />
                       <Listbox width={130} options={INTERVAL} value={interval} onChange={setInterval} ariaLabel="Interval" />
                       {interval === 'Weeks' && (<>
                         <span className="lbl">on</span>
@@ -1893,7 +1893,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 {isNegative && (
                 <div className="h10-rb-dedupe">
                   <button type="button" className={`h10-bktoggle ${protectConverting ? 'on' : ''}`} role="switch" aria-checked={protectConverting} aria-label="Protect converting search terms" onClick={() => setProtectConverting((v) => !v)}><span /></button>
-                  <span>Never create a negative for a term that <b>converted</b> (≥1 order) in the last <input className="h10-rb-ninline" inputMode="numeric" value={protectDays} onChange={(e) => setProtectDays(e.target.value)} aria-label="Protection window in days" /> days in any campaign — protects proven keywords from being blocked.</span>
+                  <span>Never create a negative for a term that <b>converted</b> (≥1 order) in the last <Input size="xs" fieldClassName="h10-rb-ninline" className="h10-rb-nincenter" inputMode="numeric" value={protectDays} onChange={(e) => setProtectDays(e.target.value)} aria-label="Protection window in days" /> days in any campaign — protects proven keywords from being blocked.</span>
                 </div>
                 )}
                 {isHarvest && (
@@ -2141,7 +2141,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             {tmpl.mode === 'save' ? (
               <div className="tmbody">
                 <label htmlFor="tmpl-name">Template name</label>
-                <input id="tmpl-name" className="h10-rb-input" value={tmplName} onChange={(e) => setTmplName(e.target.value)} placeholder="e.g. Scale winners — ACoS under 25%" aria-label="Template name" autoFocus />
+                <Input id="tmpl-name" fieldClassName="h10-rb-input" value={tmplName} onChange={(e) => setTmplName(e.target.value)} placeholder="e.g. Scale winners — ACoS under 25%" aria-label="Template name" autoFocus />
                 <p className="tmhint">Saves this rule’s criteria + budget action so you can reuse it on another rule.</p>
                 <div className="tmfoot"><button type="button" className="h10-rb-btn ghost" onClick={() => setTmpl(null)}>Cancel</button><button type="button" className="h10-rb-create" disabled={!tmplName.trim()} onClick={saveTemplate}>Save Template</button></div>
               </div>

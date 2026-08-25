@@ -23,7 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
-import { Checkbox } from '@/design-system/primitives'
+import { Checkbox, Input } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -428,7 +428,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
             {/* ── Schedule Name ── */}
             <section id="sb-name" className="h10-rb-sec">
               <h2>{isDayparting ? 'Dayparting Schedule Name' : 'Schedule Name'}</h2>
-              <input className="h10-rb-input rn" value={name} onChange={(e) => setName(e.target.value)} placeholder={isDayparting ? 'Enter schedule name' : 'Enter a budget schedule name'} aria-label="Schedule name" />
+              <Input fieldClassName="h10-rb-input rn" value={name} onChange={(e) => setName(e.target.value)} placeholder={isDayparting ? 'Enter schedule name' : 'Enter a budget schedule name'} aria-label="Schedule name" />
             </section>
 
             {/* ── Timezone (Dayparting only) ── */}

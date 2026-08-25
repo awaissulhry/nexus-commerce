@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
@@ -257,7 +258,7 @@ export function RankGoalBuilder() {
           <div className="h10-rb-wrap">
             <section id="rgd-name" className="h10-rb-sec">
               <h2>Schedule Name</h2>
-              <input className="h10-rb-input rn" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter a schedule name" aria-label="Schedule name" />
+              <Input fieldClassName="h10-rb-input rn" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter a schedule name" aria-label="Schedule name" />
             </section>
 
             <section id="rgd-campaigns" className="h10-rb-sec">

@@ -35,10 +35,9 @@
 .h10-rb-sec { margin-bottom: 34px; scroll-margin-top: 24px; }
 .h10-rb-sec h2 { font-size: 18px; font-weight: 800; color: var(--nds-grey-900); margin: 0 0 6px; letter-spacing: -0.01em; } /* BP.P3: 20→18, beside the AiGoal surface's 17px section heads */
 .h10-rb-desc { font-size: 13.5px; color: var(--nds-grey-600); margin: 0 0 16px; line-height: 1.5; max-width: 920px; }
-.h10-rb-input { height: 40px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 13px; font: inherit; font-size: 13.5px; color: var(--nds-grey-900); }
+/* DS-ALIGN — the builder's text field is the DS `Input`; the primitive carries the border,
+   the placeholder colour and the focus ring. Only the named-field width is stated here. */
 .h10-rb-input.rn { width: 420px; max-width: 100%; }
-.h10-rb-input::placeholder { color: var(--nds-grey-400); }
-.h10-rb-input:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 
 /* Phase 5 — portfolio scope selector above the campaign picker */
 .h10-rb-pfscope { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
@@ -339,15 +338,18 @@
 /* Advanced → Frequency: Custom · Every N · interval · on <day> · at <time> */
 .h10-rb-card.adv .freqrow { flex-wrap: wrap; row-gap: 10px; }
 .h10-rb-card.adv .freqrow .lbl { font-size: 13px; color: var(--nds-grey-600); }
-.h10-rb-num { width: 150px; height: 38px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 12px; font: inherit; font-size: 13.5px; color: var(--nds-grey-900); }
-.h10-rb-num::placeholder { color: var(--nds-grey-400); }
-.h10-rb-num:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
+/* DS-ALIGN — the DS `Input`; only its width is this row's. */
+.h10-rb-num { width: 150px; }
 /* Control: "do not suggest existing" toggle above Manual/Automate (reuses .h10-bktoggle from ads.css) */
 .h10-rb-dedupe { display: flex; align-items: flex-start; gap: 12px; padding: 2px 0 14px; margin-bottom: 10px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-rb-dedupe span { font-size: 13px; color: var(--nds-grey-700); line-height: 1.45; }
 .h10-rb-dedupe .h10-bktoggle { flex-shrink: 0; margin-top: 1px; }
 /* N2: inline day-count inside the "don't negate converting" sentence (negative-targeting only) */
-.h10-rb-ninline { width: 48px; height: 26px; margin: 0 5px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 0 6px; font: inherit; font-size: 12.5px; text-align: center; color: var(--nds-grey-900); vertical-align: middle; }
+/* DS-ALIGN — the DS `Input` at `xs`, sitting inside a sentence. The `.nds-field >` prefix on
+   the alignment rule is load-bearing: `.nds-field > input` declares `font: inherit`, and at
+   (0,1,1) it beats a bare class — see `.h10-plc3-numin` for the same trap. */
+.h10-rb-ninline { width: 56px; margin: 0 5px; vertical-align: middle; }
+.nds-field > .h10-rb-nincenter { text-align: center; }
 .h10-rb-ninline:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 /* B5: budget guardrails — floor>ceiling warning */
 .h10-rb-warn { margin-top: 10px; font-size: 12.5px; color: var(--nds-amber-700); background: #fff5ed; border: 1px solid #fed7aa; border-radius: var(--nds-radius-lg); padding: 8px 12px; line-height: 1.45; }
@@ -710,7 +712,8 @@
 .h10-rte-row .fld input { width: 100%; font: inherit; font-size: 12px; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 6px; }
 .h10-rte-row .fld.h10-rte-na { font-size: 10.5px; color: var(--nds-grey-400); text-align: center; }
 .h10-rte-row .act { flex: 0 0 90px; display: inline-flex; gap: 2px; justify-content: flex-end; }
-.h10-rte-name { font: inherit; font-size: 12.5px; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 7px; }
+/* DS-ALIGN — the DS `Input` at `sm`. */
+.h10-rte-name { min-width: 0; }
 /* Motion + blend drawers */
 .h10-rte-motion { padding: 10px 16px 12px; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-100); }
 .h10-mtitle { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: #3730a3; }
@@ -948,8 +951,8 @@
 .h10-dp-selbar .cnt em { font-style: normal; color: var(--nds-grey-500); }
 .h10-dp-selbar .grow { flex: 1; }
 .h10-dp-selbar .lbl { font-size: 12px; color: var(--nds-grey-600); }
-.h10-dp-selbar .nm { height: 30px; min-width: 190px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); padding: 0 9px; font: inherit; font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white); }
-.h10-dp-selbar .nm::placeholder { color: var(--nds-grey-400); }
+/* DS-ALIGN — the DS `Input` at `sm`; only the width it needs for a template name is ours. */
+.h10-dp-selbar .nm { min-width: 190px; }
 .h10-dp-selmsg { margin: 8px 0 0; font-size: 12px; color: #0a7d48; }
 
 /* ── E1/E3 — arm preview, in the builder's Control section ─────────────────────────────────
@@ -1140,8 +1143,8 @@
    .h10-rb-sec's existing rhythm so the panel sits flush with the rule list
    above it rather than reading as a bolted-on block. */
 .h10-pt-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 12px; }
-.h10-pt-input { flex: 1 1 200px; min-width: 160px; height: 30px; padding: 0 9px; font-size: 12px;
-  border: 1px solid var(--border-default, var(--nds-grey-200)); border-radius: var(--nds-radius-sm); background: var(--bg-input, var(--nds-white)); }
+/* DS-ALIGN — the DS `Input` at `sm`; only how it shares the row is ours. */
+.h10-pt-input { flex: 1 1 200px; min-width: 160px; }
 .h10-pt-input.reason { flex: 1 1 180px; }
 .h10-pt-sel { height: 30px; padding: 0 8px; font-size: 12px; border-radius: var(--nds-radius-sm);
   border: 1px solid var(--border-default, var(--nds-grey-200)); background: var(--bg-input, var(--nds-white)); }
@@ -2679,9 +2682,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-bsp-field2 { display: flex; flex-direction: column; gap: 4px; }
 .h10-bsp-field2 .cap { font-size: 11px; font-weight: 700; color: var(--nds-text-muted); }
-.h10-bsp-in { width: 100%; padding: 7px 10px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); font: inherit; font-size: 13px; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-bsp-in:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
-.h10-bsp-in:disabled { background: var(--nds-grey-25); color: var(--nds-text-muted); }
+/* DS-ALIGN — the DS `Input`, which owns the border, the focus ring and the disabled fill. */
+.h10-bsp-in { width: 100%; }
+.nds-field > .h10-bsp-in { font-variant-numeric: tabular-nums; }
 
 .h10-bsp-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); font-size: 12px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-bsp-btn:hover:not(:disabled) { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
@@ -2759,7 +2762,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-cstat { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-bsp-num { font-variant-numeric: tabular-nums; color: var(--nds-grey-900); }
 .h10-bsp-dim { color: var(--nds-text-muted); font-size: 11.5px; }
-.h10-bsp-cellin { width: 84px; padding: 4px 7px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-sm); font: inherit; font-size: 12px; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
+/* DS-ALIGN — the DS `Input` at `xs`. The BLUE border stays: in this grid it is not decoration,
+   it is the mark that the cell is in edit mode and will write when the modal is applied. */
+.h10-bsp-cellin { width: 84px; border-color: var(--nds-blue-600); }
+.nds-field > .h10-bsp-cellfig { font-variant-numeric: tabular-nums; }
 
 /* ── outcome notes ────────────────────────────────────────────────────────────────────────────
    `refused` is amber and `broke` is red, deliberately different: a refusal is the system declining
@@ -3576,9 +3582,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngp-plist .cx.hot b { color: #a8321f; }
 
 .h10-ngp-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 6px; }
-.h10-ngp-input { flex: 1 1 200px; min-width: 160px; height: 30px; padding: 0 9px; font-size: 12px;
-  color: #10151c; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); }
-.h10-ngp-input:focus { outline: 2px solid #2f6feb; outline-offset: -1px; border-color: #2f6feb; }
+/* DS-ALIGN — the DS `Input` at `sm`; only how it shares the row is ours. */
+.h10-ngp-input { flex: 1 1 200px; min-width: 160px; }
 .h10-ngp-input.reason { flex: 1 1 180px; }
 .h10-ngp-blurb { margin: 0 0 2px; padding: 7px 9px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-50);
   font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-700); }
@@ -3987,12 +3992,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    overrides, and source order beats specificity here. */
 .h10-kt6-row { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; }
 .h10-kt6-lab { font-size: 12px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-kt6-cur { font-size: 13px; font-weight: 700; color: var(--nds-grey-600); }
-.h10-kt6-in {
-  width: 76px; padding: 5px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid #c9d2de; border-radius: 5px;
-}
-.h10-kt6-in:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Input` at `sm`. The euro sign moved from a loose `<span>` beside the box
+   into the primitive's `prefix` slot, so the currency now sits INSIDE the field it applies to. */
+.h10-kt6-in { width: 104px; }
+.nds-field > .h10-kt6-fig { font-weight: 700; font-variant-numeric: tabular-nums; }
 .h10-kt6-spin { color: var(--nds-grey-600); }
 .h10-kt6-warn { margin: 0 0 9px; font-size: 11px; font-weight: 600; color: #9a3412; }
 
@@ -4509,7 +4512,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-qlist .qe em.qw { color: var(--nds-grey-700); }
 .h10-au-qlist .qe a { color: var(--nds-blue-600); display: inline-flex; }
 .h10-au-qlist .qacts { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.h10-au-qlist .qedit { width: 90px; height: 30px; border: 1px solid var(--nds-grey-300); border-radius: var(--nds-radius-md); padding: 0 8px; font: inherit; font-size: 13px; }
+/* DS-ALIGN — the DS `Input` at `sm`. */
+.h10-au-qlist .qedit { width: 90px; }
 
 /* AUTO.A3 — Simulate in the drawer */
 .h10-au-recbtns { display: flex; gap: 8px; flex-wrap: wrap; }

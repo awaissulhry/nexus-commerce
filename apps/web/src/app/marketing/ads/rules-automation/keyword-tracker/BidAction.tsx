@@ -54,7 +54,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
-import { Checkbox } from '@/design-system/primitives'
+import { Checkbox, Input } from '@/design-system/primitives'
 
 interface PreviewResponse {
   term: string
@@ -245,9 +245,9 @@ export function BidAction({
 
       <div className="h10-kt6-row">
         <label className="h10-kt6-lab" htmlFor="kt6-bid">Set every bid to</label>
-        <span className="h10-kt6-cur">€</span>
-        <input
-          id="kt6-bid" className="h10-kt6-in" inputMode="decimal" value={bidEuros}
+        <Input
+          size="sm" prefix="€" fieldClassName="h10-kt6-in" className="h10-kt6-fig"
+          id="kt6-bid" inputMode="decimal" value={bidEuros}
           onChange={(e) => { setBidEuros(e.target.value); setResult(null) }}
           aria-label={`Bid in euros for ${term}`}
         />
