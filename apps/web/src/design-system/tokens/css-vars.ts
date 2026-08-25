@@ -194,6 +194,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-muted', value: '#667080' },
   { name: '--nds-success-text', value: '#14724d' },
   { name: '--nds-warning-text', value: '#8a5316' },
+  // "Stale" had FIVE browns across the ads console — #8a5316, #6d3f10, #7a4512, #7a5b00 and a
+  // red — for one meaning. This is the darkest measured value, so adopting it everywhere only
+  // ever RAISES contrast: 5.89 → 8.27 on the stale badge, 7.29 → 8.27 on the feed banner.
+  { name: '--nds-stale-text', value: '#6d3f10' },
   { name: '--nds-danger-text', value: '#9c2f2a' },
   { name: '--nds-info-text', value: '#10457f' },
 

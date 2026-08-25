@@ -2271,8 +2271,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-feed.fresh b { color: #1c6b3f; }
 .h10-sov-feed.ageing b { color: var(--nds-warning-text); }
 .h10-sov-feed.stale { border-color: #f0d9b5; background: #fff6e8; color: var(--nds-warning-text); }
-.h10-sov-feed.stale b { color: #7a4512; }
-.h10-sov-feed.stale i { background: #f7e9d4; color: #7a4512; }
+.h10-sov-feed.stale b { color: var(--nds-stale-text); }
+.h10-sov-feed.stale i { background: #f7e9d4; color: var(--nds-stale-text); }
 
 /* ── notes and warnings ─────────────────────────────────────────────────────────────────────── */
 .h10-sov-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
@@ -2501,7 +2501,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-seg { display: inline-flex; padding: 2px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; }
 .h10-bud-seg .seg { padding: 4px 12px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-bud-seg .seg.on { background: var(--nds-white); color: var(--nds-grey-900); box-shadow: 0 1px 2px rgba(28, 37, 48, .12); }
-.h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bud-stale:hover { background: #fdeed5; }
 
 /* ── the provisional rule list's heading ───────────────────────────────────────────────────── */
@@ -2610,7 +2610,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.
    🔴 It cannot appear today — `GET /advertising/apply-rules/cursor` does not exist and a failed
    poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
-.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-ar-stale:hover { background: #fdeed5; }
 /* U13 — a refused bid-automation flip, in the toolbar slot the staleness chip uses. Danger, not
    warning: the stale chip means "there is more to see", this means "your write did not happen".
@@ -2886,7 +2886,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-hour .lnk { font: inherit; font-weight: 700; color: var(--nds-blue-700); text-decoration: underline; }
 .h10-plc-hour .clock { padding: 1px 7px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
 /* The refresh offer. It OFFERS; it never refetches under a reading operator. */
-.h10-plc-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #6d3f10; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-plc-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-plc-stale:hover { background: #fdeed5; }
 
 @media (max-width: 1200px) {

@@ -2744,7 +2744,7 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
 .h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
 .h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator. */
-.h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bd-stale:hover { background: #fdeed5; }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════

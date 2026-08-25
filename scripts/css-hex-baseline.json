@@ -1,7 +1,7 @@
 {
   "note": "Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero.",
   "updatedAt": "2026-08-25",
-  "total": 3274,
+  "total": 3265,
   "files": {
     "app/_shared/shared-shell.css": 8,
     "app/fleet/activity/activity.css": 77,
@@ -16,7 +16,7 @@
     "app/marketing/ads/_shared/CampaignTypeSelect.css": 1,
     "app/marketing/ads/_shared/automation-dock.css": 15,
     "app/marketing/ads/_shared/keyword-targeting.css": 5,
-    "app/marketing/ads/ads.css": 397,
+    "app/marketing/ads/ads.css": 391,
     "app/marketing/ads/ai-advertising/ai-advertising.css": 3,
     "app/marketing/ads/ai-advertising/new-goal/ai-goal.css": 12,
     "app/marketing/ads/analytics/coverage.css": 26,
@@ -43,7 +43,7 @@
     "app/marketing/ads/rules-automation/control-room/control-room.css": 238,
     "app/marketing/ads/rules-automation/dayparting/rank-dayparting.css": 26,
     "app/marketing/ads/rules-automation/fleet/fleet-sections.css": 87,
-    "app/marketing/ads/rules-automation/rules-automation.css": 1041,
+    "app/marketing/ads/rules-automation/rules-automation.css": 1038,
     "app/marketing/ads/suggestions/suggestions.css": 24,
     "app/marketing/ads-console/amazon.css": 450
   }
