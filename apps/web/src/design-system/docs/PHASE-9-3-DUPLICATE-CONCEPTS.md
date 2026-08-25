@@ -1033,6 +1033,36 @@ values, `-seg` five, `-toggle` four, `-cell` five. Where a majority WAS clear an
 were genuinely the same, it was fixed (`-note`, now uniform at `lg` to match its unified colours).
 The rest are listed for a design pass.
 
+### The two open decisions, with the data
+
+Both are design calls. Everything measurable has been measured; what is left is taste, and getting
+it wrong changes how the product looks.
+
+**1. The radius scale.** It runs 6, 7, 8, 10, 12, 14 (plus pill 4, full 999). Two problems: 6 and 7
+are indistinguishable to the eye, and there is nothing below 6 or between 8 and 10 — so small
+elements have nowhere to land. 959 declarations sit off it. Either the scale grows to cover them,
+or the console curates down to fewer, genuinely distinct steps. Because 851 declarations now
+reference tokens, that future change is a token edit rather than a 1,400-site sweep. Frozen
+meanwhile by `check-css-radius-ratchet`.
+
+**2. `-chip` renders in two visual languages.** Not drift, and not proportionate design —
+tested. Radius does NOT track size:
+
+| font | radius | classes |
+|---|---|---|
+| 10.5px | **4px** | `.acr-grad-chip` |
+| 10.5px | **999px** | `.eb-chip`, `.eb-promo-chip`, `.acr-fl-vchip` |
+| 11px | **4px** | `.acr-fs-chip` |
+| 11px | **999px** | `.hl-fchip` |
+| 12px | **7px** | `.h10-bd8-chip`, `.h10-sov-chip`, `.mc-chip`, `.h10-dragchip` |
+| 12px | **999px** | `.eb-kind-chip`, `.aig2-chip`, `.h10-rg-chip`, `.cp-scenchip` |
+
+At the SAME size, chips are both capsules and rounded rects. Ten of one, eleven of the other — no
+majority to defer to. The DS's own `.nds-pill` uses `--nds-radius-pill` (4px), so "follow the design
+system" argues for the rounded rect and would restyle ten surfaces. That is a visible product
+change on a near-even split, and the eBay chips may be capsule deliberately to match that channel's
+language. **Not decided here.**
+
 ### Method notes
 
 - `.h10-kt-note.out` stopped a wrong fix: `-note` looked like six-boxed-versus-three-plain drift
