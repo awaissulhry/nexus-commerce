@@ -714,3 +714,66 @@ purely additive.
 
 It also exposed the error above: factory already had `.nds-modal-f .grow` in *its* `patterns.css`,
 which is what sent me to check web's — where it had been all along.
+
+## Appendix C — the WG.3 census (2026-08-25): the rename is not the blocker
+
+WG.3 reads "move the TSX + its three local deps into `patterns/WorkspaceGrid`". Measured before
+starting, it is not a move — it is six concept reconciliations, and the rename that looks like the
+hard part unblocks nothing on its own.
+
+### The rename, and why it was NOT done
+
+`.h10-am-grid` has **227 occurrences** in the live tree, not the 169 rules that were extracted:
+`workspace-grid.css` 151, **`rules-automation.css` 52**, `ebay.css` 4, and singles across
+`reporting.css`, `rank-dayparting.css`, `budget-manager.css`, `suggestions.css`, plus the two TSX
+renderers, two probe scripts and the DS `DataGrid` docblocks.
+
+Renaming to `nds-wsgrid` would put a DS-prefixed class in app stylesheets while the component is
+still an app component — a half-state with 227 chances to silently unstyle something and no
+benefit until the component actually moves. **The rename belongs with the move, not before it.**
+
+### What actually blocks the move
+
+`AdsDataGrid` imports `../FilterDropdown` (H10Select, HoverCard), `./AdsFilterBar` and
+`./enabledRank`. The DS may not depend on app code, so each has to be resolved first — and the DS
+already has a counterpart for every one of them:
+
+| ads module | LOC | DS counterpart | LOC | DS adoption |
+|---|---|---|---|---|
+| `FilterDropdown` (H10Select) | 370 | `Listbox` | 56 | **157 files, 313 uses** |
+| `FilterDropdown` (HoverCard) | — | `HoverCard` | 23 | **0 files** |
+| `AdsFilterBar` | 179 | `FilterBar` + `FilterPanel` | 178 + 72 | 5 files / 1 file |
+| `AdsDataGrid` toolbar | — | `GridToolbar` | 37 | 7 files (see below) |
+| `AdsDataGrid` pager | — | `Pagination` | 52 | 5 files |
+| `AdsDataGrid` customize | — | `ColumnCustomizer` | 82 | **0 files** |
+
+Two of these invert the usual picture, and both matter:
+
+- **`Listbox` is the platform's real select** — 157 files, 313 uses, every one importing from the
+  DS. `H10Select` is a 370-line app module doing the same job for the grid alone. Here the DS
+  version wins on adoption by two orders of magnitude.
+- **The DS `HoverCard` has zero adoption.** All 12 files that render a `HoverCard` import the app's
+  one from `campaigns/FilterDropdown`, via five different relative paths. Its API differs too
+  (`card: ReactNode` vs `text` + `placement` + `delay`), so it is not a drop-in either way.
+
+### 🔴 A fifteenth concept, and the worst shape yet: `GridToolbar`
+
+**53 files render a `<GridToolbar>` and they mean three different components:**
+
+    32  @/app/_shared/grid-lens
+    14  (defined locally, in the file that renders it)
+     7  @/design-system/patterns
+
+Fourteen separate local definitions under a name that already exists twice elsewhere. Nothing in
+the toolchain can see this — each file compiles, each renders something toolbar-shaped. It was
+found only by resolving the import for every render site rather than counting the name.
+
+### Revised WG.3
+
+| | | |
+|---|---|---|
+| WG.3a | reconcile `GridToolbar` — 3 implementations, 53 render sites | the biggest, and not grid-specific |
+| WG.3b | reconcile `HoverCard` — DS version has 0 users, APIs differ | small |
+| WG.3c | `H10Select` → `Listbox`, or justify keeping a second select | 370 LOC vs a DS primitive with 313 uses |
+| WG.3d | `AdsFilterBar` → `FilterBar`/`FilterPanel` | comparable size, real API diff |
+| WG.3e | THEN move the component, renaming `.h10-am-grid` → `nds-wsgrid` in one pass | 227 occurrences |
