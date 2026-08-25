@@ -17,14 +17,10 @@
 .pf-tile-v { font-weight: 800; font-size: 18px; color: var(--nds-grey-900); margin-top: 2px; }
 .pf-tile-v.ok { color: #067d62; }
 
-/* table */
-.pf-tablewrap { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); overflow: hidden; background: var(--nds-white); }
-.pf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.pf-table thead th { text-align: left; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); padding: 10px 14px; border-bottom: 1px solid var(--nds-grey-100); background: var(--nds-white); white-space: nowrap; }
-.pf-table thead th.num { text-align: right; }
-.pf-table tbody td { padding: 11px 14px; border-top: 1px solid var(--nds-grey-50); color: #37495b; vertical-align: middle; }
-.pf-table tbody tr:first-child td { border-top: 0; }
-.pf-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-900); }
+/* The portfolio list is the DS `DataGrid` (`.pf-grid`). Its rows are rule drop
+   targets, which needs `rowProps` — a gap this session filed this morning and the
+   DS closed today. What is left below is the cell vocabulary the grid has no
+   opinion about: the name, the state and source chips, the market tags. */
 .pf-name { display: flex; align-items: center; gap: 8px; }
 .pf-name-main { font-weight: 700; color: var(--nds-grey-900); }
 .pf-state { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-100); color: var(--nds-grey-600); }
@@ -55,11 +51,8 @@
 .pf-confirm-name { font-size: 13px; color: #37495b; }
 
 /* row actions */
-.pf-table thead th.pf-actions-h { text-align: right; }
-.pf-table tbody td.pf-actions { text-align: right; white-space: nowrap; }
 /* the three row actions are design-system ToolbarButtons; this row is only their spacing. */
 .pf-actrow { display: inline-flex; align-items: center; gap: 4px; }
-.pf-table tbody td.pf-nocap { color: var(--nds-grey-400); font-weight: 600; }
 
 /* budget modal — the policy switch is the DS SegmentedControl; all that is left
    is keeping it hugging the left edge of the modal’s column-flex form. */
@@ -72,7 +65,6 @@
 .pf-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: var(--nds-grey-900); }
 .pf-search input::placeholder { color: var(--nds-grey-400); }
 .pf-search button { border: none; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: var(--nds-grey-500); padding: 0 2px; }
-.pf-norows { padding: 26px 12px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
 
 /* ACR.6 — the name is the door to the Family Cockpit. */
 .pf-name-link { color: var(--nds-blue-600); text-decoration: none; cursor: pointer; }
@@ -84,3 +76,10 @@
 .pf--with-dock { display: flex; flex-direction: row; gap: 20px; align-items: flex-start; max-width: none; }
 .pf-maincol { min-width: 0; flex: 1; }
 @media (max-width: 1100px) { .pf--with-dock { flex-direction: column; } .pf--with-dock .adock { position: static; width: 100%; max-height: 420px; } }
+
+/* The figures were bold and near-black before the swap; the grid's own cell is 500.
+   Weight only — the colour stays the DS's, which is darker than the grey-900 it replaces. */
+.pf-grid td.num { font-weight: 700; }
+/* “No cap” is real text and was grey-400 — 2.36:1 on white, under even the 3:1
+   non-text floor. The DS muted tier is 5.01:1. A conversion may only ever raise it. */
+.pf-grid .pf-nocap { color: var(--nds-text-muted); font-weight: 600; }

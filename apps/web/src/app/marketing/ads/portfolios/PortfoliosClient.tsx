@@ -16,6 +16,7 @@ import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
+import { DataGrid } from '@/design-system/components'
 import { Modal } from '@/design-system/components/Modal'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -224,55 +225,51 @@ function PortfoliosInner() {
           </div>
         </div>
       ) : (
-        <div className="pf-tablewrap">
-          <table className="pf-table">
-            <thead><tr>
-              <th>Portfolio</th><th>Markets</th><th className="num">Campaigns</th><th className="num">Budget</th><th className="num">Spend</th><th className="num">Sales</th><th className="num">ACoS</th><th>Synced</th><th className="pf-actions-h">Actions</th>
-            </tr></thead>
-            <tbody>
-              {visible.length === 0 && (
-                <tr><td colSpan={9} className="pf-norows">No portfolio matches “{q}”.</td></tr>
-              )}
-              {visible.map((r) => (
-                <tr
-                  key={r.portfolioId}
-                  {...ruleDropProps((rule) => {
-                    void setRuleScope(rule.id, { scopePortfolioId: r.portfolioId }).then((ok) =>
-                      toast(ok
-                        ? `“${rule.name}” now fires only inside ${r.name}.`
-                        : 'Bind failed — the scope change was rejected.', ok ? 'success' : 'danger'))
-                  })}
-                >
-                  <td>
-                    <span className="pf-name">
-                      {/* ACR.6 — the name opens the Family Cockpit: campaigns, coverage,
-                          contested keywords and automation posture for THIS portfolio. */}
-                      <Link href={`/marketing/ads/portfolios/${r.portfolioId}`} className="pf-name-main pf-name-link">{r.name}</Link>
-                      {r.state && <span className={`pf-state ${stateClass(r.state)}`}>{r.state}</span>}
-                      <span className={`pf-src${r.source === 'local' ? ' pf-src--local' : ''}`}>{r.source}</span>
-                    </span>
-                  </td>
-                  <td>{r.marketplaces.length ? <span className="pf-mkts">{r.marketplaces.map((m) => <span className="pf-mkt" key={m}>{m}</span>)}</span> : <span className="pf-mkt-none">—</span>}</td>
-                  <td className="num">{r.activeCampaignCount}/{r.campaignCount}</td>
-                  <td className={`num${r.budgetAmountCents == null ? ' pf-nocap' : ''}`}>{budgetLabel(r)}</td>
-                  <td className="num">{eurc(r.spendCents)}</td>
-                  <td className="num">{eurc(r.salesCents)}</td>
-                  <td className="num pf-acos">{r.acos == null ? '—' : pct(r.acos)}</td>
-                  <td>{ago(r.lastSyncedAt)}</td>
-                  <td className="pf-actions">
-                    <span className="pf-actrow">
-                      <ToolbarButton variant="boxed" icon={<Wallet size={13} />} label="Set budget" disabled={rowBusy === r.portfolioId} onClick={() => openBudget(r)} />
-                      <ToolbarButton variant="boxed" icon={<Pencil size={13} />} label="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }} />
-                      {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
-                        <ToolbarButton variant="boxed" icon={<Archive size={13} />} label="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)} tooltipAlign="end" />
-                      )}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<PortfolioRow>
+          className="pf-grid"
+          rows={visible}
+          rowKey={(r) => r.portfolioId}
+          emptyState={`No portfolio matches “${q}”.`}
+          rowProps={(r) => ruleDropProps((rule) => {
+            void setRuleScope(rule.id, { scopePortfolioId: r.portfolioId }).then((ok) =>
+              toast(ok
+                ? `“${rule.name}” now fires only inside ${r.name}.`
+                : 'Bind failed — the scope change was rejected.', ok ? 'success' : 'danger'))
+          })}
+          columns={[
+            {
+              key: 'name', label: 'Portfolio',
+              render: (r) => (
+                <span className="pf-name">
+                  {/* ACR.6 — the name opens the Family Cockpit: campaigns, coverage,
+                      contested keywords and automation posture for THIS portfolio. */}
+                  <Link href={`/marketing/ads/portfolios/${r.portfolioId}`} className="pf-name-main pf-name-link">{r.name}</Link>
+                  {r.state && <span className={`pf-state ${stateClass(r.state)}`}>{r.state}</span>}
+                  <span className={`pf-src${r.source === 'local' ? ' pf-src--local' : ''}`}>{r.source}</span>
+                </span>
+              ),
+            },
+            { key: 'markets', label: 'Markets', render: (r) => (r.marketplaces.length ? <span className="pf-mkts">{r.marketplaces.map((m) => <span className="pf-mkt" key={m}>{m}</span>)}</span> : <span className="pf-mkt-none">—</span>) },
+            { key: 'campaigns', label: 'Campaigns', align: 'right', numeric: true, render: (r) => `${r.activeCampaignCount}/${r.campaignCount}` },
+            { key: 'budget', label: 'Budget', align: 'right', numeric: true, render: (r) => <span className={r.budgetAmountCents == null ? 'pf-nocap' : undefined}>{budgetLabel(r)}</span> },
+            { key: 'spend', label: 'Spend', align: 'right', numeric: true, render: (r) => eurc(r.spendCents) },
+            { key: 'sales', label: 'Sales', align: 'right', numeric: true, render: (r) => eurc(r.salesCents) },
+            { key: 'acos', label: 'ACoS', align: 'right', numeric: true, render: (r) => <span className="pf-acos">{r.acos == null ? '—' : pct(r.acos)}</span> },
+            { key: 'synced', label: 'Synced', render: (r) => ago(r.lastSyncedAt) },
+            {
+              key: 'actions', label: 'Actions', align: 'right', width: 120,
+              render: (r) => (
+                <span className="pf-actrow">
+                  <ToolbarButton variant="boxed" icon={<Wallet size={13} />} label="Set budget" disabled={rowBusy === r.portfolioId} onClick={() => openBudget(r)} />
+                  <ToolbarButton variant="boxed" icon={<Pencil size={13} />} label="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }} />
+                  {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
+                    <ToolbarButton variant="boxed" icon={<Archive size={13} />} label="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)} tooltipAlign="end" />
+                  )}
+                </span>
+              ),
+            },
+          ]}
+        />
       )}
 
       <Modal
