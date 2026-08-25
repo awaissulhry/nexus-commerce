@@ -915,6 +915,27 @@ Done as two verifiable steps rather than one:
 
 The stylesheet is at **zero** raw literals, from 15 that morning.
 
+### The move, driven on prod
+
+The one risk the local harness could not cover: the stylesheet's IMPORT PATH changed, and load
+order is what decides this codebase's cascade.
+
+- `.nds-wsgrid` present, `.h10-am-grid` gone, 100 rows, 49 sortable headers
+- **cascade order correct** — verified by walking `document.styleSheets` and comparing where
+  `.h10-am-toolbar` and `.nds-wsgrid` land, rather than trusting the import statement
+- rules that exist ONLY in workspace-grid.css are live: sticky header, `z-index: 6` on the frozen
+  column, `overflow: auto` on the scroller
+- hover highlight: 101 cells, exactly one column
+- column drag: armed, reordered, persisted, torn down clean — then the operator's saved column
+  order restored byte-for-byte and confirmed after a reload
+
+🔴 **The gesture trap, a second time.** A synthetic `mouseenter` produced no highlight, which reads
+exactly like a broken feature. React implements `onMouseEnter` through `mouseover` delegation at the
+root, so a dispatched `mouseenter` never reaches it; a REAL hover lit 101 cells. With
+`left_click_drag` teleporting past the 5px threshold in WG.2b, that is twice in one day that an
+automated gesture doing nothing was indistinguishable from code doing nothing. **Confirm the gesture
+before blaming the code.**
+
 ### What is left of #13
 
 `DataGrid` still has 6 render sites and 13 type importers. Retiring it is WG.6 and needs those
