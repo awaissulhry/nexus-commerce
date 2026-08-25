@@ -1564,3 +1564,27 @@
   padding: 5px 9px;
   font-size: 11.5px;
 }
+
+/* A navigable step. The hit target is the badge AND the label together — clicking the number of a
+   finished step is the gesture people reach for, and a label-only target misses it. Inherits the
+   li's layout so adding interactivity does not move anything. */
+.nds-step-hit {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.nds-step.selectable .nds-step-hit:hover .nds-step-label {
+  color: var(--nds-text);
+  text-decoration: underline;
+}
+.nds-step-hit:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-sm);
+}
