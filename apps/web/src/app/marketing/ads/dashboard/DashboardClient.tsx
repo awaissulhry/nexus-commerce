@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
+import { SegmentedControl } from '@/design-system/primitives'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ProfitPanel } from './ProfitPanel'
 import { eur, intl, roas as roasFmt } from '../_canvas/format'
@@ -209,11 +210,14 @@ export function DashboardClient() {
         <div className="dash-card">
           <div className="dash-card-h">
             Top movers · latest day
-            <span className="dash-seg">
-              {(['campaigns', 'keywords', 'asins'] as const).map((t) => (
-                <button key={t} type="button" className={momTab === t ? 'on' : ''} onClick={() => setMomTab(t)}>{t}</button>
-              ))}
-            </span>
+            <SegmentedControl
+              className="dash-seg"
+              size="sm"
+              ariaLabel="Top movers by"
+              value={momTab}
+              onChange={(v) => setMomTab(v as typeof momTab)}
+              options={[{ value: 'campaigns', label: 'campaigns' }, { value: 'keywords', label: 'keywords' }, { value: 'asins', label: 'asins' }]}
+            />
           </div>
           {momRows.length === 0 ? (
             <div className="dash-empty">{loading ? 'Loading…' : 'No momentum data yet.'}</div>

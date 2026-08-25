@@ -27,9 +27,9 @@
 @media (max-width: 1080px) { .dash-row2 { grid-template-columns: 1fr; } }
 
 /* segmented (momentum tabs) */
-.dash-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; }
-.dash-seg button { border: 0; background: var(--nds-white); padding: 4px 10px; font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); text-transform: capitalize; cursor: pointer; }
-.dash-seg button.on { background: var(--nds-blue-600); color: var(--nds-white); }
+/* The momentum switch is the DS `SegmentedControl`, which brings the `radiogroup`/`radio` roles
+   and arrow-key roving this hand-rolled one never had. Only the label casing is left to say. */
+.dash-seg { text-transform: capitalize; }
 
 /* alerts */
 .dash-alerts { display: flex; flex-direction: column; }
@@ -68,15 +68,11 @@
    all of it must not read the same. Mirrors the KPI strip's own explainer. */
 .dash-pnl-t .s { display: block; margin-top: 2px; font-size: 10px; line-height: 1.35; color: var(--nds-grey-500); }
 
-/* The table is wider than the card on a narrow window, so it scrolls inside its own box —
-   the page body must never scroll sideways. */
-.dash-pnl-scroll { max-height: 420px; overflow: auto; border: 1px solid var(--nds-grey-100); border-radius: 9px; }
-.dash-pnl { width: 100%; border-collapse: collapse; font-size: 12px; }
-.dash-pnl thead th { position: sticky; top: 0; z-index: 1; background: var(--nds-grey-25); text-align: left; padding: 7px 10px; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); border-bottom: 1px solid var(--nds-grey-150); white-space: nowrap; }
-.dash-pnl th.r, .dash-pnl td.r { text-align: right; }
-.dash-pnl tbody td { padding: 6px 10px; border-top: 1px solid var(--nds-grey-50); color: #37495b; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dash-pnl tbody tr:first-child td { border-top: 0; }
-.dash-pnl tbody tr:hover td { background: var(--nds-grey-25); }
+/* The per-SKU table is the DS `DataGrid`: it owns the scroll box, the sticky header, the cell
+   padding, the hover and the right-alignment, and `maxHeight` replaces `.dash-pnl-scroll`. Only
+   this grid's own register is left. The `.mono` / `.dim` / `.pos` / `.neg` inks below still apply
+   — they were always descendant selectors, and the cells are spans now rather than `<td>`s. */
+.dash-pnl .nds-grid { font-size: 12px; font-variant-numeric: tabular-nums; }
 .dash-pnl .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .dash-pnl .dim { color: var(--nds-grey-450); }
 .dash-pnl .pos { color: #067d62; font-weight: 700; }

@@ -22,7 +22,61 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DataGrid, type Column } from '@/design-system/components'
 import { eur2, intl } from '../_canvas/format'
+
+/**
+ * The per-SKU profit columns. `trueProfitCents == null` means no cost price was ever loaded for
+ * that product — NOT zero profit — so it sorts as -Infinity and the cell keeps saying so.
+ */
+function profitColumns(): Array<Column<ProfitRow>> {
+  const fees = (r: ProfitRow) => r.referralFeesCents + r.fbaFulfillmentFeesCents + r.fbaStorageFeesCents
+  return [
+    { key: 'date', label: 'Date', sortable: true, sortValue: (r) => r.date, render: (r) => <span className="mono">{new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</span> },
+    {
+      key: 'sku', label: 'SKU', sortable: true, sortValue: (r) => r.product?.sku ?? '',
+      render: (r) => (r.product
+        ? <Link className="dash-pnl-sku" href={`/products/${r.product.id}`} title={r.product.name}>{r.product.sku}</Link>
+        : <span className="mono dim">—</span>),
+    },
+    { key: 'mkt', label: 'Mkt', sortable: true, sortValue: (r) => r.marketplace, render: (r) => <span className="mono">{r.marketplace}</span> },
+    { key: 'units', label: 'Units', align: 'right', sortable: true, sortValue: (r) => r.unitsSold, render: (r) => intl(r.unitsSold) },
+    { key: 'revenue', label: 'Revenue', align: 'right', sortable: true, sortValue: (r) => r.grossRevenueCents, render: (r) => cents(r.grossRevenueCents) },
+    { key: 'cogs', label: 'COGS', align: 'right', sortable: true, sortValue: (r) => r.cogsCents, render: (r) => cents(r.cogsCents) },
+    { key: 'fees', label: 'Fees', align: 'right', sortable: true, sortValue: fees, render: (r) => cents(fees(r)) },
+    { key: 'adspend', label: 'Ad spend', align: 'right', sortable: true, sortValue: (r) => r.advertisingSpendCents, render: (r) => cents(r.advertisingSpendCents) },
+    {
+      key: 'profit', label: 'Profit', align: 'right', sortable: true,
+      sortValue: (r) => (r.trueProfitCents == null ? -Infinity : r.trueProfitCents),
+      render: (r) => (
+        <span
+          className={r.trueProfitCents == null ? 'dim' : r.trueProfitCents >= 0 ? 'pos' : 'neg'}
+          title={r.trueProfitCents == null ? 'No cost price loaded for this product — not the same as zero profit.' : undefined}
+        >{r.trueProfitCents == null ? '—' : cents(r.trueProfitCents)}</span>
+      ),
+    },
+    {
+      key: 'margin', label: 'Margin', align: 'right', sortable: true,
+      sortValue: (r) => (r.trueProfitMarginPct != null ? Number(r.trueProfitMarginPct) : -Infinity),
+      render: (r) => {
+        const m = r.trueProfitMarginPct != null ? Number(r.trueProfitMarginPct) : null
+        return <span className={`dash-pnl-b b-${band(m)}`}>{m != null ? `${(m * 100).toFixed(0)}%` : '—'}</span>
+      },
+    },
+    {
+      key: 'coverage', label: 'Coverage', sortable: true, sortValue: (r) => coverage(r.coverage).pct,
+      render: (r) => {
+        const cov = coverage(r.coverage)
+        return (
+          <span
+            className={`dash-pnl-cov ${cov.pct >= 0.75 ? 'ok' : cov.pct >= 0.5 ? 'part' : 'thin'}`}
+            title={cov.missing.length ? `Missing: ${cov.missing.join(', ')}` : 'All four components are real'}
+          >{Math.round(cov.pct * 100)}%</span>
+        )
+      },
+    },
+  ]
+}
 
 interface ProfitRow {
   id: string
@@ -183,57 +237,15 @@ export function ProfitPanel({ market }: { market: string }) {
             ))}
           </div>
 
-          <div className="dash-pnl-scroll">
-            <table className="dash-pnl">
-              <thead>
-                <tr>
-                  <th>Date</th><th>SKU</th><th>Mkt</th>
-                  <th className="r">Units</th><th className="r">Revenue</th><th className="r">COGS</th>
-                  <th className="r">Fees</th><th className="r">Ad spend</th><th className="r">Profit</th>
-                  <th className="r">Margin</th><th>Coverage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const margin = r.trueProfitMarginPct != null ? Number(r.trueProfitMarginPct) : null
-                  const cov = coverage(r.coverage)
-                  return (
-                    <tr key={r.id}>
-                      <td className="mono">{new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</td>
-                      <td>
-                        {r.product ? (
-                          <Link className="dash-pnl-sku" href={`/products/${r.product.id}`} title={r.product.name}>{r.product.sku}</Link>
-                        ) : <span className="mono dim">—</span>}
-                      </td>
-                      <td className="mono">{r.marketplace}</td>
-                      <td className="r">{intl(r.unitsSold)}</td>
-                      <td className="r">{cents(r.grossRevenueCents)}</td>
-                      <td className="r">{cents(r.cogsCents)}</td>
-                      <td className="r">{cents(r.referralFeesCents + r.fbaFulfillmentFeesCents + r.fbaStorageFeesCents)}</td>
-                      <td className="r">{cents(r.advertisingSpendCents)}</td>
-                      <td
-                        className={`r ${r.trueProfitCents == null ? 'dim' : r.trueProfitCents >= 0 ? 'pos' : 'neg'}`}
-                        title={r.trueProfitCents == null ? 'No cost price loaded for this product — not the same as zero profit.' : undefined}
-                      >
-                        {r.trueProfitCents == null ? '—' : cents(r.trueProfitCents)}
-                      </td>
-                      <td className="r">
-                        <span className={`dash-pnl-b b-${band(margin)}`}>{margin != null ? `${(margin * 100).toFixed(0)}%` : '—'}</span>
-                      </td>
-                      <td>
-                        <span
-                          className={`dash-pnl-cov ${cov.pct >= 0.75 ? 'ok' : cov.pct >= 0.5 ? 'part' : 'thin'}`}
-                          title={cov.missing.length ? `Missing: ${cov.missing.join(', ')}` : 'All four components are real'}
-                        >
-                          {Math.round(cov.pct * 100)}%
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* Eleven columns of per-SKU profit — a real data grid, so it is the DS one. Sortable,
+              which it was not: "which SKU is losing money" needed the profit column ordered. */}
+          <DataGrid<ProfitRow>
+            className="dash-pnl"
+            rows={rows}
+            rowKey={(r) => r.id}
+            maxHeight={420}
+            columns={profitColumns()}
+          />
         </>
       )}
     </div>
