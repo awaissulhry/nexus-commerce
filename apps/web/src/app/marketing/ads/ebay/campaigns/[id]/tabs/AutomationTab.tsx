@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
-import { Button, Pill, Toggle } from '@/design-system/primitives'
+import { Button, Pill, Toggle, Input } from '@/design-system/primitives'
 import { pillTone } from '../../../../_shared/pillTone'
 
 const POSTURES = [
@@ -91,11 +91,11 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
         <div className="eb-form-row" style={{ marginTop: 12, alignItems: 'flex-end' }}>
           <div className="h10-cd-field s">
             <label>Rate cap % (this campaign)</label>
-            <input type="number" min={2} max={100} step={0.1} value={capPct} onChange={(e) => setCapPct(e.target.value)} placeholder="none" />
+            <Input type="number" aria-label="Rate cap % (this campaign)" min={2} max={100} step={0.1} value={capPct} onChange={(e) => setCapPct(e.target.value)} placeholder="none" />
           </div>
           <div className="h10-cd-field s">
             <label>Rate floor %</label>
-            <input type="number" min={0} max={100} step={0.1} value={floorPct} onChange={(e) => setFloorPct(e.target.value)} placeholder="none" />
+            <Input type="number" aria-label="Rate floor %" min={0} max={100} step={0.1} value={floorPct} onChange={(e) => setFloorPct(e.target.value)} placeholder="none" />
           </div>
           <Button size="sm" disabled={busy}
  onClick={() => void savePolicy({ rateCapPct: capPct === '' ? null : Number(capPct), rateFloorPct: floorPct === '' ? null : Number(floorPct) }, 'guardrail overrides saved')}>Save caps</Button>

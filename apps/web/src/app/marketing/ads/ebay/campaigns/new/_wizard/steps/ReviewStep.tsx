@@ -16,7 +16,7 @@ import { postEbayAds, getEbayAds } from '../../../../_lib'
 import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
-import { Button, Input, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill, Checkbox } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components'
 
 interface LaunchOut {
@@ -255,10 +255,13 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
         <label className="eb-cap eb-cap-lbl">Rule packs bound at launch (PROPOSE mode — born governed)</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {packOptions.map((p) => (
-            <label key={p} className={`eb-pack ${plan.rulePacks.includes(p) ? 'on' : ''}`}>
-              <input type="checkbox" checked={plan.rulePacks.includes(p)} onChange={(e) => set({ rulePacks: e.target.checked ? [...plan.rulePacks, p] : plan.rulePacks.filter((x) => x !== p) })} />
-              {p}
-            </label>
+            <Checkbox
+              key={p}
+              className={`eb-pack ${plan.rulePacks.includes(p) ? 'on' : ''}`}
+              checked={plan.rulePacks.includes(p)}
+              onChange={(e) => set({ rulePacks: e.target.checked ? [...plan.rulePacks, p] : plan.rulePacks.filter((x) => x !== p) })}
+              label={p}
+            />
           ))}
         </div>
       </div>
@@ -275,9 +278,12 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
             {advisories.map((a) => (
               <li key={a.key} className="warn">
                 {a.text}{a.key !== 'over-be' && (
-                  <label className="eb-ack">
-                    <input type="checkbox" checked={plan.acks.includes(a.key)} onChange={(e) => set({ acks: e.target.checked ? [...plan.acks, a.key] : plan.acks.filter((x) => x !== a.key) })} /> acknowledge
-                  </label>
+                  <Checkbox
+                    className="eb-ack"
+                    checked={plan.acks.includes(a.key)}
+                    onChange={(e) => set({ acks: e.target.checked ? [...plan.acks, a.key] : plan.acks.filter((x) => x !== a.key) })}
+                    label="acknowledge"
+                  />
                 )}
               </li>
             ))}

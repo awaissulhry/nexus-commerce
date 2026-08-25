@@ -56,7 +56,7 @@ export function RatesStep({ plan, set, listings }: {
             <div className="eb-form-row" style={{ alignItems: 'flex-end' }}>
               <div className="h10-cd-field s" style={{ maxWidth: 150 }}>
                 <label>Cap % <InfoTip tip="eBay's daily suggested rate applies per listing but is hard-capped here. Listings whose break-even sits BELOW the cap can lose margin on days eBay pushes the rate to the ceiling — launch asks for a named override on those." /></label>
-                <input className="h10-cd-input" type="number" min={2} max={100} step={0.5} value={plan.dynamicCapPct} onChange={(e) => set({ dynamicCapPct: e.target.value })} />
+                <Input type="number" aria-label="Cap %" min={2} max={100} step={0.5} value={plan.dynamicCapPct} onChange={(e) => set({ dynamicCapPct: e.target.value })} />
               </div>
               <span className="eb-be-hint" style={{ flex: 1 }}>
                 Ads attach <b>without fixed rates</b> — eBay adjusts daily under the cap. Rate edits and Rate Discovery don&apos;t apply while dynamic; switching back to Fixed is a one-click campaign edit later.
@@ -76,7 +76,7 @@ export function RatesStep({ plan, set, listings }: {
               <div className="eb-form-row" style={{ alignItems: 'flex-end' }}>
                 <div className="h10-cd-field s" style={{ maxWidth: 190 }}>
                   <label>Rate override <InfoTip tip="Blank = each listing keeps its computed rate (break-even × factor). A value here applies to every staged listing; the per-row inputs below still win." /></label>
-                  <input type="number" min={2} max={100} step={0.1} value={plan.globalRate} onChange={(e) => set({ globalRate: e.target.value })} placeholder="per-listing" />
+                  <Input type="number" aria-label="Rate override" min={2} max={100} step={0.1} value={plan.globalRate} onChange={(e) => set({ globalRate: e.target.value })} placeholder="per-listing" />
                 </div>
                 <span className="eb-be-hint" style={{ flex: 1 }}>
                   Computed rates = <b>break-even × {plan.template ? 'template factor' : '0.7'}</b> where costs exist, else the default. {suggestAvailable
@@ -128,10 +128,10 @@ export function RatesStep({ plan, set, listings }: {
               </div>
               {d.on && (
                 <div className="eb-form-row" style={{ marginTop: 12 }}>
-                  <div className="h10-cd-field s" style={{ maxWidth: 110 }}><label>Floor %</label><input type="number" min={2} max={100} step={0.5} value={d.floorPct} onChange={(e) => set({ rateDiscovery: { ...d, floorPct: e.target.value } })} /></div>
-                  <div className="h10-cd-field s" style={{ maxWidth: 110 }}><label>Cap %</label><input type="number" min={2} max={100} step={0.5} value={d.capPct} onChange={(e) => set({ rateDiscovery: { ...d, capPct: e.target.value } })} /></div>
-                  <div className="h10-cd-field s" style={{ maxWidth: 110 }}><label>Step %</label><input type="number" min={0.5} max={20} step={0.5} value={d.stepPct} onChange={(e) => set({ rateDiscovery: { ...d, stepPct: e.target.value } })} /></div>
-                  <div className="h10-cd-field s" style={{ maxWidth: 130 }}><label>Dwell (days)</label><input type="number" min={1} max={30} step={1} value={d.dwellDays} onChange={(e) => set({ rateDiscovery: { ...d, dwellDays: e.target.value } })} /></div>
+                  <div className="h10-cd-field s" style={{ maxWidth: 110 }}><label>Floor %</label><Input type="number" aria-label="Floor %" min={2} max={100} step={0.5} value={d.floorPct} onChange={(e) => set({ rateDiscovery: { ...d, floorPct: e.target.value } })} /></div>
+                  <div className="h10-cd-field s" style={{ maxWidth: 110 }}><label>Cap %</label><Input type="number" aria-label="Discovery cap %" min={2} max={100} step={0.5} value={d.capPct} onChange={(e) => set({ rateDiscovery: { ...d, capPct: e.target.value } })} /></div>
+                  <div className="h10-cd-field s" style={{ maxWidth: 110 }}><label>Step %</label><Input type="number" aria-label="Step %" min={0.5} max={20} step={0.5} value={d.stepPct} onChange={(e) => set({ rateDiscovery: { ...d, stepPct: e.target.value } })} /></div>
+                  <div className="h10-cd-field s" style={{ maxWidth: 130 }}><label>Dwell (days)</label><Input type="number" aria-label="Dwell (days)" min={1} max={30} step={1} value={d.dwellDays} onChange={(e) => set({ rateDiscovery: { ...d, dwellDays: e.target.value } })} /></div>
                   <span className="eb-be-hint">≈ {Math.max(0, Math.ceil((Number(d.capPct) - Number(d.floorPct)) / Math.max(0.5, Number(d.stepPct)))) + 1} steps × {d.dwellDays || '?'} days — progress lands on the campaign&apos;s Automation tab.</span>
                 </div>
               )}

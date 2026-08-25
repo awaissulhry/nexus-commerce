@@ -14,7 +14,7 @@ import { InfoTip } from '../../../../../campaigns/InfoTip'
 
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
-import { Button, Pill, Toggle } from '@/design-system/primitives'
+import { Button, Pill, Toggle, Input } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components'
 
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
@@ -87,13 +87,13 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
           {rules.map((r, i) => (
             <div key={i} className="eb-form-row" style={{ alignItems: 'flex-end', marginBottom: 10 }}>
               <div className="h10-cd-field s"><label>Brands <InfoTip tip="Comma-separated; blank = any brand. Matches the listing's Brand aspect exactly as it appears on eBay." /></label>
-                <input type="text" value={r.brands.join(', ')} onChange={(e) => setRule(i, { brands: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Xavia" /></div>
+                <Input type="text" aria-label="Brands" value={r.brands.join(', ')} onChange={(e) => setRule(i, { brands: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Xavia" /></div>
               <div className="h10-cd-field s"><label>Category IDs <InfoTip tip="Comma-separated eBay category IDs; blank = any category. A listing's category ID shows on its detail page and in the listing index." /></label>
-                <input type="text" value={r.categoryIds.join(', ')} onChange={(e) => setRule(i, { categoryIds: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="177104" /></div>
+                <Input type="text" aria-label="Category IDs" value={r.categoryIds.join(', ')} onChange={(e) => setRule(i, { categoryIds: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="177104" /></div>
               <div className="h10-cd-field s" style={{ maxWidth: 120 }}><label>Min price € <InfoTip tip="Listing price floor for this rule; blank = no minimum." /></label>
-                <input type="number" min={0} value={r.minPrice} onChange={(e) => setRule(i, { minPrice: e.target.value })} /></div>
+                <Input type="number" aria-label="Min price €" min={0} value={r.minPrice} onChange={(e) => setRule(i, { minPrice: e.target.value })} /></div>
               <div className="h10-cd-field s" style={{ maxWidth: 120 }}><label>Max price € <InfoTip tip="Listing price ceiling for this rule; blank = no maximum." /></label>
-                <input type="number" min={0} value={r.maxPrice} onChange={(e) => setRule(i, { maxPrice: e.target.value })} /></div>
+                <Input type="number" aria-label="Max price €" min={0} value={r.maxPrice} onChange={(e) => setRule(i, { maxPrice: e.target.value })} /></div>
               <Button size="sm" onClick={() => set({ criterion: { ...plan.criterion, rules: rules.filter((_, j) => j !== i) } })}>Remove</Button>
             </div>
           ))}
@@ -113,10 +113,10 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
                   { value: 'DYNAMIC', label: "Dynamic — eBay's daily suggestion under a cap" },
                 ]} /></span></div>
             <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>{plan.adRateStrategy === 'DYNAMIC' ? 'Base rate %' : 'Campaign rate %'} <InfoTip tip={plan.adRateStrategy === 'DYNAMIC' ? 'The starting rate before eBay begins adjusting.' : 'The one % every matched listing pays on attributed sales.'} /></label>
-              <input type="number" min={2} max={100} step={0.1} value={plan.campaignRatePct} onChange={(e) => set({ campaignRatePct: e.target.value })} /></div>
+              <Input type="number" aria-label={plan.adRateStrategy === 'DYNAMIC' ? 'Base rate %' : 'Campaign rate %'} min={2} max={100} step={0.1} value={plan.campaignRatePct} onChange={(e) => set({ campaignRatePct: e.target.value })} /></div>
             {plan.adRateStrategy === 'DYNAMIC' && (
               <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>Cap % <InfoTip tip="Hard ceiling eBay may never exceed — Floor Watch alerts if eBay's applied rate ever reads above it." /></label>
-                <input type="number" min={2} max={100} step={0.1} value={plan.dynamicCapPct} onChange={(e) => set({ dynamicCapPct: e.target.value })} /></div>
+                <Input type="number" aria-label="Cap %" min={2} max={100} step={0.1} value={plan.dynamicCapPct} onChange={(e) => set({ dynamicCapPct: e.target.value })} /></div>
             )}
           </div>
           <p className="eb-be-hint" style={{ marginTop: 8 }}>Rules-based campaigns carry a campaign-level rate (the one CPS shape where that is real and stays editable). Per-listing break-even clamps don&apos;t apply here — set the rate with your margins in mind.</p>

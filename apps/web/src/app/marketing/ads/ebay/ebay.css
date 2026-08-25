@@ -265,8 +265,10 @@
 .eb-readiness.bad { color: var(--nds-red-500); }
 .eb-editlinks { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--nds-grey-600); align-items: center; }
 .eb-cap-lbl { display: block; margin-bottom: 8px; }
-.eb-pack { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--nds-grey-800); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 5px 10px; cursor: pointer; background: var(--nds-white); }
-.eb-pack.on { background: var(--nds-blue-50); }
+/* The tick is the DS `Checkbox`; the chip around it is this step's own. Written at two classes
+   so the gap and type beat `.nds-check` on specificity rather than on stylesheet order. */
+.nds-check.eb-pack { gap: 6px; font-size: 12.5px; color: var(--nds-grey-800); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 5px 10px; background: var(--nds-white); }
+.nds-check.eb-pack.on { background: var(--nds-blue-50); }
 .eb-ack { margin-left: 8px; font-size: 11.5px; }
 .eb-willcreate { font-size: 12.5px; color: var(--nds-grey-600); }
 .eb-explainer-h { font-size: 17px; font-weight: 700; margin: 0 0 10px; color: var(--nds-grey-900); }

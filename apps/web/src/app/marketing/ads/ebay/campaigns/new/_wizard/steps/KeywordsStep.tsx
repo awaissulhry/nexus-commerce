@@ -10,7 +10,7 @@
  * (AU/DE/GB/US only — stated honestly for the rest).
  */
 import { useState } from 'react'
-import { Button, Input, Pill, Textarea } from '@/design-system/primitives'
+import { Button, Input, Pill, Textarea, Checkbox } from '@/design-system/primitives'
 import { Tabs } from '@/design-system/components'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
@@ -61,9 +61,9 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
         <div key={i} className="h10-cd-card pad">
           <div className="eb-form-row" style={{ alignItems: 'flex-end', marginBottom: 10 }}>
             <div className="h10-cd-field s"><label>Ad group name <InfoTip tip="Structure for reporting and bid control — group keywords with a shared theme (e.g. one product family per group). Up to 500 groups per campaign." /></label>
-              <input type="text" value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} /></div>
+              <Input type="text" aria-label="Ad group name" value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} /></div>
             <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>Default bid € <InfoTip tip="Applies to keywords without their own bid. Every bid stays editable per keyword, here and after launch." /></label>
-              <input type="number" min={0.02} step={0.01} value={g.defaultBidEur} onChange={(e) => setGroup(i, { defaultBidEur: e.target.value })} /></div>
+              <Input type="number" aria-label="Default bid €" min={0.02} step={0.01} value={g.defaultBidEur} onChange={(e) => setGroup(i, { defaultBidEur: e.target.value })} /></div>
             <span className="grow" style={{ flex: 1 }} />
             {plan.adGroups.length > 1 && <Button size="sm" onClick={() => set({ adGroups: plan.adGroups.filter((_, j) => j !== i) })}>Remove group</Button>}
           </div>
@@ -101,10 +101,11 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                   {g.seeds.map((s, k) => (
                     <tr key={`${s.text}-${k}`} style={s.on ? undefined : { opacity: 0.45 }}>
                       <td className="ed">
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={s.on} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, on: e.target.checked } : x)) })} />
-                          <span className="t">{s.text}</span>
-                        </label>
+                        <Checkbox
+                          checked={s.on}
+                          onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, on: e.target.checked } : x)) })}
+                          label={<span className="t">{s.text}</span>}
+                        />
                       </td>
                       <td className="ed"><Pill tone={pillTone(s.source === 'MANUAL' ? 'ok' : 'arch')}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</Pill></td>
                       <td className="ed">

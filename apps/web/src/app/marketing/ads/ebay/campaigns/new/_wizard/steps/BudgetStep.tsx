@@ -8,7 +8,7 @@
  * with eBay's suggestMaxCpc.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { money } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { postEbayAds } from '../../../../_lib'
@@ -45,7 +45,7 @@ export function BudgetStep({ plan, set, showMaxCpc }: { plan: CampaignPlan; set:
           <div className="eb-form-row" style={{ alignItems: 'flex-end' }}>
             <div className="h10-cd-field s" style={{ maxWidth: 160 }}>
               <label>Daily budget (EUR) <InfoTip tip="eBay paces to the average: a single day may spend up to 2× this value, and the month caps at 30.4× the daily budget. Editable after launch (15 edits/day per campaign)." /></label>
-              <input type="number" min={1} step={0.5} value={plan.budgetEur} onChange={(e) => set({ budgetEur: e.target.value })} />
+              <Input type="number" aria-label="Daily budget (EUR)" min={1} step={0.5} value={plan.budgetEur} onChange={(e) => set({ budgetEur: e.target.value })} />
             </div>
             {suggestion && (
               <span className="eb-be-hint">
@@ -71,7 +71,7 @@ export function BudgetStep({ plan, set, showMaxCpc }: { plan: CampaignPlan; set:
             <div className="eb-form-row" style={{ alignItems: 'flex-end' }}>
               <div className="h10-cd-field s" style={{ maxWidth: 160 }}>
                 <label>Max CPC (EUR) <InfoTip tip="The most a single click may cost. eBay picks targets and bids under this cap — there is no keyword management on smart campaigns by design." /></label>
-                <input type="number" min={0.02} step={0.01} value={plan.maxCpcEur} onChange={(e) => set({ maxCpcEur: e.target.value })} />
+                <Input type="number" aria-label="Max CPC (EUR)" min={0.02} step={0.01} value={plan.maxCpcEur} onChange={(e) => set({ maxCpcEur: e.target.value })} />
               </div>
               <Button size="sm" disabled={cpcBusy} onClick={() => void suggestCpc()}>{cpcBusy ? '…' : "eBay's suggested max CPC"}</Button>
               <span className="eb-be-hint">Smart targeting: eBay picks targets and bids under this cap.</span>

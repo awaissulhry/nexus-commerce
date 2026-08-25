@@ -11,7 +11,7 @@ import { EBAY_MARKETS } from '../../../../_lib'
 import { EbDateField } from '../../../../_lib/EbDateField'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -36,7 +36,7 @@ export function SetupStep({ plan, set, suggestedName, onMarketChange }: {
             </div>
             <div style={{ flex: 1 }} className="h10-cd-field">
               <label>Campaign name <InfoTip tip="Visible in Seller Hub too. The suggestion follows the console grammar (type-scope-market-sequence); one click applies it, editing stays free." /></label>
-              <input className="eb-input-full" type="text" value={plan.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} placeholder="name your campaign" />
+              <Input fieldClassName="eb-input-full" type="text" aria-label="Campaign name" value={plan.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} placeholder="name your campaign" />
             </div>
           </div>
           {suggestedName && plan.name !== suggestedName && (
