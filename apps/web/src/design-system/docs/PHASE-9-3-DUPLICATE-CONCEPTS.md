@@ -800,3 +800,65 @@ sites (3 DS, 1 local, 1 `./_components/FilterBar`), `Pagination` 2 across 5 (4 D
 | WG.3c | `H10Select` → `Listbox`, or justify keeping a second select | 370 LOC vs a DS primitive with 313 uses |
 | WG.3d | `AdsFilterBar` → `FilterBar`/`FilterPanel` | comparable size, real API diff |
 | WG.3e | THEN move the component, renaming `.h10-am-grid` → `nds-wsgrid` in one pass | 227 occurrences |
+
+## Appendix D — the WG.3d census: the grid is four reconciliations from the DS, not one
+
+WG.3c cleared `H10Select`. The remaining line in the plan read "`AdsFilterBar` → `FilterBar`/
+`FilterPanel`", as though one dependency stood between `AdsDataGrid` and the design system.
+Measured, it is four, and two of them are circular.
+
+### The dependency chain, resolved
+
+    AdsDataGrid  ⇄  AdsFilterBar          ← MUTUAL: AdsFilterBar imports GridFilter/FilterState
+                                            FROM AdsDataGrid. They move as ONE unit or not at all.
+    AdsFilterBar  →  FilterDropdown       (FilterDropdown, MultiSelect)
+                  →  InfoTip
+
+### Where each stands
+
+| concept | app | DS | verdict |
+|---|---|---|---|
+| `InfoTip` | **25 render sites**, via 4 different relative paths | `primitives/InfoTip.tsx`, **0 uses** | the HoverCard shape again — promote the app's |
+| `MultiSelect` | 3 implementations (see below) | `components/MultiSelect`, 2 consumers | consolidate, but the DS one lacks `searchable`/`ariaLabel` |
+| `FilterDropdown` | 3 render sites | — | small |
+| `AdsFilterBar` | **15 sites in 14 files**, `notesSlot` used by 9 | `FilterBar` 3 consumers, `FilterPanel` **0** | the app's is the adopted one |
+
+### 🔴 `MultiSelect` has FOUR implementations
+
+    design-system/components/MultiSelect     ExportScopeModal, SponsoredBrandSettings
+    campaigns/FilterDropdown  → MultiSelect  AdsFilterBar
+    CampaignsGrid.tsx:575     → MultiSelect  itself  (takes `selected`, not `value`)
+    CampaignsGrid.tsx:608     → CampaignMultiSelect  itself
+
+The two local ones are invisible to any import-based census: they are defined and consumed inside
+the same file. `selected` vs `value` is the tell that the third is not the DS one wearing a
+different import path.
+
+### Why `AdsFilterBar` is not simply "migrate to the DS FilterBar"
+
+The DS `FilterBar` is declarative — a `dimensions` array, each carrying its own value. `AdsFilterBar`
+is controlled: one `FilterState` object in, one out, on all 15 sites. And it has `notesSlot`, used by
+9 of 15, which renders the server's verdict on the scope **outside** the collapsible body —
+deliberately, because a contradiction ("nothing can match this scope") hidden by a collapsed panel
+would leave an empty grid with no explanation. The DS has no equivalent.
+
+The DS `FilterBar`'s 3 consumers are `products/next`, `fulfillment/stock` and `fleet/activity`;
+`FilterPanel` has none. So consolidating *toward* the DS version would migrate 15 well-adopted ads
+sites onto a component with 3 users and a missing feature — which is backwards, and the same
+inversion `HoverCard` turned out to be.
+
+### ⚠️ A counting error worth recording
+
+An earlier pass in this appendix reported component adoption as "N sites" when the counter
+incremented **once per file**. `CampaignsGrid` renders `MultiSelect` twice and was counted once.
+Sites and files are different numbers and the distinction decides how big a migration is — count
+render occurrences, not files, and say which one a figure is.
+
+### Revised remainder
+
+| | | |
+|---|---|---|
+| WG.3d.1 | `InfoTip` — promote the app's (25 sites) over the unused DS one | bounded, same shape as HoverCard |
+| WG.3d.2 | `MultiSelect` — 4 implementations to 1; DS one needs `searchable`/`ariaLabel` as `Listbox` did | medium |
+| WG.3d.3 | `AdsFilterBar` + `AdsDataGrid` move together, `FilterBar`/`FilterPanel` consolidation deferred with the commerce rebuild | the unit |
+| WG.3e | component move + the 227-occurrence rename, one pass | last |
