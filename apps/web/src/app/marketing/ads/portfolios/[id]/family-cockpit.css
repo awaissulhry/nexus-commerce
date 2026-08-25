@@ -62,11 +62,11 @@
 .fc-switch { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; border-radius: 5px; padding: 3px 8px; cursor: pointer; border: 1px solid var(--nds-grey-150); background: var(--nds-grey-25); color: #7a869a; }
 .fc-switch.on { background: #e8f6ef; color: var(--nds-success-text); border-color: #bfe3d2; }
 .fc-switch:disabled { opacity: 0.55; cursor: default; }
-.fc-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; border-radius: 5px; padding: 3px 8px; cursor: pointer; border: 1px solid transparent; background: none; }
+/* the chrome is the DS `Button variant="quiet" size="xs"`; only the three state
+   colours it INHERITS are still ours. */
 .fc-status.enabled { color: var(--nds-success-text); }
 .fc-status.paused { color: #8a6320; }
 .fc-status.archived { color: #7a869a; cursor: default; }
-.fc-status:hover:not(:disabled) { border-color: var(--nds-grey-200); background: var(--nds-grey-50); }
 .fc-budget input { width: 64px; font-size: 12px; text-align: right; border: 1px solid transparent; border-radius: 5px; padding: 3px 6px; background: transparent; font-variant-numeric: tabular-nums; }
 .fc-budget input:hover, .fc-budget input:focus { border-color: var(--nds-grey-200); background: var(--nds-white); outline: none; }
 .fc-deliv { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 4px; padding: 2px 6px; }

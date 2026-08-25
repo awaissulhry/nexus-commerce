@@ -8,7 +8,7 @@
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Listbox, Modal, Pagination } from '@/design-system/components'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
@@ -740,16 +740,16 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
     >
       {step === 1 ? (
           <div className="h10-bulk">
-            <div className="h10-bulk-hd"><label className="ck"><input type="checkbox" ref={(el) => { if (el) el.indeterminate = any && !allOn }} checked={allOn} onChange={() => setAll(!allOn)} aria-label="Select all items" /></label><span className="it">Item</span><span className="ac">Action</span></div>
+            <div className="h10-bulk-hd"><label className="ck"><Checkbox ref={(el) => { if (el) el.indeterminate = any && !allOn }} checked={allOn} onChange={() => setAll(!allOn)} aria-label="Select all items" /></label><span className="it">Item</span><span className="ac">Action</span></div>
 
             <div className="h10-bulk-row">
-              <label className="ck"><input type="checkbox" checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change Campaign Status" /></label>
+              <label className="ck"><Checkbox checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change Campaign Status" /></label>
               <span className="it">Campaign Status</span>
               <div className="ac"><Listbox width={150} options={STATUS_ACTIONS} value={statusVal} onChange={(v) => setStatusVal(v as typeof statusVal)} ariaLabel="Campaign status action" /></div>
             </div>
 
             <div className="h10-bulk-row">
-              <label className="ck"><input type="checkbox" checked={enBudget} onChange={() => setEnBudget((v) => !v)} aria-label="Change Campaign Budget" /></label>
+              <label className="ck"><Checkbox checked={enBudget} onChange={() => setEnBudget((v) => !v)} aria-label="Change Campaign Budget" /></label>
               <span className="it">Campaign Budget</span>
               <div className="ac">
                 <Listbox width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
@@ -758,19 +758,19 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
             </div>
 
             <div className="h10-bulk-row">
-              <label className="ck"><input type="checkbox" checked={enAuto} onChange={() => setEnAuto((v) => !v)} aria-label="Change Bid Automation" /></label>
+              <label className="ck"><Checkbox checked={enAuto} onChange={() => setEnAuto((v) => !v)} aria-label="Change Bid Automation" /></label>
               <span className="it">Bid Automation</span>
               <div className="ac"><Toggle checked={autoOn} onChange={setAutoOn} aria-label="Bid Automation" /></div>
             </div>
 
             <div className="h10-bulk-row">
-              <label className="ck"><input type="checkbox" checked={enAcos} onChange={() => setEnAcos((v) => !v)} aria-label="Change Target ACoS" /></label>
+              <label className="ck"><Checkbox checked={enAcos} onChange={() => setEnAcos((v) => !v)} aria-label="Change Target ACoS" /></label>
               <span className="it">Target ACoS</span>
               <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="1" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} aria-label="Target ACoS value" /></span></div>
             </div>
 
             <div className="h10-bulk-row">
-              <label className="ck"><input type="checkbox" checked={enMult} onChange={() => setEnMult((v) => !v)} aria-label="Change Bid Multiplier" /></label>
+              <label className="ck"><Checkbox checked={enMult} onChange={() => setEnMult((v) => !v)} aria-label="Change Bid Multiplier" /></label>
               <span className="it">Bid Multiplier</span>
               <div className="ac">
                 <Listbox width={158} options={PLACEMENT_OPTS} value={placement} onChange={setPlacement} ariaLabel="Bid multiplier placement" />
@@ -780,7 +780,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
             </div>
 
             <div className="h10-bulk-row">
-              <label className="ck"><input type="checkbox" checked={enStrat} onChange={() => setEnStrat((v) => !v)} aria-label="Change Bidding Strategy" /></label>
+              <label className="ck"><Checkbox checked={enStrat} onChange={() => setEnStrat((v) => !v)} aria-label="Change Bidding Strategy" /></label>
               <span className="it">Bidding Strategy</span>
               <div className="ac"><span className="set">Set</span><Listbox width={158} options={STRAT_OPTIONS} value={stratVal} onChange={setStratVal} ariaLabel="Bidding strategy" /></div>
             </div>
@@ -1937,7 +1937,7 @@ export function CampaignsGrid() {
         <table>
           <thead>
             <tr>
-              <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
+              <th className="ck"><Checkbox checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
               <th className="nm fz"><button type="button" className="sortable" onClick={() => onSort('name')}>Campaign {sortIcon('name')}</button></th>
               {physical.map((pc) => (
                 <th key={pc.key}
@@ -1968,7 +1968,7 @@ export function CampaignsGrid() {
             ) : paged.map((c) => {
               return (
                 <tr key={c.id} className={sel.has(c.id) ? 'on' : ''}>
-                  <td className="ck"><input type="checkbox" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></td>
+                  <td className="ck"><Checkbox checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></td>
                   <td className="nm fz">
                     <CampaignNameCell
                       id={c.id} name={c.name} marketplace={c.marketplace} status={c.status}

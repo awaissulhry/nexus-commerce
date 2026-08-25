@@ -290,14 +290,14 @@ export function FamilyCockpitClient() {
                   >
                     <td className="l" title={c.name}>{c.name}</td>
                     <td>
-                      <button
-                        type="button" className={`fc-status ${c.status.toLowerCase()}`}
+                      <Button
+                        variant="quiet" size="xs" className={`fc-status ${c.status.toLowerCase()}`}
                         disabled={busy === c.id || c.status === 'ARCHIVED'}
                         title={c.status === 'ENABLED' ? 'Pause this campaign' : c.status === 'PAUSED' ? 'Enable this campaign' : 'Archived'}
                         onClick={() => void patchCampaign(c.id, { status: c.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' })}
                       >
                         {c.status === 'ENABLED' ? <><Pause size={11} /> on</> : c.status === 'PAUSED' ? <><Play size={11} /> paused</> : 'archived'}
-                      </button>
+                      </Button>
                     </td>
                     <td>
                       <button
@@ -481,12 +481,12 @@ export function FamilyCockpitClient() {
                           </button>
                         </td>
                         <td>
-                          <button type="button" className={`fc-status ${t.status === 'ACTIVE' ? 'enabled' : 'paused'}`}
+                          <Button variant="quiet" size="xs" className={`fc-status ${t.status === 'ACTIVE' ? 'enabled' : 'paused'}`}
                             disabled={covSetBusy}
                             title={t.status === 'ACTIVE' ? 'Pause this term in the set' : 'Reactivate'}
                             onClick={() => void patchCovTerm(t.id, { status: t.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}>
                             {t.status === 'ACTIVE' ? 'active' : 'paused'}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
