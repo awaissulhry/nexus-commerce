@@ -67,7 +67,7 @@ export function EfficiencyTab() {
         <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{rangeLabel(range)} vs previous</span>
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
 
       <div className="az-hero">

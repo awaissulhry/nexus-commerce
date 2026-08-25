@@ -59,7 +59,7 @@ export function HealthTab() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 2px 10px' }}>
         <span style={{ fontWeight: 700 }}><Activity size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Activity log</span>
         <span style={{ flex: 1 }} />
-        <ToolbarButton icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">

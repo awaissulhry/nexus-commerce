@@ -173,7 +173,7 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
           onChange={(v) => setDays(Number(v))}
           options={RANGES.map((r) => ({ value: String(r.d), label: r.label }))}
         />
-        <ToolbarButton icon={<RefreshCw size={15} className={(tab === 'targeting' ? tLoading : stLoading) ? 'az-spin' : ''} />} label="Refresh" onClick={() => { if (tab === 'targeting') void refetchTargets(); else void refetchST() }} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={(tab === 'targeting' ? tLoading : stLoading) ? 'az-spin' : ''} />} label="Refresh" onClick={() => { if (tab === 'targeting') void refetchTargets(); else void refetchST() }} />
       </div>
 
       {tab === 'targeting' ? (
@@ -207,7 +207,7 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
                     <td className="l">{statusBadge(t.status)}</td>
                     <td className="num">{edit[t.id] != null
                       ? <Input autoFocus aria-label="Bid" type="number" step="0.01" prefix="€" style={{ width: 62, textAlign: 'right' }} value={edit[t.id]} onChange={(e) => setEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBid(t); if (e.key === 'Escape') setEdit((s) => { const x = { ...s }; delete x[t.id]; return x }) }} onBlur={() => void saveBid(t)} disabled={busy === t.id} />
-                      : <button className="az-editbtn" onClick={() => setEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))}>{eur(t.bidCents)}</button>}</td>
+                      : <Button variant="quiet" size="sm" onClick={() => setEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))}>{eur(t.bidCents)}</Button>}</td>
                     <td className="num">{num(t.impressions)}</td>
                     <td className="num">{num(t.clicks)}</td>
                     <td className="num">{pct(ctr, 2)}</td>

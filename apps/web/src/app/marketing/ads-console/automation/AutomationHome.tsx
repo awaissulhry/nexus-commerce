@@ -41,7 +41,7 @@ export function AutomationHome({ rules, recs, state, onTab }: { rules: Rule[]; r
       <div className="az-ah-sec">
         <h3 className="az-ah-h"><Zap size={15} /> What&apos;s running</h3>
         {active.length === 0
-          ? <div className="az-ah-empty">Nothing automated yet. Add one from the <button type="button" className="az-link" onClick={() => onTab('library')}>Library</button> — it starts <b>disabled + dry-run</b> until you turn it on.</div>
+          ? <div className="az-ah-empty">Nothing automated yet. Add one from the <Button variant="link" inline onClick={() => onTab('library')}>Library</Button> — it starts <b>disabled + dry-run</b> until you turn it on.</div>
           : <div className="az-ah-running">
             <span className="pill live">{live.length} live</span>
             <span className="pill dry">{dry} dry-run</span>
@@ -61,7 +61,7 @@ export function AutomationHome({ rules, recs, state, onTab }: { rules: Rule[]; r
         </div>
       )}
 
-      <div className="az-ah-safe"><ShieldCheck size={14} /> Everything stays safe: new automations start <b>disabled + dry-run</b>, writes are gated, and there&apos;s a kill-switch in <button type="button" className="az-link" onClick={() => onTab('safety')}>Safety</button>.</div>
+      <div className="az-ah-safe"><ShieldCheck size={14} /> Everything stays safe: new automations start <b>disabled + dry-run</b>, writes are gated, and there&apos;s a kill-switch in <Button variant="link" inline onClick={() => onTab('safety')}>Safety</Button>.</div>
     </div>
   )
 }

@@ -81,7 +81,7 @@ export function AnomalyTab() {
         <span style={{ color: 'var(--ink2)', fontSize: 12 }}>sudden moves vs the trailing baseline</span>
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
       {loading && <div className="az-empty">Analysing…</div>}
       {!loading && anomalies.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No anomalies detected — performance is steady.</div>}

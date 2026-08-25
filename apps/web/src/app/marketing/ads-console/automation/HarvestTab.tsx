@@ -81,8 +81,8 @@ export function HarvestTab() {
         <span style={{ flex: 1 }} />
         <Button variant="primary" disabled={busy || (negatives.length + graduations.length === 0)} onClick={() => void applyAll()}>{busy ? 'Applying…' : `Apply harvest (${negatives.length + graduations.length})`}</Button>
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
-        <ToolbarButton icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv(`harvest-${windowDays}d.csv`, [...graduations, ...negatives].map((t, idx) => ({ kind: idx < graduations.length ? 'graduate' : 'negate', query: t.query, campaign: campMap[t.externalCampaignId]?.name ?? t.externalCampaignId, marketplace: campMap[t.externalCampaignId]?.marketplace ?? '', adGroupId: t.externalAdGroupId, impressions: t.impressions, clicks: t.clicks, spendCents: t.costCents, orders: t.orders, salesCents: t.salesCents })))} />
-        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
+        <ToolbarButton variant="boxed" icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv(`harvest-${windowDays}d.csv`, [...graduations, ...negatives].map((t, idx) => ({ kind: idx < graduations.length ? 'graduate' : 'negate', query: t.query, campaign: campMap[t.externalCampaignId]?.name ?? t.externalCampaignId, marketplace: campMap[t.externalCampaignId]?.marketplace ?? '', adGroupId: t.externalAdGroupId, impressions: t.impressions, clicks: t.clicks, spendCents: t.costCents, orders: t.orders, salesCents: t.salesCents })))} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
       <h4 style={{ margin: '4px 2px 8px', fontSize: 13.5 }}><Sprout size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5, color: 'var(--green)' }} />Graduate to exact keywords</h4>
       {tbl(graduations, 'grad')}

@@ -53,7 +53,7 @@ export function RetailTab() {
         <span style={{ flex: 1 }} />
         {flagged.length > 0 && <Button variant="primary" disabled={busy} onClick={() => void applyAll()}><PauseCircle size={14} />Min bid · {flagged.length} flagged</Button>}
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
-        <ToolbarButton icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">

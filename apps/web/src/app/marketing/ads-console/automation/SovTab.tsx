@@ -45,8 +45,8 @@ export function SovTab() {
         <Checkbox checked={onlyFlags} onChange={(e) => setOnlyFlags(e.target.checked)} label="Flagged only" />
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <ToolbarButton icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv('share-of-voice.csv', rows.map((r) => ({ query: r.query, sovPct: r.sovPct, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, cvr: r.cvr, cpcCents: r.cpcCents, orders: r.orders, campaigns: r.campaignCount, flag: r.flag ?? '' })))} />
-        <ToolbarButton icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
+        <ToolbarButton variant="boxed" icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv('share-of-voice.csv', rows.map((r) => ({ query: r.query, sovPct: r.sovPct, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, cvr: r.cvr, cpcCents: r.cpcCents, orders: r.orders, campaigns: r.campaignCount, flag: r.flag ?? '' })))} />
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">
