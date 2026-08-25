@@ -145,7 +145,7 @@
    its own radius, so the grid wrapper drops both rather than nesting a box in a box — 0,2,0, so
    it is not decided by which stylesheet loads last. */
 .nds-grid-wrap.cvf-grid { border: 0; border-radius: 0; background: transparent; }
-.cvf-grid .nds-grid { font-size: 12px; font-variant-numeric: tabular-nums; }
+.cvf-grid .nds-grid { font-variant-numeric: tabular-nums; }
 .cvf-grid tr.champ td { background: #f5faf7; }
 .cvf-grid tr.dormant td { color: #a6b0bd; }
 .cvf-grid .bad { color: var(--nds-danger-text); font-weight: 600; }

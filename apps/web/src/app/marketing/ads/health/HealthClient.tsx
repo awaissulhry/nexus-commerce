@@ -12,7 +12,7 @@ import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-r
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ProbePanel } from './ProbePanel'
 import { getBackendUrl } from '@/lib/backend-url'
-import { FilterChip } from '@/design-system/primitives'
+import { FilterChip, SegmentedControl } from '@/design-system/primitives'
 import { Card } from '@/design-system/components'
 import { intl } from '../_canvas/format'
 import './health.css'
@@ -140,11 +140,13 @@ export function HealthClient() {
       />
 
       <div className="hl-toolbar">
-        <span className="hl-win">
-          {[7, 14, 30].map((w) => (
-            <button key={w} type="button" className={windowDays === w ? 'on' : ''} onClick={() => setWindowDays(w)}>{w}d</button>
-          ))}
-        </span>
+        <SegmentedControl
+          size="sm"
+          ariaLabel="Alert window"
+          value={String(windowDays)}
+          onChange={(v) => setWindowDays(Number(v))}
+          options={[7, 14, 30].map((w) => ({ value: String(w), label: `${w}d` }))}
+        />
         <span className="hl-tile-sub muted">Window applies to alerts; retail/automation are 30-day.</span>
       </div>
 

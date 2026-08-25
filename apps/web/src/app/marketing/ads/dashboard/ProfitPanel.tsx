@@ -241,6 +241,7 @@ export function ProfitPanel({ market }: { market: string }) {
               which it was not: "which SKU is losing money" needed the profit column ordered. */}
           <DataGrid<ProfitRow>
             className="dash-pnl"
+            size="sm"
             rows={rows}
             rowKey={(r) => r.id}
             maxHeight={420}

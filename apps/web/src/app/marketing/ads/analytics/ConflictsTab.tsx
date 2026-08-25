@@ -247,6 +247,7 @@ export function ConflictsTab({ market }: { market: string }) {
               {shown.length > 0 && (
                 <DataGrid<Contender>
                   className="cvf-grid"
+                  size="sm"
                   rows={shown}
                   rowKey={(x) => x.campaignId}
                   rowClassName={(x) => (x.campaignId === c.championId ? 'champ' : x.impressions === 0 ? 'dormant' : undefined)}

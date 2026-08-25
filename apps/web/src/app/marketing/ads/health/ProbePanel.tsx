@@ -21,7 +21,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Stethoscope, Play, ChevronDown, ChevronRight, CheckCircle2, XCircle, Copy, Check, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button } from '@/design-system/primitives'
+import { Button, SegmentedControl } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 
 interface ProfileRow { profileId: string; marketplace: string; region: string; accountLabel: string | null; mode: string; isActive: boolean }
 interface ProbeResult {
@@ -39,34 +40,43 @@ interface ProbeReport {
 /** 403 is a permission answer, 5xx is Amazon's problem, anything else non-2xx is ours to read. */
 const tone = (p: ProbeResult) => (p.ok ? 'ok' : p.status === 403 ? 'bad' : p.status >= 500 ? 'them' : 'warn')
 
-function ProbeRow({ probe }: { probe: ProbeResult }) {
-  const [open, setOpen] = useState(false)
+/**
+ * The probe grid. Expansion is the DS grid's now (`renderExpanded` + a controlled `expanded`
+ * set), so the `colSpan` on the detail row is the GRID's problem rather than a hard-coded 6 that
+ * silently went wrong the moment a column moved.
+ */
+function probeColumns(expanded: Set<string>): Array<Column<ProbeResult>> {
+  return [
+    {
+      key: 'chev', label: '', width: 22,
+      render: (p) => (expanded.has(p.id) ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />),
+    },
+    { key: 'id', label: 'ID', sortable: true, sortValue: (p) => p.id, render: (p) => <span className="mono dim">{p.id}</span> },
+    { key: 'what', label: 'What it asks', sortable: true, sortValue: (p) => p.description, render: (p) => p.description },
+    { key: 'endpoint', label: 'Endpoint', sortable: true, sortValue: (p) => p.path, render: (p) => <span className="mono dim"><b>{p.method}</b> {p.path}</span> },
+    {
+      key: 'status', label: 'Status', sortable: true, sortValue: (p) => p.status,
+      render: (p) => (
+        <span className={`st ${tone(p)}`}>
+          {p.ok ? <CheckCircle2 size={12} aria-hidden /> : <XCircle size={12} aria-hidden />} {p.status || 'ERR'}
+        </span>
+      ),
+    },
+    { key: 'time', label: 'Time', align: 'right', sortable: true, sortValue: (p) => p.durationMs, render: (p) => <span className="dim">{p.durationMs}ms</span> },
+  ]
+}
+
+function ProbeDetail({ probe }: { probe: ProbeResult }) {
   const interesting = Object.entries(probe.responseHeaders)
     .filter(([k]) => k.toLowerCase().startsWith('x-amzn') || k.toLowerCase() === 'content-type' || k.toLowerCase() === 'location')
   return (
     <>
-      <tr className="hl-pb-r" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <td className="chev">{open ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}</td>
-        <td className="mono dim">{probe.id}</td>
-        <td>{probe.description}</td>
-        <td className="mono dim"><b>{probe.method}</b> {probe.path}</td>
-        <td className={`st ${tone(probe)}`}>
-          {probe.ok ? <CheckCircle2 size={12} aria-hidden /> : <XCircle size={12} aria-hidden />} {probe.status || 'ERR'}
-        </td>
-        <td className="r dim">{probe.durationMs}ms</td>
-      </tr>
-      {open && (
-        <tr className="hl-pb-d">
-          <td colSpan={6}>
-            <div className="hl-pb-k">Request headers</div>
-            <pre>{Object.entries(probe.requestHeaders).map(([k, v]) => `${k}: ${v}`).join('\n') || '(none)'}</pre>
-            <div className="hl-pb-k">Response headers</div>
-            <pre>{interesting.map(([k, v]) => `${k}: ${v}`).join('\n') || '(none of interest)'}</pre>
-            <div className="hl-pb-k">Response body · first 400 chars</div>
-            <pre className="wrap">{probe.responseSnippet || '(empty)'}</pre>
-          </td>
-        </tr>
-      )}
+      <div className="hl-pb-k">Request headers</div>
+      <pre>{Object.entries(probe.requestHeaders).map(([k, v]) => `${k}: ${v}`).join('\n') || '(none)'}</pre>
+      <div className="hl-pb-k">Response headers</div>
+      <pre>{interesting.map(([k, v]) => `${k}: ${v}`).join('\n') || '(none of interest)'}</pre>
+      <div className="hl-pb-k">Response body · first 400 chars</div>
+      <pre className="wrap">{probe.responseSnippet || '(empty)'}</pre>
     </>
   )
 }
@@ -76,6 +86,7 @@ export function ProbePanel() {
   const [profiles, setProfiles] = useState<ProfileRow[] | null>(null)
   const [selected, setSelected] = useState('')
   const [running, setRunning] = useState(false)
+  const [openRows, setOpenRows] = useState<Set<string>>(() => new Set())
   const [report, setReport] = useState<ProbeReport | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -139,16 +150,20 @@ export function ProbePanel() {
           ) : (
             <>
               <div className="hl-pb-ctl">
-                <span className="hl-pb-seg" role="radiogroup" aria-label="Profile to probe">
-                  {profiles.map((p) => (
-                    <button key={p.profileId} type="button" role="radio" aria-checked={selected === p.profileId}
-                      className={selected === p.profileId ? 'on' : ''} disabled={running}
-                      title={`${p.accountLabel ?? p.profileId} · ${p.region} · ${p.mode}${p.isActive ? '' : ' · inactive'}`}
-                      onClick={() => setSelected(p.profileId)}>
-                      {p.marketplace}
-                    </button>
-                  ))}
-                </span>
+                {/* Per-profile tooltips ride the label, which is a ReactNode — `SegmentedOption`
+                    has no `title` of its own, and the account/region/mode line is the only way to
+                    tell two same-marketplace connections apart. */}
+                <SegmentedControl
+                  size="sm"
+                  ariaLabel="Profile to probe"
+                  disabled={running}
+                  value={selected}
+                  onChange={setSelected}
+                  options={profiles.map((p) => ({
+                    value: p.profileId,
+                    label: <span title={`${p.accountLabel ?? p.profileId} · ${p.region} · ${p.mode}${p.isActive ? '' : ' · inactive'}`}>{p.marketplace}</span>,
+                  }))}
+                />
                 <Button variant="primary" size="sm" disabled={running || !selected} onClick={() => void run()}>
                   {running ? <><Loader2 size={13} className="hl-pb-spin" aria-hidden /> Probing…</> : <><Play size={13} aria-hidden /> Run probe suite</>}
                 </Button>
@@ -181,14 +196,24 @@ export function ProbePanel() {
                       <pre>{report.token.snippet}</pre>
                     </div>
                   ) : (
-                    <div className="hl-pb-scroll">
-                      <table className="hl-pb">
-                        <thead>
-                          <tr><th /><th>ID</th><th>What it asks</th><th>Endpoint</th><th>Status</th><th className="r">Time</th></tr>
-                        </thead>
-                        <tbody>{report.results.map((r) => <ProbeRow key={r.id} probe={r} />)}</tbody>
-                      </table>
-                    </div>
+                    <DataGrid<ProbeResult>
+                      className="hl-pb"
+                      size="sm"
+                      rows={report.results}
+                      rowKey={(r) => r.id}
+                      columns={probeColumns(openRows)}
+                      expanded={openRows}
+                      renderExpanded={(r) => <ProbeDetail probe={r} />}
+                      rowProps={(r) => ({
+                        className: 'hl-pb-r',
+                        'aria-expanded': openRows.has(r.id),
+                        onClick: () => setOpenRows((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(r.id)) next.delete(r.id); else next.add(r.id)
+                          return next
+                        }),
+                      })}
+                    />
                   )}
                 </>
               )}

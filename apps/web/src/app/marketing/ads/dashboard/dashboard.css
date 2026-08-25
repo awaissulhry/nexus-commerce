@@ -72,7 +72,7 @@
    padding, the hover and the right-alignment, and `maxHeight` replaces `.dash-pnl-scroll`. Only
    this grid's own register is left. The `.mono` / `.dim` / `.pos` / `.neg` inks below still apply
    — they were always descendant selectors, and the cells are spans now rather than `<td>`s. */
-.dash-pnl .nds-grid { font-size: 12px; font-variant-numeric: tabular-nums; }
+.dash-pnl .nds-grid { font-variant-numeric: tabular-nums; }
 .dash-pnl .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .dash-pnl .dim { color: var(--nds-grey-450); }
 .dash-pnl .pos { color: #067d62; font-weight: 700; }

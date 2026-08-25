@@ -306,6 +306,7 @@ export function CoverageClient() {
               first paint is unchanged. */}
           <DataGrid<Row>
             className="cov-termgrid"
+            size="sm"
             rows={rows}
             rowKey={(r) => r.term}
             initialSort={{ key: 'marketImpressions', dir: 'desc' }}
