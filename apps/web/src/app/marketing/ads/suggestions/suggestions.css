@@ -80,14 +80,16 @@
 .h10-sug-acts { display: inline-flex; gap: 8px; justify-content: flex-end; }
 /* Explicit box — an icon inside a padded pill collapses to width 0 in a narrow column
    (the NEG.5 delete-button lesson), so the button owns its geometry outright. */
-.h10-sug-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); color: var(--nds-text-2); cursor: pointer; }
-.h10-sug-iconbtn:hover { border-color: var(--nds-text-3); color: var(--nds-text); }
-.h10-sug-iconbtn.ok:hover { border-color: var(--nds-success-strong); color: var(--nds-success-strong); background: var(--nds-success-soft); }
-.h10-sug-iconbtn.no:hover { border-color: var(--nds-danger-strong); color: var(--nds-danger-strong); background: var(--nds-danger-soft); }
-.h10-sug-iconbtn:disabled { opacity: .55; cursor: default; }
+/* The BOX is the DS's now (`ToolbarButton variant="boxed"` — 28px, border, surface, disabled
+   state). What stays is the three verbs' own colours, which the DS does not model: it offers
+   `neutral` and `danger`, and this column needs apply / snooze / stop to read differently.
+   Written at three classes deep so they beat `.nds-tbtn.boxed`'s own hover on specificity rather
+   than on which stylesheet the bundler emits last. */
+.nds-tbtn.h10-sug-iconbtn.ok:hover:not(:disabled) { border-color: var(--nds-success-strong); color: var(--nds-success-strong); background: var(--nds-success-soft); }
+.nds-tbtn.h10-sug-iconbtn.no:hover:not(:disabled) { border-color: var(--nds-danger-strong); color: var(--nds-danger-strong); background: var(--nds-danger-soft); }
 /* the pause verb is ARMED by its first click (3.5s) — the second click is the real write */
-.h10-sug-iconbtn.pz:hover { border-color: #c68a2e; color: var(--nds-warning-text); background: #fff6e8; }
-.h10-sug-iconbtn.pz.armed { border-color: #c68a2e; color: var(--nds-warning-text); background: #fdeed5; box-shadow: 0 0 0 2px #f0dcbe; }
+.nds-tbtn.h10-sug-iconbtn.pz:hover:not(:disabled) { border-color: #c68a2e; color: var(--nds-warning-text); background: #fff6e8; }
+.nds-tbtn.h10-sug-iconbtn.pz.armed { border-color: #c68a2e; color: var(--nds-warning-text); background: #fdeed5; box-shadow: 0 0 0 2px #f0dcbe; }
 
 /* SG.2 — metric + value cells */
 .h10-sug-num { font-variant-numeric: tabular-nums; }
@@ -95,11 +97,11 @@
 .h10-sug-sugval { font-weight: 700; color: var(--nds-text); font-variant-numeric: tabular-nums; }
 
 /* SG.2b — the staged verbs: the FILL is the staged state (H10's blue-boxed ✓/✕) */
-.h10-sug-iconbtn.ok.on { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-sug-iconbtn.no.on { background: var(--nds-warning-text); border-color: var(--nds-warning-text); color: var(--nds-white); }
+.nds-tbtn.h10-sug-iconbtn.ok[aria-pressed='true'] { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
+.nds-tbtn.h10-sug-iconbtn.no[aria-pressed='true'] { background: var(--nds-warning-text); border-color: var(--nds-warning-text); color: var(--nds-white); }
 /* SG.9 — ⏸ is a MUTE now (stop suggesting), so it wears the quiet slate fill rather than the
    amber "armed, about to write" treatment its pause ancestor used. Nothing reaches Amazon. */
-.h10-sug-iconbtn.pz.on { background: var(--nds-text-2); border-color: var(--nds-text-2); color: var(--nds-white); }
+.nds-tbtn.h10-sug-iconbtn.pz[aria-pressed='true'] { background: var(--nds-text-2); border-color: var(--nds-text-2); color: var(--nds-white); }
 
 /* SG.9 — the REAL pause, rehoused in the drawer. Amber because this one does write. */
 .h10-sug-pausebox { border: 1px solid #f0dcbe; border-radius: var(--nds-radius-xl); padding: 12px 14px; background: #fff6e8; }

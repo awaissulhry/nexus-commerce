@@ -310,18 +310,22 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         key: 'ok', label: '✓', tip: 'Apply this recommendation — hover for exactly what it does; a confirm states the account mode (sandbox = simulated · live = gated writes) before anything is sent.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => r.apply ? (
           <ApproveHoverCard content={() => recHoverContent(r, () => writeUrl({ row: r.id }, { history: true }), mode)}>
-            <button type="button" className="h10-sug-iconbtn ok" disabled={busy === r.id} aria-label="Apply this recommendation" onClick={() => setConfirm({ kind: 'one', rec: r })}>
-              <Check size={14} />
-            </button>
+            <ToolbarButton
+              variant="boxed" className="h10-sug-iconbtn ok" tooltip={false}
+              icon={<Check size={14} />} label="Apply this recommendation"
+              disabled={busy === r.id} onClick={() => setConfirm({ kind: 'one', rec: r })}
+            />
           </ApproveHoverCard>
         ) : dash('No one-click apply for this recommendation — open the row to review it'),
       } as GridColumn<Recommendation>,
       {
         key: 'no', label: '✕', tip: 'Snooze — hides it for this session. The engines recompute this feed continuously, so it comes back with the next run; ⏸ is how you stop it for good. Undo lives in the toast.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => (
-          <button type="button" className="h10-sug-iconbtn no" disabled={busy === r.id} aria-label="Snooze this recommendation for this session" onClick={() => dismiss(r)}>
-            <X size={14} />
-          </button>
+          <ToolbarButton
+            variant="boxed" className="h10-sug-iconbtn no" tooltip={false}
+            icon={<X size={14} />} label="Snooze this recommendation for this session"
+            disabled={busy === r.id} onClick={() => dismiss(r)}
+          />
         ),
       } as GridColumn<Recommendation>,
       {
@@ -329,9 +333,12 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         // engines simply stop proposing it until you unmute.
         key: 'pz', label: '⏸', tip: 'Stop suggesting this. Nothing is changed at Amazon — the engines just stop raising it, permanently, until you unmute it under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => (
-          <button type="button" className="h10-sug-iconbtn pz" disabled={busy === r.id} aria-label="Stop suggesting this recommendation" title="Stop suggesting this — nothing changes at Amazon" onClick={() => void muteRec(r)}>
-            <Pause size={14} />
-          </button>
+          <ToolbarButton
+            variant="boxed" className="h10-sug-iconbtn pz" tooltip={false}
+            icon={<Pause size={14} />} label="Stop suggesting this recommendation"
+            title="Stop suggesting this — nothing changes at Amazon"
+            disabled={busy === r.id} onClick={() => void muteRec(r)}
+          />
         ),
       } as GridColumn<Recommendation>,
     ] : isMuted ? [

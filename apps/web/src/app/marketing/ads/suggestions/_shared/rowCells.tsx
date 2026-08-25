@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronRight, ExternalLink, RotateCcw } from 'lucide-react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { ApproveHoverCard, type HoverContent } from '../ApproveHoverCard'
@@ -224,9 +225,11 @@ export function BufferInput({ current, suggestedEur, stagedValue, isStaged, disa
         }}
       />
       {edited && (
-        <button type="button" className="rv" title="Restore the suggested value" aria-label="Restore the suggested value" onClick={onRevert}>
-          <RotateCcw size={12} />
-        </button>
+        <ToolbarButton
+          className="rv" tooltip={false} size="sm"
+          icon={<RotateCcw size={12} />} label="Restore the suggested value"
+          title="Restore the suggested value" onClick={onRevert}
+        />
       )}
     </span>
   )

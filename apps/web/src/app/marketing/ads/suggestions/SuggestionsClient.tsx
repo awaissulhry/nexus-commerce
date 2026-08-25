@@ -1086,9 +1086,12 @@ function SuggestionsInner() {
           const on = staged.get(s.id)?.kind === 'apply'
           return (
             <ApproveHover s={s} onEdit={() => writeUrl({ row: s.id }, { history: true })}>
-              <button type="button" className={`h10-sug-iconbtn ok${on ? ' on' : ''}`} disabled={!!busy[s.id]} aria-pressed={on} aria-label={on ? 'Staged to apply — click to un-stage' : 'Stage this change for Apply'} onClick={() => stage(s.id, 'apply')}>
-                <Check size={14} />
-              </button>
+              <ToolbarButton
+                variant="boxed" className="h10-sug-iconbtn ok" tooltip={false} active={on}
+                icon={<Check size={14} />}
+                label={on ? 'Staged to apply — click to un-stage' : 'Stage this change for Apply'}
+                disabled={!!busy[s.id]} onClick={() => stage(s.id, 'apply')}
+              />
             </ApproveHover>
           )
         },
@@ -1098,9 +1101,13 @@ function SuggestionsInner() {
         render: (s: Suggestion) => {
           const on = staged.get(s.id)?.kind === 'remove'
           return (
-            <button type="button" className={`h10-sug-iconbtn no${on ? ' on' : ''}`} disabled={!!busy[s.id]} aria-pressed={on} aria-label={on ? 'Staged to remove — click to un-stage' : 'Remove until a new suggestion is generated'} title={on ? 'Staged to remove — click to un-stage' : 'Remove suggestion until a new one is generated'} onClick={() => stage(s.id, 'remove')}>
-              <X size={14} />
-            </button>
+            <ToolbarButton
+              variant="boxed" className="h10-sug-iconbtn no" tooltip={false} active={on}
+              icon={<X size={14} />}
+              label={on ? 'Staged to remove — click to un-stage' : 'Remove until a new suggestion is generated'}
+              title={on ? 'Staged to remove — click to un-stage' : 'Remove suggestion until a new one is generated'}
+              disabled={!!busy[s.id]} onClick={() => stage(s.id, 'remove')}
+            />
           )
         },
       } as GridColumn<Suggestion>,
@@ -1118,17 +1125,14 @@ function SuggestionsInner() {
           const on = staged.get(s.id)?.kind === 'mute'
           const what = ENTITY_LABEL[s.entityType]?.toLowerCase() ?? 'entity'
           return (
-            <button
-              type="button"
-              className={`h10-sug-iconbtn pz${on ? ' on' : ''}`}
+            <ToolbarButton
+              variant="boxed" className="h10-sug-iconbtn pz" tooltip={false} active={on}
+              icon={<Pause size={14} />}
               disabled={!!busy[s.id]}
-              aria-pressed={on}
-              aria-label={on ? 'Staged to mute — click to un-stage' : `Stop suggesting for this ${what}`}
+              label={on ? 'Staged to mute — click to un-stage' : `Stop suggesting for this ${what}`}
               title={on ? 'Staged to mute — click to un-stage' : `Stop suggesting for this ${what} — it keeps running at Amazon`}
               onClick={() => stage(s.id, 'mute')}
-            >
-              <Pause size={14} />
-            </button>
+            />
           )
         },
       } as GridColumn<Suggestion>,
@@ -1165,16 +1169,14 @@ function SuggestionsInner() {
           if (!s.undo) return dash('No undo is offered for this row here — the change may still exist; it just has no handle from this queue')
           const armed = armedUndo?.id === s.id
           return (
-            <button
-              type="button"
-              className={`h10-sug-iconbtn${armed ? ' pz armed' : ''}`}
+            <ToolbarButton
+              variant="boxed" className={`h10-sug-iconbtn${armed ? ' pz armed' : ''}`} tooltip={false}
+              icon={<RotateCcw size={14} />}
               disabled={!!busy[s.id]}
-              aria-label={armed ? armedUndo!.note : 'Undo this change (click twice)'}
+              label={armed ? armedUndo!.note : 'Undo this change (click twice)'}
               title={armed ? armedUndo!.note : 'Undo this change at Amazon — first click previews, second executes'}
               onClick={() => (armed ? void doUndo(s) : void armUndo(s))}
-            >
-              <RotateCcw size={14} />
-            </button>
+            />
           )
         },
       } as GridColumn<Suggestion>,
@@ -1337,9 +1339,12 @@ function SuggestionsInner() {
                     const on = aiStaged.get(r.id) === 'apply'
                     return (
                       <ApproveHoverCard content={() => aiHoverContent(r, () => writeUrl({ row: r.id }, { history: true }))}>
-                        <button type="button" className={`h10-sug-iconbtn ok${on ? ' on' : ''}`} disabled={bulkBusy} aria-pressed={on} aria-label={on ? 'Staged to apply — click to un-stage' : 'Stage this proposal for Apply'} onClick={() => aiStage(r.id, 'apply')}>
-                          <Check size={14} />
-                        </button>
+                        <ToolbarButton
+                          variant="boxed" className="h10-sug-iconbtn ok" tooltip={false} active={on}
+                          icon={<Check size={14} />}
+                          label={on ? 'Staged to apply — click to un-stage' : 'Stage this proposal for Apply'}
+                          disabled={bulkBusy} onClick={() => aiStage(r.id, 'apply')}
+                        />
                       </ApproveHoverCard>
                     )
                   },
@@ -1350,9 +1355,12 @@ function SuggestionsInner() {
                   render: (r: AiDecision) => {
                     const on = aiStaged.get(r.id) === 'remove'
                     return (
-                      <button type="button" className={`h10-sug-iconbtn no${on ? ' on' : ''}`} disabled={bulkBusy} aria-pressed={on} aria-label={on ? 'Staged to remove — click to un-stage' : 'Remove for 7 days'} onClick={() => aiStage(r.id, 'remove')}>
-                        <X size={14} />
-                      </button>
+                      <ToolbarButton
+                        variant="boxed" className="h10-sug-iconbtn no" tooltip={false} active={on}
+                        icon={<X size={14} />}
+                        label={on ? 'Staged to remove — click to un-stage' : 'Remove for 7 days'}
+                        disabled={bulkBusy} onClick={() => aiStage(r.id, 'remove')}
+                      />
                     )
                   },
                 } as GridColumn<AiDecision>,
@@ -1365,12 +1373,13 @@ function SuggestionsInner() {
                   render: (r: AiDecision) => {
                     const on = aiStaged.get(r.id) === 'mute'
                     return (
-                      <button type="button" className={`h10-sug-iconbtn pz${on ? ' on' : ''}`} disabled={bulkBusy || !r.campaignId} aria-pressed={on}
-                        aria-label={on ? 'Staged to mute — click to un-stage' : 'Stop suggesting for this campaign'}
+                      <ToolbarButton
+                        variant="boxed" className="h10-sug-iconbtn pz" tooltip={false} active={on}
+                        icon={<Pause size={14} />}
+                        label={on ? 'Staged to mute — click to un-stage' : 'Stop suggesting for this campaign'}
                         title={r.campaignId ? (on ? 'Staged to mute — click to un-stage' : 'Stop suggesting for this campaign — it keeps running at Amazon') : 'This decision names no campaign to mute'}
-                        onClick={() => aiStage(r.id, 'mute')}>
-                        <Pause size={14} />
-                      </button>
+                        disabled={bulkBusy || !r.campaignId} onClick={() => aiStage(r.id, 'mute')}
+                      />
                     )
                   },
                 } as GridColumn<AiDecision>,
@@ -1407,16 +1416,14 @@ function SuggestionsInner() {
                     if (!r.undo) return dash('No undo is offered for this row here — the change may still exist; this queue just holds no handle to it')
                     const armed = aiArmedUndo?.id === r.id
                     return (
-                      <button
-                        type="button"
-                        className={`h10-sug-iconbtn${armed ? ' pz armed' : ''}`}
+                      <ToolbarButton
+                        variant="boxed" className={`h10-sug-iconbtn${armed ? ' pz armed' : ''}`} tooltip={false}
+                        icon={<RotateCcw size={14} />}
                         disabled={bulkBusy}
-                        aria-label={armed ? aiArmedUndo!.note : 'Undo this change (click twice)'}
+                        label={armed ? aiArmedUndo!.note : 'Undo this change (click twice)'}
                         title={armed ? aiArmedUndo!.note : 'Undo this change at Amazon — first click previews, second executes'}
                         onClick={() => (armed ? void aiDoUndo(r) : void aiArmUndo(r))}
-                      >
-                        <RotateCcw size={14} />
-                      </button>
+                      />
                     )
                   },
                 } as GridColumn<AiDecision>,
