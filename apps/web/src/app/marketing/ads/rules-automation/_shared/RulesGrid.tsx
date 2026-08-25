@@ -1160,7 +1160,6 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       render: (r) => (
         <ToolbarButton
           tone="danger"
-          className="h10-rg-del"
           icon={<Trash2 size={14} aria-hidden />}
           label={`Delete ${r.name}`}
           description="This deletes the rule, its execution history and any campaign assignments, and cannot be undone."

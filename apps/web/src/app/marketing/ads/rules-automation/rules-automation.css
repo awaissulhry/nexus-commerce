@@ -81,8 +81,6 @@
 /* criteria */
 .h10-rb-card.crit { margin-bottom: 16px; }
 .h10-rb-card.crit .acts { display: inline-flex; gap: 12px; color: var(--nds-grey-450); }
-.h10-rb-card.crit .acts button { border: 0; background: none; color: inherit; cursor: pointer; padding: 2px; display: inline-flex; }
-.h10-rb-card.crit .acts button:hover { color: var(--nds-blue-600); }
 .h10-rb-conds { padding: 6px 18px 16px; }
 .h10-rb-conds .cond { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 /* BP.P3 — `position: relative` lifts the pills above the absolutely-positioned dashed connector
@@ -292,8 +290,6 @@
 .cp-add:hover { background: var(--nds-blue-50); }
 .cp-add.added { background: var(--nds-grey-75); border-color: var(--nds-grey-150); color: var(--nds-grey-500); cursor: default; }
 .cp-pager { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--nds-grey-100); }
-.cp-pager .pg { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); background: var(--nds-white); color: var(--nds-grey-600); cursor: pointer; }
-.cp-pager .pg:disabled { color: var(--nds-grey-300); cursor: default; }
 .cp-pager .pgn { min-width: 28px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); color: var(--nds-blue-600); font-size: 13px; font-weight: 600; padding: 0 8px; }
 .cp-pager .pp { margin-left: auto; }
 .cp-rhead { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; }
@@ -303,8 +299,8 @@
 .cp-removeall:disabled { color: var(--nds-grey-400); cursor: default; }
 .cp-colhdr { padding: 9px 16px; background: var(--nds-grey-50); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); }
 .cp-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--nds-grey-450); font-size: 13px; }
-.cp-rm { margin-left: auto; border: 0; background: none; color: var(--nds-grey-500); cursor: pointer; display: inline-flex; padding: 3px; border-radius: var(--nds-radius-sm); flex-shrink: 0; }
-.cp-rm:hover { background: var(--nds-grey-75); color: var(--nds-red-500); }
+/* DS-ALIGN — the DS `ToolbarButton`; only its place in the row is ours. */
+.cp-rm { margin-left: auto; flex-shrink: 0; }
 /* B3: rule templates — Apply Template (Criteria header) + Save Template (footer) + modal */
 .h10-rb-crit-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .h10-rb-crit-hd .t h2 { margin: 0; }
@@ -370,8 +366,8 @@
 .h10-rb-twocol .agrow .chips { display: inline-flex; gap: 8px; }
 .h10-rb-twocol .agrow .tchip { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--nds-grey-200); background: var(--nds-white); color: var(--nds-grey-500); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .h10-rb-twocol .agrow .tchip.on { background: #8a1538; border-color: #8a1538; color: var(--nds-white); }
-.h10-rb-twocol .agrow .agrm { flex-shrink: 0; border: 0; background: none; color: var(--nds-grey-400); cursor: pointer; padding: 4px; display: inline-flex; }
-.h10-rb-twocol .agrow .agrm:hover { color: var(--nds-red-500); }
+/* DS-ALIGN — the DS `ToolbarButton` at `sm`, `tone="danger"`. */
+.h10-rb-twocol .agrow .agrm { flex-shrink: 0; }
 
 /* H2: Add-Group popover — grouped tabs, status pills, messages */
 .h10-rb-agpop .grp { margin-bottom: 6px; }
@@ -496,9 +492,6 @@
 /* DS-ALIGN — the DS `Input` at `sm`. */
 .h10-sb-adjval { width: 82px; }
 .h10-sb-week .act { display: inline-flex; gap: 11px; justify-content: flex-end; color: var(--nds-grey-450); }
-.h10-sb-week-r .act button { border: 0; background: none; color: inherit; cursor: pointer; padding: 2px; display: inline-flex; }
-.h10-sb-week-r .act button:hover { color: var(--nds-blue-600); }
-.h10-sb-week-r .act button[aria-label="Delete"]:hover { color: var(--nds-red-500); }
 
 /* Advanced — schedule start & end date card */
 .h10-sb-adv { padding: 18px; }
@@ -2496,9 +2489,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-search { width: 230px; }
 /* The grain segment. Its own class rather than `.h10-svt-seg`, which carries a `margin: … 24px`
    that would inset it past every other block on this page — see the gutter note at the top. */
-.h10-bud-seg { display: inline-flex; padding: 2px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); }
-.h10-bud-seg .seg { padding: 4px 12px; border: 0; border-radius: var(--nds-radius-sm); background: none; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-bud-seg .seg.on { background: var(--nds-white); color: var(--nds-grey-900); box-shadow: 0 1px 2px rgba(28, 37, 48, .12); }
 .h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bud-stale:hover { background: #fdeed5; }
 
@@ -3009,12 +2999,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-ceil:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
 .h10-hv-ceil.off { background: #fff6e8; border-color: #f0dcbe; color: var(--nds-warning-text); }
 
-/* the two segmented controls */
-.h10-hv-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; }
-.h10-hv-seg .seg { padding: 5px 10px; border: 0; background: var(--nds-white); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-seg .seg + .seg { border-left: 1px solid var(--nds-grey-150); }
-.h10-hv-seg .seg:hover { background: var(--nds-grey-75); }
-.h10-hv-seg .seg.on { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 /* ── the attrition: what each criterion removed ───────────────────────────────────────────────
    A single surviving count tells you nothing about which knob to turn. */
@@ -3042,11 +3026,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-pol .txt b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-pol .act { display: inline-flex; align-items: center; gap: 8px; }
 .h10-hv-pol .ok { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: var(--nds-success-text); }
-.h10-hv-save { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-blue-600); border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); font-size: 11.5px; font-weight: 700; color: var(--nds-white); cursor: pointer; }
-.h10-hv-save:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); }
-.h10-hv-save:disabled { opacity: .6; cursor: default; }
-.h10-hv-unset { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-unset:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: var(--nds-warning-text); }
 
 /* D4 — a save changes what every operator in that scope sees by default, so it gets a full
    sentence rather than a tooltip. */
@@ -3092,8 +3071,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* ── the drawer's two entry points ───────────────────────────────────────────────────────────── */
 .h10-ngd-rm { margin-left: 8px; padding: 1px 7px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 800; color: #8a2020; cursor: pointer; }
 .h10-ngd-rm:hover { background: #fdeeee; border-color: #d99; }
-.h10-ngd-bulk { margin-left: auto; padding: 2px 8px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-sm); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ngd-bulk:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Button` at `xs`; only its place in the heading is ours. The `h4` around it
+   is `text-transform: uppercase`, which a button must not inherit. */
+.h10-ngd-bulk { margin-left: auto; text-transform: none; letter-spacing: 0; }
 
 /* ── the dialog ──────────────────────────────────────────────────────────────────────────────── */
 .h10-ngr-back { position: fixed; inset: 0; z-index: 1300; background: rgba(28, 37, 48, .42); border: 0; padding: 0; cursor: pointer; }
@@ -3128,9 +3108,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngr-msg { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); display: flex; align-items: center; gap: 7px; }
 .h10-ngr-msg b { font-weight: 800; color: var(--nds-grey-900); }
 
-.h10-ngr-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
-.h10-ngr-pick .seg { padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ngr-pick .seg.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: var(--nds-info-text); }
+/* DS-ALIGN — the DS `SegmentedControl` owns the track; only its place in the column is ours. */
+.h10-ngr-pick { margin: 12px 0 0; }
 
 .h10-ngr-reason { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 0; }
 .h10-ngr-reason span { font-size: 11px; font-weight: 700; color: var(--nds-text-muted); }
@@ -3507,11 +3486,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* the two views. A segmented control rather than a tab: the header, market and scope above it
    apply to BOTH, and a tab would imply a different page. */
-.h10-hv-viewseg { display: inline-flex; margin: 14px 0 0; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); overflow: hidden; background: var(--nds-white); }
-.h10-hv-viewseg .seg { padding: 7px 16px; border: 0; background: var(--nds-white); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-viewseg .seg + .seg { border-left: 1px solid var(--nds-grey-150); }
-.h10-hv-viewseg .seg:hover { background: var(--nds-grey-75); }
-.h10-hv-viewseg .seg.on { background: var(--nds-blue-100); color: var(--nds-info-text); }
+/* DS-ALIGN — the DS `SegmentedControl` owns the track; only the top margin is ours. */
+.h10-hv-viewseg { display: inline-flex; margin: 14px 0 0; }
 
 /* 🔴 the four outcomes — four different failures, so four different colours, and the two that are
    OUR fault (never reached Amazon) read as warnings rather than as neutral facts. */
@@ -3531,8 +3507,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* the comparison table — dense, and the harvested rows are the ones being asked about */
 .h10-hv-cmp { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 11.5px; }
-.h10-hv-cmp th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--nds-grey-150); font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--nds-text-muted); }
-.h10-hv-cmp td { padding: 5px 8px; border-bottom: 1px solid var(--nds-grey-75); color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-hv-cmp tr.me td { background: var(--nds-blue-100); color: var(--nds-info-text); font-weight: 700; }
 .h10-hv-conf { margin: 9px 0 0; padding-left: 18px; font-size: 11.5px; line-height: 1.6; color: var(--nds-text-muted); }
 .h10-hv-conf li + li { margin-top: 3px; }
@@ -3627,12 +3601,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngp-g .cn b { font-weight: 800; color: #10151c; }
 .h10-ngp-g .ca { justify-self: end; }
 
-.h10-ngp-act { padding: 4px 10px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); background: var(--nds-white);
-  cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-700); white-space: nowrap; }
-.h10-ngp-act:hover:not(:disabled) { border-color: #2f6feb; color: #1d3f87; background: var(--nds-grey-50); }
-.h10-ngp-act:disabled { opacity: 0.5; cursor: default; }
-.h10-ngp-act.undo { color: #4a5566; }
-.h10-ngp-act.sm { padding: 2px 8px; font-size: 11px; }
 
 .h10-ngp-g .dec { display: flex; align-items: flex-start; gap: 6px; margin: 7px 0 0;
   padding: 6px 9px; border-radius: var(--nds-radius-sm); background: #edf7f0; font-size: 11.5px; line-height: 1.55; color: #1c5334; }
@@ -5227,9 +5195,6 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    Defined in this stylesheet on purpose: an undefined class is silent
    (reference_undefined_css_class_is_silent), and this is the file every other h10-* rules-grid
    class lives in. */
-.h10-rg-del { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: var(--nds-radius-md); background: none; color: var(--nds-grey-600); cursor: pointer; transition: color .1s, background .1s, border-color .1s; }
-.h10-rg-del:hover { background: #fbdedb; border-color: #f3c4bf; color: #a3211a; }
-.h10-rg-del:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 1px; color: #a3211a; }
 
 /* ── B2 (2026-08-20) — the rules grid's Lookback cell ──────────────────────────────────────────
    Three states, and the whole value of the column is that they do not look alike:
@@ -5356,8 +5321,6 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-sb-exd .hd2 b { font-size: 13.5px; color: #17233a; }
 .h10-sb-exd .hd2 span { font-size: 12px; color: var(--nds-grey-600); }
 .h10-sb-exd .h10-sb-dates.exrow { align-items: flex-end; gap: 16px; }
-.h10-sb-exdel { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 34px; border: 0; background: none; color: #73839a; border-radius: var(--nds-radius-sm); cursor: pointer; }
-.h10-sb-exdel:hover { background: var(--nds-grey-75); color: #a02c2c; }
 
 /* Status pill on the schedules grid — Scheduled / Active / Completed / Off. Own names rather than
    borrowing the autonomy-mode classes: same palette, different vocabulary, and a class named after
