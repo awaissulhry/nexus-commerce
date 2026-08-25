@@ -10,6 +10,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Search, GripVertical, Lock, Check } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { COLUMN_META, CATEGORIES, META_BY_KEY, type ColCategory } from './columns'
 
 const LOCKED = COLUMN_META.filter((c) => c.locked)
@@ -100,7 +103,7 @@ export function CustomiseColumns({
                 <Search size={14} />
                 <input placeholder="Find a column" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a column" />
               </div>
-              <button className="az-link" onClick={selectAllFiltered}>{allFilteredSelected ? 'Deselect all' : 'Select all'}</button>
+              <Button variant="link" size="sm" onClick={selectAllFiltered}>{allFilteredSelected ? 'Deselect all' : 'Select all'}</Button>
             </div>
             <div className="az-cc-list">
               {available.length === 0 && <div style={{ padding: 16, color: 'var(--ink2)' }}>No columns match “{q}”.</div>}
@@ -121,7 +124,7 @@ export function CustomiseColumns({
           <div className="az-cc-sel">
             <div className="az-cc-h">
               <span className="t" style={{ flex: 1 }}><span className="n">{LOCKED.length + draft.length}</span> selected</span>
-              <button className="az-link" onClick={() => setDraft([])} disabled={draft.length === 0} style={draft.length === 0 ? { opacity: .4, cursor: 'default' } : undefined}>Remove all</button>
+              <Button variant="link" size="sm" onClick={() => setDraft([])} disabled={draft.length === 0}>Remove all</Button>
             </div>
             <div className="az-cc-chips">
               {LOCKED.map((c) => (

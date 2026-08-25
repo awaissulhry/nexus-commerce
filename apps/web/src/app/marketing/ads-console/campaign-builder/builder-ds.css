@@ -1,0 +1,26 @@
+/* DS-alignment glue for the ads-console campaign builder (2026-08-25).
+
+   The hand-built `.az-cb-modal` (fixed overlay + `.box` panel + `.hd` header +
+   `.ft` footer) is now the design-system `<Modal>`. What survives here is only
+   the CONTENT inside that modal — the live/sandbox note, the count line and the
+   campaign list — which was never a component, plus two width/spacing rules the
+   DS controls need. Nothing here repaints a design-system component.
+
+   `.az-cb-modal`'s own overlay/panel/header/footer rules in ads-console/amazon.css
+   now have no caller; that file is outside this session's scope. */
+
+.az-cb-review .note { font-size: 12.5px; border-radius: 8px; padding: 10px 13px; margin-bottom: 14px; line-height: 1.5; }
+.az-cb-review .note.live { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.az-cb-review .note.sandbox { background: #f1f5f9; border: 1px solid #e2e8f0; color: var(--ink2); }
+.az-cb-review .sum { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+.az-cb-review .list { border: 1px solid var(--divider); border-radius: 9px; overflow: hidden; }
+.az-cb-review .list .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 13px; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
+.az-cb-review .list .row:last-child { border-bottom: none; }
+.az-cb-review .list .nm { font-weight: 600; color: var(--ink); }
+.az-cb-review .list .meta { font-size: 11px; color: var(--ink3); white-space: nowrap; }
+
+/* width the DS <Input>/<Select> take through `fieldClassName` / `className` */
+.az-cb-inputw { width: 100%; max-width: 460px; }
+.az-cb-inputw.sm { max-width: 180px; }
+/* the two disclosure links kept `.az-cb-link`'s 11px top margin */
+.az-cb-linkrow { display: inline-flex; margin-top: 11px; }

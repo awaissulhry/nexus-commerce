@@ -12,6 +12,9 @@
 
 import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
+import { Button, Checkbox, ToolbarButton, Toggle } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
@@ -270,7 +273,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const cell = (key: string, r: Row): ReactNode => {
     const b = r.b
     switch (key) {
-      case 'active': return <button className={`az-toggle ${b.status === 'ENABLED' ? 'on' : ''}`} disabled={busy === b.id} onClick={() => void toggleActive(b)} aria-label="Toggle active"><i /></button>
+      case 'active': return <Toggle checked={b.status === 'ENABLED'} disabled={busy === b.id} onChange={() => void toggleActive(b)} aria-label="Toggle active" />
       case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><button className={`az-expand ${expanded.has(b.id) ? 'open' : ''}`} onClick={() => toggleExpand(b.id)} aria-label={expanded.has(b.id) ? 'Collapse ad groups' : 'Expand ad groups'} aria-expanded={expanded.has(b.id)}><ChevronRight size={15} /></button><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><button className="az-kebab" title="Actions" aria-label="Row actions" onClick={(e) => openMenu(e, b.id)}><MoreVertical size={15} /></button></span>
       case 'country': return marketplaceCountryName(b.marketplace) || '—'
       case 'status': return statusBadge(b)
@@ -310,7 +313,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const childCell = (key: string, g: AdGroup, parentId: string): ReactNode => {
     const impr = g.impressions ?? 0, clicks = g.clicks ?? 0, spendC = g.spendCents ?? 0, salesC = g.salesCents ?? 0, orders = g.ordersCount ?? 0
     switch (key) {
-      case 'active': return <button className={`az-toggle sm ${g.status === 'ENABLED' ? 'on' : ''}`} disabled={busy === g.id} onClick={() => void patchAdGroup(g, parentId)} aria-label="Toggle ad group"><i /></button>
+      case 'active': return <Toggle checked={g.status === 'ENABLED'} disabled={busy === g.id} onChange={() => void patchAdGroup(g, parentId)} aria-label="Toggle ad group" />
       case 'name': return <span className="childname"><span className="gname">{g.name}</span><span className="sub">Ad group</span></span>
       case 'status': return g.status === 'ENABLED' ? <span className="az-badge deliver">Delivering</span> : <span className="az-badge paused">{titlecase(g.status || 'Paused')}</span>
       case 'impressions': return num(impr)
@@ -411,8 +414,8 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
             </div>
           </>}
         </span>
-        <button className="az-iconbtn" onClick={() => void refetch()} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
-        <span className="az-iconbtn" style={{ border: 0 }} onClick={() => setShowCols(true)} title="Settings"><Settings size={16} /></span>
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={() => void refetch()} />
+        <ToolbarButton icon={<Settings size={16} />} label="Settings" onClick={() => setShowCols(true)} />
         <span className="ctl" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></span>
       </div>
 
@@ -428,7 +431,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         <table className={`az-table ${density}`}>
           <thead>
             <tr>
-              <th className="l az-cellsticky"><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
+              <th className="l az-cellsticky"><Checkbox checked={allChecked} aria-label="Select all campaigns" onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
               {order.map((k) => {
                 const m = META_BY_KEY[k]; const label = k === 'active' ? 'Active' : m?.label ?? k
                 return (
@@ -448,7 +451,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
               return (
                 <Fragment key={b.id}>
                   <tr className={sel.has(b.id) ? 'sel' : ''}>
-                    <td className="l az-cellsticky"><input className="az-check" type="checkbox" checked={sel.has(b.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} /></td>
+                    <td className="l az-cellsticky"><Checkbox checked={sel.has(b.id)} aria-label={`Select ${b.name}`} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} /></td>
                     {order.map((k) => <td key={k} className={`${META_BY_KEY[k]?.numeric ? 'num' : 'l'}${stickClass(k)}`}>{cell(k, r)}</td>)}
                   </tr>
                   {isOpen && (data === undefined || data === 'loading') && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Loading ad groups…</span></td></tr>}
@@ -508,7 +511,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           <button className="az-btn" onClick={() => void bulkStatus('PAUSED')}><Pause size={15} />Pause</button>
           <button className="az-btn" onClick={() => void bulkArchive()}><Archive size={15} />Archive</button>
           <span className="div" />
-          <button className="az-link" onClick={() => setSel(new Set())}>Clear</button>
+          <Button variant="link" size="sm" onClick={() => setSel(new Set())}>Clear</Button>
         </div>
       )}
     </div>

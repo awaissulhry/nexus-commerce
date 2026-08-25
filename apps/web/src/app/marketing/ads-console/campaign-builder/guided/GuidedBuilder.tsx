@@ -10,6 +10,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TrendingUp, BarChart3, Droplets, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 
 const STEPS = ['Product Selection', 'Campaign Setup', 'Add Keywords', 'Review and Launch'] as const
 
@@ -142,7 +148,7 @@ export function GuidedBuilder() {
         </div>
         <div className="az-cb-headr">
           <label className="az-cb-mktsel"><span>Market</span><select value={market} onChange={(e) => setMarket(e.target.value)}>{['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK'].map((m) => <option key={m} value={m}>{m}{LIVE_MARKETS.includes(m) ? ' · live' : ''}</option>)}</select></label>
-          <button type="button" className="az-cb-exit" onClick={exit}>Exit Builder</button>
+          <Button size="sm" onClick={exit}>Exit Builder</Button>
         </div>
       </div>
 
@@ -161,7 +167,7 @@ export function GuidedBuilder() {
             <div className="az-cb-sec">
               <div className="az-cb-h"><b>Product Group Name</b> <i className="req">*</i></div>
               <div className="az-cb-sub">All selected Products will be added to this product group</div>
-              <input className="az-cb-input" value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} />
+              <Input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} aria-label="Product group name" fieldClassName="az-cb-inputw" />
             </div>
 
             <div className="az-cb-sec">
@@ -187,14 +193,14 @@ export function GuidedBuilder() {
               <div className="az-cb-sec">
                 <div className="az-cb-h"><b>Target ACoS</b></div>
                 <div className="az-cb-sub">Set a target ACoS value</div>
-                <div className="az-cb-pct"><input className="az-cb-input sm" value={targetAcos} onChange={(e) => setTargetAcos(e.target.value)} /><span>%</span></div>
+                <Input inputMode="decimal" suffix="%" value={targetAcos} onChange={(e) => setTargetAcos(e.target.value)} aria-label="Target ACoS" fieldClassName="az-cb-inputw sm" />
               </div>
             )}
 
             <div className="az-cb-sec">
               <div className="az-cb-h"><b>Select Products</b></div>
               <div className="az-cb-sub">{selected.size} selected{products.length ? ` · ${products.length} available` : ''}</div>
-              <input className="az-cb-input" placeholder="Search products…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Search products…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" fieldClassName="az-cb-inputw" />
               <div className="az-cb-prodlist">
                 {filtered.slice(0, 100).map((p) => (
                   <label key={p.id} className={`az-cb-prod ${selected.has(p.id) ? 'on' : ''}`}>
@@ -216,21 +222,21 @@ export function GuidedBuilder() {
             <div className="az-cb-camp">
               <div className="az-cb-camp-hd">
                 <b>Sponsored Product Campaign</b>
-                <label className="az-cb-chk"><input type="checkbox" checked={includeProductTarget} onChange={(e) => setIncludeProductTarget(e.target.checked)} /> Include Product Target Campaign</label>
+                <Checkbox className="az-cb-chk" checked={includeProductTarget} onChange={(e) => setIncludeProductTarget(e.target.checked)} label="Include Product Target Campaign" />
               </div>
               {renderSpTable('SP', spAdGroups)}
-              <button type="button" className="az-cb-link" onClick={() => setShowNaming((s) => !s)}>{showNaming ? '▴' : '▾'} Advanced Naming Options</button>
+              <span className="az-cb-linkrow"><Button variant="link" size="sm" onClick={() => setShowNaming((s) => !s)}>{showNaming ? '▴' : '▾'} Advanced Naming Options</Button></span>
               {showNaming && <div className="az-cb-sub" style={{ marginTop: 8 }}>Campaign + ad-group names are generated from the product group name; custom naming schemes arrive with the structure builder.</div>}
             </div>
 
             <div className="az-cb-camp">
               <div className="az-cb-camp-hd">
                 <b>Sponsored Brand Campaign</b>
-                <label className="az-cb-chk"><input type="checkbox" checked={includeSB} onChange={(e) => setIncludeSB(e.target.checked)} /> Include</label>
+                <Checkbox className="az-cb-chk" checked={includeSB} onChange={(e) => setIncludeSB(e.target.checked)} label="Include" />
               </div>
               {includeSB ? (
                 <div className="az-cb-sbset">
-                  <label className="az-cb-field"><span>Brand</span><select className="az-cb-input"><option>Select brand to add SB campaign into setup</option></select></label>
+                  <label className="az-cb-field"><span>Brand</span><Select className="az-cb-inputw" aria-label="Brand"><option>Select brand to add SB campaign into setup</option></Select></label>
                   <div className="az-cb-field"><span>Sponsored Brand Ad Type</span>
                     <div className="az-cb-radios">
                       <label><input type="radio" name="sbtype" defaultChecked /> Product Collection</label>
@@ -246,7 +252,7 @@ export function GuidedBuilder() {
             <div className="az-cb-camp">
               <div className="az-cb-camp-hd">
                 <b>Sponsored Display Campaign</b>
-                <label className="az-cb-chk"><input type="checkbox" checked={includeSD} onChange={(e) => setIncludeSD(e.target.checked)} /> Include</label>
+                <Checkbox className="az-cb-chk" checked={includeSD} onChange={(e) => setIncludeSD(e.target.checked)} label="Include" />
               </div>
               {includeSD ? renderSpTable('SD', ['Product Target']) : <div className="az-cb-sub">Toggle on to add a Sponsored Display (product-targeting) campaign.</div>}
             </div>
@@ -274,7 +280,7 @@ export function GuidedBuilder() {
                       <label key={m}><input type="radio" name="mt" checked={matchType === m} onChange={() => setMatchType(m)} /> {m}</label>
                     ))}
                     <span className="grow" />
-                    {kwSource === 'suggested' && <button type="button" className="az-cb-addall" onClick={addAllSuggested}>+ Add All</button>}
+                    {kwSource === 'suggested' && <Button variant="link" size="sm" onClick={addAllSuggested}>+ Add All</Button>}
                   </div>
                   {kwSource === 'suggested' && (
                     <div className="az-cb-sugg">
@@ -286,12 +292,12 @@ export function GuidedBuilder() {
                   {kwSource === 'new' && (
                     <div className="az-cb-newkw">
                       <textarea value={newKw} onChange={(e) => setNewKw(e.target.value)} placeholder="Enter or paste keywords (one per line or comma-separated)" />
-                      <button type="button" className="az-cb-btn dark sm" onClick={addNewKw} disabled={!newKw.trim()}>+ Add Keywords</button>
+                      <Button variant="primary" size="sm" onClick={addNewKw} disabled={!newKw.trim()}>+ Add Keywords</Button>
                     </div>
                   )}
                   {kwSource === 'mylist' && <div className="az-cb-empty">Saved keyword lists will appear here.</div>}
-                  <button type="button" className="az-cb-link" onClick={() => setShowNegs((s) => !s)}>{showNegs ? '▴' : '▾'} Advanced Negative Keywords (Optional)</button>
-                  {showNegs && <textarea className="az-cb-negs" value={negKw} onChange={(e) => setNegKw(e.target.value)} placeholder="Negative keywords (one per line)" />}
+                  <span className="az-cb-linkrow"><Button variant="link" size="sm" onClick={() => setShowNegs((s) => !s)}>{showNegs ? '▴' : '▾'} Advanced Negative Keywords (Optional)</Button></span>
+                  {showNegs && <Textarea className="az-cb-negs" value={negKw} onChange={(e) => setNegKw(e.target.value)} placeholder="Negative keywords (one per line)" aria-label="Negative keywords" />}
                 </div>
                 <div className="az-cb-kwright">
                   <div className="hd"><b>{addedKw.length} Keywords Added</b>{addedKw.length > 0 && <button type="button" onClick={() => setAddedKw([])}>Remove All</button>}</div>
@@ -308,7 +314,7 @@ export function GuidedBuilder() {
                 <div className="az-cb-h"><b>Product Targeting ASINs</b></div>
                 <div className="az-cb-sub">Target competitor or complementary product detail pages by ASIN.</div>
                 <textarea value={newKw} onChange={(e) => setNewKw(e.target.value)} placeholder="Enter ASINs (one per line)" />
-                <button type="button" className="az-cb-btn dark sm" onClick={addNewKw} disabled={!newKw.trim()}>+ Add ASINs</button>
+                <Button variant="primary" size="sm" onClick={addNewKw} disabled={!newKw.trim()}>+ Add ASINs</Button>
               </div>
             )}
           </div>
@@ -331,7 +337,7 @@ export function GuidedBuilder() {
                 <button type="button" className={ruleTab === 'harvest' ? 'on' : ''} onClick={() => setRuleTab('harvest')}>Keyword Harvesting</button>
                 <button type="button" className={ruleTab === 'negative' ? 'on' : ''} onClick={() => setRuleTab('negative')}>Negative Targeting</button>
               </div>
-              <label className="az-cb-field" style={{ maxWidth: 380 }}><span>Rule Name</span><input className="az-cb-input" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder={`${grp} Promotion`} /></label>
+              <label className="az-cb-field" style={{ maxWidth: 380 }}><span>Rule Name</span><Input fieldClassName="az-cb-inputw" aria-label="Rule name" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder={`${grp} Promotion`} /></label>
               <div className="az-cb-mt" style={{ marginTop: 12 }}>
                 <label><input type="radio" name="rulemode" checked={ruleMode === 'automate'} onChange={() => setRuleMode('automate')} /> Automate</label>
                 <label><input type="radio" name="rulemode" checked={ruleMode === 'isolation'} onChange={() => setRuleMode('isolation')} /> Search Term Isolation</label>
@@ -364,32 +370,35 @@ export function GuidedBuilder() {
       </div>
 
       <div className="az-cb-foot">
-        {step > 0 && <button type="button" className="az-cb-btn" onClick={() => setStep((s) => s - 1)}>Back</button>}
+        {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
         <span className="grow" />
         {step < STEPS.length - 1
-          ? <button type="button" className="az-cb-btn dark" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Next</button>
-          : <button type="button" className="az-cb-btn dark" disabled={launching || selected.size === 0} onClick={() => void doPreview()}>{launching ? 'Working…' : 'Launch Campaigns'}</button>}
+          ? <Button variant="primary" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Next</Button>
+          : <Button variant="primary" disabled={launching || selected.size === 0} onClick={() => void doPreview()}>{launching ? 'Working…' : 'Launch Campaigns'}</Button>}
       </div>
 
       {launchMsg && <div className="az-cb-toast" role="status">{launchMsg}<button type="button" onClick={() => setLaunchMsg('')} aria-label="Dismiss">✕</button></div>}
       {preview && (
-        <div className="az-cb-modal" role="dialog" aria-modal="true" onClick={() => setPreview(null)}>
-          <div className="box" onClick={(e) => e.stopPropagation()}>
-            <div className="hd">Review what will be created on <b>{preview.market}</b></div>
-            {LIVE_MARKETS.includes(preview.market)
-              ? <div className="note live"><b>{preview.market} is live</b> — confirming creates these as <b>real campaigns on Amazon</b>. New campaigns aren&rsquo;t auto-allowlisted, so their bids won&rsquo;t change until you opt them in.</div>
-              : <div className="note sandbox">{preview.market} is not live — these are created in <b>sandbox</b> (nothing reaches Amazon) until you take {preview.market} live in Settings.</div>}
-            <div className="sum">{preview.totalCampaigns} campaign{preview.totalCampaigns === 1 ? '' : 's'} · {preview.totalProductAds} product ad{preview.totalProductAds === 1 ? '' : 's'} · {preview.totalKeywords} keyword{preview.totalKeywords === 1 ? '' : 's'}</div>
-            <div className="list">
-              {preview.campaigns.map((c) => <div className="row" key={c.name}><span className="nm">{c.name}</span><span className="meta">{c.targeting} · {c.productAds} ASIN{c.productAds === 1 ? '' : 's'}{c.keywords ? ` · ${c.keywords} kw` : ''}</span></div>)}
-            </div>
-            <div className="ft">
-              <button type="button" className="az-cb-btn" onClick={() => setPreview(null)}>Cancel</button>
-              <span className="grow" />
-              <button type="button" className="az-cb-btn dark" disabled={launching} onClick={() => void doLaunch()}>{launching ? 'Creating…' : `Create on ${preview.market}`}</button>
-            </div>
+        <Modal
+          open
+          onClose={() => setPreview(null)}
+          size="md"
+          title={<>Review what will be created on <b>{preview.market}</b></>}
+          className="az-cb-review"
+          footer={<>
+            <Button onClick={() => setPreview(null)}>Cancel</Button>
+            <span className="grow" />
+            <Button variant="primary" disabled={launching} onClick={() => void doLaunch()}>{launching ? 'Creating…' : `Create on ${preview.market}`}</Button>
+          </>}
+        >
+          {LIVE_MARKETS.includes(preview.market)
+            ? <div className="note live"><b>{preview.market} is live</b> — confirming creates these as <b>real campaigns on Amazon</b>. New campaigns aren&rsquo;t auto-allowlisted, so their bids won&rsquo;t change until you opt them in.</div>
+            : <div className="note sandbox">{preview.market} is not live — these are created in <b>sandbox</b> (nothing reaches Amazon) until you take {preview.market} live in Settings.</div>}
+          <div className="sum">{preview.totalCampaigns} campaign{preview.totalCampaigns === 1 ? '' : 's'} · {preview.totalProductAds} product ad{preview.totalProductAds === 1 ? '' : 's'} · {preview.totalKeywords} keyword{preview.totalKeywords === 1 ? '' : 's'}</div>
+          <div className="list">
+            {preview.campaigns.map((c) => <div className="row" key={c.name}><span className="nm">{c.name}</span><span className="meta">{c.targeting} · {c.productAds} ASIN{c.productAds === 1 ? '' : 's'}{c.keywords ? ` · ${c.keywords} kw` : ''}</span></div>)}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

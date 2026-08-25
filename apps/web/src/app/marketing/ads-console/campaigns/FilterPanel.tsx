@@ -10,6 +10,9 @@
 
 import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 
 export interface MetricFilter { id: string; metric: string; op: 'gte' | 'lte'; value: number }
 export interface Filters { statuses: string[]; targeting: string[]; portfolios: string[]; metrics: MetricFilter[] }
@@ -107,7 +110,7 @@ export function FilterPanel({
         </div>
 
         <div className="az-fp-foot">
-          <button className="az-link" onClick={() => setFilters(EMPTY_FILTERS)} disabled={countFilters(filters) === 0} style={countFilters(filters) === 0 ? { opacity: .4, cursor: 'default' } : undefined}>Clear all</button>
+          <Button variant="link" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} disabled={countFilters(filters) === 0}>Clear all</Button>
           <button className="az-btn dark" onClick={onClose}>Done</button>
         </div>
       </div>
