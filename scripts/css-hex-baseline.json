@@ -1,5 +1,5 @@
 {
-  "note": "Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero.",
+  "note": "Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero. A file whose entry equals a RELOCATION (rules moved verbatim from another sheet) says so in the commit; the total does not rise.",
   "updatedAt": "2026-08-25",
   "total": 10343,
   "files": {
@@ -47,6 +47,7 @@
     "app/marketing/ads/rules-automation/rules-automation.css": 3674,
     "app/marketing/ads/suggestions/suggestions.css": 43,
     "app/marketing/ads-console/amazon.css": 450,
-    "app/products/next/styles.module.css": 4
+    "app/products/next/styles.module.css": 4,
+    "app/marketing/ads/campaigns/_grid/workspace-grid.css": 12
   }
 }
