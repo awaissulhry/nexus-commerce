@@ -50,7 +50,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
@@ -744,15 +744,16 @@ export function BudgetClient() {
           <RefreshCw size={12} /> Changed since you loaded
         </button>
       )}
-      <select
+      <Select
+        size="xs"
         value={windowParam} onChange={(e) => push({ window: e.target.value })}
-        aria-label="Window" className="h10-bud-select"
+        aria-label="Window"
         title="The window the spend, movement and rule-activity columns are measured over."
       >
         <option value="7d">7 days</option>
         <option value="30d">30 days</option>
         <option value="60d">60 days</option>
-      </select>
+      </Select>
     </span>
   )
 

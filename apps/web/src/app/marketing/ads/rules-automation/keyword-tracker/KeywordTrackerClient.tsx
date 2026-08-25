@@ -44,7 +44,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -880,8 +880,8 @@ export function KeywordTrackerClient() {
                 {/* KT.2 — a real picker, driving ?list=. Rendered as a select only when this market
                     actually has a choice: a one-option dropdown is a control where nothing moves. */}
                 {(data?.lists.length ?? 0) > 1 && (
-                  <select
-                    className="h10-kt-listsel"
+                  <Select
+                    size="xs" className="h10-kt-listsel"
                     aria-label="Watchlist"
                     value={s?.list?.id ?? ''}
                     onChange={(e) => push({ list: e.target.value })}
@@ -889,7 +889,7 @@ export function KeywordTrackerClient() {
                     {data!.lists.map((l) => (
                       <option key={l.id} value={l.id}>{l.name} · {num(l.terms)} terms{l.isDefault ? ' · default' : ''}</option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <button type="button" className="h10-kt-toggle" onClick={() => setEditing(true)}>
                   <ListPlus size={12} /> Watchlist

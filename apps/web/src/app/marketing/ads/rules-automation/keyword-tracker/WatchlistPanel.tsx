@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Textarea } from '@/design-system/primitives'
 import { AlertTriangle, Check, Download, Plus, Star, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -193,7 +193,7 @@ export function WatchlistPanel({
         <section className="h10-kt-wlcard">
           <h4>Add terms</h4>
           <p className="cap">One per line, or separated by commas. Lowercased and de-duplicated on save.</p>
-          <textarea
+          <Textarea
             className="h10-kt-wlta"
             rows={5}
             value={paste}

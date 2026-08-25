@@ -15,6 +15,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
+import { Select } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { SchedCampaign } from '../_schedule/CampaignSection'
@@ -219,9 +220,9 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
                 />
               )}
               {smoothed && <label className="h10-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
-              <select className="h10-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
+              <Select className="h10-rp-tf" size="xs" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
                 {[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}
-              </select>
+              </Select>
               {rec && rec.windows.length > 0 && <button type="button" className="h10-rp-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
             </div>
             <DemandReadout grid={activeDemand.grid} hourProfile={activeDemand.hourProfile} weekdayProfile={activeDemand.weekdayProfile} timezone={demand.timezone} metric={demand.metric} />
@@ -244,11 +245,11 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
             {windows.map((w, i) => (
               <div key={i} className="h10-rp-win">
                 <div className="days">{DAYS.map((d, di) => <button key={di} type="button" className={w.days.includes(di) ? 'on' : ''} onClick={() => toggleDay(i, di)} aria-label={d} aria-pressed={w.days.includes(di)}>{d[0]}</button>)}</div>
-                <select value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</select>
+                <Select size="sm" value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</Select>
                 <span className="to">to</span>
-                <select value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</select>
+                <Select size="sm" value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</Select>
                 <span className="arrow">→</span>
-                <select value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</select>
+                <Select size="sm" value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</Select>
                 <span className="grow" />
                 <button type="button" className="rm" onClick={() => removeWin(i)} aria-label="Remove window"><Trash2 size={13} /></button>
               </div>

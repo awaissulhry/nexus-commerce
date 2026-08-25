@@ -21,6 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
+import { Textarea } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1698,7 +1699,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     <label className="rad"><input type="radio" name="stmode" checked={searchMode === 'contains'} onChange={() => setSearchMode('contains')} /> Contains</label>
                     <label className="rad"><input type="radio" name="stmode" checked={searchMode === 'not'} onChange={() => setSearchMode('not')} /> Does Not Contain</label>
                   </div>
-                  <textarea className="h10-rb-ta" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Enter or paste search terms here" aria-label="Search terms" />
+                  <Textarea className="h10-rb-ta" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Enter or paste search terms here" aria-label="Search terms" />
                   <div className="staction"><button type="button" className="h10-rb-btn ghost" disabled={!searchText.trim()} onClick={addSearchTerms}>Add Search Terms</button></div>
                 </div>
                 <div className="right">
@@ -1717,7 +1718,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
               </div>
               <div className="h10-rb-brand">
                 <div className="bl"><b>Brand &amp; competitor filters</b><span>{isHarvest ? 'Don’t harvest your own brand terms; optionally only harvest competitor ASINs.' : 'Never negate your own brand terms; optionally only negate competitor ASINs.'}</span></div>
-                <textarea className="h10-rb-ta brand" value={brandExclude} onChange={(e) => setBrandExclude(e.target.value)} placeholder={isHarvest ? 'Brand terms to never harvest (one per line or comma-separated)' : 'Brand terms to never negate (one per line or comma-separated)'} aria-label="Brand terms to protect" />
+                <Textarea className="h10-rb-ta brand" value={brandExclude} onChange={(e) => setBrandExclude(e.target.value)} placeholder={isHarvest ? 'Brand terms to never harvest (one per line or comma-separated)' : 'Brand terms to never negate (one per line or comma-separated)'} aria-label="Brand terms to protect" />
                 <label className="h10-rb-compt"><button type="button" className={`h10-bktoggle ${competitorOnly ? 'on' : ''}`} role="switch" aria-checked={competitorOnly} aria-label="Only competitor ASINs" onClick={() => setCompetitorOnly((v) => !v)}><span /></button> Only {isHarvest ? 'harvest' : 'negate'} competitor ASINs (exclude same-brand search terms)</label>
               </div>
             </section>

@@ -9,7 +9,7 @@
  */
 import { useState } from 'react'
 import { Save, Layers } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 
 export interface BlendLane {
   placement: string
@@ -99,14 +99,14 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
       })}
       <div className="h10-blend-base">
         <span className="h10-blend-baselbl">Base bid</span>
-        <select value={bidMode} onChange={(e) => setBidMode(e.target.value)}>
+        <Select size="xs" value={bidMode} onChange={(e) => setBidMode(e.target.value)}>
           <option value="hold">Hold — don&apos;t touch</option>
           <option value="absolute">Set to €…</option>
           <option value="deltaPct">Adjust ±%…</option>
           <option value="suppress">Suppress to ~€0.02</option>
-        </select>
+        </Select>
         {bidMode === 'absolute' && (
-          <input type="number" step="0.01" min={0.02} placeholder="0.50" value={bidValueCents != null ? (bidValueCents / 100).toFixed(2) : ''} onChange={(e) => setBidValueCents(e.target.value === '' ? null : Math.round(Number(e.target.value) * 100))} />
+          <Input size="xs" type="number" step="0.01" min={0.02} placeholder="0.50" fieldClassName="h10-blend-num" value={bidValueCents != null ? (bidValueCents / 100).toFixed(2) : ''} onChange={(e) => setBidValueCents(e.target.value === '' ? null : Math.round(Number(e.target.value) * 100))} />
         )}
         {bidMode === 'deltaPct' && (
           <label className="h10-blend-delta" title="Scale every keyword + ad-group bid by this % from its stable baseline (−95…+300). Reverts to baseline when the window ends — never compounds.">

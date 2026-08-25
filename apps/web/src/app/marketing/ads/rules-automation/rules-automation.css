@@ -129,9 +129,11 @@
 .h10-rb-st .strow .l { color: var(--nds-grey-800); font-weight: 600; }
 .h10-rb-st .rad { display: inline-flex; align-items: center; gap: 6px; color: var(--nds-grey-700); cursor: pointer; }
 .h10-rb-st .rad input { accent-color: var(--nds-blue-600); }
-.h10-rb-ta { width: 100%; height: 170px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 12px; font: inherit; font-size: 13px; resize: vertical; color: var(--nds-grey-900); }
-.h10-rb-ta::placeholder { color: var(--nds-grey-400); }
-.h10-rb-ta:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
+/* DS-ALIGN — the DS `Textarea` carries the border, the placeholder colour, the focus ring
+   and the resize handle. Only the height these two panes need is stated here; the primitive's
+   own min-height of 168px is one pixel off the 170 this pane was built around, and the brand
+   box below is deliberately short. */
+.h10-rb-ta { height: 170px; min-height: 0; }
 .h10-rb-st .staction { display: flex; justify-content: flex-end; margin-top: 12px; }
 .h10-rb-st .right { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); overflow: hidden; }
 .h10-rb-st .sth { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--nds-grey-150); }
@@ -585,7 +587,6 @@
 .h10-rp-win .days { display: inline-flex; gap: 3px; }
 .h10-rp-win .days button { width: 26px; height: 26px; font-size: 11px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 1px solid transparent; border-radius: var(--nds-radius-sm); cursor: pointer; }
 .h10-rp-win .days button.on { color: var(--nds-white); background: var(--nds-blue-600); }
-.h10-rp-win select { font: inherit; font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); padding: 5px 8px; cursor: pointer; }
 .h10-rp-win .to, .h10-rp-win .arrow { font-size: 12px; color: var(--nds-grey-500); }
 .h10-rp-win .grow { flex: 1; }
 .h10-rp-win .rm { color: var(--nds-imgup-err); background: none; border: 0; cursor: pointer; padding: 4px; border-radius: var(--nds-radius-sm); display: inline-flex; }
@@ -645,7 +646,8 @@
 
 /* RGD.3 — demand controls */
 .h10-rp-sample { color: var(--nds-blue-600); font-weight: 700; }
-.h10-rp-tf { font: inherit; font-size: 11.5px; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 3px 7px; cursor: pointer; max-width: 220px; }
+/* DS-ALIGN — the DS `Select` at `xs`; only the cap on a long option list is ours. */
+.h10-rp-tf { max-width: 220px; }
 .h10-rp-smooth { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--nds-grey-600); cursor: pointer; }
 /* RGD.3 — demand heatmap (day × hour) */
 .h10-hm2 { display: flex; flex-direction: column; gap: 7px; }
@@ -729,7 +731,6 @@
 /* MB.2 — the engine clamped what you typed; say so where you typed it. */
 .h10-mwarn { font-size: 10.5px; font-weight: 600; color: var(--nds-amber-700); background: #fff4ed; border: 1px solid #fde3d3; border-radius: var(--nds-radius-sm); padding: 5px 8px; margin-top: 8px; }
 .h10-mkeep { flex-direction: row; align-items: center; gap: 5px; }
-.h10-mkeep select { font: inherit; font-size: 11.5px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 3px 6px; }
 .h10-mrecipes { display: flex; align-items: center; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
 .h10-mrecipes .grow { flex: 1; }
 .h10-rcp { font: inherit; font-size: 11px; font-weight: 600; color: #3730a3; background: var(--nds-blue-100); border: 1px solid #dfe4ff; border-radius: var(--nds-radius-sm); padding: 3px 10px; cursor: pointer; }
@@ -744,7 +745,8 @@
 .h10-blend-fields { display: inline-flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
 .h10-blend-eff { font-size: 11px; font-weight: 700; color: var(--nds-green-700); }
 .h10-blend-base { display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
-.h10-blend-base select, .h10-blend-base input { font: inherit; font-size: 12px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 7px; }
+/* DS-ALIGN — both controls are DS primitives at `xs`; the width of the € box is ours. */
+.h10-blend-num > input { width: 84px; }
 .h10-blend-baselbl { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-blend-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--nds-grey-600); }
 .h10-blend-delta input { width: 60px; }
@@ -1579,7 +1581,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    KT.1's and are reused, not restyled. */
 
 /* The picker only renders when a market has more than one list, so this is not a decorative select. */
-.h10-kt-listsel { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 8px; max-width: 280px; }
+.h10-kt-listsel { max-width: 280px; }
 
 .h10-kt-wlpanel { margin: 12px 0 0; padding: 14px 16px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); }
 .h10-kt-wlhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -1596,7 +1598,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-wlcard h4 { margin: 0; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-muted); }
 .h10-kt-wlcard .cap { margin: 0; font-size: 11px; line-height: 1.55; color: var(--nds-text-muted); }
 .h10-kt-wlcard .cap b { font-weight: 800; color: var(--nds-grey-600); }
-.h10-kt-wlta { width: 100%; font: inherit; font-size: 12px; line-height: 1.5; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); padding: 8px 10px; resize: vertical; }
+/* DS-ALIGN — the DS `Textarea`; `rows={5}` sizes it, so the primitive's 168px floor is released. */
+.h10-kt-wlta { min-height: 0; }
 
 .h10-kt-wlterms { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; max-height: 210px; overflow-y: auto; }
 .h10-kt-wlterm { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); font-size: 11.5px; color: var(--nds-grey-900); cursor: pointer; background: var(--nds-white); }
@@ -1682,7 +1685,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid chrome ───────────────────────────────────────────────────────────────────────────── */
 .h10-bd-win { display: inline-flex; align-items: center; gap: 8px; }
-.h10-bd-select { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 8px; }
 .h10-bd-search input { font: inherit; font-size: 11.5px; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 9px; width: 250px; }
 .h10-bd-search input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
 /* .h10-bd-stale — SG.1: MOVED to ads.css (StaleBanner gained its first consumer outside this
@@ -2307,7 +2309,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 11px; cursor: pointer; }
 .h10-sov-toggle:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
 .h10-sov-toggle.on { color: var(--nds-blue-600); background: var(--nds-blue-100); }
-.h10-sov-listsel { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 9px; cursor: pointer; max-width: 260px; }
+.h10-sov-listsel { max-width: 260px; }
 .h10-sov-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--nds-text-muted); }
 .h10-sov-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; }
 .h10-sov-win i.bad { background: #fff6e8; color: var(--nds-warning-text); }
@@ -2493,7 +2495,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid chrome ───────────────────────────────────────────────────────────────────────────── */
 .h10-bud-win { display: inline-flex; align-items: center; gap: 8px; }
-.h10-bud-select { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 8px; }
 .h10-bud-search input { font: inherit; font-size: 11.5px; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 9px; width: 230px; }
 .h10-bud-search input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
 /* The grain segment. Its own class rather than `.h10-svt-seg`, which carries a `margin: … 24px`
@@ -4866,9 +4867,15 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-plc3-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
 .h10-plc3-field { display: flex; flex-direction: column; gap: 4px; }
 .h10-plc3-field .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: var(--nds-text-muted); }
-.h10-plc3-field input, .h10-plc3-field select { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 6px 9px; }
-.h10-plc3-field input { width: 92px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
-.h10-plc3-field input:focus, .h10-plc3-field select:focus { outline: 2px solid var(--nds-blue-700); outline-offset: -1px; border-color: var(--nds-blue-700); }
+/* DS-ALIGN — both controls are DS primitives at `sm`, which carry the border, the hover
+   and the focus ring. The multiplier stays a right-aligned tabular figure, 92px wide.
+
+   🔴 The `.nds-field >` prefix is load-bearing. `.nds-field > input` declares `font: inherit`,
+   and the `font` SHORTHAND resets `font-weight` and `font-variant` — so a bare `.h10-plc3-numin`
+   (0,1,0) loses both to it (0,1,1) and the figure renders 400-weight and proportional. Measured:
+   font-weight came back 400 before this selector was raised. */
+.h10-plc3-num { width: 92px; }
+.nds-field > .h10-plc3-numin { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 
 /* the preview's verdict counters */
 .h10-plc3-tally { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }

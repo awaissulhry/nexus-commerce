@@ -51,6 +51,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
+import { Select } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -752,15 +753,16 @@ export function BidClient() {
           <RefreshCw size={12} /> Changed since you loaded
         </button>
       )}
-      <select
+      <Select
+        size="xs"
         value={windowParam} onChange={(e) => push({ window: e.target.value })}
-        aria-label="Metric window" className="h10-bd-select"
+        aria-label="Metric window"
         title="The window the metric columns are summed over. It is NOT the history window — the bid curve arrives in S3 and carries its own."
       >
         <option value="7d">7 days</option>
         <option value="30d">30 days</option>
         <option value="60d">60 days</option>
-      </select>
+      </Select>
     </span>
   )
 

@@ -52,7 +52,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, Search } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1161,8 +1161,8 @@ export function ShareOfVoiceClient() {
                 {/* The watchlist as a FILTER, not the population — the inverse of Keyword Tracker.
                     Offered only where the market has a list to filter by. */}
                 {(data?.facets.byList.length ?? 0) > 0 && (
-                  <select
-                    className="h10-sov-listsel"
+                  <Select
+                    size="xs" className="h10-sov-listsel"
                     aria-label="Filter by watchlist"
                     value={s?.list?.id ?? 'all'}
                     onChange={(e) => push({ list: e.target.value })}
@@ -1171,7 +1171,7 @@ export function ShareOfVoiceClient() {
                     {data!.facets.byList.map((l) => (
                       <option key={l.id} value={l.id}>{l.name} · {num(l.terms)} terms</option>
                     ))}
-                  </select>
+                  </Select>
                 )}
               </span>
             )}

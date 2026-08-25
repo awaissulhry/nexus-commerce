@@ -44,6 +44,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, ShieldAlert, X } from 'lucide-react'
+import { Input, Select } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export type LaneKey = 'top' | 'rest' | 'product'
@@ -240,13 +241,14 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
           <div className="h10-plc3-form">
             <label className="h10-plc3-field">
               <span className="cap">Lane</span>
-              <select value={laneSel} onChange={(e) => setLaneSel(e.target.value as LaneKey)} disabled={running}>
+              <Select size="sm" value={laneSel} onChange={(e) => setLaneSel(e.target.value as LaneKey)} disabled={running}>
                 {(['top', 'rest', 'product'] as LaneKey[]).map((l) => <option key={l} value={l}>{LANE_LABEL[l]}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="h10-plc3-field">
               <span className="cap">Multiplier %</span>
-              <input
+              <Input
+                size="sm" fieldClassName="h10-plc3-num" className="h10-plc3-numin"
                 inputMode="numeric" value={pctDraft} disabled={running}
                 onChange={(e) => setPctDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
                 aria-label="Multiplier percent, 0 to 900"
@@ -254,10 +256,10 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
             </label>
             <label className="h10-plc3-field">
               <span className="cap">Campaigns</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value as 'enabled' | 'all')} disabled={running}>
+              <Select size="sm" value={status} onChange={(e) => setStatus(e.target.value as 'enabled' | 'all')} disabled={running}>
                 <option value="enabled">Enabled only</option>
                 <option value="all">Every status</option>
-              </select>
+              </Select>
             </label>
             <button type="button" className="h10-plc3-btn" onClick={loadPreview} disabled={!pctValid || loading || running}>
               {loading ? <><Loader2 size={12} className="spin" /> Checking…</> : 'Preview'}
