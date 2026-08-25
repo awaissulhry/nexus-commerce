@@ -1529,3 +1529,12 @@
   width: 13px;
   height: 13px;
 }
+
+/* An expanded row's detail panel. Full width by construction — the grid supplies the colSpan,
+   because only it knows the column count, and that count shifts with `selectable` and with
+   hidden columns. */
+.nds-grid tbody tr.nds-grid-sub > td {
+  padding: 0;
+  background: var(--nds-surface-sunken);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, Fragment } from 'react'
 import { ChevronsUpDown, ChevronUp, ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { ToolbarButton } from '../primitives'
 // The pattern FILE, not the `../patterns` barrel — see the note on the Modal
@@ -49,6 +49,18 @@ export interface DataGridProps<T> {
   selectRowHint?: string
   showTotals?: boolean
   emptyState?: ReactNode
+  /**
+   * Render an extra full-width row beneath a row. Return `null`/`undefined` for rows that do not
+   * expand; the sub-row is only rendered when `rowKey(row)` is in `expanded`.
+   *
+   * The GRID owns the `colSpan`, because only it knows the column count — which shifts with
+   * `selectable` and with hidden columns, and is exactly the number every hand-rolled version got
+   * wrong the moment a column was toggled. The CALLER owns the caret: put it in whichever cell it
+   * belongs to, with its own `aria-expanded`, as `CampaignsTable` already does.
+   */
+  renderExpanded?: (row: T) => ReactNode
+  /** Keys of the currently expanded rows. Controlled — the grid keeps no expansion state. */
+  expanded?: Set<string>
   initialSort?: { key: string; dir: 'asc' | 'desc' }
   /**
    * Controlled sort (NAF.SB.AS-S1R S1.e — additive, opt-in).
@@ -130,7 +142,7 @@ export function DataGrid<T>({
   selectAllHint,
   selectRowHint,
   showTotals,
-  emptyState,
+  emptyState, renderExpanded, expanded,
   initialSort,
   sort: controlledSort,
   onSortChange,
@@ -383,7 +395,7 @@ export function DataGrid<T>({
             sortedRows.map((row) => {
               const k = rowKey(row)
               const isSel = !!selected?.has(k)
-              return (
+              const main = (
                 <tr key={k} className={[isSel ? 'sel' : '', rowClassName?.(row) ?? ''].filter(Boolean).join(' ') || undefined}>
                   {selectable && (
                     <td className="ck sticky" style={{ left: 0 }}>
@@ -400,6 +412,16 @@ export function DataGrid<T>({
                     </td>
                   ))}
                 </tr>
+              )
+              const sub = renderExpanded && expanded?.has(k) ? renderExpanded(row) : null
+              if (sub == null) return main
+              return (
+                <Fragment key={k}>
+                  {main}
+                  <tr className="nds-grid-sub">
+                    <td colSpan={cols.length + (selectable ? 1 : 0)}>{sub}</td>
+                  </tr>
+                </Fragment>
               )
             })
           )}
