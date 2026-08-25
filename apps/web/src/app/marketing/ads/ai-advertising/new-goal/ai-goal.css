@@ -35,7 +35,7 @@
 .aig2-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .aig2-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #344054; background: var(--nds-grey-75); border-radius: var(--nds-radius-full); padding: 4px 11px; }
 .aig2-chip b { color: var(--nds-text); }
-.aig2-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #9a6b00; background: #fdf6e3; border: 1px solid #f1e2b6; border-radius: var(--nds-radius-lg); padding: 8px 11px; }
+.aig2-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #9a6b00; background: var(--nds-note-warn-bg); border: 1px solid #f1e2b6; border-radius: var(--nds-radius-lg); padding: 8px 11px; }
 .aig2-ptable { width: 100%; border-collapse: collapse; }
 .aig2-ptable th { text-align: left; font-size: 11.5px; font-weight: 700; color: #475467; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-150); padding: 8px 12px; white-space: nowrap; }
 .aig2-ptable td { font-size: 12.5px; color: var(--nds-grey-800); border-bottom: 1px solid var(--nds-grey-100); padding: 8px 12px; }
@@ -60,5 +60,5 @@
 .aig2-step.ok .dot { background: var(--nds-green-700); }
 .aig2-step.err .dot { background: #b42318; }
 .aig2-launch .sum { font-size: 12.5px; color: var(--nds-text-2); margin-bottom: 14px; line-height: 1.5; }
-.aig2-launch .errs { font-size: 12px; color: #9a6b00; background: #fdf6e3; border-radius: var(--nds-radius-lg); padding: 8px 11px; margin-bottom: 14px; max-height: 120px; overflow-y: auto; }
+.aig2-launch .errs { font-size: 12px; color: #9a6b00; background: var(--nds-note-warn-bg); border-radius: var(--nds-radius-lg); padding: 8px 11px; margin-bottom: 14px; max-height: 120px; overflow-y: auto; }
 .aig2-launch .btns { display: flex; gap: 10px; justify-content: flex-end; }

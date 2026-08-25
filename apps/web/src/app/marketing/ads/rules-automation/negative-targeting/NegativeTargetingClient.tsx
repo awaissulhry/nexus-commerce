@@ -467,7 +467,7 @@ export function NegativeTargetingClient() {
         onChange={setFilterState}
         defaultOpen
         notesSlot={s?.unreachable ? (
-          <p className="h10-ra-note bad">
+          <p className="h10-ra-note warn">
             <AlertTriangle size={13} />
             <span>
               <b>This portfolio view cannot see {num(s.unreachable.negativesWithoutPortfolio)} of

@@ -758,7 +758,7 @@ export function ShareOfVoiceClient() {
             onChange={setFilterState}
             defaultOpen
             notesSlot={s?.boundBy === 'portfolio' && s.resolved.campaignsWithoutPortfolio > 0 ? (
-              <p className="h10-ra-note bad">
+              <p className="h10-ra-note warn">
                 <AlertTriangle size={13} />
                 <span>
                   <b>This portfolio view cannot see {num(s.resolved.campaignsWithoutPortfolio)} of the{' '}

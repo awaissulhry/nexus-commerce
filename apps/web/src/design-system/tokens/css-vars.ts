@@ -198,11 +198,15 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // red — for one meaning. This is the darkest measured value, so adopting it everywhere only
   // ever RAISES contrast: 5.89 → 8.27 on the stale badge, 7.29 → 8.27 on the feed banner.
   { name: '--nds-stale-text', value: '#6d3f10' },
-  // The error tier of an inline note. NOT --nds-danger-text (#9c2f2a): on this ground the
-  // darker value measures 9.16 against 6.9, and a substitution may only ever raise contrast.
-  { name: '--nds-note-error-bg', value: '#fdecea' },
-  { name: '--nds-note-error-fg', value: '#7a1c16' },
+  // Inline-note severities, one pair each. Values are the HIGHEST-contrast variant found among
+  // the six that existed, so adopting them raises contrast everywhere and lowers it nowhere:
+  // error 6.24/9.16/9.23 → 9.23, caution 5.79/5.89/6.63 → 6.63.
+  { name: '--nds-note-error-bg', value: '#fdf0ef' },
+  { name: '--nds-note-error-fg', value: '#7a2018' },
   { name: '--nds-note-error-icon', value: '#b3261e' },
+  { name: '--nds-note-warn-bg', value: '#fdf6e3' },
+  { name: '--nds-note-warn-fg', value: '#6b5514' },
+  { name: '--nds-note-warn-icon', value: '#8a6d1f' },
   { name: '--nds-danger-text', value: '#9c2f2a' },
   { name: '--nds-info-text', value: '#10457f' },
 

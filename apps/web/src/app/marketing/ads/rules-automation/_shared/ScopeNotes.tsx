@@ -32,7 +32,7 @@ export function ScopeNotes({ applied, notes, contradiction, intersectionCopy }: 
   return (
     <>
       {contradiction && (
-        <p className="h10-ra-note bad">
+        <p className="h10-ra-note warn">
           <AlertTriangle size={12} />
           <span><b>Nothing can match this scope.</b> {contradiction}</span>
         </p>

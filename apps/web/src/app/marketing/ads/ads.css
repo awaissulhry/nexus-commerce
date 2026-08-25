@@ -2057,7 +2057,7 @@
 .h10-rep-scope .item .t b { font-size: 13px; font-weight: 600; color: #6b7a8d; }
 .h10-rep-scope .item.on .t b { color: var(--nds-grey-900); }
 .h10-rep-scope .item .h { font-size: 11.5px; line-height: 1.45; color: var(--nds-grey-500); }
-.h10-rep-scope-warn { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 12px; font-size: 12.5px; line-height: 1.5; color: #8a6d1f; background: #fdf6e3; border: 1px solid #f0e0b0; border-radius: var(--nds-radius-lg); }
+.h10-rep-scope-warn { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 12px; font-size: 12.5px; line-height: 1.5; color: #8a6d1f; background: var(--nds-note-warn-bg); border: 1px solid #f0e0b0; border-radius: var(--nds-radius-lg); }
 .h10-rep-scope-warn svg { flex: none; margin-top: 1px; }
 .h10-rep-scope-note { margin: 10px 0 0; font-size: 12px; color: #7c8794; }
 
@@ -2078,7 +2078,7 @@
 .h10-rep-reps .row input:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
 .h10-rep-reps .row .arr { color: #a4adba; flex: none; }
 .h10-rep-reps .row .del { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; color: var(--nds-grey-500); background: none; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); cursor: pointer; flex: none; }
-.h10-rep-reps .row .del:hover { color: #c11208; border-color: #f0c4c0; background: #fdf0ef; }
+.h10-rep-reps .row .del:hover { color: #c11208; border-color: #f0c4c0; background: var(--nds-note-error-bg); }
 .h10-rep-addrep { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-blue-600); background: none; border: none; padding: 2px 0; cursor: pointer; }
 .h10-rep-addrep:hover { text-decoration: underline; }
 
@@ -2094,9 +2094,9 @@
 .h10-rep-preview .row .from { color: #7c8794; text-decoration: line-through; text-decoration-color: var(--nds-grey-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rep-preview .row .arr { color: #b9c2cd; text-align: center; }
 .h10-rep-preview .row .to { color: var(--nds-grey-900); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-rep-preview .row.bad { background: #fdf0ef; }
+.h10-rep-preview .row.bad { background: var(--nds-note-error-bg); }
 .h10-rep-preview .row.bad .to { color: #c11208; }
-.h10-rep-preview .row.same { background: #fdf6e3; }
+.h10-rep-preview .row.same { background: var(--nds-note-warn-bg); }
 .h10-rep-preview .row.same .from { text-decoration: none; }
 .h10-rep-preview .row.same .to { color: #8a6d1f; }
 
@@ -2132,17 +2132,17 @@
 /* ── AX3.7 — step 2: review & edit (structure rail + working pane) ──────── */
 .h10-rep-bulkbtn { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); padding: 6px 11px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .h10-rep-bulkbtn:hover { border-color: #b9c2cd; background: var(--nds-grey-25); }
-.h10-rep-bulkbtn.danger:hover { color: #c11208; border-color: #f0c4c0; background: #fdf0ef; }
+.h10-rep-bulkbtn.danger:hover { color: #c11208; border-color: #f0c4c0; background: var(--nds-note-error-bg); }
 
 /* Shared atoms — the wizard root carries .h10-rep, so these reach step 1's
    source tree and the history panel as well as the tables below. */
 .h10-rep .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: #6b7a8d; background: var(--nds-grey-100); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
 .h10-rep .tag.auto, .h10-rep .tag.edited { color: var(--nds-blue-600); background: var(--nds-blue-100); }
 .h10-rep .tag.new { color: #1a7f4b; background: #e6f6ed; }
-.h10-rep .tag.neg { color: #8a6d1f; background: #fdf6e3; }
-.h10-rep .tag.cf { color: #8a6d1f; background: #fdf6e3; border: 1px solid #f0e0b0; }
+.h10-rep .tag.neg { color: #8a6d1f; background: var(--nds-note-warn-bg); }
+.h10-rep .tag.cf { color: #8a6d1f; background: var(--nds-note-warn-bg); border: 1px solid #f0e0b0; }
 .h10-rep .cutbtn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: #a4adba; background: none; border: none; border-radius: var(--nds-radius-sm); cursor: pointer; flex: none; }
-.h10-rep .cutbtn:hover { color: #c11208; background: #fdf0ef; }
+.h10-rep .cutbtn:hover { color: #c11208; background: var(--nds-note-error-bg); }
 .h10-rep .cutbtn.on { color: var(--nds-blue-600); }
 .h10-rep .cutbtn.on:hover { color: var(--nds-blue-600); background: var(--nds-blue-100); }
 .h10-rep .inl { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-sm); background: var(--nds-white); font-size: 12px; color: #7c8794; }
@@ -2155,7 +2155,7 @@
 
 /* The gate, stated with the actions that clear it. */
 .h10-rep-gate { display: flex; align-items: flex-start; gap: 13px; padding: 14px 16px; border-radius: var(--nds-radius-2xl); border: 1px solid; }
-.h10-rep-gate.bad { background: #fdf0ef; border-color: #f0c4c0; }
+.h10-rep-gate.bad { background: var(--nds-note-error-bg); border-color: #f0c4c0; }
 .h10-rep-gate.ok { background: #e6f6ed; border-color: #b9e2cb; }
 .h10-rep-gate .ic { flex: none; margin-top: 1px; }
 .h10-rep-gate.bad .ic { color: #c11208; }
@@ -2174,7 +2174,7 @@
 .h10-rep-rail button.on { background: var(--nds-blue-100); color: var(--nds-blue-600); font-weight: 600; }
 .h10-rep-rail button .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rep-rail button .c { flex: none; font-size: 11px; color: #9aa4b1; }
-.h10-rep-rail button .cf { flex: none; min-width: 19px; text-align: center; font-size: 10.5px; font-weight: 700; color: #8a6d1f; background: #fdf6e3; border: 1px solid #f0e0b0; border-radius: 9px; padding: 0 5px; }
+.h10-rep-rail button .cf { flex: none; min-width: 19px; text-align: center; font-size: 10.5px; font-weight: 700; color: #8a6d1f; background: var(--nds-note-warn-bg); border: 1px solid #f0e0b0; border-radius: 9px; padding: 0 5px; }
 .h10-rep-rail button.cut .n { text-decoration: line-through; color: #a4adba; }
 .h10-rep-rail .root { font-weight: 700; color: var(--nds-grey-900); margin-bottom: 5px; border-bottom: 1px solid var(--nds-grey-100); border-radius: 7px 7px 0 0; }
 .h10-rep-rail .grp + .grp { margin-top: 3px; }
@@ -2217,7 +2217,7 @@
 .h10-rep-tbl th .ar { margin-left: 3px; }
 .h10-rep-tbl td { padding: 7px 10px; border-bottom: 1px solid var(--nds-grey-50); color: var(--nds-grey-700); }
 .h10-rep-tbl tbody tr:hover td { background: var(--nds-white); }
-.h10-rep-tbl tr.conflict td { background: #fdf6e3; }
+.h10-rep-tbl tr.conflict td { background: var(--nds-note-warn-bg); }
 .h10-rep-tbl tr.conflict:hover td { background: #fcf3d9; }
 .h10-rep-tbl tr.added td { background: #f6fbf8; }
 .h10-rep-tbl tr.cut td { background: var(--nds-grey-25); }
@@ -2284,7 +2284,7 @@
 .h10-rep-settings .acts { display: flex; align-items: center; gap: 8px; flex: none; }
 .h10-rep-settings .cutbtn, .h10-rep-settings .ghost { display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); padding: 5px 10px; cursor: pointer; }
 .h10-rep-settings .ghost:hover { color: var(--nds-blue-600); border-color: #d6e6fb; background: var(--nds-blue-100); }
-.h10-rep-settings .cutbtn:hover { color: #c11208; border-color: #f0c4c0; background: #fdf0ef; }
+.h10-rep-settings .cutbtn:hover { color: #c11208; border-color: #f0c4c0; background: var(--nds-note-error-bg); }
 .h10-rep-settings .cutbtn.on, .h10-rep-settings .cutbtn.on:hover { color: var(--nds-blue-600); border-color: #d6e6fb; background: var(--nds-blue-100); }
 .h10-rep-settings .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; }
 .h10-rep-settings .fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -2339,9 +2339,9 @@
 .h10-rep-note ul { margin: 6px 0 0; padding-left: 20px; }
 .h10-rep-note li { margin: 2px 0; }
 .h10-rep-note .hint { font-size: 12px; color: #7c8794; }
-.h10-rep-note.bad { background: #fdf0ef; border-color: #f0c4c0; color: #7a2018; }
+.h10-rep-note.bad { background: var(--nds-note-error-bg); border-color: #f0c4c0; color: var(--nds-note-error-fg); }
 .h10-rep-note.bad b { color: #c11208; }
-.h10-rep-note.warn { background: #fdf6e3; border-color: #f0e0b0; color: #6b5514; }
+.h10-rep-note.warn { background: var(--nds-note-warn-bg); border-color: #f0e0b0; color: var(--nds-note-warn-fg); }
 .h10-rep-note.warn b { color: #8a6d1f; }
 .h10-rep-note.ok { background: #e6f6ed; border-color: #b9e2cb; color: #14603a; }
 .h10-rep-note.ok b { color: #1a7f4b; }
@@ -2373,11 +2373,11 @@
 .h10-rep-launchbar.sticky { position: sticky; bottom: 0; z-index: 2; padding: 12px 15px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); box-shadow: 0 -2px 12px rgba(16,24,40,.06); }
 
 /* AX3.7 — a blocker states its own cure, and carries the control that applies it. */
-.h10-rep-blockers { padding: 12px 15px; background: #fdf0ef; border: 1px solid #f0c4c0; border-radius: var(--nds-radius-xl); }
+.h10-rep-blockers { padding: 12px 15px; background: var(--nds-note-error-bg); border: 1px solid #f0c4c0; border-radius: var(--nds-radius-xl); }
 .h10-rep-blockers .hd { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #c11208; }
 .h10-rep-blockers .bl { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f5d5d2; }
-.h10-rep-blockers .bl p { flex: 1; min-width: 250px; margin: 0; font-size: 12.5px; line-height: 1.55; color: #7a2018; }
-.h10-rep-blockers .capfix { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #7a2018; }
+.h10-rep-blockers .bl p { flex: 1; min-width: 250px; margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--nds-note-error-fg); }
+.h10-rep-blockers .capfix { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: var(--nds-note-error-fg); }
 .h10-rep-blockers .lnk { font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-blue-600); background: none; border: none; cursor: pointer; }
 .h10-rep-blockers .lnk:hover { text-decoration: underline; }
 
@@ -2399,7 +2399,7 @@
 .h10-rep-launchbar .bad { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #c11208; }
 .h10-rep-launchbar .h10-spw-next { display: inline-flex; align-items: center; gap: 7px; }
 .h10-rep-bulkbtn.danger { color: #c11208; border-color: #f0c4c0; }
-.h10-rep-bulkbtn.danger:hover { background: #fdf0ef; border-color: #e0a49e; }
+.h10-rep-bulkbtn.danger:hover { background: var(--nds-note-error-bg); border-color: #e0a49e; }
 .h10-rep-bulkbtn { display: inline-flex; align-items: center; gap: 6px; }
 
 /* Saved structures — the blueprint library, now inside the builder. */
@@ -2739,10 +2739,10 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
 .h10-am-fpanel .h10-ra-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-am-fpanel .h10-ra-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-am-fpanel .h10-ra-note .lnk { font: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
-.h10-am-fpanel .h10-ra-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-am-fpanel .h10-ra-note.bad svg { color: var(--nds-warning-text); }
-.h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
-.h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }
+.h10-am-fpanel .h10-ra-note.warn { background: var(--nds-note-warn-bg); border: 1px solid var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
+.h10-am-fpanel .h10-ra-note.warn svg { color: var(--nds-note-warn-fg); }
+.h10-am-fpanel .h10-ra-note.warn b { color: var(--nds-note-warn-fg); }
+.h10-am-fpanel .h10-ra-note.warn .lnk { color: var(--nds-note-warn-fg); }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator. */
 .h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bd-stale:hover { background: #fdeed5; }

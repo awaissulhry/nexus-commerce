@@ -165,11 +165,15 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-radius-2xl', value: '12px' },
   { name: '--nds-radius-3xl', value: '14px' },
   { name: '--nds-radius-full', value: '999px' },
-  // The error tier of an inline note. NOT --nds-danger-text (#9c2f2a): on this ground the
-  // darker value measures 9.16 against 6.9, and a substitution may only ever raise contrast.
-  { name: '--nds-note-error-bg', value: '#fdecea' },
-  { name: '--nds-note-error-fg', value: '#7a1c16' },
+  // Inline-note severities, one pair each. Values are the HIGHEST-contrast variant found among
+  // the six that existed, so adopting them raises contrast everywhere and lowers it nowhere:
+  // error 6.24/9.16/9.23 → 9.23, caution 5.79/5.89/6.63 → 6.63.
+  { name: '--nds-note-error-bg', value: '#fdf0ef' },
+  { name: '--nds-note-error-fg', value: '#7a2018' },
   { name: '--nds-note-error-icon', value: '#b3261e' },
+  { name: '--nds-note-warn-bg', value: '#fdf6e3' },
+  { name: '--nds-note-warn-fg', value: '#6b5514' },
+  { name: '--nds-note-warn-icon', value: '#8a6d1f' },
   { name: '--nds-radius-round', value: '999px' },
 
   // ── Elevation + focus ────────────────────────────────────────────

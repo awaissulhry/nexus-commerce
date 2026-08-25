@@ -1029,8 +1029,8 @@
    items and collapse into a narrow left column. */
 .h10-n24-sum .note > span { flex: 1; min-width: 0; }
 .h10-n24-sum .note.off { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-n24-sum .note.warn { background: #fdf6e7; color: #7a5c15; }
-.h10-n24-sum .note.bad { background: #fdefec; color: #9a3a24; }
+.h10-n24-sum .note.warn { background: var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
+.h10-n24-sum .note.bad { background: var(--nds-note-error-bg); color: var(--nds-note-error-fg); }
 /* A dated event is not a fault — it is a deliberate override — so it reads as information. */
 .h10-n24-sum .note.evt { background: var(--nds-blue-50); color: #24487a; }
 .h10-n24-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
@@ -1054,21 +1054,21 @@
 .h10-n24-t td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
 .h10-n24-t td.tg em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
 .h10-n24-t td.tg em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
-.h10-n24-t td.tg .miss { color: #9a3a24; display: inline-flex; align-items: center; gap: 4px; }
+.h10-n24-t td.tg .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
 .h10-n24-t .none { color: var(--nds-grey-400); }
 .h10-n24-t td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
 .h10-n24-t td.bd .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
 .h10-n24-t td.bd .hold, .h10-n24-t td.bd .sup { white-space: nowrap; }
 .h10-n24-t td.bd .chase b { font-weight: 700; }
-.h10-n24-t td.bd .chase.risk { color: #9a3a24; }
+.h10-n24-t td.bd .chase.risk { color: var(--nds-note-error-fg); }
 /* MB.6 — this hour's climb stops at the CPC ceiling, not at the target's own Ceiling. Its own
    line: inside the nowrap .chase span it pushed the cell over its column. */
 .h10-n24-t td.bd .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
 .h10-n24-t td.bd .sup { color: var(--nds-grey-500); }
 .h10-n24-t td.gd { color: var(--nds-pill-neutral-fg); }
 .h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }
-.h10-n24-t td.gd .ao { color: #9a3a24; font-weight: 700; }
-.h10-n24-t td.gd .bad { color: #9a3a24; font-weight: 700; }
+.h10-n24-t td.gd .ao { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t td.gd .bad { color: var(--nds-note-error-fg); font-weight: 700; }
 
 /* RDX/E2 — the fit block when there is not enough evidence to state a share. No big number,
    because the whole point is that there is no number worth showing. */
@@ -1094,7 +1094,7 @@
 .h10-d2-diff .pick .chg { margin-left: auto; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: #2563eb; cursor: pointer; padding: 2px 4px; }
 .h10-d2-diff .sum { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 0; font-size: 12.5px; color: #4a5462; }
 .h10-d2-diff .sum b { font-weight: 700; color: var(--nds-grey-900); }
-.h10-d2-diff .sum .warn b { color: #9a3a24; }
+.h10-d2-diff .sum .warn b { color: var(--nds-note-error-fg); }
 .h10-d2-diff .sum .muted { color: var(--nds-grey-500); }
 /* One row per changed hour, capped in height so a 40-hour paint scrolls instead of pushing the
    confirm button off-screen — the button is the point of the dialog. */
@@ -1107,7 +1107,7 @@
 .h10-d2-diff .r .v { color: var(--nds-grey-900); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-d2-none { padding: 16px 10px; font-size: 12.5px; color: #4a5462; line-height: 1.5; }
 .h10-d2-none b { color: var(--nds-grey-900); }
-.h10-d2-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px; border-radius: var(--nds-radius-md); background: #fdf6e7; color: #7a5c15; font-size: 12px; line-height: 1.45; }
+.h10-d2-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px; border-radius: var(--nds-radius-md); background: var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); font-size: 12px; line-height: 1.45; }
 .h10-d2-note svg { flex: none; margin-top: 1px; }
 
 /* ── G3 — event overrides ──────────────────────────────────────────────────────────────────
@@ -1133,7 +1133,7 @@
 .h10-evt-act { display: flex; align-items: center; gap: 10px; }
 
 /* RDX/G2 — the arm-confirm reuses the D2 diff shell; only the alarming variant is new. */
-.h10-d2-note.bad { background: #fdefec; color: #9a3a24; }
+.h10-d2-note.bad { background: var(--nds-note-error-bg); color: var(--nds-note-error-fg); }
 
 /* ── ADX G4 — protected terms ─────────────────────────────────────────────
    Matches the h10-* language the rest of this console uses. Spacing mirrors
@@ -1634,9 +1634,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bd-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-bd-note b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-bd-note.warn { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-bd-note.warn svg { color: var(--nds-warning-text); }
-.h10-bd-note.warn b { color: #7a4512; }
+.h10-bd-note.warn { background: var(--nds-note-warn-bg); border: 1px solid var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
+.h10-bd-note.warn svg { color: var(--nds-note-warn-fg); }
+.h10-bd-note.warn b { color: var(--nds-note-warn-fg); }
 .h10-bd-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bd-said b { font-weight: 800; color: var(--nds-grey-900); }
 
@@ -2402,9 +2402,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-bud-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-bud-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 4px; border-radius: 4px; background: #fdeed5; color: #7a4512; }
-.h10-bud-note.warn { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-bud-note.warn svg { color: var(--nds-warning-text); }
-.h10-bud-note.warn b { color: #7a4512; }
+.h10-bud-note.warn { background: var(--nds-note-warn-bg); border: 1px solid var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
+.h10-bud-note.warn svg { color: var(--nds-note-warn-fg); }
+.h10-bud-note.warn b { color: var(--nds-note-warn-fg); }
 .h10-bud-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bud-said b { font-weight: 800; color: var(--nds-grey-900); }
 
@@ -2592,9 +2592,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-ar-note b { font-weight: 800; color: var(--nds-grey-900); }
 /* Broke — the read failed. Amber, and the only state on this page that is allowed to look wrong. */
-.h10-ar-note.warn { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-ar-note.warn svg, .h10-ar-note.warn b { color: var(--nds-warning-text); }
-.h10-ar-note.warn .h10-ar-lnk { color: #7a4512; }
+.h10-ar-note.warn { background: var(--nds-note-warn-bg); border: 1px solid var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
+.h10-ar-note.warn svg, .h10-ar-note.warn b { color: var(--nds-note-warn-fg); }
+.h10-ar-note.warn .h10-ar-lnk { color: var(--nds-note-warn-fg); }
 /* Refused — the scope cannot resolve. A refusal is not a failure: it is the system working, and it
    gets its own colour so an operator never reads "this is broken" where the answer is "this asks
    for two things that cannot both be true". */
@@ -2766,9 +2766,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    a value it understood, and colouring it as breakage is the lie this page exists to stop telling. */
 .h10-bsp-note.ok { background: #e7f6ed; color: #0f5132; }
 .h10-bsp-note.ok b { color: #0f5132; }
-.h10-bsp-note.warn { background: #fdf3e3; color: #6b4310; }
-.h10-bsp-note.warn svg { color: var(--nds-warning-text); }
-.h10-bsp-note.warn b { color: #6b4310; }
+.h10-bsp-note.warn { background: var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
+.h10-bsp-note.warn svg { color: var(--nds-note-warn-fg); }
+.h10-bsp-note.warn b { color: var(--nds-note-warn-fg); }
 .h10-bsp-empty.refused .ico { color: var(--nds-warning-text); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════
