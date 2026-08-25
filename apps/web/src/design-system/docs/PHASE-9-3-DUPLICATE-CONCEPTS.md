@@ -383,6 +383,50 @@ grew all of that *is* `AdsDataGrid`, so option 4 collapses into option 2.
 a primitive, and the DS already has that layer — and it is **renamed**. Nothing about it is
 ads-specific except its vocabulary; `WorkspaceGrid` is what it actually is.
 
+### WG.1 shipped 2026-08-25 — and the "one field" turned out to be blocked
+
+The correction above said the port was **one field plus two renames**. The renames are done
+(`metric` → `align`, three alignments where there were two, `.ctr` added beside `.num`/`.ed`; all
+64 ads call sites render byte-identically because `align` falls through to `metric` when unset).
+
+**The one field does not port.** `Column.sticky` pins per column by accumulating widths inward from
+the edge. In the ads grid the left edge is the IDENTITY cell, and it declares only
+`max-width: 360px` — it is fluid. A left-pinned data column therefore cannot know where it starts,
+and no arrangement of static CSS can tell it. It needs a runtime measurement, which is the same
+measurement the operator-pinning work below needs.
+
+So the two are one task, not two, and `sticky` was left OUT of WG.1 rather than shipped as a prop
+that type-checks and does nothing.
+
+**Consequence for the migration order.** The 20 call sites split:
+
+| | |
+|---|---|
+| migrate now | every grid that does not left-pin a column |
+| blocked on runtime measurement | the ones that do — `sticky: true` appears in **7** places across `stock/sync-control` (3), `stock/locations`, `stock/import` (3) |
+
+The four bare-table sites named as the low-risk proof are NOT all clear: `stock/locations` and
+`stock/import` both left-pin. `fleet/map/EntityListView` and `pricing/volume-pricing` are.
+
+**Order, corrected.** Call sites cannot migrate first. Until the component lives in the DS,
+pointing `fleet` or `pricing` at `app/marketing/ads/campaigns/_grid/AdsDataGrid` trades a duplicate
+component for a cross-section app import — worse coupling than the thing being fixed.
+
+| | | |
+|---|---|---|
+| WG.1 | `align` + `.ctr` | ✅ 2026-08-25 |
+| WG.2 | extract the grid's CSS out of `ads.css` into a DS-owned stylesheet | the bulk |
+| WG.3 | move the TSX + its three local deps into `patterns/WorkspaceGrid` | |
+| WG.4 | `AdsDataGrid` becomes a re-export — 64 ads call sites untouched | |
+| WG.5 | migrate the 20 DS `DataGrid` call sites | 5 blocked on `sticky` |
+| WG.6 | retire the DS `DataGrid` | |
+
+**The CSS is the real bulk, and it was under-counted.** Promoting the component means moving its
+styles, and they are **312 rules across 10 interleaved blocks** of a 3,088-line `ads.css`, spanning
+lines 19–3071 — not a contiguous block, not a cut-and-paste. Plus three app-local code
+dependencies: `FilterDropdown` (370 lines), `AdsFilterBar` (178), `enabledRank` (20). Any estimate
+of #13 that counts only `AdsDataGrid.tsx`'s 967 lines is short by more than half.
+
 ### 🔴 The requirement: pinning must become an OPERATOR preference, not developer config
 
 Operator, 2026-08-25: *"I want the ability to be able to stick the column and lock the columns and
