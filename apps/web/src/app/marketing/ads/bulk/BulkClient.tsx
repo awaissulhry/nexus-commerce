@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
+import { Checkbox } from '@/design-system/primitives/Checkbox'
 import { Select } from '@/design-system/primitives/Select'
 import { Banner } from '@/design-system/components/Banner'
 import { Tabs } from '@/design-system/components/Tabs'
@@ -420,10 +421,12 @@ function BulkInner() {
                         </Select>
                       </label>
                     )}
-                    <label className="bulk-opt bulk-opt--check">
-                      <input type="checkbox" checked={applyLive} onChange={(e) => setApplyLive(e.target.checked)} />
-                      <span>Push to Amazon now <em>— otherwise changes queue behind the write gate</em></span>
-                    </label>
+                    <Checkbox
+                      className="bulk-opt--check"
+                      checked={applyLive}
+                      onChange={(e) => setApplyLive(e.target.checked)}
+                      label={<>Push to Amazon now <em>— otherwise changes queue behind the write gate</em></>}
+                    />
                   </div>
                   <div className="bulk-actions-btns">
                     <Button variant="secondary" onClick={reset} disabled={busy}>Cancel</Button>
