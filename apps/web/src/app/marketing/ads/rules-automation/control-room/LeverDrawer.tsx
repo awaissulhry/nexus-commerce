@@ -31,6 +31,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X, Play, AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -151,10 +152,10 @@ export function LeverDrawer({ engine, onClose, onRan }: {
             <section className="acr-dw-sec">
               <div className="acr-dw-runbar">
                 {d.run.available ? (
-                  <button type="button" className="acr-btn go" disabled={running} onClick={() => void runNow()}>
+                  <Button variant="success" size="sm" disabled={running} onClick={() => void runNow()}>
                     {running ? <Loader2 size={14} className="acr-spin" /> : <Play size={14} />}
                     {running ? 'Starting…' : 'Run now'}
-                  </button>
+                  </Button>
                 ) : (
                   <span className="acr-dw-norun">
                     <CircleSlash size={13} /> {d.run.why ?? 'No manual trigger for this engine.'}

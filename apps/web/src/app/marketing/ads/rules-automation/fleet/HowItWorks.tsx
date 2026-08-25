@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { BookOpen, X } from 'lucide-react'
 import { Term } from './glossary'
 
@@ -39,8 +40,8 @@ export function FirstVisitIntro() {
           </li>
         </ol>
       </div>
-      <button
-        className="acr-btn"
+      <Button
+        variant="quiet" size="sm"
         aria-label="Dismiss introduction"
         onClick={() => {
           localStorage.setItem(INTRO_KEY, '1')
@@ -48,7 +49,7 @@ export function FirstVisitIntro() {
         }}
       >
         <X size={13} /> Got it
-      </button>
+      </Button>
     </div>
   )
 }
@@ -61,9 +62,9 @@ export function HowItWorks() {
         <h3>
           <BookOpen size={15} /> How the fleet works
         </h3>
-        <button className="acr-btn" onClick={() => setOpen(!open)}>
+        <Button variant="quiet" size="sm" onClick={() => setOpen(!open)}>
           {open ? 'Close' : 'Read it'}
-        </button>
+        </Button>
       </header>
       {open ? (
         <div className="acr-flx-how">

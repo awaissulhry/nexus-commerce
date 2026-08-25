@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AlertTriangle, AlertOctagon, Info, ArrowRight, CheckCircle2, RefreshCw, Gauge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -123,12 +124,14 @@ export function TodayTab() {
               It lives here because it is a map, not a control surface, and the rail is kept short
               on purpose. Nothing else links to it, so without this the canvas is unreachable.
             */}
-            <Link href="/marketing/ads/autopilot" className="acr-refresh">
-              <Gauge size={13} /> Open the map
-            </Link>
-            <button type="button" className="acr-refresh" onClick={() => void load()} disabled={loading}>
+            <Button asChild size="sm" className="acr-refresh">
+              <Link href="/marketing/ads/autopilot">
+                <Gauge size={13} /> Open the map
+              </Link>
+            </Button>
+            <Button size="sm" className="acr-refresh" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={13} /> {loading ? 'Checking…' : 'Re-check'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

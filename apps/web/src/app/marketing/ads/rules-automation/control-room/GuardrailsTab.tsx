@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Save, AlertTriangle, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { GuardrailGrid } from './GuardrailGrid'
 import { ProtectedTermsPanel } from '../ProtectedTermsPanel'
 
@@ -121,9 +121,9 @@ export function GuardrailsTab() {
               {g.spendPerHourCents.set == null ? ' — the code default' : ''}
             </span>
           </label>
-          <button type="button" className="acr-btn go" disabled={busy} onClick={() => void save()}>
+          <Button variant="success" size="sm" disabled={busy} onClick={() => void save()}>
             <Save size={14} /> {busy ? 'Saving…' : saved ? 'Saved' : 'Save'}
-          </button>
+          </Button>
         </div>
         <p className="acr-note">
           Leave a field empty to fall back to the default. The action count covers rule

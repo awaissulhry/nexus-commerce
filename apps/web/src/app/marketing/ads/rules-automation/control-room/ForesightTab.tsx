@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, RefreshCw, Info, Ban, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -126,9 +127,9 @@ export function ForesightTab() {
           </p>
         </div>
         <div className="acr-today-meta">
-          <button type="button" className="acr-refresh" onClick={() => void load()} disabled={loading}>
+          <Button size="sm" className="acr-refresh" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={13} /> {loading ? 'Checking…' : 'Re-check'}
-          </button>
+          </Button>
         </div>
       </div>
 

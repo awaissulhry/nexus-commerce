@@ -283,12 +283,14 @@ function ThisWeek({ d, onSend, sending, sent }: {
           <code>{d.gates.outboundFlag}</code> {d.gates.outboundEnabled ? 'on' : 'not true'}
         </p>
         <div className="acr-digest-actions">
-          <a className="acr-btn ghost" href={`${api}/api/advertising/digest/weekly/preview?mode=previous`} target="_blank" rel="noopener noreferrer">
-            <Eye size={13} /> Preview last week&rsquo;s
-          </a>
-          <button type="button" className="acr-btn ghost" onClick={onSend} disabled={sending}>
+          <Button asChild size="sm">
+            <a href={`${api}/api/advertising/digest/weekly/preview?mode=previous`} target="_blank" rel="noopener noreferrer">
+              <Eye size={13} /> Preview last week&rsquo;s
+            </a>
+          </Button>
+          <Button size="sm" onClick={onSend} disabled={sending}>
             <Send size={13} /> {sending ? 'Sending…' : 'Send me a test'}
-          </button>
+          </Button>
           {sent && <span className="acr-digest-sent"><CheckCircle2 size={13} /> {sent}</span>}
         </div>
       </div>

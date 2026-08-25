@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Check, FlaskConical, History, PlayCircle, RotateCcw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Input, Textarea } from '@/design-system/primitives'
+import { Button, Input, Textarea } from '@/design-system/primitives'
 import { Term } from '../../glossary'
 
 interface Revision {
@@ -173,8 +173,8 @@ export function CharterStudio({
       ) : null}
 
       <div className="acr-cs-actions">
-        <button
-          className="acr-btn"
+        <Button
+          variant="quiet" size="sm"
           disabled={!!busy}
           onClick={async () => {
             const r = (await call('/preview', { systemPrompt: draft }, 'preview')) as PreviewResult | null
@@ -182,9 +182,9 @@ export function CharterStudio({
           }}
         >
           <PlayCircle size={13} /> {busy === 'preview' ? 'Trying it…' : 'Try it on real data'}
-        </button>
-        <button
-          className="acr-btn"
+        </Button>
+        <Button
+          variant="quiet" size="sm"
           disabled={!!busy || !dirty}
           onClick={async () => {
             const r = (await call('/evaluate', { systemPrompt: draft, cases: 2 }, 'evaluate')) as EvalResult | null
@@ -192,7 +192,7 @@ export function CharterStudio({
           }}
         >
           <FlaskConical size={13} /> {busy === 'evaluate' ? 'Measuring…' : 'Measure against the current charter'}
-        </button>
+        </Button>
         <span className="acr-cs-notewrap">
           <Input
             fieldClassName="acr-cs-note"
@@ -200,8 +200,8 @@ export function CharterStudio({
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
-          <button
-            className="acr-btn go"
+          <Button
+            variant="success" size="sm"
             disabled={!!busy || !dirty || !note.trim()}
             onClick={async () => {
               const saved = (await call(
@@ -217,7 +217,7 @@ export function CharterStudio({
             }}
           >
             Save as a new revision
-          </button>
+          </Button>
         </span>
       </div>
 
@@ -293,8 +293,8 @@ export function CharterStudio({
           <ul className="acr-cs-revlist">
             {data.source === 'revision' ? (
               <li>
-                <button
-                  className="acr-btn"
+                <Button
+                  variant="quiet" size="sm"
                   disabled={!!busy}
                   onClick={async () => {
                     if (await call('/revert-to-code', {}, 'revert')) {
@@ -304,7 +304,7 @@ export function CharterStudio({
                   }}
                 >
                   <RotateCcw size={13} /> Go back to the code charter
-                </button>
+                </Button>
                 <span className="acr-fl-sub">
                   The version in the repository — always available, never fails.
                 </span>
@@ -323,12 +323,12 @@ export function CharterStudio({
                 </span>
                 <span className="acr-cs-revnote">{r.note}</span>
                 <span className="acr-cs-revactions">
-                  <button className="acr-btn" onClick={() => setDraft(r.systemPrompt)}>
+                  <Button variant="quiet" size="sm" onClick={() => setDraft(r.systemPrompt)}>
                     Load into the editor
-                  </button>
+                  </Button>
                   {r.id !== data.activeRevisionId ? (
-                    <button
-                      className="acr-btn"
+                    <Button
+                      variant="quiet" size="sm"
                       disabled={!!busy}
                       onClick={async () => {
                         const res = await call(`/revisions/${r.id}/activate`, {}, 'activate')
@@ -356,7 +356,7 @@ export function CharterStudio({
                       }}
                     >
                       <Check size={13} /> Make this the live charter
-                    </button>
+                    </Button>
                   ) : null}
                 </span>
               </li>

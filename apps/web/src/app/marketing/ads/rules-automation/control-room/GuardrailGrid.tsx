@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Search, Pin, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Checkbox, Input, Select } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Select } from '@/design-system/primitives'
 
 type Dim = 'placement' | 'bids' | 'budget'
 
@@ -441,9 +441,9 @@ export function GuardrailGrid() {
         </Select>
         {/* Filter state is always visible with a way back, per the console's standing rule. */}
         {(search || market || !managedOnly || gap) && (
-          <button type="button" className="acr-gg-reset" onClick={() => { setSearch(''); setMarket(''); setManagedOnly(true); setGap('') }}>
+          <Button variant="tonal" size="sm" onClick={() => { setSearch(''); setMarket(''); setManagedOnly(true); setGap('') }}>
             Reset
-          </button>
+          </Button>
         )}
         <span className="acr-gg-count">{g ? `${shown.length} shown of ${g.totals.campaigns}` : ''}</span>
       </div>
@@ -472,10 +472,10 @@ export function GuardrailGrid() {
                 onChange={(e) => setBulkMax(e.target.value)} aria-label="Bulk maximum bid"
               />
             </label>
-            <button type="button" className="acr-btn go" disabled={!!bulkBusy} onClick={() => void applyBulkBounds()}>
+            <Button variant="success" size="sm" disabled={!!bulkBusy} onClick={() => void applyBulkBounds()}>
               {bulkBusy === 'Bounds' ? <Loader2 size={13} className="acr-spin" /> : null}
               Set bounds
-            </button>
+            </Button>
             {/* Explicit, because an empty box must keep meaning "leave alone". */}
             <span className="acr-gg-bulk-pin">
               <button type="button" disabled={!!bulkBusy} className="off"
@@ -503,7 +503,7 @@ export function GuardrailGrid() {
             <button type="button" className="acr-gg-toggle" disabled={!!bulkBusy} onClick={() => void applyBulkManaged(false)}>Off-limits</button>
           </span>
 
-          <button type="button" className="acr-gg-reset" onClick={() => setSel(new Set())}>Clear</button>
+          <Button variant="tonal" size="sm" className="acr-gg-clear" onClick={() => setSel(new Set())}>Clear</Button>
         </div>
       )}
 

@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
 import { DecisionCard, TOOL_CARDS, toolCardFor } from './DecisionCard'
-import { Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
 
@@ -226,9 +226,9 @@ function ScheduledRow({
         </span>
       </span>
       {left > 0 ? (
-        <button className="acr-btn" disabled={busy} onClick={() => onUndo(row.id)}>
+        <Button variant="quiet" size="sm" disabled={busy} onClick={() => onUndo(row.id)}>
           <Undo2 size={13} /> Undo
-        </button>
+        </Button>
       ) : null}
     </div>
   )
@@ -405,8 +405,8 @@ export function ApprovalInbox({
                       onChange={(e) => setBulkReason(e.target.value)}
                     />
                   ) : null}
-                  <button
-                    className="acr-btn go"
+                  <Button
+                    variant="success" size="sm"
                     disabled={
                       busy || (pendingBulk.decision === 'reject' && !bulkReason.trim())
                     }
@@ -420,23 +420,23 @@ export function ApprovalInbox({
                     }}
                   >
                     Yes, do it
-                  </button>
-                  <button className="acr-btn" disabled={busy} onClick={() => setPendingBulk(null)}>
+                  </Button>
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => setPendingBulk(null)}>
                     Back
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
                   <span className="ap-bulkcount">{selected.size} selected</span>
-                  <button className="acr-btn go" disabled={busy} onClick={() => void askBulk('approve')}>
+                  <Button variant="success" size="sm" disabled={busy} onClick={() => void askBulk('approve')}>
                     <Check size={13} /> Approve selected
-                  </button>
-                  <button className="acr-btn" disabled={busy} onClick={() => void askBulk('reject')}>
+                  </Button>
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => void askBulk('reject')}>
                     <X size={13} /> Reject selected
-                  </button>
-                  <button className="acr-btn" onClick={clearSelection}>
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={clearSelection}>
                     Clear
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -459,8 +459,8 @@ export function ApprovalInbox({
                     value={rejectAllReason}
                     onChange={(e) => setRejectAllReason(e.target.value)}
                   />
-                  <button
-                    className="acr-btn"
+                  <Button
+                    variant="quiet" size="sm"
                     disabled={busy || !rejectAllReason.trim()}
                     onClick={() => {
                       onRejectAll(charterKey, rejectAllReason.trim())
@@ -469,14 +469,14 @@ export function ApprovalInbox({
                     }}
                   >
                     Confirm — reject all {rows.length}
-                  </button>
-                  <button className="acr-btn" disabled={busy} onClick={() => setRejectAllFor(null)}>
+                  </Button>
+                  <Button variant="quiet" size="sm" disabled={busy} onClick={() => setRejectAllFor(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </span>
               ) : (
-                <button
-                  className="acr-btn"
+                <Button
+                  variant="quiet" size="sm"
                   disabled={busy}
                   onClick={() => {
                     setRejectAllFor(charterKey)
@@ -484,7 +484,7 @@ export function ApprovalInbox({
                   }}
                 >
                   Reject all ({rows.length})
-                </button>
+                </Button>
               )}
             </div>
             {rows.map((a) =>

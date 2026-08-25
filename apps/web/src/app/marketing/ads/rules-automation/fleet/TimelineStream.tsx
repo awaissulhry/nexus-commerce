@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import {
   AlertTriangle,
   Check,
@@ -529,9 +530,9 @@ export function TimelineStream({
           Showing {page.events.length} of {page.total}
         </span>
         {page.nextCursor ? (
-          <button className="acr-btn" onClick={onLoadMore} disabled={loadingMore}>
+          <Button variant="quiet" size="sm" onClick={onLoadMore} disabled={loadingMore}>
             {loadingMore ? 'Loading…' : 'Show older'}
-          </button>
+          </Button>
         ) : (
           <span className="dt-showing">— that is the whole history.</span>
         )}

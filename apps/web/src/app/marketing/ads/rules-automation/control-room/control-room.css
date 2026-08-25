@@ -24,19 +24,17 @@
    here is cheaper than a fourth copy and matches what they picked. #55616f is
    5.83:1 on #f4f6f9 and 6.31:1 on white.
 
-   Unlike `.acr-btn.go`, there is no non-text use to protect: every #667485 in
+   Unlike the fleet's green, there is no non-text use to protect: every #667485 in
    this file is text. The other four (.acr-status-detail, the nav link at :125,
    .acr-fs-cadence, .acr-dw-title p) fail for the same reason and are SMALLER,
    so they fail harder — left for the Control Room's owner rather than changed
    blind, and posted in the locks file. */
 .acr-sub { font-size: 13px; color: var(--nds-grey-600); margin: 0; }
 
-.acr-refresh {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  font-size: 12px; color: #46536a; background: var(--nds-white);
-  border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 6px 11px; cursor: pointer;
-}
-.acr-refresh:hover { background: var(--nds-grey-50); border-color: var(--nds-grey-300); }
+/* DS-ALIGN — the refresh controls are the DS `Button` at `sm`, including the one that is a
+   `<Link>` (`asChild`). The class survives only to keep them from shrinking in a flex header.
+   Contrast rose doing it: #46536a was 7.76:1 on white, `--nds-text-strong` is 9.87:1. */
+.acr-refresh { flex-shrink: 0; }
 
 /* ── account state ───────────────────────────────────────────────────────── */
 .acr-status {
@@ -54,26 +52,24 @@
 .acr-dot.stopped { background: var(--nds-red-600); box-shadow: 0 0 0 3px rgba(212, 69, 63, 0.15); }
 
 .acr-status-actions { flex-shrink: 0; }
-.acr-btn {
+/* DS-ALIGN — this whole family is the DS `Button` now, one variant per modifier:
+     bare    → `quiet`          (it inherits its context's colour, which is why 25 sites
+                                 could only convert once the DS stopped hard-setting one)
+     `.go`   → `success`        4.96:1 → 5.02:1
+     `.stop` → `danger-outline` 6.06:1 → 7.36:1
+   The dial below is the one exception: four labelled options in a shared track is a segmented
+   control, not four buttons, so it keeps its own rules until the DS ships one. */
+.acr-dial .acr-btn {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12.5px; font-weight: 550; border-radius: var(--nds-radius-sm); padding: 7px 13px; cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid transparent; background: none; color: inherit;
 }
-.acr-btn:disabled { opacity: 0.55; cursor: default; }
-.acr-btn.stop { background: var(--nds-white); color: #b3352f; border-color: #e6bcba; }
-.acr-btn.stop:hover:not(:disabled) { background: #fdf2f2; border-color: #d99a97; }
-/* NAF.AQ-S4R — white on #1a9d6a measured **3.46:1**, below the 4.5 floor, on
-   the fleet's PRIMARY action button. Independently measured by the Workflows
-   stream (locks §2) and again here on the Approvals card, where the button that
-   fails is the one that spends money.
-
-   Only this declaration changes. Every other #1a9d6a in this file is a dot, a
-   bar, a border or an icon — non-text, which needs 3:1 under WCAG 1.4.11 and
-   passes — so the fleet's green identity is untouched and this is not a fork.
-   #15804f is 4.96:1, the value Workflows computed; the hover is darkened to
-   match rather than left lighter than the base. */
-.acr-btn.go { background: #15804f; color: var(--nds-white); }
-.acr-btn.go:hover:not(:disabled) { background: #116b42; }
+.acr-dial .acr-btn:disabled { opacity: 0.55; cursor: default; }
+/* NAF.AQ-S4R measured white on this button's original #1a9d6a at **3.46:1**, below the 4.5
+   floor, and darkened it to #15804f (4.96:1). That fix now lives in the DS: `Button
+   variant="success"` is `--nds-success-strong` at **5.02:1**, so the whole family moved there
+   and this rule is gone. The fleet's green identity is untouched — every other #1a9d6a in this
+   file is a dot, a bar, a border or an icon, non-text, which needs 3:1 and passes. */
 
 /* ── banners ─────────────────────────────────────────────────────────────── */
 .acr-banner {
@@ -255,7 +251,6 @@
 .acr-today-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 /* The map link is an <a> styled as the same control as Re-check — they sit together and doing
    different things to them would read as two kinds of button for one kind of action. */
-a.acr-refresh { text-decoration: none; }
 .acr-today-counts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .acr-pill {
   display: inline-flex; align-items: center; gap: 4px;
@@ -569,11 +564,8 @@ a.acr-refresh { text-decoration: none; }
    across the filter label must not select its text. */
 .acr-gg-search > input { width: 190px; }
 .acr-gg-check { user-select: none; }
-.acr-gg-reset {
-  font-size: 12px; color: #2a5399; background: var(--nds-blue-50);
-  border: 1px solid #c8d8f5; border-radius: var(--nds-radius-sm); padding: 6px 10px; cursor: pointer;
-}
-.acr-gg-reset:hover { background: var(--nds-blue-100); }
+/* DS-ALIGN — the two reset chips are `Button variant="tonal"`, the tier-2 tinted treatment.
+   #2a5399 on --nds-blue-50 was 6.62:1; the DS pair is 7.41:1. */
 .acr-gg-count { font-size: 11.5px; color: var(--nds-grey-500); margin-left: auto; }
 
 /* Wide grid scrolls inside its own box; the page body never scrolls sideways. */
@@ -696,13 +688,9 @@ a.acr-refresh { text-decoration: none; }
   background: var(--nds-grey-100); border-radius: 3px; padding: 1px 4px; color: #56637a;
 }
 .acr-digest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; }
-.acr-btn.ghost {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 550; color: var(--nds-grey-700); text-decoration: none;
-  background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 6px 11px; cursor: pointer;
-}
-.acr-btn.ghost:hover:not(:disabled) { background: var(--nds-grey-50); }
-.acr-btn.ghost:disabled { color: var(--nds-grey-400); cursor: not-allowed; }
+/* DS-ALIGN — the digest pair is `Button` at `sm`. One of the two is an `<a>`, which is what
+   `asChild` is for: before it landed, converting only the `<button>` would have left a matched
+   pair visibly mismatched in the same row. */
 .acr-digest-sent { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-success-text); }
 
 /* ── ACR.1.3c — bulk edit ─────────────────────────────────────────────────
@@ -723,9 +711,8 @@ a.acr-refresh { text-decoration: none; }
   font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--nds-grey-500); white-space: nowrap;
 }
-.acr-gg-bulk .acr-btn { padding: 5px 11px; font-size: 12px; }
 .acr-gg-bulk .acr-gg-toggle { padding: 5px 10px; }
-.acr-gg-bulk .acr-gg-reset { margin-left: auto; }
+.acr-gg-bulk .acr-gg-clear { margin-left: auto; }
 
 /* Set / clear as one control, so "pin" and "unpin" cannot be confused for a toggle
    whose current state means something across a mixed selection. */
@@ -1105,7 +1092,7 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-flx-intro ol { margin: 6px 0 0; padding-left: 20px; }
 .acr-flx-intro li { margin-top: 3px; }
-.acr-flx-intro .acr-btn { flex: none; }
+.acr-flx-intro .nds-btn { flex: none; }
 
 .acr-flx-how p { margin: 10px 0 0; font-size: 13px; color: var(--nds-grey-700); line-height: 1.65; }
 .acr-flx-how p:first-child { margin-top: 0; }
@@ -1160,7 +1147,7 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-fleet .acr-fl-head h3 { font-size: 14.5px; letter-spacing: -0.01em; }
 .acr-fleet .acr-fl-head { margin-bottom: 12px; }
-.acr-fleet .acr-btn { border-radius: var(--nds-radius-lg); }
+
 .acr-fl-pill { border-radius: var(--nds-radius-full); }
 .acr-fl-action {
   border-radius: 9px; border-color: var(--nds-grey-150);

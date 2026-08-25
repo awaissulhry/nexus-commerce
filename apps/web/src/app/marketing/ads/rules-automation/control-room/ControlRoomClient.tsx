@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Zap, Eye, MessageSquare, Power, AlertTriangle, ShieldAlert, Play, Square, RefreshCw } from 'lucide-react'
@@ -124,9 +125,9 @@ export function ControlRoomClient() {
             Every automation that can change this account — engines and rules, one list.
           </p>
         </div>
-        <button type="button" className="acr-refresh" onClick={() => void load()} aria-label="Refresh">
+        <Button size="sm" className="acr-refresh" onClick={() => void load()} aria-label="Refresh">
           <RefreshCw size={14} /> Refresh
-        </button>
+        </Button>
       </header>
 
       {err && <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
@@ -151,8 +152,8 @@ export function ControlRoomClient() {
           <div className="acr-status-actions">
             {!global.envKill && (
               stopped
-                ? <button type="button" className="acr-btn go" disabled={busy} onClick={() => void setHalt(false)}><Play size={14} /> Resume</button>
-                : <button type="button" className="acr-btn stop" disabled={busy} onClick={() => void setHalt(true)}><Square size={14} /> Stop everything</button>
+                ? <Button variant="success" size="sm" disabled={busy} onClick={() => void setHalt(false)}><Play size={14} /> Resume</Button>
+                : <Button variant="danger-outline" size="sm" disabled={busy} onClick={() => void setHalt(true)}><Square size={14} /> Stop everything</Button>
             )}
           </div>
         </section>

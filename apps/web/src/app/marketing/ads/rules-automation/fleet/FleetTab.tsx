@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { Bot, RefreshCw, ShieldAlert } from 'lucide-react'
 import {
@@ -493,9 +494,9 @@ export function FleetTab() {
       {err ? (
         <div className="acr-banner err" role="alert">
           <ShieldAlert size={15} /> {err}
-          <button className="acr-btn" onClick={() => void load()}>
+          <Button variant="quiet" size="sm" onClick={() => void load()}>
             Try again
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -542,9 +543,9 @@ export function FleetTab() {
                 updated {Math.max(0, Math.round((Date.now() - updatedAt) / 1000))}s ago
               </span>
             ) : null}
-            <button className="acr-btn" onClick={() => void load()} disabled={busy}>
+            <Button variant="quiet" size="sm" onClick={() => void load()} disabled={busy}>
               <RefreshCw size={13} /> Refresh
-            </button>
+            </Button>
           </div>
         </header>
         {mapView === 'workers' ? (

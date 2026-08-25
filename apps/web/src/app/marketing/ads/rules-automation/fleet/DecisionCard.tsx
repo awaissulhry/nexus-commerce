@@ -34,7 +34,7 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
 
@@ -365,8 +365,8 @@ export function DecisionCard({
       ) : null}
 
       <div className="acr-fl-apactions">
-        <button
-          className="acr-btn go"
+        <Button
+          variant="success" size="sm"
           disabled={busy || approveBlocked}
           title={
             approveBlocked
@@ -376,7 +376,7 @@ export function DecisionCard({
           onClick={() => onDecide(approval.id, 'approve')}
         >
           <Check size={13} /> {card.approveLabel}
-        </button>
+        </Button>
         {rejecting ? (
           <span className="acr-fl-rejectrow">
             <Input
@@ -386,21 +386,21 @@ export function DecisionCard({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
-            <button
-              className="acr-btn"
+            <Button
+              variant="quiet" size="sm"
               disabled={busy || !reason.trim()}
               onClick={() => onDecide(approval.id, 'reject', reason.trim())}
             >
               Confirm rejection
-            </button>
-            <button className="acr-btn" disabled={busy} onClick={() => setRejecting(false)}>
+            </Button>
+            <Button variant="quiet" size="sm" disabled={busy} onClick={() => setRejecting(false)}>
               Cancel
-            </button>
+            </Button>
           </span>
         ) : (
-          <button className="acr-btn" disabled={busy} onClick={() => setRejecting(true)}>
+          <Button variant="quiet" size="sm" disabled={busy} onClick={() => setRejecting(true)}>
             <X size={13} /> Reject, with a reason
-          </button>
+          </Button>
         )}
       </div>
       <p className="acr-fl-dcard-teach">

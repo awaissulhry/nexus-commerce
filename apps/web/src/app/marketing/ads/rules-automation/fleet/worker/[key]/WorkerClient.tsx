@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox } from '@/design-system/primitives'
 import type { PlanLabels } from '../../PlanStory'
 import { CharterStudio } from './CharterStudio'
 import { ConfirmSpend, PauseDialog, applyPause } from '@/app/fleet/_shared/autonomy'
@@ -290,9 +290,11 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
     return (
       <div className="acr-card">
         <p className="acr-fl-empty">No worker named “{workerKey}”.</p>
-        <Link className="acr-btn" href="/marketing/ads/rules-automation/fleet">
-          <ArrowLeft size={13} /> Back to the fleet
-        </Link>
+        <Button asChild variant="quiet" size="sm">
+          <Link href="/marketing/ads/rules-automation/fleet">
+            <ArrowLeft size={13} /> Back to the fleet
+          </Link>
+        </Button>
       </div>
     )
   }
@@ -360,9 +362,9 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
       {err ? (
         <div className="acr-banner err" role="alert">
           {err}
-          <button className="acr-btn" onClick={() => void load()}>
+          <Button variant="quiet" size="sm" onClick={() => void load()}>
             Try again
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -380,9 +382,9 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
             <span className={`acr-fl-pill ${charter.autonomyLevel === 'OFF' ? '' : 'acr-fl-pill-ok'}`}>
               {charter.autonomyLevel}
             </span>
-            <button className="acr-btn" onClick={() => void load()}>
+            <Button variant="quiet" size="sm" onClick={() => void load()}>
               <RefreshCw size={13} /> Refresh
-            </button>
+            </Button>
           </div>
         </header>
         <p className="acr-fl-desc">{charter.description}</p>
@@ -674,12 +676,12 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
           ) : null}
         </header>
         <div className="acr-fl-dialrow">
-          <button className="acr-btn" disabled={busy} onClick={() => setConfirmRun(true)}>
+          <Button variant="quiet" size="sm" disabled={busy} onClick={() => setConfirmRun(true)}>
             Run it now
-          </button>
+          </Button>
           {charter.pausedUntil ? (
-            <button
-              className="acr-btn"
+            <Button
+              variant="quiet" size="sm"
               disabled={busy}
               onClick={async () => {
                 setBusy(true)
@@ -692,11 +694,11 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
               }}
             >
               Resume it now
-            </button>
+            </Button>
           ) : (
-            <button className="acr-btn" disabled={busy} onClick={() => setConfirmPause(true)}>
+            <Button variant="quiet" size="sm" disabled={busy} onClick={() => setConfirmPause(true)}>
               Pause it for a while
-            </button>
+            </Button>
           )}
         </div>
         <p className="acr-fl-sub">
