@@ -82,7 +82,10 @@
 /* `Button block variant="quiet"` supplies the full-width row, the reset and the hover reveal;
    `.hl-sec-h` beside it supplies the section-header type. Only the inset is different, and it is
    written at 0,3,0 so a two-class DS rule cannot beat it by load order. */
-.nds-btn.block.hl-pb-t { padding: 4px 0; }
+/* `.hl-sec-h` and `.nds-btn` both declare `font-weight` at one class, so the section header's
+   800 was being decided by stylesheet order — and losing, to the button's 600. Restated here at
+   0,3,0. The colour is right by inheritance: `quiet` inherits, and the header sits on grey-900. */
+.nds-btn.block.hl-pb-t { padding: 4px 0; font-weight: 800; }
 .hl-pb-t svg.open { transform: rotate(180deg); }
 .hl-pb-lede { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .hl-pb-ctl { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 11px; }

@@ -174,7 +174,11 @@
    the hover fill; the separator belongs to the card, not to the button, so it stays here.
    Written at 0,3,0 — a two-class rule would tie with `.nds-btn.quiet` and be settled by
    whichever stylesheet the bundler emits last. */
-.nds-btn.block.cvf-more { border: 0; border-top: 1px solid var(--nds-grey-75); border-radius: 0; padding: 7px 14px; font-size: 11.5px; }
+/* The ink is pinned, not inherited. `quiet` was changed to `color: inherit` after this was
+   written, which made the row take the table's own 15.48:1 body ink — louder than the "+ N more"
+   line should be. `--nds-text-strong` is 9.87:1: still well above the 5.91:1 the legacy
+   `--nds-text-muted` gave, and it cannot drift when the DS default moves again. */
+.nds-btn.block.cvf-more { border: 0; border-top: 1px solid var(--nds-grey-75); border-radius: 0; padding: 7px 14px; font-size: 11.5px; color: var(--nds-text-strong); }
 
 
 .cov > .cvf-list { margin-left: 24px; margin-right: 24px; }
