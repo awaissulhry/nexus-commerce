@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
 import { Button, Pill, Toggle, Input } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 import { pillTone } from '../../../../_shared/pillTone'
 
 const POSTURES = [
@@ -170,18 +171,20 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             {rd.history.length === 0 ? (
               <p className="eb-be-hint">No completed windows yet — each step arrives as a proposal above; approving it moves every ad&apos;s rate (clamped per listing to break-even).</p>
             ) : (
-              <table className="eb-difftable">
-                <thead><tr><th>Rate</th><th>Window</th><th>Days</th><th>Ad fees</th><th>Ad sales</th><th>Net/day</th></tr></thead>
-                <tbody>
-                  {rd.history.map((h, i) => (
-                    <tr key={i}>
-                      <td>{h.pct}%</td><td>{h.from} → {h.to}</td><td>{h.days}</td>
-                      <td>{money(h.adFeesCents)}</td><td>{money(h.salesCents)}</td>
-                      <td>{money(Math.round((h.salesCents - h.adFeesCents) / Math.max(1, h.days)))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataGrid<typeof rd.history[number]>
+                className="eb-difftable"
+                size="sm"
+                rows={rd.history}
+                rowKey={(h) => `${h.from}-${h.to}-${h.pct}`}
+                columns={[
+                  { key: 'pct', label: 'Rate', align: 'right', render: (h) => `${h.pct}%` },
+                  { key: 'win', label: 'Window', render: (h) => `${h.from} → ${h.to}` },
+                  { key: 'days', label: 'Days', align: 'right', render: (h) => h.days },
+                  { key: 'fees', label: 'Ad fees', align: 'right', render: (h) => money(h.adFeesCents) },
+                  { key: 'sales', label: 'Ad sales', align: 'right', render: (h) => money(h.salesCents) },
+                  { key: 'net', label: 'Net/day', align: 'right', render: (h) => money(Math.round((h.salesCents - h.adFeesCents) / Math.max(1, h.days))) },
+                ]}
+              />
             )}
           </div>
         )

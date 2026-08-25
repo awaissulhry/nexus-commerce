@@ -17,7 +17,7 @@ import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
 import { Button, Input, Pill, Checkbox } from '@/design-system/primitives'
-import { Listbox } from '@/design-system/components'
+import { Listbox, DataGrid } from '@/design-system/components'
 
 interface LaunchOut {
   ok: boolean; mode: string; campaignId: string
@@ -229,24 +229,28 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
       {isGen && !isRules && !dynKey && included.length > 0 && (
         <div className="nds-card h10-cardstack">
           <div className="h10-am-toolbar"><span className="cnt"><b>{included.length}</b> listing(s) · projected ≈ <b>{money(included.reduce((a, l) => { const r = effRate(plan, l); return a + (r != null ? Math.round(l.trailingSales30dCents * (r / 100)) : 0) }, 0))}</b>/month</span></div>
-          <div className="eb-tablebox" style={{ maxHeight: 260 }}>
-            <table>
-              <thead><tr><th className="ed">Listing</th><th className="num">Break-even</th><th className="num">Rate %</th></tr></thead>
-              <tbody>
-                {included.map((l) => {
+          <DataGrid<PlanListing>
+            className="eb-tablebox"
+            maxHeight={260}
+            rows={included}
+            rowKey={(l) => l.itemId}
+            columns={[
+              { key: 'ed', label: 'Listing', render: (l) => <span className="t">{l.title ?? l.itemId}</span> },
+              { key: 'be', label: 'Break-even', align: 'right', sortable: true, sortValue: (l) => l.breakEvenPct ?? -1, render: (l) => (l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>) },
+              {
+                key: 'rate', label: 'Rate %', align: 'right',
+                render: (l) => {
                   const r = effRate(plan, l)
                   const over = l.breakEvenPct != null && r != null && r > l.breakEvenPct
                   return (
-                    <tr key={l.itemId}>
-                      <td className="ed"><span className="t">{l.title ?? l.itemId}</span></td>
-                      <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>}</td>
-                      <td className="num"><Input size="sm" fieldClassName={`eb-rate-cell${over ? ' over-be' : ''}`} aria-label="Ad rate %" type="number" min={2} max={100} step={0.1} value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')} onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} /></td>
-                    </tr>
+                    <Input size="sm" fieldClassName={`eb-rate-cell${over ? ' over-be' : ''}`} aria-label="Ad rate %" type="number" min={2} max={100} step={0.1}
+                      value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')}
+                      onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} />
                   )
-                })}
-              </tbody>
-            </table>
-          </div>
+                },
+              },
+            ]}
+          />
         </div>
       )}
 

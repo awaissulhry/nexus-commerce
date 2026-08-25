@@ -8,10 +8,13 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Button, FilterChip } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 import Link from 'next/link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import '../ebay.css'
 import { postEbayAds, getEbayAds, eurC, pctP, intlN } from '../_lib'
+
+interface Mover { campaign: string; feesCents: number; salesCents: number; sold: number }
 
 interface DigestPayload {
   week: { start: string; end: string }
@@ -19,7 +22,7 @@ interface DigestPayload {
   prior: { adFeesCents: number; salesCents: number; soldQty: number }
   // ER4 E2 — present on digests generated after 2026-07-04; older weeks lack it
   byMarketplace?: Array<{ marketplace: string; adFeesCents: number; salesCents: number; soldQty: number; acosPct: number | null }>
-  movers: Array<{ campaign: string; feesCents: number; salesCents: number; sold: number }>
+  movers: Mover[]
   autopilotApplied: Array<{ kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string }; result?: { detail?: string } | null }>
   pendingProposals: Array<{ id: string; kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string } }>
   anomalies: Array<{ type: string; severity: string; message: string }>
@@ -148,20 +151,19 @@ export function EbayDigestClient() {
           <section className="eb-panel">
             <header className="eb-panel-head"><h3>Campaign movers</h3><span className="eb-panel-note">by week ad fees</span></header>
             {p.movers.length === 0 ? <EmptyNote title="No campaign activity this week" /> : (
-              <table className="eb-movers">
-                <thead><tr><th>Campaign</th><th>Ad fees</th><th>Ad sales</th><th>Sold</th><th aria-label="Share of week" /></tr></thead>
-                <tbody>
-                  {p.movers.map((m, i) => (
-                    <tr key={i}>
-                      <td className="nm" title={m.campaign}>{m.campaign}</td>
-                      <td className="num">{eurC(m.feesCents)}</td>
-                      <td className="num">{eurC(m.salesCents)}</td>
-                      <td className="num">{intlN(m.sold)}</td>
-                      <td className="bar"><span style={{ width: `${Math.round((m.feesCents / maxMoverFees) * 100)}%` }} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataGrid<Mover>
+                className="eb-movers"
+                size="sm"
+                rows={p.movers}
+                rowKey={(m) => m.campaign}
+                columns={[
+                  { key: 'nm', label: 'Campaign', sortable: true, sortValue: (m) => m.campaign, render: (m) => <span className="nm" title={m.campaign}>{m.campaign}</span> },
+                  { key: 'fees', label: 'Ad fees', align: 'right', sortable: true, sortValue: (m) => m.feesCents, render: (m) => eurC(m.feesCents) },
+                  { key: 'sales', label: 'Ad sales', align: 'right', sortable: true, sortValue: (m) => m.salesCents, render: (m) => eurC(m.salesCents) },
+                  { key: 'sold', label: 'Sold', align: 'right', sortable: true, sortValue: (m) => m.sold, render: (m) => intlN(m.sold) },
+                  { key: 'bar', label: <span aria-label="Share of week" />, prefsLabel: 'Share of week', width: 140, render: (m) => <span className="bar"><span style={{ width: `${Math.round((m.feesCents / maxMoverFees) * 100)}%` }} /></span> },
+                ]}
+              />
             )}
           </section>
 

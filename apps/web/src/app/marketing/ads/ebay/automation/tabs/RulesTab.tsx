@@ -76,7 +76,7 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
                 aria-label={r.enabled ? `Disable ${r.name}` : `Enable ${r.name}`}
                 onChange={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { enabled: !r.enabled }))}
               />
-              <button type="button" className="eb-rule-name" onClick={() => router.push(`/marketing/ads/ebay/automation/rules/${r.id}`)} title="Edit rule">{r.name}</button>
+              <Button variant="link" inline className="eb-rule-name" onClick={() => router.push(`/marketing/ads/ebay/automation/rules/${r.id}`)} title="Edit rule">{r.name}</Button>
               <button type="button" className={`h10-pill ${r.mode === 'AUTOPILOT' ? 'ok' : 'arch'}`} style={{ cursor: 'pointer', border: 'none' }} disabled={busy}
                 title="Click to toggle PROPOSE ↔ AUTOPILOT (autopilot applies within guardrails when the dial is on Auto)"
                 onClick={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { mode: r.mode === 'AUTOPILOT' ? 'PROPOSE' : 'AUTOPILOT' }))}>

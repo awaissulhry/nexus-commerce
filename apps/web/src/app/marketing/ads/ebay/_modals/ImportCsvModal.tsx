@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Button, Pill, Textarea } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 
@@ -44,17 +45,21 @@ export function ImportCsvModal(props: { open: boolean; onClose: () => void; onDo
       <Err msg={error} />
       {parseErrors.length > 0 && <ul className="eb-results">{parseErrors.map((p) => <li key={p.row} className="err">row {p.row}: {p.error}</li>)}</ul>}
       {diff && (
-        <table className="eb-difftable">
-          <thead><tr><th>#</th><th>Op</th><th>Target</th><th>From</th><th>To</th><th>Check</th></tr></thead>
-          <tbody>
-            {diff.map((r) => (
-              <tr key={r.row}>
-                <td>{r.row}</td><td>{r.kind}</td><td>{r.target}</td><td>{r.from}</td><td>{r.to}</td>
-                <td>{r.error ? <Pill tone="warning">{r.error}</Pill> : r.note ? <Pill tone="warning">{r.note}</Pill> : <Pill tone="success">ok</Pill>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataGrid<CsvDiffRow>
+          className="eb-difftable"
+          size="sm"
+          rows={diff}
+          rowKey={(r) => String(r.row)}
+          maxHeight={320}
+          columns={[
+            { key: 'row', label: '#', align: 'right', sortable: true, sortValue: (r) => r.row, render: (r) => r.row },
+            { key: 'kind', label: 'Op', sortable: true, sortValue: (r) => r.kind, render: (r) => r.kind },
+            { key: 'target', label: 'Target', sortable: true, sortValue: (r) => r.target, render: (r) => r.target },
+            { key: 'from', label: 'From', render: (r) => r.from },
+            { key: 'to', label: 'To', render: (r) => r.to },
+            { key: 'check', label: 'Check', render: (r) => (r.error ? <Pill tone="warning">{r.error}</Pill> : r.note ? <Pill tone="warning">{r.note}</Pill> : <Pill tone="success">ok</Pill>) },
+          ]}
+        />
       )}
       {applied && <ul className="eb-results">{applied.map((a) => <li key={a.row} className={a.ok ? 'ok' : 'err'}>row {a.row}: {a.detail} ({a.mode})</li>)}</ul>}
     </H10Modal>

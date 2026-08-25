@@ -15,6 +15,7 @@ import { money, pct } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { effRate, includedListings, SUGGEST_MARKETS, type CampaignPlan, type PlanListing } from '../plan'
 import { Input, Pill, Toggle } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 
 export function RatesStep({ plan, set, listings }: {
   plan: CampaignPlan
@@ -89,31 +90,32 @@ export function RatesStep({ plan, set, listings }: {
 
             <div className="nds-card h10-cardstack">
               <div className="h10-am-toolbar"><span className="cnt">Promoting <b>{included.length}</b> listing(s)</span></div>
-              <div className="eb-tablebox" style={{ maxHeight: 380 }}>
-                <table>
-                  <thead><tr><th className="ed">Listing</th><th className="num">Break-even</th><th className="num">Rate %</th><th className="num">30d sales</th><th className="num">Fee forecast/mo</th></tr></thead>
-                  <tbody>
-                    {included.map((l) => {
+              <DataGrid<PlanListing>
+                className="eb-tablebox"
+                size="md"
+                maxHeight={380}
+                rows={included}
+                rowKey={(l) => l.itemId}
+                columns={[
+                  { key: 'ed', label: 'Listing', render: (l) => <div className="nmw"><span className="t" title={l.title ?? l.itemId}>{l.title ?? l.itemId}</span><span className="mk">{l.itemId.slice(-6)}</span></div> },
+                  { key: 'be', label: 'Break-even', align: 'right', sortable: true, sortValue: (l) => l.breakEvenPct ?? -1, render: (l) => (l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>) },
+                  {
+                    key: 'rate', label: 'Rate %', align: 'right',
+                    render: (l) => {
                       const r = effRate(plan, l)
                       const over = l.breakEvenPct != null && r != null && r > l.breakEvenPct
                       return (
-                        <tr key={l.itemId}>
-                          <td className="ed"><div className="nmw"><span className="t" title={l.title ?? l.itemId}>{l.title ?? l.itemId}</span><span className="mk">{l.itemId.slice(-6)}</span></div></td>
-                          <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>}</td>
-                          <td className="num">
-                            <Input size="sm" fieldClassName={`eb-rate-cell${over ? ' over-be' : ''}`} aria-label="Ad rate %" type="number" min={2} max={100} step={0.1}
-                              value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')}
-                              title={l.rateSource}
-                              onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} />
-                          </td>
-                          <td className="num">{money(l.trailingSales30dCents)}</td>
-                          <td className="num">{r != null ? money(Math.round(l.trailingSales30dCents * (r / 100))) : '—'}</td>
-                        </tr>
+                        <Input size="sm" fieldClassName={`eb-rate-cell${over ? ' over-be' : ''}`} aria-label="Ad rate %" type="number" min={2} max={100} step={0.1}
+                          value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')}
+                          title={l.rateSource}
+                          onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} />
                       )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                    },
+                  },
+                  { key: 's30', label: '30d sales', align: 'right', sortable: true, sortValue: (l) => l.trailingSales30dCents, render: (l) => money(l.trailingSales30dCents) },
+                  { key: 'fees', label: 'Est. fees', align: 'right', render: (l) => { const r = effRate(plan, l); return r != null ? money(Math.round(l.trailingSales30dCents * (r / 100))) : '—' } },
+                ]}
+              />
             </div>
           </section>
 

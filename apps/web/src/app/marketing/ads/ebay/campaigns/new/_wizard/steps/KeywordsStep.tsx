@@ -11,7 +11,7 @@
  */
 import { useState } from 'react'
 import { Button, Input, Pill, Textarea, Checkbox } from '@/design-system/primitives'
-import { Tabs } from '@/design-system/components'
+import { Tabs, DataGrid } from '@/design-system/components'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
 import { postEbayAds } from '../../../../_lib'
@@ -94,31 +94,50 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
           {g.seeds.length === 0 ? (
             <p className="eb-be-hint">No keywords in this group yet.</p>
           ) : (
-            <div className="eb-tablebox" style={{ maxHeight: 260 }}>
-              <table>
-                <thead><tr><th className="ed">Keyword ({g.seeds.filter((s) => s.on).length} selected)</th><th className="ed">Source</th><th className="ed">Match</th><th className="num">Bid €</th></tr></thead>
-                <tbody>
-                  {g.seeds.map((s, k) => (
-                    <tr key={`${s.text}-${k}`} style={s.on ? undefined : { opacity: 0.45 }}>
-                      <td className="ed">
-                        <Checkbox
-                          checked={s.on}
-                          onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, on: e.target.checked } : x)) })}
-                          label={<span className="t">{s.text}</span>}
-                        />
-                      </td>
-                      <td className="ed"><Pill tone={pillTone(s.source === 'MANUAL' ? 'ok' : 'arch')}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</Pill></td>
-                      <td className="ed">
-                        <span className="eb-dd dense"><Listbox ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
-                          onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}
-                          options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} /></span>
-                      </td>
-                      <td className="num"><Input size="sm" fieldClassName="eb-bid-cell" aria-label="Seed bid €" type="number" min={0.05} step={0.05} value={s.bidEur} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, bidEur: e.target.value } : x)) })} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataGrid<Seed & { _k: string }>
+              className="eb-tablebox"
+              maxHeight={260}
+              rows={g.seeds.map((sd, k) => ({ ...sd, _k: `${sd.text}-${k}` }))}
+              rowKey={(sd) => sd._k}
+              rowClassName={(sd) => (sd.on ? undefined : 'eb-seed-off')}
+              columns={[
+                {
+                  key: 'kw', label: `Keyword (${g.seeds.filter((x) => x.on).length} selected)`,
+                  render: (sd) => {
+                    const k = g.seeds.findIndex((x, n) => `${x.text}-${n}` === sd._k)
+                    return (
+                      <Checkbox
+                        checked={sd.on}
+                        onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, on: e.target.checked } : x)) })}
+                        label={<span className="t">{sd.text}</span>}
+                      />
+                    )
+                  },
+                },
+                { key: 'src', label: 'Source', render: (sd) => <Pill tone={pillTone(sd.source === 'MANUAL' ? 'ok' : 'arch')}>{sd.source === 'ASPECT/FREQUENT' ? 'aspects' : sd.source.toLowerCase()}</Pill> },
+                {
+                  key: 'match', label: 'Match',
+                  render: (sd) => {
+                    const k = g.seeds.findIndex((x, n) => `${x.text}-${n}` === sd._k)
+                    return (
+                      <span className="eb-dd dense"><Listbox ariaLabel={`Match type for ${sd.text}`} width={110} value={sd.matchType}
+                        onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}
+                        options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} /></span>
+                    )
+                  },
+                },
+                {
+                  key: 'bid', label: 'Bid €', align: 'right',
+                  render: (sd) => {
+                    const k = g.seeds.findIndex((x, n) => `${x.text}-${n}` === sd._k)
+                    return (
+                      <Input size="sm" fieldClassName="eb-bid-cell" aria-label="Seed bid €" type="number" min={0.05} step={0.05} value={sd.bidEur}
+                        onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, bidEur: e.target.value } : x)) })} />
+                    )
+                  },
+                },
+              ]}
+            />
           )}
 
           <div className="h10-cd-field" style={{ marginTop: 12, maxWidth: 520 }}>

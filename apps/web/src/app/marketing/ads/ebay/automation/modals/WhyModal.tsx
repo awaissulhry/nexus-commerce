@@ -8,6 +8,7 @@
  */
 import Link from 'next/link'
 import { Button, Pill } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 import { H10Modal } from '../../_lib/modal'
 import { eurC } from '../../_lib'
 import { type WhyReasoning, conditionSentence, CENTS_METRICS, PCT_METRICS, type RuleCondition } from '../_lib/rules'
@@ -26,7 +27,10 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
   estimatedImpact?: { feesDeltaCentsPerWeek?: number; salesAtRiskCentsPerWeek?: number; assumption: string } | null
 }) {
   const r = reasoning ?? {}
-  const rows = r.conditionResults ?? r.conditions?.map((c) => ({ ...c, value: null, cmp: null, pass: null })) ?? []
+  // `_k` because a condition has no id and `DataGrid` keys by value, not by index — two identical
+  // conditions in one rule would otherwise share a key and React would reuse the wrong row.
+  const rows = (r.conditionResults ?? r.conditions?.map((c) => ({ ...c, value: null, cmp: null, pass: null })) ?? [])
+    .map((c, i) => ({ ...c, _k: String(i) }))
   return (
     <H10Modal open={open} onClose={onClose} title="Why this suggestion" subtitle={title}
    footer={<><span style={{ flex: 1 }} /><Button onClick={onClose}>Close</Button></>}>
@@ -35,19 +39,18 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
         {campaignId && <> · <Link className="nds-btn link" href={`/marketing/ads/ebay/campaigns/${campaignId}`}>open campaign →</Link></>}
       </p>
       {rows.length > 0 && (
-        <table className="eb-why-table">
-          <thead><tr><th>Condition</th><th>Value</th><th>Compared to</th><th>Result</th></tr></thead>
-          <tbody>
-            {rows.map((c, i) => (
-              <tr key={i}>
-                <td>{conditionSentence(c)}</td>
-                <td>{fmtVal(c, c.value)}</td>
-                <td>{fmtVal(c, c.cmp)}</td>
-                <td>{c.pass === true ? <Pill tone="success">met</Pill> : c.pass === false ? <Pill tone="neutral">not met</Pill> : <Pill tone="neutral" title="Recorded before ER3.2 — per-condition values weren't captured">n/a</Pill>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataGrid<typeof rows[number]>
+          className="eb-why-table"
+          size="sm"
+          rows={rows}
+          rowKey={(c) => c._k}
+          columns={[
+            { key: 'cond', label: 'Condition', render: (c) => conditionSentence(c) },
+            { key: 'val', label: 'Value', render: (c) => fmtVal(c, c.value) },
+            { key: 'cmp', label: 'Compared to', render: (c) => fmtVal(c, c.cmp) },
+            { key: 'res', label: 'Result', render: (c) => (c.pass === true ? <Pill tone="success">met</Pill> : c.pass === false ? <Pill tone="neutral">not met</Pill> : <Pill tone="warning">unknown</Pill>) },
+          ]}
+        />
       )}
       <p className="eb-be-hint" style={{ marginTop: 8 }}>
         {r.facts && <>Window facts: {r.facts.impressions.toLocaleString('en-IE')} impressions · {r.facts.clicks} clicks · {eurC(r.facts.adFeesCents)} fees · {eurC(r.facts.salesCents)} sales · {r.facts.soldQty} sold. </>}

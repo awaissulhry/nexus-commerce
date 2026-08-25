@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { money } from '../../../../campaigns/_grid/format'
 import { postEbayAds } from '../../../_lib'
 import { Button, Pill } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 import { pillTone } from '../../../../_shared/pillTone'
 
 interface SelectionRule { brands?: string[]; categoryIds?: string[]; categoryScope?: string; listingConditionIds?: string[]; minPrice?: number; maxPrice?: number }
@@ -41,20 +42,19 @@ export function CriterionCard({ criterion, marketplace, onClone }: { criterion: 
       {rules.length === 0 ? (
         <p className="eb-be-hint">No selection rules recorded on the sync — eBay applies the campaign&apos;s original rules server-side.</p>
       ) : (
-        <table className="eb-difftable">
-          <thead><tr><th>#</th><th>Brands</th><th>Categories</th><th>Condition</th><th>Price range</th></tr></thead>
-          <tbody>
-            {rules.map((r, i) => (
-              <tr key={i}>
-                <td>{i + 1}</td>
-                <td>{r.brands?.length ? r.brands.join(', ') : 'any'}</td>
-                <td>{r.categoryIds?.length ? `${r.categoryIds.join(', ')}${r.categoryScope ? ` (${r.categoryScope})` : ''}` : 'any'}</td>
-                <td>{r.listingConditionIds?.length ? r.listingConditionIds.join(', ') : 'any'}</td>
-                <td>{r.minPrice != null || r.maxPrice != null ? `${r.minPrice != null ? money(Math.round(Number(r.minPrice) * 100)) : '…'} – ${r.maxPrice != null ? money(Math.round(Number(r.maxPrice) * 100)) : '…'}` : 'any'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataGrid<typeof rules[number] & { _k: string }>
+          className="eb-difftable"
+          size="sm"
+          rows={rules.map((r, i) => ({ ...r, _k: String(i) }))}
+          rowKey={(r) => r._k}
+          columns={[
+            { key: 'n', label: '#', align: 'right', render: (_r) => Number(_r._k) + 1 },
+            { key: 'brands', label: 'Brands', render: (r) => (r.brands?.length ? r.brands.join(', ') : 'any') },
+            { key: 'cats', label: 'Categories', render: (r) => (r.categoryIds?.length ? `${r.categoryIds.join(', ')}${r.categoryScope ? ` (${r.categoryScope})` : ''}` : 'any') },
+            { key: 'cond', label: 'Condition', render: (r) => (r.listingConditionIds?.length ? r.listingConditionIds.join(', ') : 'any') },
+            { key: 'price', label: 'Price range', render: (r) => (r.minPrice != null || r.maxPrice != null ? `${r.minPrice != null ? money(Math.round(Number(r.minPrice) * 100)) : '…'} – ${r.maxPrice != null ? money(Math.round(Number(r.maxPrice) * 100)) : '…'}` : 'any') },
+          ]}
+        />
       )}
       {preview?.sample.length ? (
         <ul className="eb-results" style={{ marginTop: 10 }}>

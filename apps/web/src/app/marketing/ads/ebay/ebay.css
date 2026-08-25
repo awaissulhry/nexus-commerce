@@ -103,8 +103,11 @@
 .eb-rules-toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 18px; border-bottom: 1px solid var(--nds-grey-100); }
 .eb-rule-card { padding: 10px 18px 12px; border-bottom: 1px solid var(--nds-grey-100); }
 .eb-rule-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.eb-rule-name { border: none; background: none; padding: 0; font-size: 13px; font-weight: 600; color: var(--nds-grey-900); cursor: pointer; }
-.eb-rule-name:hover { color: var(--nds-blue-600); text-decoration: underline; }
+/* `Button variant="link" inline` supplies the reset and the inline box. The rule name reads as a
+   heading until hovered, so it keeps its own ink rather than taking the DS link blue — at two
+   classes deep, so `.nds-btn.link`'s primary cannot win it on stylesheet order. */
+.nds-btn.eb-rule-name { font-size: 13px; font-weight: 600; color: var(--nds-grey-900); }
+.nds-btn.eb-rule-name:hover { color: var(--nds-blue-600); text-decoration: underline; }
 .eb-rule-sentence { font-size: 12.5px; color: var(--nds-grey-700); line-height: 1.55; margin: 6px 0 0; }
 .eb-rule-sentence b { color: var(--nds-grey-900); }
 .eb-rule-last { font-size: 11.5px; color: var(--nds-grey-500); margin: 4px 0 0; }
@@ -226,6 +229,9 @@
 
 /* EV1 — full-width input inside a flexed field (Amazon wizard idiom) */
 .eb-input-full { width: 100%; }
+/* A de-selected seed recedes rather than disappearing — it was an inline `opacity` on the row
+   before, which `DataGrid` owns through `rowClassName` now. */
+.eb-seed-off td { opacity: 0.45; }
 
 /* A DS `Input` inside a console field wrapper fills it, exactly as the raw input it replaced did
    (`.h10-cd-field > input` is `width: 100%`). `.nds-field` is inline-flex, so without this it

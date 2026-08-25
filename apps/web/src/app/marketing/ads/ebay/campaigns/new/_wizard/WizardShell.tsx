@@ -65,11 +65,11 @@ export function WizardShell(props: {
       <div style={{ marginTop: 18 }}>{props.children}</div>
 
       <footer className="h10-spw-foot">
-        {idx > 0 ? <button type="button" className="h10-spw-back" onClick={props.onBack}>Back</button> : <span />}
+        {idx > 0 ? <Button size="lg" onClick={props.onBack}>Back</Button> : <span />}
         <span className="grow" style={{ flex: 1 }} />
         {props.blockers.length > 0 && <span className="h10-spw-err">{props.blockers.length} item{props.blockers.length === 1 ? '' : 's'} need attention</span>}
         {props.footerNote}
-        <button type="button" className="h10-spw-next" disabled={props.nextBusy} onClick={tryNext}>{props.nextBusy ? '…' : props.nextLabel}</button>
+        <Button size="lg" variant="primary" disabled={props.nextBusy} onClick={tryNext}>{props.nextBusy ? '…' : props.nextLabel}</Button>
       </footer>
 
       <H10Modal open={showBlockers} onClose={() => setShowBlockers(false)} title="Before you continue"
