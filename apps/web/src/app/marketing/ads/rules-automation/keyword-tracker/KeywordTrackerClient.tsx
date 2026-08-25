@@ -915,7 +915,7 @@ export function KeywordTrackerClient() {
               </span>
             ) : undefined}
             emptyNode={(
-              <span className="h10-kt-empty">
+              <span className="h10-page-empty">
                 {measured === 'no' && (data?.scope.resolved.keywordsMeasured ?? 0) > 0 ? (
                   <b>Every watched term has share data in this scope. Nothing is unmeasured.</b>
                 ) : err ? (

@@ -1455,9 +1455,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-age.ageing i { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-kt-age.stale i { background: #fff6e8; color: var(--nds-warning-text); }
 
-.h10-kt-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-kt-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-kt-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 
 /* The marketplace a row belongs to. A row is one keyword × market, and volume/rank/share are all
    per-marketplace, so the market is on the row and not only in the header. */
@@ -1554,10 +1551,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid chrome ────────────────────────────────────────────────────────────────────────────── */
 .h10-ng-win { font-size: 11px; font-weight: 700; color: var(--nds-text-muted); font-variant-numeric: tabular-nums; }
-.h10-ng-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-ng-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-ng-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-ng-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 1200px) {
   .h10-ng-census { grid-template-columns: repeat(3, 1fr); }
@@ -1694,10 +1687,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-search input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
 /* .h10-bd-stale — SG.1: MOVED to ads.css (StaleBanner gained its first consumer outside this
    section). One definition, in the sheet every /marketing/ads page loads. */
-.h10-bd-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-bd-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-bd-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-bd-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 
 /* ── the provisional rule list's heading ───────────────────────────────────────────────────── */
 .h10-bd-prov { margin: 26px 0 0; }
@@ -1845,10 +1834,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-copy { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-hv-copy:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
 .h10-hv-win { font-size: 11px; font-weight: 700; color: var(--nds-text-muted); font-variant-numeric: tabular-nums; }
-.h10-hv-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-hv-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-hv-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-hv-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 1200px) {
   .h10-hv-census { grid-template-columns: repeat(3, 1fr); }
@@ -1974,10 +1959,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-plc-tot { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
-.h10-plc-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-plc-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-plc-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-plc-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 
 /* ── 🔴 the first column, LAST so it wins ──────────────────────────────────────────────────────
    `ads.css:695` paints `.nds-wsgrid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
@@ -2368,9 +2349,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-age.stale i { background: #fdeaea; color: #a33a3a; }
 
 /* ── empty state ────────────────────────────────────────────────────────────────────────────── */
-.h10-sov-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 580px; margin: 0 auto; padding: 8px 0; }
-.h10-sov-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-sov-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 
 @media (max-width: 1200px) {
   .h10-sov-band { gap: 6px; }
@@ -2525,10 +2503,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-seg .seg.on { background: var(--nds-white); color: var(--nds-grey-900); box-shadow: 0 1px 2px rgba(28, 37, 48, .12); }
 .h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bud-stale:hover { background: #fdeed5; }
-.h10-bud-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-bud-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-bud-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-bud-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 
 /* ── the provisional rule list's heading ───────────────────────────────────────────────────── */
 .h10-bud-prov { margin: 26px 0 0; }
@@ -2672,11 +2646,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-of { font-size: 10.5px; font-weight: 600; color: var(--nds-text-muted); }
 
 /* ── the four empty states ────────────────────────────────────────────────────────────────────── */
-.h10-ar-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-ar-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-ar-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-ar-empty.bad b { color: var(--nds-warning-text); }
-.h10-ar-empty.refused b { color: #414a7a; }
 
 @media (max-width: 1100px) {
   .h10-ar-tools { flex-wrap: wrap; gap: 8px; }
@@ -5652,3 +5621,13 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 :root[data-theme="dark"] .h10-ktp-strip { background: #171a1f; border-color: #262b33; color: #b7c0cc; }
 :root[data-theme="dark"] .h10-ktp-strip b { color: var(--nds-grey-100); }
 :root[data-theme="dark"] .h10-ktp-strip .warn { color: #e0a33c; }
+
+/* ONE page-level empty state. These eight were byte-identical rules under eight page-specific
+   names — ar, bd, bud, hv, kt, ng, plc — plus sov, which had silently drifted to max-width 580px
+   and so rendered 20px wider than its seven siblings. The 560px majority wins. */
+.h10-page-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
+.h10-page-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
+.h10-page-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
+.h10-page-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
+.h10-page-empty.bad b { color: var(--nds-warning-text); }
+.h10-page-empty.refused b { color: #414a7a; }

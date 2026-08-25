@@ -1479,7 +1479,7 @@ function EmptyState({
 
   if (error) {
     return (
-      <div className="h10-ar-empty bad">
+      <div className="h10-page-empty bad">
         <b>This did not load</b>
         <span>{error} Nothing is wrong with the account — the page could not read it.</span>
         <button type="button" className="h10-ar-lnk" onClick={onRetry}>Try again</button>
@@ -1489,7 +1489,7 @@ function EmptyState({
 
   if (contradiction) {
     return (
-      <div className="h10-ar-empty refused">
+      <div className="h10-page-empty refused">
         <b>This scope cannot resolve</b>
         <span>{contradiction}</span>
         <button type="button" className="h10-ar-lnk" onClick={onClear}>Clear the scope</button>
@@ -1499,7 +1499,7 @@ function EmptyState({
 
   if (account === 0) {
     return (
-      <div className="h10-ar-empty">
+      <div className="h10-page-empty">
         <NoDataIllus />
         <b>No campaigns</b>
         <span>This account holds no advertising campaigns, so there is nothing for automation to be
@@ -1509,7 +1509,7 @@ function EmptyState({
   }
 
   return (
-    <div className="h10-ar-empty">
+    <div className="h10-page-empty">
       <b>Nothing matches</b>
       <span>
         {scoped === 0

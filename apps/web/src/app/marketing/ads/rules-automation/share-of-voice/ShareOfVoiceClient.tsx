@@ -1212,7 +1212,7 @@ export function ShareOfVoiceClient() {
               </span>
             ) : undefined}
             emptyNode={(
-              <span className="h10-sov-empty">
+              <span className="h10-page-empty">
                 {q ? (
                   <>
                     <b>No query in {market} matches “{q}”.</b>

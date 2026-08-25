@@ -1108,12 +1108,12 @@ function EmptyState({
   flag: FlagKey | 'all'
   push: (p: Record<string, string>) => void
 }) {
-  if (loading) return <span className="h10-plc-empty"><b>Loading…</b></span>
-  if (!data) return <span className="h10-plc-empty"><b>Nothing loaded.</b><span>The read failed — the message above says why.</span></span>
+  if (loading) return <span className="h10-page-empty"><b>Loading…</b></span>
+  if (!data) return <span className="h10-page-empty"><b>Nothing loaded.</b><span>The read failed — the message above says why.</span></span>
 
   if (data.scope.contradiction) {
     return (
-      <span className="h10-plc-empty">
+      <span className="h10-page-empty">
         <b>This scope resolves to no campaign at all.</b>
         <span>
           {data.scope.contradiction}. The market in the header and the pickers above are ANDed
@@ -1126,7 +1126,7 @@ function EmptyState({
 
   if (data.counts.campaigns === 0) {
     return (
-      <span className="h10-plc-empty">
+      <span className="h10-page-empty">
         <b>No campaigns in this scope.</b>
         <span>
           Nothing here has a placement to show. Widen the scope — this account holds{' '}
@@ -1148,7 +1148,7 @@ function EmptyState({
     const stat = data.flags[flag]
     const unmeasurable = (flag === 'inverted' || flag === 'decorative') && stat.of === 0
     return (
-      <span className="h10-plc-empty">
+      <span className="h10-page-empty">
         <b>
           {unmeasurable
             ? flag === 'inverted'
@@ -1176,7 +1176,7 @@ function EmptyState({
    * the branch above fired, telling the operator to widen a scope that already held 220 campaigns.
    */
   return (
-    <span className="h10-plc-empty">
+    <span className="h10-page-empty">
       <b>
         {num(data.counts.campaigns)} campaign{data.counts.campaigns === 1 ? '' : 's'} in this scope
         {lane === 'all' ? '' : ` on the ${LANE_LABEL[lane]} lane`} — {q ? 'the search hides' : 'the filters hide'} all of them.

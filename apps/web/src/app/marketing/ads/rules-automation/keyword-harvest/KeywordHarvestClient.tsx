@@ -828,10 +828,10 @@ function EmptyState({
   push: (p: Record<string, string>) => void
 }) {
   // 1 · could not load — the read failed, and the message above says why.
-  if (loading) return <span className="h10-hv-empty"><b>Loading…</b></span>
+  if (loading) return <span className="h10-page-empty"><b>Loading…</b></span>
   if (err || !data) {
     return (
-      <span className="h10-hv-empty">
+      <span className="h10-page-empty">
         <b>Nothing loaded.</b>
         <span>The read failed, so this grid is not telling you there are no candidates — it is telling you it does not know.</span>
       </span>
@@ -840,7 +840,7 @@ function EmptyState({
   // 2 · not measured — no search-term data reaches this scope at all.
   if (data.scope.resolved.campaignsWithTerms === 0) {
     return (
-      <span className="h10-hv-empty">
+      <span className="h10-page-empty">
         <b>No search-term data in this scope.</b>
         <span>
           {num(data.scope.resolved.campaigns)} campaign{data.scope.resolved.campaigns === 1 ? '' : 's'} resolved and none of them has a
@@ -853,7 +853,7 @@ function EmptyState({
   //     threshold is the reason, so the state names it and offers the next value down.
   if (data.census.candidates === 0) {
     return (
-      <span className="h10-hv-empty">
+      <span className="h10-page-empty">
         <b>Nothing in this scope meets all five criteria.</b>
         <span>
           {num(data.scope.resolved.campaignsWithTerms)} campaigns have search-term data here, and{' '}
@@ -875,7 +875,7 @@ function EmptyState({
   }
   // 4 · filtered out — candidates exist and the filters hide all of them.
   return (
-    <span className="h10-hv-empty">
+    <span className="h10-page-empty">
       <b>{num(data.census.candidates)} candidates are in this scope — the filters hide all of them.</b>
       <span>
         {q ? <>Nothing matches “{q}”. </> : null}

@@ -633,11 +633,11 @@ function ViewToggle({ view, push }: { view: 'negations' | 'terms'; push: (p: Rec
 
 /** An empty grid has three quite different causes here, and saying which one is the whole job. */
 function EmptyState({ loading, data, q, push }: { loading: boolean; data: Payload | null; q: string; push: (p: Record<string, string>) => void }) {
-  if (loading) return <span className="h10-ng-empty"><b>Loading…</b></span>
-  if (!data) return <span className="h10-ng-empty"><b>Nothing loaded.</b><span>The read failed — the message above says why.</span></span>
+  if (loading) return <span className="h10-page-empty"><b>Loading…</b></span>
+  if (!data) return <span className="h10-page-empty"><b>Nothing loaded.</b><span>The read failed — the message above says why.</span></span>
   if (data.census.negations === 0) {
     return (
-      <span className="h10-ng-empty">
+      <span className="h10-page-empty">
         <b>No negatives in this scope.</b>
         <span>
           Nothing is blocked here. That is a real zero: {data.scope.resolved.campaigns} campaigns
@@ -647,7 +647,7 @@ function EmptyState({ loading, data, q, push }: { loading: boolean; data: Payloa
     )
   }
   return (
-    <span className="h10-ng-empty">
+    <span className="h10-page-empty">
       <b>{num(data.census.negations)} negatives are in this scope — the filters hide all of them.</b>
       <span>
         {q ? <>Nothing matches “{q}”. </> : null}

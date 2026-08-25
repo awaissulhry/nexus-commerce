@@ -1081,11 +1081,11 @@ function EffCpcCell({ r }: { r: BidTargetRow }) {
 
 /** An empty grid has three different causes here, and saying which one is the whole job. */
 function EmptyState({ loading, data, q, push }: { loading: boolean; data: BidGridPayload | null; q: string; push: (p: Record<string, string>) => void }) {
-  if (loading) return <span className="h10-bd-empty"><b>Loading…</b></span>
-  if (!data) return <span className="h10-bd-empty"><b>Nothing loaded.</b><span>The read failed — the message above says why.</span></span>
+  if (loading) return <span className="h10-page-empty"><b>Loading…</b></span>
+  if (!data) return <span className="h10-page-empty"><b>Nothing loaded.</b><span>The read failed — the message above says why.</span></span>
   if (data.scope.contradiction) {
     return (
-      <span className="h10-bd-empty">
+      <span className="h10-page-empty">
         <b>Nothing can match this scope.</b>
         <span>{data.scope.contradiction}</span>
       </span>
@@ -1093,7 +1093,7 @@ function EmptyState({ loading, data, q, push }: { loading: boolean; data: BidGri
   }
   if (data.census.targets === 0) {
     return (
-      <span className="h10-bd-empty">
+      <span className="h10-page-empty">
         <b>No targets in this scope.</b>
         <span>
           That is a real zero: {num(data.scope.campaigns ?? data.scope.total)} campaigns resolved and
@@ -1103,7 +1103,7 @@ function EmptyState({ loading, data, q, push }: { loading: boolean; data: BidGri
     )
   }
   return (
-    <span className="h10-bd-empty">
+    <span className="h10-page-empty">
       <b>{num(data.census.targets)} targets are in this scope — the filters hide all of them.</b>
       <span>
         {q ? <>Nothing matches “{q}”. </> : null}

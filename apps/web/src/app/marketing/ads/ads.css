@@ -121,7 +121,6 @@
 .h10-dd-opt { flex-shrink: 0; display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 13px; color: var(--nds-grey-800); padding: 8px 9px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .h10-dd-opt:hover { background: var(--nds-grey-50); }
 .h10-dd-opt.on { background: var(--nds-blue-50); color: var(--nds-blue-600); font-weight: 600; }
-.h10-dd-empty { padding: 12px 9px; font-size: 12.5px; color: var(--nds-grey-500); text-align: center; }
 
 /* multi-select dropdown (Status, Campaign Type → "All" / "N selected") */
 .h10-ms { position: relative; }

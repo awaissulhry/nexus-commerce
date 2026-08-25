@@ -321,11 +321,11 @@ function Nd({ o }: { o: HvOutcome }) {
 }
 
 function CohortEmpty({ loading, data, outcome, push }: { loading: boolean; data: Payload | null; outcome: string; push: (p: Record<string, string>) => void }) {
-  if (loading) return <span className="h10-hv-empty"><b>Loading…</b></span>
-  if (!data) return <span className="h10-hv-empty"><b>Nothing loaded.</b><span>The read failed, so this is not telling you there are no harvested keywords — it is telling you it does not know.</span></span>
+  if (loading) return <span className="h10-page-empty"><b>Loading…</b></span>
+  if (!data) return <span className="h10-page-empty"><b>Nothing loaded.</b><span>The read failed, so this is not telling you there are no harvested keywords — it is telling you it does not know.</span></span>
   if (data.census.cohort === 0) {
     return (
-      <span className="h10-hv-empty">
+      <span className="h10-page-empty">
         <b>Nothing has been harvested in this scope.</b>
         <span>
           {num(data.census.excluded.total)} keywords exist here, but none was created by a harvest — they were
@@ -335,7 +335,7 @@ function CohortEmpty({ loading, data, outcome, push }: { loading: boolean; data:
     )
   }
   return (
-    <span className="h10-hv-empty">
+    <span className="h10-page-empty">
       <b>{num(data.census.cohort)} harvested keywords are in this scope — the filter hides all of them.</b>
       <span><button type="button" className="lnk" onClick={() => push({ outcome: 'all', actor: 'all' })}>Clear the filter</button> {outcome !== 'all' && `(showing “${OUTCOME_LABEL[outcome as HvOutcome] ?? outcome}” only)`}</span>
     </span>
