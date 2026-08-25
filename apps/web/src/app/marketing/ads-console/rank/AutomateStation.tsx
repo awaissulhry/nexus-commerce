@@ -101,9 +101,9 @@ export function AutomateStation({ market, onChanged }: { market: string; onChang
                 <span className={`st ${r.enabled ? (r.dryRun ? 'dry' : 'live') : 'off'}`}>{r.enabled ? (r.dryRun ? 'Dry-run' : 'LIVE') : 'Off'}</span>
                 {r.scopeMarketplace && <span className="mk">{r.scopeMarketplace}</span>}
                 <span style={{ flex: 1 }} />
-                <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void patchRule(r.id, { enabled: !r.enabled })}>{r.enabled ? 'Disable' : 'Enable'}</button>
-                {r.enabled && <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void patchRule(r.id, { dryRun: !r.dryRun }, r.dryRun)}>{r.dryRun ? 'Go live' : 'Dry-run'}</button>}
-                <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void testRule(r.id)} title="Dry-run test fire" aria-label={`Dry-run test fire: ${r.name}`}><FlaskConical size={11} /></button>
+                <Button size="xs" disabled={busy === r.id} onClick={() => void patchRule(r.id, { enabled: !r.enabled })}>{r.enabled ? 'Disable' : 'Enable'}</Button>
+                {r.enabled && <Button size="xs" disabled={busy === r.id} onClick={() => void patchRule(r.id, { dryRun: !r.dryRun }, r.dryRun)}>{r.dryRun ? 'Go live' : 'Dry-run'}</Button>}
+                <Button size="xs" disabled={busy === r.id} onClick={() => void testRule(r.id)} title="Dry-run test fire" aria-label={`Dry-run test fire: ${r.name}`}><FlaskConical size={11} /></Button>
               </div>
             ))}
           </div>

@@ -284,9 +284,9 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                 <div className="az-rd-scopebar">
                   <span className="lbl">Untick a campaign to exclude it from this plan:</span>
                   <span className="grow" />
-                  <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set())} title="Control every campaign in the family">Include all</button>
-                  <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => c.status !== 'ENABLED').map(c => c.id)))} title="Exclude every paused / archived campaign">Active only</button>
-                  <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => !recentlyDelivered(c.lastDeliveredAt, 7)).map(c => c.id)))} title="Keep only campaigns that delivered in the last 7 days">Delivered ≤7d</button>
+                  <Button size="xs" onClick={() => setExcludeIds(new Set())} title="Control every campaign in the family">Include all</Button>
+                  <Button size="xs" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => c.status !== 'ENABLED').map(c => c.id)))} title="Exclude every paused / archived campaign">Active only</Button>
+                  <Button size="xs" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => !recentlyDelivered(c.lastDeliveredAt, 7)).map(c => c.id)))} title="Keep only campaigns that delivered in the last 7 days">Delivered ≤7d</Button>
                   {dirty && <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}><Save size={12} /> {busy ? 'Saving…' : 'Save scope'}</Button>}
                 </div>
                 <div className="az-rd-camps" style={{ maxHeight: 360, overflowY: 'auto' }}>

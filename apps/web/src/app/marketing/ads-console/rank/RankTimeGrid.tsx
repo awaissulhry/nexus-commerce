@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import {
   compileRankGrid, gridFromWindows, rankGridCounts, describeRankGrid,
   targetColor, textOn, BASELINE, BASELINE_COLOR, BASELINE_TEXT,
@@ -101,17 +102,17 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
           <button key={p.key || 'baseline'} type="button" className={`az-tr-swatch ${brush === p.key ? 'on' : ''}`} style={{ background: p.color, color: p.text }} onClick={() => setBrush(p.key)} title={p.key === BASELINE ? 'Clear back to the baseline (no window)' : `Hold ${p.name} during painted hours`}>{p.name}</button>
         ))}
         <span style={{ flex: 1 }} />
-        {onEditTargets && <button type="button" className="az-tr-mini" onClick={onEditTargets} title="Customize what each colour does (placement %, bids), or add your own">✎ Edit targets</button>}
-        {onUseDemandPeaks && <button type="button" className="az-tr-mini" onClick={onUseDemandPeaks} title="Auto-paint the recommended rank windows from where the family actually sells">✨ Use demand peaks</button>}
-        <button type="button" className="az-tr-mini" onClick={fillAll} title="Fill the whole week with the current brush">Fill all</button>
-        <button type="button" className="az-tr-mini" onClick={clearAll} title="Clear every window back to baseline">Clear</button>
+        {onEditTargets && <Button size="xs" onClick={onEditTargets} title="Customize what each colour does (placement %, bids), or add your own">✎ Edit targets</Button>}
+        {onUseDemandPeaks && <Button size="xs" onClick={onUseDemandPeaks} title="Auto-paint the recommended rank windows from where the family actually sells">✨ Use demand peaks</Button>}
+        <Button size="xs" onClick={fillAll} title="Fill the whole week with the current brush">Fill all</Button>
+        <Button size="xs" onClick={clearAll} title="Clear every window back to baseline">Clear</Button>
       </div>
       <div className="az-trgrid-bar">
         <span className="lbl">Bulk:</span>
-        <button type="button" className="az-tr-mini" onClick={copyMonWeekdays} title="Copy Monday's row to Tue–Fri">Mon→weekdays</button>
-        <button type="button" className="az-tr-mini" onClick={copyMonEveryday} title="Copy Monday's row to every day">Mon→all</button>
+        <Button size="xs" onClick={copyMonWeekdays} title="Copy Monday's row to Tue–Fri">Mon→weekdays</Button>
+        <Button size="xs" onClick={copyMonEveryday} title="Copy Monday's row to every day">Mon→all</Button>
         <span style={{ flex: 1 }} />
-        {onOpenTemplates && <button type="button" className="az-tr-mini" onClick={onOpenTemplates} title="Save / load named schedule templates (reusable across products & campaigns)">Templates…</button>}
+        {onOpenTemplates && <Button size="xs" onClick={onOpenTemplates} title="Save / load named schedule templates (reusable across products & campaigns)">Templates…</Button>}
       </div>
 
       <div className="az-trgrid-table" role="group" aria-label="Weekly rank schedule grid, 7 days by 24 hours. Press 1 to clear, 2 onward to pick a rank target, then click or drag to paint." onMouseLeave={() => { painting.current = false }}>

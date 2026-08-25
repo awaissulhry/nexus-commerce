@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { History, Loader2, RotateCcw, Trash2, ExternalLink, Bot, AlertTriangle, FlaskConical } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
 
 interface Sched { id: string; campaignId: string; name: string; windows: Array<{ days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number }>; timezone: string; enabled: boolean }
 interface Camp { id: string; name: string; marketplace: string | null; status: string; acos: number | null }
@@ -114,9 +114,9 @@ export function ManagedCampaigns({ market, onJump, onChanged }: { market: string
                 <span className="wd">{windowSummary(s.windows)} · {s.timezone}</span>
                 <span className="res">ACOS {pct(c!.acos)}</span>
                 <span style={{ flex: 1 }} />
-                <button type="button" className="az-mini" onClick={() => onJump(s.campaignId)} title="Open this campaign in the cockpit"><ExternalLink size={11} /> Cockpit</button>
-                {s.enabled && <button type="button" className="az-mini" disabled={busy === s.id} onClick={() => void revert(s)} title="Disable + restore original bids + resume">{busy === s.id ? <Loader2 size={11} className="az-spin" /> : <RotateCcw size={11} />} Revert</button>}
-                <button type="button" className="az-mini danger" disabled={busy === s.id} onClick={() => void remove(s)} title="Remove permanently" aria-label="Remove schedule"><Trash2 size={11} /></button>
+                <Button size="xs" onClick={() => onJump(s.campaignId)} title="Open this campaign in the cockpit"><ExternalLink size={11} /> Cockpit</Button>
+                {s.enabled && <Button size="xs" disabled={busy === s.id} onClick={() => void revert(s)} title="Disable + restore original bids + resume">{busy === s.id ? <Loader2 size={11} className="az-spin" /> : <RotateCcw size={11} />} Revert</Button>}
+                <ToolbarButton variant="boxed" icon={<Trash2 size={11} />} label="Remove schedule" description="Remove permanently" disabled={busy === s.id} onClick={() => void remove(s)} />
               </div>
             ))}
           </div>}
@@ -139,7 +139,7 @@ export function ManagedCampaigns({ market, onJump, onChanged }: { market: string
               {r.scopeMarketplace == null && <span className="mk">account-wide</span>}
               <span style={{ flex: 1 }} />
               {r.dryRun && r.enabled && <FlaskConical size={11} style={{ color: 'var(--ink3)' }} />}
-              <button type="button" className="az-mini" disabled={busy === r.id} onClick={() => void toggleRule(r)}>{r.enabled ? 'Disable' : 'Enable'}</button>
+              <Button size="xs" disabled={busy === r.id} onClick={() => void toggleRule(r)}>{r.enabled ? 'Disable' : 'Enable'}</Button>
             </div>
           ))}
       </div>

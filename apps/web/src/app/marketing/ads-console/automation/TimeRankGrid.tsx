@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 
 export type Level = 'max' | 'strong' | 'normal' | 'light' | 'pause'
 export interface LevelDef { k: Level; label: string; mult: number | null; pause?: boolean; color: string; text: string }
@@ -194,19 +195,19 @@ export function TimeRankGrid({ grid, onChange, demandGrid }: { grid: Level[][]; 
           <button key={l.k} type="button" className={`az-tr-swatch ${brush === l.k ? 'on' : ''}`} style={{ background: l.color, color: l.text }} onClick={() => setBrush(l.k)}>{l.label}</button>
         ))}
         <span style={{ flex: 1 }} />
-        <button type="button" className="az-tr-mini" onClick={fillAll}>Fill all</button>
-        <button type="button" className="az-tr-mini" onClick={reseed} title="Auto-paint from the family's demand">Auto-paint from demand</button>
+        <Button size="xs" onClick={fillAll}>Fill all</Button>
+        <Button size="xs" onClick={reseed} title="Auto-paint from the family's demand">Auto-paint from demand</Button>
       </div>
       <div className="az-trgrid-bar">
         <span className="lbl">Presets:</span>
-        <button type="button" className="az-tr-mini" onClick={pPauseNight} title="Pause 00:00–07:00 every day">Pause overnight</button>
-        <button type="button" className="az-tr-mini" onClick={pPushEvenings} title="Max push 17:00–23:00 every day">Push evenings</button>
-        <button type="button" className="az-tr-mini" onClick={pWeekendsLight} title="Ease off Saturday &amp; Sunday">Weekends light</button>
+        <Button size="xs" onClick={pPauseNight} title="Pause 00:00–07:00 every day">Pause overnight</Button>
+        <Button size="xs" onClick={pPushEvenings} title="Max push 17:00–23:00 every day">Push evenings</Button>
+        <Button size="xs" onClick={pWeekendsLight} title="Ease off Saturday &amp; Sunday">Weekends light</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="az-tr-mini" onClick={copyMonWeekdays} title="Copy Monday to Tue–Fri">Mon→weekdays</button>
-        <button type="button" className="az-tr-mini" onClick={copyMonEveryday} title="Copy Monday to every day">Mon→all</button>
-        <button type="button" className="az-tr-mini" onClick={saveTpl} title="Save this grid as a reusable template">Save</button>
-        <button type="button" className="az-tr-mini" onClick={loadTpl} title="Load your saved template">Load</button>
+        <Button size="xs" onClick={copyMonWeekdays} title="Copy Monday to Tue–Fri">Mon→weekdays</Button>
+        <Button size="xs" onClick={copyMonEveryday} title="Copy Monday to every day">Mon→all</Button>
+        <Button size="xs" onClick={saveTpl} title="Save this grid as a reusable template">Save</Button>
+        <Button size="xs" onClick={loadTpl} title="Load your saved template">Load</Button>
       </div>
 
       <div className="az-trgrid-table" role="group" aria-label="Weekly time × rank grid, 7 days by 24 hours. Press 1–5 to pick a level, then click or drag to paint." onMouseLeave={() => { painting.current = false }}>
