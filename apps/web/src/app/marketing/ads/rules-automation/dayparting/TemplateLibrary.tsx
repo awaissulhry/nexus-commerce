@@ -20,7 +20,7 @@ import { Trash2, Check } from 'lucide-react'
 import { WeekShape } from './WeekShape'
 import type { TargetPalette } from './ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 
 interface Template {
@@ -138,12 +138,14 @@ export function TemplateLibrary({ groupIds, groupNames, palette, onClose, onAppl
                 nameOf={palette.name}
                 baselineName={t.defaultTargetKey ? palette.name(t.defaultTargetKey) : 'Baseline'}
               />
-              {/* 🔴 NOT `ToolbarButton`: this sits inside the row's `<label>`, so the click must
-                  `preventDefault()` or deleting a template also SELECTS it. `ToolbarButton.onClick`
-                  is `() => void` and hands the call site no event. Filed in .claude/DS-GAPS.md. */}
-              <button type="button" className="del" aria-label={`Delete ${t.name}`} title="Delete this template" onClick={(e) => { e.preventDefault(); void remove(t) }}>
-                <Trash2 size={13} />
-              </button>
+              {/* This sits inside the row's `<label>`, so the click MUST `preventDefault()` or
+                  deleting a template also selects it. `ToolbarButton` takes the native handler
+                  signature as of 2026-08-25, which is what makes this convertible. */}
+              <ToolbarButton
+                tone="danger" size="sm" className="del"
+                icon={<Trash2 size={13} />} label={`Delete ${t.name}`} description="Delete this template"
+                onClick={(e) => { e.preventDefault(); void remove(t) }}
+              />
             </label>
           ))}
         </div>

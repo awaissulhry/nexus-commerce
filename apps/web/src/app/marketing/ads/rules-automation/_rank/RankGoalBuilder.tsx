@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
-import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, RadioCard, ToolbarButton } from '@/design-system/primitives'
 
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
@@ -306,14 +306,20 @@ export function RankGoalBuilder() {
               <h2>Control</h2>
               <p className="h10-rb-desc">Choose how this rank plan runs once you create it.</p>
               <div className="h10-rb-card control">
-                <label className={`h10-rb-ctrl ${control === 'manual' ? 'on' : ''}`}>
-                  <input type="radio" name="rgdcontrol" checked={control === 'manual'} onChange={() => setControl('manual')} />
-                  <span className="b"><span className="t">Manual</span><span className="d">Save the plan but don&apos;t run it — nothing changes on Amazon until you switch it to Automate.</span></span>
-                </label>
-                <label className={`h10-rb-ctrl ${control === 'automate' ? 'on' : ''}`}>
-                  <input type="radio" name="rgdcontrol" checked={control === 'automate'} onChange={() => setControl('automate')} />
-                  <span className="b"><span className="t">Automate</span><span className="d">Have the engine hold this rank automatically on its cadence (real Amazon pushes still honour each campaign&apos;s write-gate).</span></span>
-                </label>
+                <RadioCard
+                  variant="row" className="h10-rb-ctrl"
+                  name="rgdcontrol" checked={control === 'manual'} selected={control === 'manual'}
+                  onChange={() => setControl('manual')}
+                  title="Manual"
+                  description={<>Save the plan but don&apos;t run it — nothing changes on Amazon until you switch it to Automate.</>}
+                />
+                <RadioCard
+                  variant="row" className="h10-rb-ctrl"
+                  name="rgdcontrol" checked={control === 'automate'} selected={control === 'automate'}
+                  onChange={() => setControl('automate')}
+                  title="Automate"
+                  description={<>Have the engine hold this rank automatically on its cadence (real Amazon pushes still honour each campaign&apos;s write-gate).</>}
+                />
               </div>
               {/* E1/E3 — what arming this actually does, at the point the choice is made. */}
               <ArmPreview

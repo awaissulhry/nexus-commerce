@@ -149,11 +149,12 @@
 
 /* control */
 .h10-rb-card.control { padding: 16px 22px; }
-.h10-rb-ctrl { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; cursor: pointer; }
-.h10-rb-ctrl input { margin-top: 2px; accent-color: var(--nds-blue-600); width: 17px; height: 17px; flex-shrink: 0; }
-.h10-rb-ctrl .b { display: flex; flex-direction: column; gap: 2px; }
-.h10-rb-ctrl .t { font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-rb-ctrl .d { font-size: 12.5px; color: var(--nds-grey-600); }
+/* DS-ALIGN — the Manual/Automate pair is `RadioCard variant="row"`, which is structurally what
+   this always was: radio, title, description. Its `on` class used to style NOTHING — the
+   selected option was carried by the radio dot alone — and the primitive gives it a real one.
+   Only the row's 14px title survives, because this is a section-level choice, not a list item. */
+.h10-rb-ctrl { padding: 9px 0; }
+.h10-rb-ctrl .rc-title { font-size: 14px; font-weight: 700; }
 
 /* footer */
 .h10-rb-foot { display: flex; align-items: center; padding: 22px 0 0; border-top: 1px solid var(--nds-grey-150); margin-top: 8px; }
@@ -189,11 +190,10 @@
 
 .h10-rtm-h .x:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); }
 .h10-rtm-b { padding: 4px 24px 8px; overflow-y: auto; }
-.h10-rtm-opt { display: flex; align-items: flex-start; gap: 13px; padding: 9px 0; cursor: pointer; }
-.h10-rtm-opt input { margin-top: 2px; accent-color: var(--nds-blue-600); width: 17px; height: 17px; flex-shrink: 0; }
-.h10-rtm-opt .b { display: flex; flex-direction: column; gap: 3px; }
-.h10-rtm-opt .t { font-size: 14.5px; font-weight: 700; color: #1f2c3d; }
-.h10-rtm-opt .d { font-size: 12.5px; color: var(--nds-pill-neutral-fg); line-height: 1.4; }
+/* DS-ALIGN — `RadioCard variant="row"`; see `.h10-rb-ctrl`. Nine options in one dialog is
+   exactly why the `card` variant was wrong here. */
+.h10-rtm-opt .rc-title { font-size: 14.5px; font-weight: 700; }
+.h10-rtm-opt .rc-desc { line-height: 1.4; }
 .h10-rtm-f { display: flex; align-items: center; padding: 14px 24px 20px; }
 .h10-rtm-f .grow { flex: 1; }
 
@@ -454,11 +454,10 @@
 
 /* schedule-type radios (Campaign Budget / Budget Multiplier) */
 .h10-sb-types { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 22px; }
-.h10-sb-type { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; max-width: 620px; }
-.h10-sb-type input { margin-top: 2px; accent-color: var(--nds-blue-600); width: 16px; height: 16px; }
-.h10-sb-type .b { display: flex; flex-direction: column; gap: 2px; }
-.h10-sb-type .b .t { font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-sb-type .b .d { font-size: 13px; color: var(--nds-grey-600); }
+/* DS-ALIGN — `RadioCard variant="row"`; see `.h10-rb-ctrl`. */
+.h10-sb-type { max-width: 620px; }
+.h10-sb-type .rc-title { font-size: 14px; font-weight: 700; }
+.h10-sb-type .rc-desc { font-size: 13px; }
 
 /* Hourly Campaign Performance — chart card (controls + body) */
 .h10-sb-chart { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); overflow: hidden; margin-bottom: 22px; }

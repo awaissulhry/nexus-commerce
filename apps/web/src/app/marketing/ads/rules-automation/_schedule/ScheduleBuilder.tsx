@@ -23,7 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, RadioCard, Toggle, ToolbarButton } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -454,10 +454,12 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
               {cfg.types.length > 0 && (
               <div className="h10-sb-types">
                 {cfg.types.map((t) => (
-                  <label key={t.value} className={`h10-sb-type ${type === t.value ? 'on' : ''}`}>
-                    <input type="radio" name="schedtype" checked={type === t.value} onChange={() => setType(t.value)} />
-                    <span className="b"><span className="t">{t.label}</span><span className="d">{t.desc}</span></span>
-                  </label>
+                  <RadioCard
+                    key={t.value} variant="row" className="h10-sb-type"
+                    name="schedtype" checked={type === t.value} selected={type === t.value}
+                    onChange={() => setType(t.value)}
+                    title={t.label} description={t.desc}
+                  />
                 ))}
               </div>
               )}

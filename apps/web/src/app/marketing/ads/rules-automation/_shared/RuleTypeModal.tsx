@@ -12,7 +12,7 @@
  * back to the first option, which is the behaviour every existing caller had.
  */
 import { useState } from 'react'
-import { Button, ToolbarButton } from '@/design-system/primitives'
+import { Button, RadioCard, ToolbarButton } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import { RULE_TYPES } from './ruleTypes'
@@ -32,10 +32,12 @@ export function RuleTypeModal({ onClose, initial }: { onClose: () => void; initi
         </div>
         <div className="h10-rtm-b">
           {RULE_TYPES.map((rt) => (
-            <label className={`h10-rtm-opt ${sel === rt.slug ? 'on' : ''}`} key={rt.slug}>
-              <input type="radio" name="ruletype" checked={sel === rt.slug} onChange={() => setSel(rt.slug)} />
-              <span className="b"><span className="t">{rt.label}</span><span className="d">{rt.desc}</span></span>
-            </label>
+            <RadioCard
+              key={rt.slug} variant="row" className="h10-rtm-opt"
+              name="ruletype" checked={sel === rt.slug} selected={sel === rt.slug}
+              onChange={() => setSel(rt.slug)}
+              title={rt.label} description={rt.desc}
+            />
           ))}
         </div>
         <div className="h10-rtm-f">

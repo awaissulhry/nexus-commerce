@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input, Radio, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, RadioCard, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1904,14 +1904,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <span>Also add each harvested term as a <b>negative</b> in its source ad group — stops the source (Auto/Broad) campaign from competing with the new target.</span>
                 </div>
                 )}
-                <label className={`h10-rb-ctrl ${control === 'manual' ? 'on' : ''}`}>
-                  <input type="radio" name="control" checked={control === 'manual'} onChange={() => setControl('manual')} />
-                  <span className="b"><span className="t">Manual</span><span className="d">Manually approve rule actions on the Suggestions page</span></span>
-                </label>
-                <label className={`h10-rb-ctrl ${control === 'automate' ? 'on' : ''}`}>
-                  <input type="radio" name="control" checked={control === 'automate'} onChange={() => setControl('automate')} />
-                  <span className="b"><span className="t">Automate</span><span className="d">Automate this rule to have Nexus Ads automatically apply rule actions</span></span>
-                </label>
+                <RadioCard
+                  variant="row" className="h10-rb-ctrl"
+                  name="control" checked={control === 'manual'} selected={control === 'manual'}
+                  onChange={() => setControl('manual')}
+                  title="Manual" description="Manually approve rule actions on the Suggestions page"
+                />
+                <RadioCard
+                  variant="row" className="h10-rb-ctrl"
+                  name="control" checked={control === 'automate'} selected={control === 'automate'}
+                  onChange={() => setControl('automate')}
+                  title="Automate" description="Automate this rule to have Nexus Ads automatically apply rule actions"
+                />
               </div>
             </section>
 
