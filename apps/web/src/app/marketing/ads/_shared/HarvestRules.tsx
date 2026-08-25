@@ -16,6 +16,7 @@
  */
 import { type Dispatch, type SetStateAction, useState } from 'react'
 import { Layers } from 'lucide-react'
+import { Checkbox } from '@/design-system/primitives'
 import { Tabs } from '@/design-system/components/Tabs'
 import { InfoTip } from '../campaigns/InfoTip'
 import { PerformanceCriteria, type CriteriaGroup } from '../rules-automation/_shared/PerformanceCriteria'
@@ -35,9 +36,13 @@ function MBadge({ tone, letter }: { tone: 'green' | 'slate' | 'navy' | 'blue' | 
 }
 function Package11() { return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden><path d="M21 8 12 3 3 8l9 5 9-5Z" /><path d="m3 8 0 8 9 5 9-5 0-8" /></svg> }
 
+/**
+ * A matrix cell. The disabled case used to render `<span className="h10-spw-mx-ck dis" aria-hidden />`
+ * — a grey box with no name, no state and no presence in the a11y tree, so a screen-reader user
+ * could not tell an unavailable combination from an empty cell. `Checkbox disabled` announces it.
+ */
 function Check({ on, disabled, onChange, label }: { on: boolean; disabled?: boolean; onChange: () => void; label: string }) {
-  if (disabled) return <span className="h10-spw-mx-ck dis" aria-hidden />
-  return <input type="checkbox" className="h10-spw-mx-ck" checked={on} onChange={onChange} aria-label={label} />
+  return <Checkbox checked={on} disabled={disabled} onChange={onChange} aria-label={label} />
 }
 
 export function HarvestRules({ rules, setRules, campaigns }: {
