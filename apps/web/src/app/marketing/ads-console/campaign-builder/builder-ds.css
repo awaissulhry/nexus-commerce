@@ -12,13 +12,17 @@
    The two note colours are `--nds-*` rather than the literals the old rule used —
    the raw-hex ratchet holds every new stylesheet at zero, and both substitutions
    RAISE contrast: the live note goes 7.60:1 → 9.23:1 and the sandbox one
-   6.46:1 → 6.70:1. */
+   6.46:1 → 6.70:1.
 
-.az-cb-review .note { font-size: 12.5px; border-radius: 8px; padding: 10px 13px; margin-bottom: 14px; line-height: 1.5; }
+   Radii are on the scale too: the note's 8px is `--nds-radius-lg` exactly, and the
+   list's old 9px — which names no scale step — moves to the same `lg`, so the two
+   boxes inside one modal round identically instead of by 1px apart. */
+
+.az-cb-review .note { font-size: 12.5px; border-radius: var(--nds-radius-lg); padding: 10px 13px; margin-bottom: 14px; line-height: 1.5; }
 .az-cb-review .note.live { background: var(--nds-note-error-bg); border: 1px solid var(--nds-danger-soft); color: var(--nds-note-error-fg); }
 .az-cb-review .note.sandbox { background: var(--nds-grey-25); border: 1px solid var(--nds-border-subtle); color: var(--ink2); }
 .az-cb-review .sum { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
-.az-cb-review .list { border: 1px solid var(--divider); border-radius: 9px; overflow: hidden; }
+.az-cb-review .list { border: 1px solid var(--divider); border-radius: var(--nds-radius-lg); overflow: hidden; }
 .az-cb-review .list .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 13px; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
 .az-cb-review .list .row:last-child { border-bottom: none; }
 .az-cb-review .list .nm { font-weight: 600; color: var(--ink); }
