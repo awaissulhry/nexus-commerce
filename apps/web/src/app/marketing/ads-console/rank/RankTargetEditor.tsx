@@ -15,6 +15,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Radio } from '@/design-system/primitives'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
@@ -329,21 +330,21 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
               {FIELDS.map(f => <span key={f.f} className="fld"><input type="number" placeholder={f.unit} value={(form[f.f] == null ? '' : f.f === 'maxCpcCents' ? eur(form[f.f]) : form[f.f]) as string | number} onChange={e => setForm(s => ({ ...s, [f.f]: e.target.value === '' ? undefined : f.f === 'maxCpcCents' ? Math.round(Number(e.target.value) * 100) : Math.round(Number(e.target.value)) }))} step={f.f === 'maxCpcCents' ? '0.01' : '1'} /></span>)}
               <span className="act" />
               <div className="az-rte-addscope">
-                Add to: <label><input type="radio" checked={form.scope === 'scope'} onChange={() => setForm(f => ({ ...f, scope: 'scope' }))} disabled={scopeKind === 'product' ? !productId : !campaignId} /> {scopeKind === 'product' ? 'This product only' : 'This campaign only'}</label>
-                <label><input type="radio" checked={form.scope === 'global'} onChange={() => setForm(f => ({ ...f, scope: 'global' }))} /> Global (everywhere)</label>
+                Add to: <Radio name="rte-add-scope" checked={form.scope === 'scope'} onChange={() => setForm(f => ({ ...f, scope: 'scope' }))} disabled={scopeKind === 'product' ? !productId : !campaignId} label={scopeKind === 'product' ? 'This product only' : 'This campaign only'} />
+                <Radio name="rte-add-scope" checked={form.scope === 'global'} onChange={() => setForm(f => ({ ...f, scope: 'global' }))} label="Global (everywhere)" />
                 <span className="grow" />
-                <button type="button" className="az-btn dark sm" disabled={busy} onClick={() => void addCustom()}>Add target</button>
-                <button type="button" className="az-btn sm" onClick={() => setAdding(false)}>Cancel</button>
+                <Button variant="primary" size="sm" disabled={busy} onClick={() => void addCustom()}>Add target</Button>
+                <Button size="sm" onClick={() => setAdding(false)}>Cancel</Button>
               </div>
             </div>
           )}
         </div>
         {msg && <div className="az-rp-msg" style={{ margin: '0 15px' }}>{msg}</div>}
         <div className="ft">
-          {!adding && <button type="button" className="az-btn" onClick={() => setAdding(true)}><Plus size={13} /> Add target</button>}
+          {!adding && <Button onClick={() => setAdding(true)}><Plus size={13} /> Add target</Button>}
           <span className="grow" />
-          <button type="button" className="az-btn" onClick={() => onClose(changed)}>Close</button>
-          {((view === 'scope' && scopeAvailable) || view === 'global') && <button type="button" className="az-btn dark" disabled={busy || !changed} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : view === 'scope' ? 'Save overrides' : 'Save defaults'}</button>}
+          <Button onClick={() => onClose(changed)}>Close</Button>
+          {((view === 'scope' && scopeAvailable) || view === 'global') && <Button variant="primary" disabled={busy || !changed} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : view === 'scope' ? 'Save overrides' : 'Save defaults'}</Button>}
         </div>
       </div>
     </div>

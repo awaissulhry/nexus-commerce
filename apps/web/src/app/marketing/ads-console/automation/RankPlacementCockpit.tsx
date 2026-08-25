@@ -1039,7 +1039,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
         <div className="az-kwx-clean"><Check size={13} /> No keyword overlap — none of your other products bid on this campaign’s keywords in {market}.</div>
       )}
       {kwConflicts && kwConflicts.conflicts.length > 0 && visibleConflicts.length === 0 && (
-        <div className="az-kwx-clean"><Check size={13} /> All {kwConflicts.conflicts.length} keyword overlap{kwConflicts.conflicts.length === 1 ? '' : 's'} ignored for this campaign. <button type="button" className="lnk" onClick={restoreDismissed}>Show again</button></div>
+        <div className="az-kwx-clean"><Check size={13} /> All {kwConflicts.conflicts.length} keyword overlap{kwConflicts.conflicts.length === 1 ? '' : 's'} ignored for this campaign. <Button variant="link" inline onClick={restoreDismissed}>Show again</Button></div>
       )}
 
       {/* ── T·product: When · dayparting (CR.6 — hidden in the embedded cockpit;
