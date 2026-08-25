@@ -92,6 +92,12 @@
    carried. The `gap` override is written at .nds-tabs.eb-tabs.hub so it outranks `.nds-tabs.lg`
    on specificity rather than on which stylesheet happens to load last. */
 .eb-tabs { margin-bottom: 20px; }
+
+/* The wizard step rail is the DS `Stepper`, which owns the badges, the labels, the connectors
+   and the done/active/upcoming states — all of which `.h10-spw-step` hand-rolled. What is left is
+   only the rail's place on the page: the legacy `.h10-spw-steps` wrapper also carried a 20px top
+   margin and the hairline that separates the rail from the step body. */
+.eb-wiz-steps { margin-top: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--nds-grey-150); }
 .eb-tabs.tight { margin-bottom: 10px; }
 .nds-tabs.eb-tabs.hub { gap: 30px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
 .eb-tabs.hub::-webkit-scrollbar { display: none; }

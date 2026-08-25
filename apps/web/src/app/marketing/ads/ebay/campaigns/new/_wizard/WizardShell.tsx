@@ -2,14 +2,15 @@
 
 /**
  * ER2 — the shared stepper shell on the SP-Super-Wizard chrome (§PL-7:
- * .h10-spw-top eyebrow+h1+exit, .h10-spw-steps with .circ/.lbl/.on/.done +
+ * .h10-spw-top eyebrow+h1+exit, the DS `Stepper` for the step rail, +
  * connectors, .h10-spw-foot Back·err·Next). Steps are freely clickable
  * (Amazon idiom); advancing past BLOCKING issues opens a modal that lists
  * them with no continue-anyway (stricter than SPW — eBay launches spend
  * money; deviation recorded in the spec §11.3).
  */
-import { Fragment, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Stepper } from '@/design-system/components'
 import Link from 'next/link'
 import { H10Modal } from '../../../_lib/modal'
 
@@ -45,22 +46,17 @@ export function WizardShell(props: {
         <Link className="h10-spw-exit" href="/marketing/ads/ebay/campaigns/new">Exit to campaign types</Link>
       </header>
 
-      <nav className="h10-spw-steps" aria-label="Steps">
-        {props.steps.map((s, i) => (
-          <Fragment key={s.key}>
-            {i > 0 && <span className="h10-spw-conn" />}
-            <button
-              type="button"
-              className={`h10-spw-step ${props.active === s.key ? 'on' : ''} ${props.visited.includes(s.key) && props.active !== s.key ? 'done' : ''}`}
-              aria-current={props.active === s.key ? 'step' : undefined}
-              onClick={() => props.onStep(s.key)}
-            >
-              <span className="circ">{i + 1}</span>
-              <span className="lbl">{s.label}</span>
-            </button>
-          </Fragment>
-        ))}
-      </nav>
+      {/* `canSelect` returns true for every step because that is what this wizard already did —
+          `go()` performs no validation, so any step has always been reachable. The DS defaults to
+          completed-only and makes jumping ahead an explicit opt-in; this is that opt-in, not a
+          behaviour change. Tightening it is the wizard owner's call, not this conversion's. */}
+      <Stepper
+        className="eb-wiz-steps"
+        steps={props.steps.map((s) => ({ key: s.key, label: s.label }))}
+        current={idx}
+        onSelect={(_i, step) => props.onStep(step.key)}
+        canSelect={() => true}
+      />
 
       <div style={{ marginTop: 18 }}>{props.children}</div>
 
