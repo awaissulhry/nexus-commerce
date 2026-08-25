@@ -208,6 +208,21 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // light, so the dark danger pill was #f79289 on #fde8e8 — 1.9:1, illegible. --nds-danger-text
   // has no dark override: 6.27:1 in BOTH themes (was 4.63 light / 1.9 dark).
   { name: '--nds-pill-danger-fg', value: 'var(--nds-danger-text)' },
+  // ── WorkspaceGrid (tier 3) ─────────────────────────────────────────────────────
+  // Arrived with the grid in WG.3e. Kept as component tokens rather than snapped to the
+  // nearest ramp entry: the nearest is 2.4–44.1 away in RGB, and in this codebase a colour
+  // far from the palette has repeatedly turned out to be a contrast ratio somebody computed.
+  // A substitution may only ever RAISE contrast, so these keep their measured values.
+  { name: '--nds-wsgrid-head-fg', value: '#475467' }, // column header text
+  { name: '--nds-wsgrid-dot', value: '#cbd2db' }, // inactive state dot in the name cell
+  { name: '--nds-wsgrid-icon-muted', value: '#b6bdc8' }, // pin and bulb glyphs in the name cell
+  { name: '--nds-wsgrid-badge-sb-fg', value: '#b45309' }, // Sponsored Brands badge text
+  { name: '--nds-wsgrid-tag-auto', value: '#4f46e5' }, // AUTO targeting tag
+  { name: '--nds-wsgrid-tag-manual', value: '#7c3aed' }, // MANUAL targeting tag
+  { name: '--nds-wsgrid-pb-bg', value: '#2f3a4a' }, // placement badge ground
+  { name: '--nds-wsgrid-pb-border', value: '#cfd6de' }, // placement badge edge
+  { name: '--nds-wsgrid-rule', value: '#d0d5dd' }, // frozen-column and checkbox-column rules
+  { name: '--nds-wsgrid-drag-ring', value: '#2f6bff' }, // the ring on a header being dragged
   { name: '--nds-pill-danger-bg', value: 'var(--nds-danger-soft)' },
 
   // ── Tier 3: program / targeting chips ────────────────────────────

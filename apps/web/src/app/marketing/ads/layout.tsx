@@ -14,7 +14,7 @@ import '@/app/_shared/shared-shell.css'
 import './ads.css'
 // WG.2d — the grid's 146 rules, lifted out of ads.css. MUST load after it: verified in that
 // exact position (0 computed-property differences, 0 differing subpixels).
-import './campaigns/_grid/workspace-grid.css'
+import '@/design-system/styles/workspace-grid.css'
 import type { ReactNode } from 'react'
 import { AdsSidebar } from './_shell/AdsSidebar'
 import { AdsMarketplaceProvider } from './_shell/MarketplaceContext'

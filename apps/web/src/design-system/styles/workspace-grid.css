@@ -21,7 +21,7 @@
 .eb-tablebox table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 .nds-wsgrid thead th,
-.eb-tablebox thead th { position: sticky; top: 0; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-200); font-size: 11.5px; font-weight: 700; color: #475467; text-align: left; padding: 10px 14px; white-space: nowrap; }
+.eb-tablebox thead th { position: sticky; top: 0; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-200); font-size: 11.5px; font-weight: 700; color: var(--nds-wsgrid-head-fg); text-align: left; padding: 10px 14px; white-space: nowrap; }
 
 .nds-wsgrid th.num, .nds-wsgrid td.num,
 .eb-tablebox th.num, .eb-tablebox td.num { text-align: right; }
@@ -37,7 +37,7 @@
 
 .nds-wsgrid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
 
-.nds-wsgrid td.nm .dot { width: 7px; height: 7px; border-radius: 999px; background: #cbd2db; flex-shrink: 0; }
+.nds-wsgrid td.nm .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nds-wsgrid-dot); flex-shrink: 0; }
 
 .nds-wsgrid td.nm .dot.live { background: var(--nds-green-500); }
 
@@ -67,7 +67,7 @@
    pagination + Latest Report footer + loading skeleton (Helium 10 match) */
 .nds-wsgrid td.nm { gap: 7px; }
 
-.nds-wsgrid td.nm .pin { color: #b6bdc8; flex-shrink: 0; }
+.nds-wsgrid td.nm .pin { color: var(--nds-wsgrid-icon-muted); flex-shrink: 0; }
 
 .nds-wsgrid td.nm .tg { font-size: 10px; font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
 
@@ -77,7 +77,7 @@
 
 .nds-wsgrid td.nm .pb[data-p="SD"] { color: var(--nds-cyan-700); background: var(--nds-cyan-bg); }
 
-.nds-wsgrid td.nm .pb[data-p="SB"] { color: #b45309; background: var(--nds-badge-sb-bg); }
+.nds-wsgrid td.nm .pb[data-p="SB"] { color: var(--nds-wsgrid-badge-sb-fg); background: var(--nds-badge-sb-bg); }
 
 .nds-wsgrid td.nm .t { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; }
 
@@ -121,13 +121,13 @@
 
 .nds-wsgrid td.nm .nmw { display: flex; align-items: center; gap: 7px; max-width: 300px; }
 
-.nds-wsgrid td.nm .nmw .bulb { color: #b6bdc8; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .bulb { color: var(--nds-wsgrid-icon-muted); flex-shrink: 0; }
 
 .nds-wsgrid td.nm .nmw .tg { font-size: 10px; font-weight: 800; color: var(--nds-white); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.25; }
 
-.nds-wsgrid td.nm .nmw .tg[data-t="A"] { background: #4f46e5; }
+.nds-wsgrid td.nm .nmw .tg[data-t="A"] { background: var(--nds-wsgrid-tag-auto); }
 
-.nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: #7c3aed; }
+.nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: var(--nds-wsgrid-tag-manual); }
 
 .nds-wsgrid td.nm .nmw .pb { font-size: 9px; font-weight: 800; color: var(--nds-white); background: var(--nds-grey-700); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.35; }
 
@@ -205,7 +205,7 @@
 
 .nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
 
-.nds-wsgrid td.nm .nmw .pb { font-size: 10px; font-weight: 800; padding: 3px 6px; line-height: 1.45; border-radius: 5px; background: #2f3a4a; }
+.nds-wsgrid td.nm .nmw .pb { font-size: 10px; font-weight: 800; padding: 3px 6px; line-height: 1.45; border-radius: 5px; background: var(--nds-wsgrid-pb-bg); }
 
 .nds-wsgrid td.nm .nmw .t { font-size: 13px; }
 
@@ -253,7 +253,7 @@
 
 .nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
 
-.nds-wsgrid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-white); border: 1px solid #cfd6de; border-radius: 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-white); border: 1px solid var(--nds-wsgrid-pb-border); border-radius: 5px; flex-shrink: 0; }
 
 /* ── CBN.2h.9 — custom rounded checkboxes (H10), ~19px, grid + bulk modal ── */
 .nds-wsgrid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
@@ -316,7 +316,7 @@
    above at 46px and .nm at left:46px), but this HIGHER-specificity .nm.fz rule kept the old 40px,
    so every selectable grid's frozen name column pinned 6px short and overlapped the checkbox
    column on horizontal scroll. One winning rule, one value, matching td.ck's width. */
-.nds-wsgrid th.nm.fz, .nds-wsgrid td.nm.fz { position: sticky; left: 46px; z-index: 3; background: var(--nds-white); border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-wsgrid th.nm.fz, .nds-wsgrid td.nm.fz { position: sticky; left: 46px; z-index: 3; background: var(--nds-white); border-right: 1px solid var(--nds-wsgrid-rule); box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 
 .nds-wsgrid thead th.nm.fz { z-index: 6; background: var(--nds-grey-25); }
 
@@ -353,7 +353,7 @@
 
 .nds-wsgrid thead th.dragging, .nds-wsgrid td.dragging { opacity: 0.4; }
 
-.nds-wsgrid thead th.dragging { box-shadow: inset 0 0 0 2px #2f6bff; }
+.nds-wsgrid thead th.dragging { box-shadow: inset 0 0 0 2px var(--nds-wsgrid-drag-ring); }
 
 /* ════════════════════════════════════════════════════════════════════════════
    CBN.3.2 — AdsDataGrid shared-grid additions. Only the pinned Total row is new;
@@ -391,7 +391,7 @@
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 .nds-wsgrid th.fzr, .nds-wsgrid td.fzr { position: sticky; z-index: 3; background: var(--nds-white); }
 
-.nds-wsgrid th.fzr0, .nds-wsgrid td.fzr0 { border-left: 1px solid #d0d5dd; box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-wsgrid th.fzr0, .nds-wsgrid td.fzr0 { border-left: 1px solid var(--nds-wsgrid-rule); box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 
 .nds-wsgrid thead th.fzr { z-index: 6; background: var(--nds-grey-25); }
 

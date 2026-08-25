@@ -120,6 +120,16 @@
   --nds-pill-neutral-fg: #6b7480;
   --nds-pill-neutral-bg: var(--nds-grey-100);
   --nds-pill-danger-fg: var(--nds-danger-text);
+  --nds-wsgrid-head-fg: #475467;
+  --nds-wsgrid-dot: #cbd2db;
+  --nds-wsgrid-icon-muted: #b6bdc8;
+  --nds-wsgrid-badge-sb-fg: #b45309;
+  --nds-wsgrid-tag-auto: #4f46e5;
+  --nds-wsgrid-tag-manual: #7c3aed;
+  --nds-wsgrid-pb-bg: #2f3a4a;
+  --nds-wsgrid-pb-border: #cfd6de;
+  --nds-wsgrid-rule: #d0d5dd;
+  --nds-wsgrid-drag-ring: #2f6bff;
   --nds-pill-danger-bg: var(--nds-danger-soft);
 
   /* ── Tier 3: program / targeting chips ── */
