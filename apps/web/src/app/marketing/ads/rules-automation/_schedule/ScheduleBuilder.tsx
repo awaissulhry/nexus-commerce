@@ -589,10 +589,10 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                       {w.adj && adjNeedsValue(w.adj) && <Input size="sm" fieldClassName="h10-sb-adjval" inputMode="decimal" value={w.value} onChange={(e) => setWin(w.id, { value: e.target.value })} placeholder={adjustments.find((a) => a.value === w.adj)?.unit === 'mult' ? '1.5' : adjustments.find((a) => a.value === w.adj)?.unit === 'eur' ? '€' : '%'} aria-label="Adjustment value" />}
                     </span>
                     <span className="act">
-                      <button type="button" aria-label="Add time period" onClick={() => addWin(w.day)}><Plus size={15} /></button>
-                      <button type="button" aria-label="Duplicate" onClick={() => dupWin(w.id)}><Copy size={15} /></button>
-                      {isDayparting && <button type="button" aria-label="Copy to all days" title="Copy to all days" onClick={() => copyToAllDays(w)}><CopyPlus size={15} /></button>}
-                      <button type="button" aria-label="Delete" onClick={() => delWin(w.id)}><Trash2 size={15} /></button>
+                      <ToolbarButton size="sm" icon={<Plus size={15} />} label="Add time period" tooltip={false} onClick={() => addWin(w.day)} />
+                      <ToolbarButton size="sm" icon={<Copy size={15} />} label="Duplicate" tooltip={false} onClick={() => dupWin(w.id)} />
+                      {isDayparting && <ToolbarButton size="sm" icon={<CopyPlus size={15} />} label="Copy to all days" onClick={() => copyToAllDays(w)} />}
+                      <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={15} />} label="Delete" tooltip={false} onClick={() => delWin(w.id)} />
                     </span>
                   </div>
                 ))}
@@ -650,7 +650,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                           <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={r.start} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, start: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude start date" /></div>
                         <div className="f"><label>Exclude End</label>
                           <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={r.end} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, end: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude end date" /></div>
-                        <button type="button" className="h10-sb-exdel" aria-label="Remove this exclude range" onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))}><X size={14} /></button>
+                        <ToolbarButton tone="danger" className="h10-sb-exdel" icon={<X size={14} />} label="Remove this exclude range" tooltip={false} onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))} />
                       </div>
                     ))}
                     <Button onClick={() => setExcludeRanges((rs) => [...rs, { id: _wid++, start: '', end: '' }])}><Plus size={13} /> Add exclude range</Button>

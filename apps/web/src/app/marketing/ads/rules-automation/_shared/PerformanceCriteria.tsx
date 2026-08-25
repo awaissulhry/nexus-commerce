@@ -7,6 +7,7 @@
  * (Config lifted verbatim from RuleBuilder.tsx; the THEN-action lives with each caller.)
  */
 import { X, Plus } from 'lucide-react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { HIGH_ACOS_FLOOR, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import { Listbox } from '@/design-system/components'
 
@@ -217,7 +218,7 @@ export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvestin
             <Listbox width={260} options={metrics} value={c.metric} onChange={(v) => setCond(i, { metric: v })} ariaLabel="Metric" />
             <Listbox width={300} options={PC_OPERATORS} value={c.op} onChange={(v) => setCond(i, { op: v })} ariaLabel="Operator" />
             <div className={`h10-pc-val ${unit}`}>{unit === 'eur' && <span className="u">€</span>}<input inputMode="decimal" value={c.value} onChange={(e) => setCond(i, { value: e.target.value })} placeholder="Value" aria-label="Value" />{unit === 'pct' && <span className="u">%</span>}</div>
-            {value.conditions.length > 1 && <button type="button" className="h10-pc-rm" onClick={() => rmCond(i)} aria-label="Remove condition"><X size={14} /></button>}
+            {value.conditions.length > 1 && <ToolbarButton tone="danger" size="sm" icon={<X size={14} />} label="Remove condition" tooltip={false} onClick={() => rmCond(i)} />}
           </div>
         )
       })}

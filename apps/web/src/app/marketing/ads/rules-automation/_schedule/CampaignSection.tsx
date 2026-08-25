@@ -23,7 +23,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button, Input, Radio } from '@/design-system/primitives'
+import { Button, Input, Radio, ToolbarButton } from '@/design-system/primitives'
 
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -263,9 +263,9 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
         </div>
         {tab === 'All Campaigns' && (
         <div className="cp-pager">
-          <button type="button" className="pg" disabled={pg <= 1} onClick={() => setPage(pg - 1)} aria-label="Previous page"><ChevronLeft size={16} /></button>
+          <ToolbarButton variant="boxed" className="pg" icon={<ChevronLeft size={16} />} label="Previous page" tooltip={false} disabled={pg <= 1} onClick={() => setPage(pg - 1)} />
           <span className="pgn">{pg}</span>
-          <button type="button" className="pg" disabled={pg >= pages} onClick={() => setPage(pg + 1)} aria-label="Next page"><ChevronRight size={16} /></button>
+          <ToolbarButton variant="boxed" className="pg" icon={<ChevronRight size={16} />} label="Next page" tooltip={false} disabled={pg >= pages} onClick={() => setPage(pg + 1)} />
           <span className="pp">Rows per page: <Listbox width={72} options={[{ value: '25', label: '25' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} value={String(perPage)} onChange={(v) => { setPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" /></span>
         </div>
         )}
@@ -285,7 +285,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
                 {badges(c)}
                 <span className="cp-name" title={c.name}>{c.name}</span>
                 <span className={`cp-status ${c.status === 'ENABLED' ? 'on' : 'off'}`}>{statusText(c.status)}</span>
-                <button type="button" className="cp-rm" onClick={() => onRemove(c.id)} aria-label={`Remove ${c.name}`}><X size={15} /></button>
+                <ToolbarButton tone="danger" size="sm" className="cp-rm" icon={<X size={15} />} label={`Remove ${c.name}`} tooltip={false} onClick={() => onRemove(c.id)} />
               </div>
             ))}
           </div>

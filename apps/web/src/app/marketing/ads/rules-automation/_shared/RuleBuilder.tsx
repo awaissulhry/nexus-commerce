@@ -1540,8 +1540,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <div className="h10-rb-card-h">
                     <b>Criteria {gi + 1}</b>
                     <span className="acts">
-                      <button type="button" aria-label="Duplicate criteria" onClick={() => dupGroup(g.id)}><Copy size={15} /></button>
-                      <button type="button" aria-label="Delete criteria" onClick={() => delGroup(g.id)}><Trash2 size={15} /></button>
+                      <ToolbarButton size="sm" icon={<Copy size={15} />} label="Duplicate criteria" tooltip={false} onClick={() => dupGroup(g.id)} />
+                      <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={15} />} label="Delete criteria" tooltip={false} onClick={() => delGroup(g.id)} />
                     </span>
                   </div>
                   <div className="h10-rb-conds">
@@ -1957,7 +1957,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
           <div className={`h10-rb-prev${isRank ? ' ktp' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isRank ? 'Keyword Tracker preview' : isSov ? 'Share of Voice preview' : isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
-            <div className="ph"><b>{isSov ? 'Share of Voice Preview — current → proposed' : isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
+            <div className="ph"><b>{isSov ? 'Share of Voice Preview — current → proposed' : isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={() => setPreview(null)} /></div>
             <div className="psub">{isRank ? (preview?.rank && preview.rank.matched > 0
               ? `Live, read-only: the ${preview.rank.matched} keyword${preview.rank.matched === 1 ? '' : 's'} in your ${preview.rank.selected} selected campaign${preview.rank.selected === 1 ? '' : 's'} that ${preview.rank.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against the latest rank observation for each keyword.`
               : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isSov ? (preview?.sov && preview.sov.matched > 0
@@ -2145,7 +2145,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       {tmpl && (
         <div className="h10-rb-prevback" onClick={() => setTmpl(null)}>
           <div className="h10-rb-tmpl-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={tmpl.mode === 'save' ? 'Save template' : 'Apply template'}>
-            <div className="ph"><b>{tmpl.mode === 'save' ? 'Save as Template' : 'Apply Template'}</b><button type="button" onClick={() => setTmpl(null)} aria-label="Close"><X size={18} /></button></div>
+            <div className="ph"><b>{tmpl.mode === 'save' ? 'Save as Template' : 'Apply Template'}</b><ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={() => setTmpl(null)} /></div>
             {tmpl.mode === 'save' ? (
               <div className="tmbody">
                 <label htmlFor="tmpl-name">Template name</label>
@@ -2227,7 +2227,7 @@ function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onCl
             <div className="h10-rb-agrows">{groups.map((g) => (
               <div className="agrow tgt" key={g.id}>
                 <span className="chips">{setup.matchTypes.map((m) => { const k = m.key as 'P' | 'E' | 'product'; return (<HoverCard key={m.key} text={m.tip} placement="above"><button type="button" className={`tchip ${g.types[k] ? 'on' : ''}`} aria-pressed={g.types[k]} onClick={() => onToggleType(g.id, k)}>{m.product ? <Package size={14} /> : m.key}</button></HoverCard>) })}</span>
-                <button type="button" className="agrm" onClick={() => onRemoveGroup(g.id)} aria-label={`Remove ${g.name}`}><X size={15} /></button>
+                <ToolbarButton tone="danger" size="sm" className="agrm" icon={<X size={15} />} label={`Remove ${g.name}`} tooltip={false} onClick={() => onRemoveGroup(g.id)} />
               </div>
             ))}</div>
           )}

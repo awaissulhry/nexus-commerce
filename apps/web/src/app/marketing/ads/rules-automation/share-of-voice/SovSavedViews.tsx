@@ -120,7 +120,7 @@ export function SovSavedViews({ currentQs, onApply }: { currentQs: string; onApp
             <Button size="sm" disabled={!name.trim() || busy} onClick={() => void save()}>
               <Check size={12} /> Save
             </Button>
-            <button type="button" className="x" onClick={() => setOpen(false)} aria-label="Close"><X size={13} /></button>
+            <ToolbarButton size="sm" icon={<X size={13} />} label="Close" tooltip={false} onClick={() => setOpen(false)} />
           </div>
 
           {err && <p className="h10-sov-savederr">{err}</p>}

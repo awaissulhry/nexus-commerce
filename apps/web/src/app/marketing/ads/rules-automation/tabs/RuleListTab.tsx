@@ -14,7 +14,7 @@
  * field, and is disabled with the reason on engine rules, whose mode lives on Automations.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Toggle } from '@/design-system/primitives'
+import { Button, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { Plus, Trash2, ExternalLink, Clock, X, RotateCcw } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
@@ -329,7 +329,7 @@ export function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: str
   return (
     <div className="h10-hist-back" onClick={onClose}>
       <div className="h10-hist" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`History — ${rule.name}`}>
-        <div className="h10-hist-h"><div><b>Execution history</b><span title={rule.name}>{rule.name}</span></div><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="h10-hist-h"><div><b>Execution history</b><span title={rule.name}>{rule.name}</span></div><ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={onClose} /></div>
         {rbError && <div className="h10-hist-err" role="alert">{rbError}</div>}
         <div className="h10-hist-b">
           {loading ? <div className="h10-hist-msg">Loading…</div>

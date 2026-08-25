@@ -82,7 +82,7 @@
  *    the Automations mode dial had been silently refusing 14 notches the whole time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, Toggle } from '@/design-system/primitives'
+import { Button, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -1158,13 +1158,14 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     {
       key: 'actions', label: 'Actions', metric: false, sortable: false,
       render: (r) => (
-        <button
-          type="button"
+        <ToolbarButton
+          tone="danger"
           className="h10-rg-del"
-          aria-label={`Delete ${r.name}`}
-          title={`Delete “${r.name}” — this deletes the rule, its execution history and any campaign assignments, and cannot be undone.`}
+          icon={<Trash2 size={14} aria-hidden />}
+          label={`Delete ${r.name}`}
+          description="This deletes the rule, its execution history and any campaign assignments, and cannot be undone."
           onClick={(e) => { e.stopPropagation(); setBulk({ kind: 'delete', ids: [r.id] }) }}
-        ><Trash2 size={14} aria-hidden /></button>
+        />
       ),
     },
   ], [raw, ceilings, pending, setAutomation, activity, activityFailed, tabKey])
