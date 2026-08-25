@@ -78,3 +78,13 @@
    outrank the DS quiet button, so the class is new; `quiet` inherits, so the tone is
    set here rather than left to the popover's. */
 .h10-libpop-row .cd-presetname { font-size: 13px; font-weight: 600; color: var(--nds-text-strong); padding: 8px 9px; }
+
+/* ── campaign detail: the End Date field ───────────────────────────────────
+   `DateField` — the DS grew a `format` today, which was the whole blocker: it
+   rendered dd/mm/yyyy and this console reads m/d/yyyy, and "08/09" is two
+   different days in those two spellings. 83 lines of hand-rolled calendar
+   (portal, click-away, Escape, scroll-close, viewport clamp, 42-cell grid) went
+   with it. Only the box is ours: the date row is 38px tall and 200px wide, and
+   the DS trigger sizes to its content. */
+.cd-datefield { width: 200px; max-width: 200px; }
+.cd-datefield .nds-listbox-btn { width: 100%; height: 38px; }

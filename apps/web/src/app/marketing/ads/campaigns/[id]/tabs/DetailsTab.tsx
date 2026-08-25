@@ -19,11 +19,10 @@
  * (From AMC / From Amazon · search · +Add · pager · "Audience Added 0/1" panel), the
  * custom End-Date calendar popover, and the Product-Selection amazon badge + ASIN copy.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Checkbox, Input, RadioCard, Toggle, ToolbarButton } from '@/design-system/primitives'
-import { Field, Listbox } from '@/design-system/components'
-import { createPortal } from 'react-dom'
-import { Calendar, ChevronLeft, ChevronRight, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
+import { DateField, Field, Listbox } from '@/design-system/components'
+import { Calendar, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { InfoTip } from '../../InfoTip'
 import { num } from '../../_grid/format'
@@ -225,7 +224,17 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
                 <div className="h10-cd-date ro"><span className="ib"><Calendar size={15} /></span><input id="cd-startdate" type="text" value={campaign?.startDate ? mdy(campaign.startDate as string) : ''} readOnly aria-readonly /></div>
               </Field>
               <Field className="cd-field" label="End Date" required={!form.neverExpire} htmlFor="cd-enddate">
-                <EndDateCalendar value={form.endDate} disabled={form.neverExpire} onChange={(v) => set('endDate', v)} />
+                <DateField
+                  className="cd-datefield"
+                  value={form.endDate}
+                  onChange={(v) => set('endDate', v)}
+                  format="mm/dd/yyyy"
+                  locale="en-US"
+                  disabled={form.neverExpire}
+                  placeholder="Enter a Date"
+                  clearable={false}
+                  ariaLabel="End date"
+                />
               </Field>
               <span className="h10-cd-switch"><Toggle checked={form.neverExpire} onChange={(v) => set('neverExpire', v)} aria-label="Never Expire" /> Never Expire</span>
             </div>
@@ -400,89 +409,6 @@ function BidRuleSelect() {
         options={[]}
       />
     </div>
-  )
-}
-
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-const isoOf = (y: number, mo: number, d: number) => `${y}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-
-/** Custom End-Date calendar popover (H10 match) — replaces the native date input. */
-function EndDateCalendar({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const popRef = useRef<HTMLDivElement>(null)
-  const parsed = value ? new Date(`${value}T00:00:00`) : null
-  const [view, setView] = useState(() => { const d = parsed ?? new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
-
-  const openCal = () => {
-    if (disabled) return
-    const d = parsed ?? new Date()
-    setView({ y: d.getFullYear(), m: d.getMonth() })
-    setPos({ top: -9999, left: -9999 }) // off-screen until measured post-mount
-    setOpen(true)
-  }
-
-  // Place below the trigger; flip above only when there's no room; clamp to the
-  // viewport. Measured AFTER the popover mounts (like InfoTip) so it can never
-  // stick to the wrong edge regardless of scroll position.
-  useLayoutEffect(() => {
-    if (!open || !popRef.current || !btnRef.current) return
-    const r = btnRef.current.getBoundingClientRect()
-    const c = popRef.current.getBoundingClientRect()
-    const m = 8
-    let left = r.left
-    if (left + c.width > window.innerWidth - m) left = window.innerWidth - m - c.width
-    if (left < m) left = m
-    let top = r.bottom + 6
-    if (top + c.height > window.innerHeight - m && r.top - 6 - c.height >= m) top = r.top - 6 - c.height
-    if (top < m) top = m
-    if (!pos || Math.abs(pos.top - top) > 0.5 || Math.abs(pos.left - left) > 0.5) setPos({ top, left })
-  }, [open, pos])
-
-  useEffect(() => {
-    if (!open) return
-    const h = (e: MouseEvent) => { if (popRef.current && !popRef.current.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false) }
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    const s = () => setOpen(false) // close on scroll so the fixed popover never detaches
-    document.addEventListener('mousedown', h); document.addEventListener('keydown', k); window.addEventListener('scroll', s, true)
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); window.removeEventListener('scroll', s, true) }
-  }, [open])
-
-  const startDow = new Date(view.y, view.m, 1).getDay()
-  const prevDays = new Date(view.y, view.m, 0).getDate()
-  const days = new Date(view.y, view.m + 1, 0).getDate()
-  const cells: Array<{ d: number; mo: number; y: number; cur: boolean }> = []
-  for (let i = startDow - 1; i >= 0; i--) cells.push({ d: prevDays - i, mo: (view.m + 11) % 12, y: view.m === 0 ? view.y - 1 : view.y, cur: false })
-  for (let d = 1; d <= days; d++) cells.push({ d, mo: view.m, y: view.y, cur: true })
-  for (let n = 1; cells.length < 42; n++) cells.push({ d: n, mo: (view.m + 1) % 12, y: view.m === 11 ? view.y + 1 : view.y, cur: false })
-
-  const nav = (delta: number) => setView((v) => { const t = v.m + delta; return { y: v.y + Math.floor(t / 12), m: ((t % 12) + 12) % 12 } })
-  const pick = (c: { d: number; mo: number; y: number }) => { onChange(isoOf(c.y, c.mo, c.d)); setOpen(false) }
-
-  return (
-    <>
-      <button type="button" ref={btnRef} className={`h10-cd-date btn ${disabled ? 'disabled' : ''} ${open ? 'open' : ''}`} onClick={openCal} disabled={disabled} aria-haspopup="dialog" aria-expanded={open}>
-        <span className="ib"><Calendar size={15} /></span>
-        <span className={value ? 'v' : 'ph'}>{value ? mdy(value) : 'Enter a Date'}</span>
-      </button>
-      {open && pos && typeof document !== 'undefined' && createPortal(
-        <div ref={popRef} className="h10-cd-cal" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="Choose end date">
-          <div className="cal-h">
-            <button type="button" className="cal-nav" onClick={() => nav(-1)} aria-label="Previous month"><ChevronLeft size={18} /></button>
-            <span className="cal-t">{MONTHS[view.m]} {view.y}</span>
-            <button type="button" className="cal-nav" onClick={() => nav(1)} aria-label="Next month"><ChevronRight size={18} /></button>
-          </div>
-          <div className="cal-wd">{WEEKDAYS.map((w, i) => <span key={i}>{w}</span>)}</div>
-          <div className="cal-grid">
-            {cells.map((c, i) => (
-              <button type="button" key={i} className={`cal-d ${c.cur ? '' : 'out'} ${value && isoOf(c.y, c.mo, c.d) === value ? 'sel' : ''}`} onClick={() => pick(c)}>{c.d}</button>
-            ))}
-          </div>
-        </div>, document.body,
-      )}
-    </>
   )
 }
 
