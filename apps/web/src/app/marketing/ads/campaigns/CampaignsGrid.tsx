@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
+import './campaigns-ds.css'
 import { Listbox, Modal, Pagination } from '@/design-system/components'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
@@ -665,7 +666,7 @@ function FilterLibrary({ library, onApply, onDelete, onClose }: {
           <div className="h10-libpop-list">
             {library.map((p, i) => (
               <div className="h10-libpop-row" key={i}>
-                <button type="button" className="nm" onClick={() => onApply(p)}>{p.name}</button>
+                <Button variant="quiet" block className="cd-presetname" onClick={() => onApply(p)}>{p.name}</Button>
                 <ToolbarButton size="sm" tooltip={false} tone="danger" icon={<Trash2 size={13} />} label={`Delete ${p.name}`} onClick={() => onDelete(i)} />
               </div>
             ))}
@@ -1809,9 +1810,9 @@ export function CampaignsGrid() {
             <div className="fppresets">
               <span className="lbl">Filter Presets:</span>
               <div className="h10-libwrap">
-                <button type="button" className="h10-am-libbtn" onClick={() => setShowLibrary((v) => !v)} aria-haspopup="dialog" aria-expanded={showLibrary}>
+                <Button size="sm" onClick={() => setShowLibrary((v) => !v)} aria-haspopup="dialog" aria-expanded={showLibrary}>
                   <Book size={14} /> Filter Library{library.length ? ` (${library.length})` : ''}
-                </button>
+                </Button>
                 {showLibrary && <FilterLibrary library={library} onApply={applyPreset} onDelete={deletePreset} onClose={() => setShowLibrary(false)} />}
               </div>
             </div>

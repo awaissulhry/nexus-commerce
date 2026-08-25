@@ -73,3 +73,8 @@
    raise contrast, so the resting tone is held. Specificity is deliberate:
    `.nds-tabs.lg .nds-tab` is (0,3,0), so (0,4,0) is what it takes to win. */
 .nds-tabs.cd-tabs.lg .nds-tab:not(.on) { color: var(--nds-text-strong); }
+
+/* The saved-filter row's name button. `.h10-libpop-row .nm` (0,2,0) in ads.css would
+   outrank the DS quiet button, so the class is new; `quiet` inherits, so the tone is
+   set here rather than left to the popover's. */
+.h10-libpop-row .cd-presetname { font-size: 13px; font-weight: 600; color: var(--nds-text-strong); padding: 8px 9px; }
