@@ -1,10 +1,22 @@
 'use client'
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives/Button'
+import { Input } from '@/design-system/primitives/Input'
 import type { ActionSpec } from '../_canvas/actions'
 
 /** Bulk action bar — appears when ≥1 object is selected. Each control STAGES an
  * action (opens the diff preview); nothing applies here. Budget + Status are the
- * v1 levers; Target-ACoS + Placement are a fast follow (stageActions supports them). */
+ * v1 levers; Target-ACoS + Placement are a fast follow (stageActions supports them).
+ *
+ * DS alignment (2026-08-25): the seven `.mc-actbtn`s are the design system's `Button`
+ * (`sm`), and the value field is its `Input`. `Clear` was `.mc-actbtn.ghost` — grey-500 on
+ * white, **3.10:1, below the 4.5:1 floor**; `link` keeps it visually quieter than the four
+ * committing actions beside it while raising it to 4.80:1.
+ *
+ * The `+% / −% / Set €` group stays hand-rolled on purpose: the DS has no segmented control
+ * yet (the DS session is building one), and a local workaround is what the alignment is for
+ * removing. It is the one thing on this bar that is not yet the DS.
+ */
 export function ActionBar({
   count,
   onStage,
@@ -32,9 +44,9 @@ export function ActionBar({
       </span>
       <div className="mc-actbar-spacer" />
       <div className="mc-actbar-group">
-        <button type="button" className="mc-actbtn" onClick={() => setBudgetOpen((o) => !o)}>
+        <Button size="sm" aria-expanded={budgetOpen} onClick={() => setBudgetOpen((o) => !o)}>
           Budget ▾
-        </button>
+        </Button>
         {budgetOpen && (
           <div className="mc-pop">
             <div className="mc-seg">
@@ -44,31 +56,31 @@ export function ActionBar({
                 </button>
               ))}
             </div>
-            <input
-              className="mc-pop-input"
+            <Input
+              fieldClassName="mc-pop-input"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               inputMode="decimal"
               aria-label="Budget value"
             />
-            <button type="button" className="mc-actbtn primary" onClick={stageBudget}>
+            <Button variant="primary" size="sm" onClick={stageBudget}>
               Stage →
-            </button>
+            </Button>
           </div>
         )}
       </div>
-      <button type="button" className="mc-actbtn" onClick={() => onStage({ kind: 'status', status: 'ENABLED' })}>
+      <Button size="sm" onClick={() => onStage({ kind: 'status', status: 'ENABLED' })}>
         Enable
-      </button>
-      <button type="button" className="mc-actbtn" onClick={() => onStage({ kind: 'status', status: 'PAUSED' })}>
+      </Button>
+      <Button size="sm" onClick={() => onStage({ kind: 'status', status: 'PAUSED' })}>
         Pause
-      </button>
-      <button type="button" className="mc-actbtn" onClick={() => onStage({ kind: 'status', status: 'ARCHIVED' })}>
+      </Button>
+      <Button size="sm" onClick={() => onStage({ kind: 'status', status: 'ARCHIVED' })}>
         Archive
-      </button>
-      <button type="button" className="mc-actbtn ghost" onClick={onClear}>
+      </Button>
+      <Button variant="link" size="sm" onClick={onClear}>
         Clear
-      </button>
+      </Button>
     </div>
   )
 }
