@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { Activity, Clock, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { cleanName } from './_icons'
 
 interface Health {
@@ -22,6 +23,22 @@ interface Health {
 interface Exec { id: string; ruleId?: string; ruleName?: string; status?: string; startedAt?: string; errorMessage?: string; actionsApplied?: number }
 const fdt = (s?: string) => (s ? new Date(s).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—')
 const stColor = (s?: string) => (s === 'SUCCESS' ? 'var(--green)' : s === 'FAILED' ? '#cc1100' : s === 'PARTIAL' ? 'var(--amber)' : 'var(--ink2)')
+
+/** `.az-table` defaults every cell to RIGHT and opts into left with `.l`; `.nds-grid` is the
+ *  other way round. So the four `.l` columns take the default and only Actions declares
+ *  `align: 'right'` — reading the old markup as "four left, one right" and typing that is how
+ *  a conversion silently flips a table. */
+const EXEC_COLUMNS: Array<Column<Exec>> = [
+  { key: 'when', label: 'When', render: (e) => fdt(e.startedAt) },
+  { key: 'rule', label: 'Rule', render: (e) => cleanName(e.ruleName ?? e.ruleId ?? '—') },
+  { key: 'status', label: 'Status', render: (e) => (
+    <span style={{ color: stColor(e.status), fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      {e.status === 'SUCCESS' ? <CheckCircle2 size={13} /> : e.status === 'FAILED' ? <AlertTriangle size={13} /> : null}{e.status ?? '—'}
+    </span>
+  ) },
+  { key: 'actions', label: 'Actions', align: 'right', render: (e) => e.actionsApplied ?? 0 },
+  { key: 'detail', label: 'Detail', render: (e) => <span className="az-cell-sub">{e.errorMessage ?? ''}</span> },
+]
 
 export function HealthTab() {
   const [h, setH] = useState<Health | null>(null)
@@ -61,23 +78,12 @@ export function HealthTab() {
         <span style={{ flex: 1 }} />
         <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr><th className="l">When</th><th className="l">Rule</th><th className="l">Status</th><th>Actions</th><th className="l">Detail</th></tr></thead>
-          <tbody>
-            {execs.length === 0 && <tr><td className="az-empty" colSpan={5}><Clock size={14} style={{ verticalAlign: 'text-bottom' }} /> No executions yet — enable a rule and it’ll show here.</td></tr>}
-            {execs.map((e) => (
-              <tr key={e.id}>
-                <td className="l">{fdt(e.startedAt)}</td>
-                <td className="l">{cleanName(e.ruleName ?? e.ruleId ?? '—')}</td>
-                <td className="l"><span style={{ color: stColor(e.status), fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>{e.status === 'SUCCESS' ? <CheckCircle2 size={13} /> : e.status === 'FAILED' ? <AlertTriangle size={13} /> : null}{e.status ?? '—'}</span></td>
-                <td className="num">{e.actionsApplied ?? 0}</td>
-                <td className="l"><span className="sub">{e.errorMessage ?? ''}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Exec>
+        rows={execs}
+        rowKey={(e) => e.id}
+        columns={EXEC_COLUMNS}
+        emptyState={<><Clock size={14} style={{ verticalAlign: 'text-bottom' }} /> No executions yet — enable a rule and it’ll show here.</>}
+      />
     </div>
   )
 }

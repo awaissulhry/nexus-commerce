@@ -1192,6 +1192,11 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-table .cn { color: var(--link); font-weight: 500; cursor: pointer; }
 .az-table .cn:hover { color: var(--link-hover); text-decoration: underline; }
 .az-table .sub { color: var(--ink2); font-size: 11.5px; }
+/* The same secondary cell text, reachable from a DS `DataGrid` cell. `.sub` exists ONLY as
+   `.az-table .sub` — moving a cell into `.nds-grid` makes it match nothing and the text
+   silently returns to 13px `--nds-text`. Same colour as the row above (--ink2, 7.07:1), so a
+   converted grid reads identically to the table it replaced. */
+.az-cell-sub { color: var(--ink2); font-size: 11.5px; }
 .az-cellsticky { position: sticky; left: 0; background: #fff; z-index: 1; }
 .az-table tbody tr:hover .az-cellsticky { background: #f7fafa; }
 .az-check { width: 16px; height: 16px; accent-color: var(--blue); cursor: pointer; }
