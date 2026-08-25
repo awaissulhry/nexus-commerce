@@ -19,6 +19,7 @@
 import '../styles/primitives.css'
 import { useRef, type ReactNode, type KeyboardEvent } from 'react'
 import type { Size } from './size'
+import { rovingTabIndex } from '../lib/roving-tabindex'
 
 export interface SegmentedOption {
   value: string
@@ -26,6 +27,14 @@ export interface SegmentedOption {
   icon?: ReactNode
 }
 export interface SegmentedControlProps {
+  /**
+   * Accessible name for the `radiogroup`.
+   *
+   * A radiogroup with no name is announced as an unlabelled group — the reader hears the options
+   * but never what they choose between. Optional only so this does not break the call sites that
+   * predate it; pass it.
+   */
+  ariaLabel?: string
   options: SegmentedOption[]
   value: string
   onChange: (value: string) => void
@@ -34,7 +43,7 @@ export interface SegmentedControlProps {
   className?: string
 }
 
-export function SegmentedControl({ options, value, onChange, size = 'md', disabled = false, className }: SegmentedControlProps) {
+export function SegmentedControl({ options, value, onChange, size = 'md', disabled = false, ariaLabel, className }: SegmentedControlProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   const move = (dir: 1 | -1) => {
@@ -53,11 +62,12 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
   }
 
+  const selectedIndex = options.findIndex((o) => o.value === value)
   const cls = ['nds-seg', size, disabled ? 'disabled' : '', className ?? ''].filter(Boolean).join(' ')
 
   return (
-    <div ref={ref} className={cls} role="radiogroup" onKeyDown={onKeyDown}>
-      {options.map((opt) => {
+    <div ref={ref} className={cls} role="radiogroup" aria-label={ariaLabel} onKeyDown={onKeyDown}>
+      {options.map((opt, i) => {
         const active = opt.value === value
         return (
           <button
@@ -65,7 +75,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
             type="button"
             role="radio"
             aria-checked={active}
-            tabIndex={active ? 0 : -1}
+            tabIndex={rovingTabIndex(active, selectedIndex, i)}
             className={`nds-seg-opt ${active ? 'on' : ''}`}
             disabled={disabled}
             onClick={() => onChange(opt.value)}

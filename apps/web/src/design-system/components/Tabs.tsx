@@ -16,6 +16,11 @@ export interface TabItem {
 }
 
 export interface TabsProps {
+  /**
+   * Accessible name for the `tablist`. Same shape as `SegmentedControl`: a tablist with no name
+   * is announced unlabelled, so the reader hears the tabs but not what they belong to.
+   */
+  ariaLabel?: string
   tabs: TabItem[]
   active: string
   onChange: (id: string) => void
@@ -29,9 +34,9 @@ export interface TabsProps {
 }
 
 /** Underline tab bar (active = primary text + primary indicator). Controlled. */
-export function Tabs({ tabs, active, onChange, className, size = 'md' }: TabsProps) {
+export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md' }: TabsProps) {
   return (
-    <div className={['nds-tabs', size === 'lg' ? 'lg' : '', className ?? ''].filter(Boolean).join(' ')} role="tablist">
+    <div className={['nds-tabs', size === 'lg' ? 'lg' : '', className ?? ''].filter(Boolean).join(' ')} role="tablist" aria-label={ariaLabel}>
       {tabs.map((t) => (
         <button
           key={t.id}
