@@ -14,7 +14,8 @@
  * field, and is disabled with the reason on engine rules, whose mode lives on Automations.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Toggle } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import { Plus, Trash2, ExternalLink, Clock, X, RotateCcw } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -217,30 +218,36 @@ function BulkModal({ kind, count, nounLower, engineCount, onApply, onClose }: {
   const TITLE: Record<BulkKind, string> = { automation: 'Set Automation', delete: 'Delete Rules' }
   const ruleNoun = count === 1 ? nounLower : `${nounLower}s`
   return (
-    <div className="h10-ntm-back" onClick={onClose}>
-      <div className="h10-ntm" role="dialog" aria-modal="true" aria-label={TITLE[kind]} onClick={(e) => e.stopPropagation()}>
-        <div className="h10-ntm-h"><b>{TITLE[kind]}</b></div>
-        <div className="h10-ntm-sub">
-          {kind === 'delete'
-            // P2.5 — the warning is finally TRUE (this used to remove rows from React state), and
-            // it says the whole cost: AutomationRuleExecution rows cascade with the rule, so its
-            // history — the evidence of what it did — is destroyed with it.
-            ? `Delete ${count} ${ruleNoun}? This deletes the rule AND its execution history, and cannot be undone.`
-            : `Apply to ${count} selected ${ruleNoun}.`}
-          {kind === 'automation' && engineCount > 0 && ` ${engineCount} of them ${engineCount === 1 ? 'is an engine rule' : 'are engine rules'} whose mode is set on the Automations page — ${engineCount === 1 ? 'it' : 'they'} will be skipped.`}
-        </div>
-        <div className="h10-ntm-b">
-          {kind === 'automation' && (
-            <label className="h10-ntm-tog"><button type="button" className={`h10-bktoggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} aria-label="Automation" onClick={() => setOn((v) => !v)}><span /></button> Automation {on ? 'On' : 'Off'}</label>
-          )}
-        </div>
-        <div className="h10-ntm-f">
-          <button type="button" className="cancel" onClick={onClose}>Cancel</button>
-          <span className="grow" />
-          <button type="button" className={`apply ${kind === 'delete' ? 'danger' : ''}`} onClick={() => onApply(kind === 'automation' ? { on } : undefined)}>{kind === 'delete' ? 'Delete' : 'Apply'}</button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={TITLE[kind]}
+      footer={<>
+        <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+        <Button
+          variant={kind === 'delete' ? 'danger' : 'primary'} size="sm"
+          onClick={() => onApply(kind === 'automation' ? { on } : undefined)}
+        >
+          {kind === 'delete' ? 'Delete' : 'Apply'}
+        </Button>
+      </>}
+    >
+      <p className="h10-ntm-say">
+        {kind === 'delete'
+          // P2.5 — the warning is finally TRUE (this used to remove rows from React state), and
+          // it says the whole cost: AutomationRuleExecution rows cascade with the rule, so its
+          // history — the evidence of what it did — is destroyed with it.
+          ? `Delete ${count} ${ruleNoun}? This deletes the rule AND its execution history, and cannot be undone.`
+          : `Apply to ${count} selected ${ruleNoun}.`}
+        {kind === 'automation' && engineCount > 0 && ` ${engineCount} of them ${engineCount === 1 ? 'is an engine rule' : 'are engine rules'} whose mode is set on the Automations page — ${engineCount === 1 ? 'it' : 'they'} will be skipped.`}
+      </p>
+      {kind === 'automation' && (
+        <label className="h10-ntm-tog">
+          <Toggle checked={on} onChange={setOn} aria-label="Automation" />
+          {' '}Automation {on ? 'On' : 'Off'}
+        </label>
+      )}
+    </Modal>
   )
 }
 

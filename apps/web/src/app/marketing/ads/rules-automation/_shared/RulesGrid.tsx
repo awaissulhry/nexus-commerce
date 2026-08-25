@@ -82,7 +82,8 @@
  *    the Automations mode dial had been silently refusing 14 notches the whole time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Toggle } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
@@ -1335,39 +1336,40 @@ function BulkModal({ kind, count, nounLower, cappedCount, onApply, onClose }: {
   }
   const ruleNoun = count === 1 ? nounLower : `${nounLower}s`
   return (
-    <div className="h10-ntm-back" onClick={onClose}>
-      <div className="h10-ntm" role="dialog" aria-modal="true" aria-label={TITLE[kind]} onClick={(e) => e.stopPropagation()}>
-        <div className="h10-ntm-h"><b>{TITLE[kind]}</b></div>
-        <div className="h10-ntm-sub">
-          {kind === 'delete'
-            /**
-             * The warning says the whole cost. Two tables cascade with an `AutomationRule`:
-             * `AutomationRuleExecution` — its history, the evidence of what it did — and, since
-             * D1 landed on 2026-08-20, `CampaignRuleAssignment`, which is the tether the operator
-             * study describes ("it completely untethers the rule from any campaigns it was
-             * attached to"). Both are named, because a warning that lists one of two costs is
-             * read as the complete list.
-             */
-            ? `Delete ${count} ${ruleNoun}? This deletes the rule, its execution history and any campaign assignments it holds, and cannot be undone.`
-            : `Apply to ${count} selected ${ruleNoun}.`}
-          {kind === 'automation' && on && cappedCount > 0 && ` ${cappedCount} of them ${cappedCount === 1 ? 'creates or destroys something and is held below Auto' : 'create or destroy something and are held below Auto'} by the graduation ceiling — ${cappedCount === 1 ? 'it' : 'they'} will be left unchanged.`}
-        </div>
-        <div className="h10-ntm-b">
-          {kind === 'automation' && (
-            <label className="h10-ntm-tog">
-              <button type="button" className={`h10-bktoggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} aria-label="Automation" onClick={() => setOn((v) => !v)}><span /></button>
-              {' '}Automation {on ? 'On' : 'Off'}
-            </label>
-          )}
-        </div>
-        <div className="h10-ntm-f">
-          <button type="button" className="cancel" onClick={onClose}>Cancel</button>
-          <span className="grow" />
-          <button type="button" className={`apply ${kind === 'delete' ? 'danger' : ''}`} onClick={() => onApply(kind === 'automation' ? { on } : undefined)}>
-            {kind === 'delete' ? 'Delete' : 'Apply'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={TITLE[kind]}
+      footer={<>
+        <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+        <Button
+          variant={kind === 'delete' ? 'danger' : 'primary'} size="sm"
+          onClick={() => onApply(kind === 'automation' ? { on } : undefined)}
+        >
+          {kind === 'delete' ? 'Delete' : 'Apply'}
+        </Button>
+      </>}
+    >
+      <p className="h10-ntm-say">
+        {kind === 'delete'
+          /**
+           * The warning says the whole cost. Two tables cascade with an `AutomationRule`:
+           * `AutomationRuleExecution` — its history, the evidence of what it did — and, since
+           * D1 landed on 2026-08-20, `CampaignRuleAssignment`, which is the tether the operator
+           * study describes ("it completely untethers the rule from any campaigns it was
+           * attached to"). Both are named, because a warning that lists one of two costs is
+           * read as the complete list.
+           */
+          ? `Delete ${count} ${ruleNoun}? This deletes the rule, its execution history and any campaign assignments it holds, and cannot be undone.`
+          : `Apply to ${count} selected ${ruleNoun}.`}
+        {kind === 'automation' && on && cappedCount > 0 && ` ${cappedCount} of them ${cappedCount === 1 ? 'creates or destroys something and is held below Auto' : 'create or destroy something and are held below Auto'} by the graduation ceiling — ${cappedCount === 1 ? 'it' : 'they'} will be left unchanged.`}
+      </p>
+      {kind === 'automation' && (
+        <label className="h10-ntm-tog">
+          <Toggle checked={on} onChange={setOn} aria-label="Automation" />
+          {' '}Automation {on ? 'On' : 'Off'}
+        </label>
+      )}
+    </Modal>
   )
 }

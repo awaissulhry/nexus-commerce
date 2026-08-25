@@ -145,8 +145,14 @@ export function CampaignLimitsModal({
       open={open}
       onClose={onClose}
       size="xl"
-      /* h10-shell re-applies the light pin the portal escaped. */
-      className="h10-shell h10-bsp-modal"
+      /* 🔴 NOT `h10-shell`. That class is the ads console's page WRAPPER — it carries
+         `background: var(--nds-grey-50)`, `height: 100dvh`, `display: flex` and
+         `overflow: hidden` alongside the light token pin. Measured on this modal
+         2026-08-25: with it the panel rendered #f4f6f9 and **742.9px tall**; without
+         it, white and 96px of content. The pin it was reaching for is unnecessary —
+         `tokens-global.css` declares every `--nds-*` on `:root`, so a portaled panel
+         resolves them without any wrapper. */
+      className="h10-bsp-modal"
       title={`Per-campaign limits · ${marketplace}`}
       subtitle={`${month} · what the pacing engine may set each campaign to`}
     >

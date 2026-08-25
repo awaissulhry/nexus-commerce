@@ -5643,3 +5643,14 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-note.bad { background: var(--nds-note-error-bg); border: 1px solid var(--nds-danger-soft); color: var(--nds-note-error-fg); }
 .h10-ar-note.bad svg { color: var(--nds-note-error-icon); }
 .h10-ar-note.bad b { color: var(--nds-note-error-fg); }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   DS-ALIGNMENT — the confirm dialogs are the design system's `Modal`.
+
+   `h10-ntm-*` hand-rolled a 440px card, a rgba(20,28,38,.42) scrim and a header/body/footer stack
+   that `.nds-modal` already ships at the same width, the same radius and the same scrim. What
+   remains here is the one thing the primitive has no opinion about: the gap between the sentence
+   the dialog asks and the switch it asks it with. `globals.css` resets every margin to 0, so
+   without this the two touch.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+.h10-ntm-say + .h10-ntm-tog { margin-top: 11px; }
