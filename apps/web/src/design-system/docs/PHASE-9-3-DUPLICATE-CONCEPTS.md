@@ -938,6 +938,29 @@ before blaming the code.**
 
 ### What is left of #13
 
-`DataGrid` still has 6 render sites and 13 type importers. Retiring it is WG.6 and needs those
-migrated to `WorkspaceGrid` — 5 were blocked on `sticky`, which is the operator-pinning requirement
-deferred at the top of Appendix A.
+`DataGrid` has **10 renders across 6 files**, and WG.6 — retiring it — is blocked by two things
+that are not engineering:
+
+    4 × products/ebay-flat-file/EbayImportWizard.tsx   🔴 hard no-touch zone
+    2 × pricing/volume-pricing/VolumePricingClient.tsx
+    1 × fulfillment/stock/locations/LocationsClient.tsx
+    1 × fleet/activity/ActivityClient.tsx
+    1 × fleet/map/EntityListView.tsx
+    1 × fleet/map/ListView.tsx
+
+**Four of the ten are in the flat-file editor**, which the operator has repeatedly required stay
+untouched — the sanctioned change there has only ever been additive, never a modification to
+existing behaviour. Migrating its grid is squarely a modification.
+
+**The other six are commerce and fleet pages** — pricing, fulfillment, fleet map and activity — the
+surface being rebuilt. Migrating them repeats the `GridToolbar` and `DataGrid`-into-the-fork
+mistake: work aimed at pages scheduled for replacement.
+
+The old note said "5 blocked on `sticky`". Measured, exactly **one** file uses it
+(`LocationsClient.tsx:228`, `sticky: true` on a column). `WorkspaceGrid` does have the concept, in a
+different shape — `stickyFirst`/`stickyLast` as operator PREFERENCES plus a `freezeRight` column
+prop, where `DataGrid` pins per column via `sticky`/`stickyRight`. That reshaping is real work, but
+it is not what blocks WG.6.
+
+**So WG.6 stays open deliberately**, and the DS keeps two grids until the commerce rebuild decides
+the six, and the operator decides the flat-file four. Nothing about that is a refactoring problem.
