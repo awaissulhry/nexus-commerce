@@ -6,7 +6,7 @@
  * reason is audited with the write.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 
 export function OverrideReasonModal(props: {
@@ -37,7 +37,7 @@ export function OverrideReasonModal(props: {
       </ul>
       <div>
         <label>Override reason (audited)</label>
-        <input className="h10-cd-input" style={{ width: '100%' }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. launch push for 2 weeks — accept negative margin" autoFocus />
+        <Input fieldClassName="eb-input-full" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. launch push for 2 weeks — accept negative margin" autoFocus />
       </div>
       <Err msg={error} />
     </H10Modal>

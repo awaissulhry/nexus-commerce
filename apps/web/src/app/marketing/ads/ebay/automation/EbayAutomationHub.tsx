@@ -16,6 +16,7 @@ import { SuggestionsTab } from './tabs/SuggestionsTab'
 import { AppliedTab } from './tabs/AppliedTab'
 import { DriftTab } from './tabs/DriftTab'
 import { Button } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components'
 
 const TABS = [
   { key: 'rules', label: 'Rules' },
@@ -76,15 +77,22 @@ export function EbayAutomationHub() {
 
       <PostureBand state={state} busy={busy} act={act} />
 
-      <nav className="h10-cd-tabs h10-rules-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`h10-cd-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>
+      {/* The count keeps its own `.h10-cd-new` badge rather than the DS `count` pill: this one
+          is an attention marker (blue on blue-50) and `.nds-tab-count` is a neutral grey total. */}
+      <Tabs
+        size="lg"
+        className="eb-tabs hub"
+        active={tab}
+        onChange={setTab}
+        tabs={TABS.map((t) => ({
+          id: t.key,
+          label: <>
             {t.label}
             {t.key === 'suggestions' && counts.suggestions > 0 && <span className="h10-cd-new">{counts.suggestions}</span>}
             {t.key === 'drift' && counts.drift > 0 && <span className="h10-cd-new">{counts.drift}</span>}
-          </button>
-        ))}
-      </nav>
+          </>,
+        }))}
+      />
 
       {tab === 'rules' && <RulesTab busy={busy} act={act} bump={bump} />}
       {tab === 'suggestions' && <SuggestionsTab busy={busy} act={act} bump={bump} highlightId={highlightId} />}

@@ -7,7 +7,7 @@
  * a named reason.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Textarea } from '@/design-system/primitives'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err, ResultsList } from '../_lib/modal'
@@ -89,18 +89,20 @@ export function PromoteModal(props: {
         </div>
         <div>
           <label>Ad rate %</label>
-          <input className="h10-cd-input" style={{ width: 90 }} type="number" min={2} max={100} step={0.1} value={ratePct} onChange={(e) => setRatePct(e.target.value)} />
+          <Input style={{ width: 90 }} type="number" min={2} max={100} step={0.1} value={ratePct} onChange={(e) => setRatePct(e.target.value)} />
         </div>
       </div>
       {noPreselection && (
         <div>
           <label>eBay item IDs — space/comma/newline separated</label>
-          <textarea className="eb-textarea" rows={3} value={manualIds} onChange={(e) => setManualIds(e.target.value)} placeholder="256568121061 256566107046 …" />
+          {/* Three rows' worth: the DS textarea floors at 168px, which is right for a
+              dedicated paste modal and far too tall for one optional field among four. */}
+          <Textarea style={{ minHeight: 74 }} value={manualIds} onChange={(e) => setManualIds(e.target.value)} placeholder="256568121061 256566107046 …" />
         </div>
       )}
       <div>
         <label>Guardrail override reason (only to exceed break-even — audited)</label>
-        <input className="h10-cd-input" style={{ width: '100%' }} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="e.g. launch push, 2 weeks" />
+        <Input fieldClassName="eb-input-full" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="e.g. launch push, 2 weeks" />
       </div>
       <p className="eb-be-hint">Rates above a listing&apos;s <b>break-even</b> are blocked unless you give an explicit override reason. Listings without cost data go through with a warning. A listing already promoted in another General campaign is rejected by eBay per item (one listing = one General campaign).</p>
       <Err msg={error} />

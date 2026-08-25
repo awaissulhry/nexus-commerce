@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err } from '../../_lib/modal'
 import { postEbayAds } from '../../_lib'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill, Radio } from '@/design-system/primitives'
 
 // ── Match a listing to a catalog product (unlocks costs + break-evens) ──────
 interface MatchCandidate { id: string; sku: string; name: string; costPriceCents: number | null; suggested: boolean }
@@ -56,7 +56,7 @@ export function MatchModal(props: { open: boolean; onClose: () => void; itemId: 
       </>}>
       <div>
         <label>Search catalog (name / SKU) — leave empty for suggestions</label>
-        <input className="h10-cd-input" style={{ width: '100%' }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. GALE, VENTRA, slider…" />
+        <Input fieldClassName="eb-input-full" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. GALE, VENTRA, slider…" />
       </div>
       {cands == null ? (
         <p className="eb-be-hint">Loading candidates…</p>
@@ -67,7 +67,7 @@ export function MatchModal(props: { open: boolean; onClose: () => void; itemId: 
           {cands.map((c) => (
             <li key={c.id} className={pick === c.id ? 'ok' : ''} style={{ cursor: 'pointer' }} onClick={() => setPick(c.id)}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input type="radio" name="match-candidate" checked={pick === c.id} onChange={() => setPick(c.id)} />
+                <Radio name="match-candidate" checked={pick === c.id} onChange={() => setPick(c.id)} />
                 <span style={{ flex: 1 }}>{c.name}</span>
                 <code>{c.sku}</code>
                 {c.suggested && <Pill tone="neutral">suggested</Pill>}

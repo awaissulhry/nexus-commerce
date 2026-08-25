@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Pill, Toggle } from '@/design-system/primitives'
 import { pillTone } from '../../../../_shared/pillTone'
 
 const POSTURES = [
@@ -80,10 +80,11 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <Pill tone="neutral" title="The global dial this campaign inherits from">global: {data.globalMode}{data.halted ? ' · HALTED' : ''}</Pill>
           <span className="grow" style={{ flex: 1 }} />
           <label className="eb-toggle-lbl" title="Excluded from ALL automation — rules, coverage guard, discovery. Badged in the header and Ad Manager.">
-            <button type="button" role="switch" aria-checked={p.protected} className={`h10-bktoggle ${p.protected ? 'on' : ''}`} disabled={busy}
-              onClick={() => void savePolicy({ protected: !p.protected }, p.protected ? 'protection removed' : 'campaign PROTECTED')}>
-              <span />
-            </button>
+            <Toggle
+              checked={p.protected}
+              disabled={busy}
+              onChange={() => void savePolicy({ protected: !p.protected }, p.protected ? 'protection removed' : 'campaign PROTECTED')}
+            />
             Protected
           </label>
         </div>

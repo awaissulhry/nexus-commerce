@@ -10,7 +10,7 @@
  * (AU/DE/GB/US only — stated honestly for the rest).
  */
 import { useState } from 'react'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Pill, Textarea } from '@/design-system/primitives'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
 import { postEbayAds } from '../../../../_lib'
@@ -80,7 +80,9 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
           )}
           {tab[i] === 'enter' && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-              <textarea className="eb-textarea" rows={3} style={{ flex: 1 }} placeholder={'one keyword per line…'} value={entry[i] ?? ''} onChange={(e) => setEntry((x) => ({ ...x, [i]: e.target.value }))} />
+              {/* minHeight instead of `rows`: the DS textarea floors at 168px, which is right for a
+                  dedicated paste modal and three times too tall for this inline entry box. */}
+              <Textarea style={{ flex: 1, minHeight: 74 }} placeholder={'one keyword per line…'} aria-label="Keywords to add" value={entry[i] ?? ''} onChange={(e) => setEntry((x) => ({ ...x, [i]: e.target.value }))} />
        <Button onClick={() => addEntered(i)}>Add</Button>
             </div>
           )}
@@ -120,7 +122,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                 onChange={(v) => setGroup(i, { negMatch: v as 'EXACT' | 'PHRASE' })}
                 options={[{ value: 'EXACT', label: 'EXACT' }, { value: 'PHRASE', label: 'PHRASE' }]} /></span>
             </label>
-            <textarea className="eb-textarea" rows={2} value={g.negativesText} onChange={(e) => setGroup(i, { negativesText: e.target.value })} placeholder="terms you never want to match (broad negatives don't exist on eBay)" />
+            <Textarea style={{ minHeight: 56 }} value={g.negativesText} aria-label="Negative keywords" onChange={(e) => setGroup(i, { negativesText: e.target.value })} placeholder="terms you never want to match (broad negatives don't exist on eBay)" />
           </div>
         </div>
       ))}

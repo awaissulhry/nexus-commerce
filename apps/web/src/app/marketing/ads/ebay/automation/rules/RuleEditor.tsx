@@ -8,7 +8,7 @@
  * rule DEFINITIONS only — eBay state never changes from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Pill } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X } from 'lucide-react'
@@ -181,7 +181,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
         <h3>Name</h3>
         <div className="eb-form-row">
           <div style={{ flex: 1, minWidth: 280 }}>
-            <input className="h10-cd-input" style={{ width: '100%' }} maxLength={80} value={name} placeholder="e.g. Fee creep-down (IT)" onChange={(e) => setName(e.target.value)} />
+            <Input fieldClassName="eb-input-full" maxLength={80} value={name} placeholder="e.g. Fee creep-down (IT)" aria-label="Rule name" onChange={(e) => setName(e.target.value)} />
           </div>
           {suggestedName && !name && (
             <button type="button" className="eb-kind-chip" title="Use the suggested name" onClick={() => setName(suggestedName.slice(0, 80))}>{suggestedName}</button>
@@ -216,13 +216,17 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           <div className="eb-campaign-picker">
             {eligibleCampaigns.length === 0 && <p className="eb-be-hint">No {trigger.scope === 'CPS_AD' ? 'CPS' : 'CPC'} campaigns on this marketplace.</p>}
             {eligibleCampaigns.map((c) => (
-              <label key={c.id} className="eb-campaign-opt">
-                <input type="checkbox" checked={scopeIds.includes(c.id)}
-                  onChange={(e) => { setScopeIds((ids) => (e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id))); setPreview(null) }} />
-                <span>{c.name}</span>
-                <span className="eb-chip">{c.marketplace.replace('EBAY_', '')}</span>
-                <Pill tone={pillTone(c.status === 'RUNNING' ? 'ok' : 'arch')}>{c.status}</Pill>
-              </label>
+              <Checkbox
+                key={c.id}
+                className="eb-campaign-opt"
+                checked={scopeIds.includes(c.id)}
+                onChange={(e) => { setScopeIds((ids) => (e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id))); setPreview(null) }}
+                label={<>
+                  {c.name}
+                  <span className="eb-chip">{c.marketplace.replace('EBAY_', '')}</span>
+                  <Pill tone={pillTone(c.status === 'RUNNING' ? 'ok' : 'arch')}>{c.status}</Pill>
+                </>}
+              />
             ))}
           </div>
         )}

@@ -173,7 +173,7 @@ export function EbayDigestClient() {
           <section className="eb-panel">
             <header className="eb-panel-head">
               <h3>Awaiting your decision ({p.pendingProposals.length})</h3>
-              <Link href="/marketing/ads/ebay/automation?tab=suggestions" className="eb-linkbtn">Open approval queue →</Link>
+              <Link href="/marketing/ads/ebay/automation?tab=suggestions" className="nds-btn link">Open approval queue →</Link>
             </header>
             {p.pendingProposals.length === 0 ? <EmptyNote title="Queue is clear" /> : (
               <ul className="eb-results">

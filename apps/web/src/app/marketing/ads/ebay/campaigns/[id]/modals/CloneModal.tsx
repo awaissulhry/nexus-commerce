@@ -6,7 +6,7 @@
  * General ads copy only from ENDED sources. Shows per-kind counts.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { H10Modal, Err } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../../../_lib'
 
@@ -47,7 +47,7 @@ export function CloneModal(props: { open: boolean; onClose: () => void; campaign
           ))}
         </ul>
       ) : (
-        <div><label>New campaign name</label><input className="h10-cd-input" style={{ width: '100%' }} value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <div><label>New campaign name</label><Input fieldClassName="eb-input-full" value={name} onChange={(e) => setName(e.target.value)} /></div>
       )}
       <Err msg={error} />
     </H10Modal>

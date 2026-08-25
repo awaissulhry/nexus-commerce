@@ -6,7 +6,7 @@
  * switch, plus the digest cross-link the critique flagged as missing.
  */
 import Link from 'next/link'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill } from '@/design-system/primitives'
 import { useEffect, useState } from 'react'
 import { postEbayAds, eurC } from '../_lib'
 import { pillTone } from '../../_shared/pillTone'
@@ -58,7 +58,7 @@ export function PostureBand({ state, busy, act }: {
             </Pill>
           ))}
           <label className="eb-posture-caplbl">EBAY_IT €
-            <input className="h10-cd-input" style={{ width: 76, marginLeft: 6 }} type="number" min={10} value={capInput} onChange={(e) => setCapInput(e.target.value)} />
+            <Input style={{ width: 76 }} fieldClassName="eb-gap-l" type="number" min={10} value={capInput} onChange={(e) => setCapInput(e.target.value)} aria-label="EBAY_IT monthly ceiling, euros" />
           </label>
           <Button size="sm" disabled={busy}
  onClick={() => void act(() => postEbayAds('/automation/ceilings', { marketplace: 'EBAY_IT', monthlyCapCents: Math.round(Number(capInput) * 100) }), 'ceiling saved')}>

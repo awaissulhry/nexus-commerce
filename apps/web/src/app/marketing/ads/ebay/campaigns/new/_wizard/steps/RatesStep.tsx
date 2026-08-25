@@ -14,7 +14,7 @@ import { Gauge, SlidersHorizontal } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { effRate, includedListings, SUGGEST_MARKETS, type CampaignPlan, type PlanListing } from '../plan'
-import { Pill } from '@/design-system/primitives'
+import { Pill, Toggle } from '@/design-system/primitives'
 
 export function RatesStep({ plan, set, listings }: {
   plan: CampaignPlan
@@ -122,7 +122,7 @@ export function RatesStep({ plan, set, listings }: {
             <p>Optional: find the best fixed rate empirically instead of guessing it.</p>
             <div className="h10-cd-card pad">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" role="switch" aria-checked={d.on} className={`h10-bktoggle ${d.on ? 'on' : ''}`} onClick={() => set({ rateDiscovery: { ...d, on: !d.on } })}><span /></button>
+                <Toggle checked={d.on} aria-label="Rate Discovery" onChange={(next) => set({ rateDiscovery: { ...d, on: next } })} />
                 <b className="eb-strong">Rate Discovery</b>
                 <span className="eb-be-hint" style={{ flex: 1 }}>Walks the rate from floor to cap one dwell window at a time, measures each step, and <b>proposes</b> every move for your approval — the cap is additionally clamped per listing to break-even at apply time. Our answer to &quot;what rate is actually best&quot;.</span>
               </div>

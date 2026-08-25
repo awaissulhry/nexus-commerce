@@ -14,7 +14,7 @@ import { InfoTip } from '../../../../../campaigns/InfoTip'
 
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Pill, Toggle } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components'
 
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
@@ -73,10 +73,10 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
         <div className="h10-cd-card pad">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             <label className="eb-toggle-lbl">
-              <button type="button" role="switch" aria-checked={plan.criterion.autoSelectFutureInventory} className={`h10-bktoggle ${plan.criterion.autoSelectFutureInventory ? 'on' : ''}`}
-                onClick={() => set({ criterion: { ...plan.criterion, autoSelectFutureInventory: !plan.criterion.autoSelectFutureInventory } })}>
-                <span />
-              </button>
+              <Toggle
+                checked={plan.criterion.autoSelectFutureInventory}
+                onChange={(next) => set({ criterion: { ...plan.criterion, autoSelectFutureInventory: next } })}
+              />
               Auto-select future listings (new matches enroll daily)
             </label>
             <span className="grow" style={{ flex: 1 }} />

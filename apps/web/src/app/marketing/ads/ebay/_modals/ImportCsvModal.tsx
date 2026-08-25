@@ -5,7 +5,7 @@
  * C1). Used by the Ad Manager.
  */
 import { useEffect, useState } from 'react'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Pill, Textarea } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 
@@ -40,7 +40,7 @@ export function ImportCsvModal(props: { open: boolean; onClose: () => void; onDo
     <Button variant="primary" onClick={() => run(false)} disabled={busy || !diff || diff.every((d) => d.error) || applied != null}>Apply valid rows</Button>
       </>}>
       <SandboxBanner mode={mode} />
-      <textarea className="eb-textarea" rows={6} value={csvText} onChange={(e) => { setCsvText(e.target.value); setDiff(null); setApplied(null) }} placeholder="Paste CSV here…" />
+      <Textarea value={csvText} onChange={(e) => { setCsvText(e.target.value); setDiff(null); setApplied(null) }} placeholder="Paste CSV here…" />
       <Err msg={error} />
       {parseErrors.length > 0 && <ul className="eb-results">{parseErrors.map((p) => <li key={p.row} className="err">row {p.row}: {p.error}</li>)}</ul>}
       {diff && (

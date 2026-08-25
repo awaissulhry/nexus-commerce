@@ -26,6 +26,7 @@ import { EndCampaignModal } from './modals/EndCampaignModal'
 import { CreateAdGroupModal } from './modals/CreateAdGroupModal'
 import { PromoteModal } from '../../_modals/PromoteModal'
 import { Button, Pill } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components'
 
 const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } }
 
@@ -94,11 +95,13 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
         backHref="/marketing/ads/ebay/campaigns"
       />
 
-      <nav className="h10-cd-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`h10-cd-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
-        ))}
-      </nav>
+      <Tabs
+        size="lg"
+        className="eb-tabs"
+        active={tab}
+        onChange={(key) => setTab(key as TabKey)}
+        tabs={TABS.map((t) => ({ id: t.key, label: t.label }))}
+      />
 
       <div className="h10-cd-body">
         {error ? (

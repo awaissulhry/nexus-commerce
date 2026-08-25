@@ -18,6 +18,7 @@ import { AgSearchTermsTab } from './tabs/AgSearchTermsTab'
 import { AddKeywordsModal } from '../../modals/AddKeywordsModal'
 import { AddNegativeKeywordsModal } from '../../modals/AddNegativeKeywordsModal'
 import { Button } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components'
 
 const TABS = [
   { key: 'keywords', label: 'Keywords' },
@@ -72,11 +73,13 @@ export function EbayAdGroupDetail({ campaignId, adGroupId }: { campaignId: strin
         backHref={`/marketing/ads/ebay/campaigns/${campaignId}?tab=ad-groups`}
       />
 
-      <nav className="h10-cd-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`h10-cd-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
-        ))}
-      </nav>
+      <Tabs
+        size="lg"
+        className="eb-tabs"
+        active={tab}
+        onChange={(key) => setTab(key as TabKey)}
+        tabs={TABS.map((t) => ({ id: t.key, label: t.label }))}
+      />
 
       <div className="h10-cd-body">
         {error ? (

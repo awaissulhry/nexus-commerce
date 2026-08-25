@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { postEbayAds, getEbayAds } from '../../_lib'
 import { type AutomationRule, conditionSentence, actionSentence, scopeLabel } from '../_lib/rules'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Pill, Toggle } from '@/design-system/primitives'
 
 function RuleMenu({ rule, busy, onRun, onDelete }: { rule: AutomationRule; busy: boolean; onRun: () => void; onDelete: () => void }) {
   const router = useRouter()
@@ -70,10 +70,12 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
         return (
           <div key={r.id} className="eb-rule-card">
             <div className="eb-rule-head">
-              <button type="button" role="switch" aria-checked={r.enabled} className={`h10-bktoggle ${r.enabled ? 'on' : ''}`} disabled={busy}
-                onClick={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { enabled: !r.enabled }))}>
-                <span />
-              </button>
+              <Toggle
+                checked={r.enabled}
+                disabled={busy}
+                aria-label={r.enabled ? `Disable ${r.name}` : `Enable ${r.name}`}
+                onChange={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { enabled: !r.enabled }))}
+              />
               <button type="button" className="eb-rule-name" onClick={() => router.push(`/marketing/ads/ebay/automation/rules/${r.id}`)} title="Edit rule">{r.name}</button>
               <button type="button" className={`h10-pill ${r.mode === 'AUTOPILOT' ? 'ok' : 'arch'}`} style={{ cursor: 'pointer', border: 'none' }} disabled={busy}
                 title="Click to toggle PROPOSE ↔ AUTOPILOT (autopilot applies within guardrails when the dial is on Auto)"

@@ -5,7 +5,7 @@
  * modal; products-page scope).
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { H10Modal, Err } from '../../_lib/modal'
 import { postEbayAds } from '../../_lib'
 
@@ -50,7 +50,7 @@ export function CostModal(props: { open: boolean; onClose: () => void; itemId: s
       ) : (
         <div>
           <label>Unit cost €</label>
-          <input className="h10-cd-input" style={{ width: 140 }} type="number" min={0.01} step={0.01} value={costEur} onChange={(e) => setCostEur(e.target.value)} autoFocus />
+          <Input style={{ width: 140 }} type="number" min={0.01} step={0.01} value={costEur} onChange={(e) => setCostEur(e.target.value)} autoFocus />
         </div>
       )}
       <Err msg={error} />

@@ -5,7 +5,7 @@
  * file per modal) + prefill support for the Search Terms → keyword flow.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Textarea } from '@/design-system/primitives'
 
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
@@ -58,9 +58,9 @@ export function AddKeywordsModal(props: {
         <div><label>Match</label>
           <span className="eb-dd dense"><Listbox ariaLabel="Match type" width={130} value={matchType} onChange={setMatchType} options={['EXACT', 'PHRASE', 'BROAD'].map((m) => ({ value: m, label: m }))} /></span>
         </div>
-        <div><label>Bid (EUR)</label><input className="h10-cd-input" style={{ width: 90 }} type="number" min={0.02} max={100} step={0.01} value={bid} onChange={(e) => setBid(e.target.value)} /></div>
+        <div><label>Bid (EUR)</label><Input style={{ width: 90 }} type="number" min={0.02} max={100} step={0.01} value={bid} onChange={(e) => setBid(e.target.value)} /></div>
       </div>
-      <div><label>Keywords</label><textarea className="eb-textarea" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={'giacca moto uomo\ngiubbotto moto impermeabile'} /></div>
+      <div><label>Keywords</label><Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={'giacca moto uomo\ngiubbotto moto impermeabile'} /></div>
       <Err msg={error} />
       {results && <ResultsList results={results} />}
     </H10Modal>

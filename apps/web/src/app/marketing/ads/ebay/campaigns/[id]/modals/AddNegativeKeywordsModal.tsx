@@ -5,7 +5,7 @@
  * (verified — teardown §6 #5). Prefill support for Search Terms → negative.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Textarea } from '@/design-system/primitives'
 
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
@@ -57,7 +57,7 @@ export function AddNegativeKeywordsModal(props: {
           <span className="eb-dd dense"><Listbox ariaLabel="Match type" width={130} value={matchType} onChange={(v) => setMatchType(v as 'EXACT' | 'PHRASE')} options={['EXACT', 'PHRASE'].map((m) => ({ value: m, label: m }))} /></span>
         </div>
       </div>
-      <div><label>Negatives — one per line</label><textarea className="eb-textarea" rows={4} value={text} onChange={(e) => setText(e.target.value)} /></div>
+      <div><label>Negatives — one per line</label><Textarea value={text} onChange={(e) => setText(e.target.value)} /></div>
       <Err msg={error} />
       {results && <ResultsList results={results} />}
     </H10Modal>
