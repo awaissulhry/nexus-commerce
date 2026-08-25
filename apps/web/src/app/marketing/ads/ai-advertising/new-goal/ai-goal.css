@@ -110,3 +110,9 @@
 .aig-advalloc > input { margin-top: 1px; }
 .aig-advalloc .t { display: block; font-size: 13.5px; font-weight: 700; color: var(--nds-text); }
 .aig-advalloc .d { display: block; font-size: 12px; line-height: 1.5; color: var(--nds-text-2); margin-top: 3px; }
+
+/* The DS `Field` replaces `.h10-aig-field`'s label/required/gap; only the column width was
+   ever this page's. (The third `.h10-aig-field` stays: it wraps `PortfolioPicker`, and `Field`
+   labels by cloning an id onto its child, which that component does not forward — the
+   `htmlFor` would point at nothing, which is worse than the span it has now.) */
+.aig-fld { max-width: 430px; }

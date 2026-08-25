@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Field } from '@/design-system/components/Field'
 import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
@@ -128,11 +129,12 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
     <Modal open onClose={onClose} title={`${FLAG[row.marketplace] ?? '🏳️'} ${mktName(row.marketplace)} — ${monthLabel(month)}`} subtitle="Set the monthly budget and how it is distributed across the month." size="lg"
       footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || (custom && Math.abs(sum - 100) > 0.5)} onClick={save}>{saving ? 'Saving…' : 'Save budget'}</Button></>}>
       <div className="bm-set">
-        <label className="bm-set-field">
-          <span className="lbl">Monthly budget</span>
-          <Input fieldClassName="bm-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" aria-label="Monthly budget" />
-          <span className="hint">{budgetCents > 0 ? `≈ ${eur(Math.round(perDay))}/day even across ${dim} days` : 'Set a monthly cap for this market.'}</span>
-        </label>
+        <Field
+          label="Monthly budget"
+          hint={budgetCents > 0 ? `≈ ${eur(Math.round(perDay))}/day even across ${dim} days` : 'Set a monthly cap for this market.'}
+        >
+          <Input fieldClassName="bm-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />
+        </Field>
 
         <div className="bm-set-controls">
           <label className="bm-swrow"><span><b>Auto Pacing</b><em>Distribute the monthly budget across the month automatically.</em></span><Toggle checked={autoPacing} onChange={setAutoPacing} aria-label="Auto Pacing" /></label>

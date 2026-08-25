@@ -34,6 +34,7 @@ import { Checkbox } from '@/design-system/primitives/Checkbox'
 import { Textarea } from '@/design-system/primitives/Textarea'
 import { Drawer } from '@/design-system/components/Drawer'
 import { Tabs } from '@/design-system/components/Tabs'
+import { Field } from '@/design-system/components/Field'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -213,17 +214,15 @@ export function AiGoalBuilder() {
           <section className="h10-aig-sec">
             <h2>Product Goal Details</h2>
             <div className="h10-aig-card">
-              <label className="h10-aig-field">
-                <span className="lbl">Goal Name <i className="req">*</i></span>
+              <Field label="Goal Name" required className="aig-fld">
                 <Input fieldClassName="aig-name" value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder="Enter a goal name" />
-              </label>
-              <label className="h10-aig-field">
-                <span className="lbl">Marketplace <i className="req">*</i> <InfoTip tip="The Amazon marketplace the AI launches these campaigns in. Everything on this page — suggestions, budgets, the preview — is scoped to it." /></span>
+              </Field>
+              <Field label="Marketplace" required info={<InfoTip tip="The Amazon marketplace the AI launches these campaigns in. Everything on this page — suggestions, budgets, the preview — is scoped to it." />} className="aig-fld">
                 <Select value={market} onChange={(e) => setMarket(e.target.value)}>
                   {!market && <option value="">Select a marketplace</option>}
                   {mk.markets.filter((m) => m.launchable).map((m) => <option key={m.code} value={m.code}>{marketLabel(m.code)}</option>)}
                 </Select>
-              </label>
+              </Field>
               <div className="h10-aig-field">
                 <span className="lbl">Portfolio (Optional)</span>
                 <PortfolioPicker value={portfolioId} onChange={setPortfolioId} />
