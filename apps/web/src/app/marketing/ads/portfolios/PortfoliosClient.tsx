@@ -13,6 +13,7 @@ import { RefreshCw, Plus, Pencil, Archive, Wallet, Search } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
 import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
+import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
 import { Modal } from '@/design-system/components/Modal'
@@ -342,10 +343,16 @@ function PortfoliosInner() {
         </>}
       >
         <div className="pf-form">
-          <div className="pf-seg">
-            <button type="button" className={budgetPolicy === 'monthlyRecurring' ? 'on' : ''} onClick={() => setBudgetPolicy('monthlyRecurring')}>Monthly recurring</button>
-            <button type="button" className={budgetPolicy === 'dateRange' ? 'on' : ''} onClick={() => setBudgetPolicy('dateRange')}>Date range</button>
-          </div>
+          <SegmentedControl
+            className="pf-seg"
+            size="sm"
+            value={budgetPolicy}
+            onChange={(v) => setBudgetPolicy(v as 'monthlyRecurring' | 'dateRange')}
+            options={[
+              { value: 'monthlyRecurring', label: 'Monthly recurring' },
+              { value: 'dateRange', label: 'Date range' },
+            ]}
+          />
           <label className="pf-fld"><span>Amount ({budgetRow?.budgetCurrencyCode || 'EUR'})</span><Input inputMode="decimal" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} placeholder="e.g. 500" aria-label="Budget amount" /></label>
           {budgetPolicy === 'dateRange' && (
             <div className="pf-daterow">
