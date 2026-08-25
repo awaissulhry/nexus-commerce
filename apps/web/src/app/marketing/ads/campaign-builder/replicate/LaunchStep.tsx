@@ -26,7 +26,7 @@ import {
   ArrowRight, Pencil, Info,
 } from 'lucide-react'
 import { Modal } from '@/design-system/components'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, RadioCard } from '@/design-system/primitives'
 import type { Plan, CopyScope, PlanEdits } from './replicate-types'
 import { COPY_ITEMS, BIDDING_STRATEGIES } from './replicate-types'
 import { describeChanges } from './edit-model'
@@ -193,7 +193,7 @@ export function LaunchStep({
                     <span>Daily cap</span>
                     <Input inputMode="decimal" prefix="€" value={cap} placeholder="none" aria-label="Daily budget cap"
                       onChange={(e) => setCap(e.target.value)} fieldClassName="h10-rep-numfield" />
-                    <button type="button" className="lnk" title="Drop the daily-spend ceiling so this replication is no longer refused for exceeding it" onClick={() => setCap('')}>Remove the cap</button>
+                    <Button variant="link" size="sm" title="Drop the daily-spend ceiling so this replication is no longer refused for exceeding it" onClick={() => setCap('')}>Remove the cap</Button>
                   </label>
                 ) : r ? (
                   <Button variant="primary" onClick={() => onResolve(r)}>{r.label} <ArrowRight size={13} /></Button>
@@ -283,7 +283,7 @@ export function LaunchStep({
           <h3>Your changes</h3>
           <span className="n">{changes.length === 0 ? 'None — this is the source structure, re-pointed at the new product' : `${changes.length} change${changes.length === 1 ? '' : 's'}`}</span>
           {changes.length > 0 && (
-            <button type="button" className="lnk" title="List every edit you made in step 2" onClick={() => setChangesOpen((o) => !o)}>{changesOpen ? 'Hide' : 'Show all'}</button>
+            <Button variant="link" size="sm" title="List every edit you made in step 2" onClick={() => setChangesOpen((o) => !o)}>{changesOpen ? 'Hide' : 'Show all'}</Button>
           )}
         </div>
         {changesOpen && (
@@ -316,28 +316,30 @@ export function LaunchStep({
       <div className="h10-spw-card h10-rep-mode">
         <b className="hd">How this goes out</b>
         <div className="opts">
-          <label className={`opt ${launchMode === 'floor' ? 'on' : ''}`}>
-            <input type="radio" name="launchmode" checked={launchMode === 'floor'} onChange={() => setLaunchMode('floor')} />
-            <span className="t">
-              <b>Land at the bid floor</b>
-              <span className="h">
-                Created and enabled at Amazon’s €0.02 minimum, with every planned bid remembered.
-                The structure exists and syncs normally but cannot meaningfully spend. One click
-                raises it to the planned bids when you are ready. <b>Never paused</b> — pausing
-                disrupts Amazon’s optimisation.
-              </span>
-            </span>
-          </label>
-          <label className={`opt ${launchMode === 'live' ? 'on' : ''}`}>
-            <input type="radio" name="launchmode" checked={launchMode === 'live'} onChange={() => setLaunchMode('live')} />
-            <span className="t">
-              <b>Go live now</b>
-              <span className="h">
-                Created at the planned bids and budgets. This commits{' '}
-                <b>€{t.dailyBudgetTotal.toFixed(2)}/day</b> in {market} from the moment it lands.
-              </span>
-            </span>
-          </label>
+          <RadioCard
+            name="launchmode"
+            selected={launchMode === 'floor'}
+            checked={launchMode === 'floor'}
+            onChange={() => setLaunchMode('floor')}
+            title="Land at the bid floor"
+            description={<>
+              Created and enabled at Amazon’s €0.02 minimum, with every planned bid remembered.
+              The structure exists and syncs normally but cannot meaningfully spend. One click
+              raises it to the planned bids when you are ready. <b>Never paused</b> — pausing
+              disrupts Amazon’s optimisation.
+            </>}
+          />
+          <RadioCard
+            name="launchmode"
+            selected={launchMode === 'live'}
+            checked={launchMode === 'live'}
+            onChange={() => setLaunchMode('live')}
+            title="Go live now"
+            description={<>
+              Created at the planned bids and budgets. This commits{' '}
+              <b>€{t.dailyBudgetTotal.toFixed(2)}/day</b> in {market} from the moment it lands.
+            </>}
+          />
         </div>
       </div>
 
@@ -353,13 +355,13 @@ export function LaunchStep({
           : launchMode === 'floor'
             ? `Creates all of this in Amazon ${market} at the €0.02 bid floor, so it exists and syncs but cannot meaningfully spend. Takes a few minutes; you can close the tab while it runs.`
             : `Creates all of this in Amazon ${market} at the planned bids and commits €${t.dailyBudgetTotal.toFixed(2)}/day from the moment it lands. Takes a few minutes; you can close the tab while it runs.`}>
-          <button type="button" className="h10-spw-next" disabled={!plan.allowed || launching} onClick={onLaunch}>
+          <Button variant="primary" disabled={!plan.allowed || launching} onClick={onLaunch}>
             {launching
               ? <><Loader2 size={14} className="spin" aria-hidden /> Creating…</>
               : launchMode === 'floor'
                 ? `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} at the bid floor`
                 : `Create ${t.campaigns} campaign${t.campaigns === 1 ? '' : 's'} — €${t.dailyBudgetTotal.toFixed(2)}/day`}
-          </button>
+          </Button>
         </InfoTip>
       </div>
     </div>
@@ -410,15 +412,15 @@ function ResultPanel({
       <div className="h10-rep-launchbar">
         {launchMode === 'floor' && c.campaigns > 0 && (
           <InfoTip tip={`Takes all ${c.campaigns} campaigns off the €0.02 floor and up to the bids this run was planned at. This is the moment they start spending — there is no undo except rolling the run back.`}>
-            <button type="button" className="h10-rep-bulkbtn" disabled={busy} onClick={onRaise}>
+            <Button size="sm" disabled={busy} onClick={onRaise}>
               <TrendingUp size={13} aria-hidden /> Raise to the planned bids
-            </button>
+            </Button>
           </InfoTip>
         )}
         <InfoTip tip="Stores this structure under a name so you can replicate it onto another product later without rebuilding the source selection. Saving changes nothing on Amazon.">
-          <button type="button" className="h10-rep-bulkbtn" disabled={busy} onClick={onSave}>
+          <Button size="sm" disabled={busy} onClick={onSave}>
             <Save size={13} aria-hidden /> Save this structure as a blueprint
-          </button>
+          </Button>
         </InfoTip>
         <span className="grow" />
         {c.campaigns > 0 && (

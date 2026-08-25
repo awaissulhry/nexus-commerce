@@ -17,3 +17,7 @@
 /* the product-list pager: DS <Pagination> centred under the list, with the
    14px breathing room the hand-rolled `.h10-spw-ps-pager` used to own */
 .spw-pager-row { display: flex; justify-content: center; padding-top: 14px; }
+
+/* Replicate — the "use the guessed token" button sits in a column-flex field and
+   must hug its text rather than stretch across it. */
+.h10-rep-guesswrap { display: inline-flex; align-self: flex-start; }

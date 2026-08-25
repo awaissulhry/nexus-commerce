@@ -14,6 +14,9 @@
  * once), then a prefix and suffix.
  */
 import { Plus, Trash2, AlertTriangle, Wand2 } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { applyNamingLocal, retoken, type NamingRules } from './replicate-types'
 
 export function NamingPanel({
@@ -47,9 +50,9 @@ export function NamingPanel({
           <span className="lbl">Product in the source names</span>
           <input value={sourceToken} onChange={(e) => setSourceToken(e.target.value)} placeholder="AIREON" aria-label="Source product token" />
           {guessed && guessed !== sourceToken && (
-            <button type="button" className="h10-rep-guess" onClick={() => setSourceToken(guessed)}>
+            <span className="h10-rep-guesswrap"><Button variant="ghost" size="sm" onClick={() => setSourceToken(guessed)}>
               <Wand2 size={12} aria-hidden /> Use “{guessed}” — found in most of the selected names
-            </button>
+            </Button></span>
           )}
           <span className="hint">Removed from every name and keyword, then replaced below.</span>
         </label>
@@ -84,9 +87,9 @@ export function NamingPanel({
             </button>
           </div>
         ))}
-        <button type="button" className="h10-rep-addrep" onClick={() => setNaming({ ...naming, replacements: [...naming.replacements, { from: '', to: '' }] })}>
+        <span><Button variant="link" size="sm" onClick={() => setNaming({ ...naming, replacements: [...naming.replacements, { from: '', to: '' }] })}>
           <Plus size={13} aria-hidden /> Add a replacement
-        </button>
+        </Button></span>
       </div>
 
       <div className="h10-rep-preview">

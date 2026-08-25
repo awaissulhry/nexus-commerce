@@ -16,7 +16,7 @@ import { RotateCcw, TrendingUp, Trash2, Loader2, ChevronDown, ChevronRight, GitC
 import { getBackendUrl } from '@/lib/backend-url'
 
 import { InfoTip } from '../../campaigns/InfoTip'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { pillTone } from '../../_shared/pillTone'
 import { Listbox } from '@/design-system/components'
 
@@ -102,7 +102,7 @@ export function HistoryPanel({ market, onReplicateAgain }: {
             </span>
             {onReplicateAgain && (
               <InfoTip tip="Load this saved structure back into step 1 as the source, so you can replicate it onto another product without rebuilding the selection.">
-                <button type="button" className="h10-rep-bulkbtn" onClick={() => onReplicateAgain(b.sourceCampaignIds, b.productToken)}>Replicate again</button>
+                <Button size="sm" onClick={() => onReplicateAgain(b.sourceCampaignIds, b.productToken)}>Replicate again</Button>
               </InfoTip>
             )}
             <InfoTip tip={`Delete the saved structure "${b.name}". This only removes the saved recipe — campaigns it has already created are untouched.`}>
@@ -224,9 +224,9 @@ export function DriftCheck({ market }: { market: string }) {
           <span className="lbl">Its campaigns start with</span>
           <input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="IT-GALE-SP-" aria-label="Campaign name prefix" />
         </label>
-        <button type="button" className="h10-rep-bulkbtn" disabled={busy || !bpId || !token.trim() || !prefix.trim()} onClick={() => void run()}>
+        <Button size="sm" disabled={busy || !bpId || !token.trim() || !prefix.trim()} onClick={() => void run()}>
           {busy ? <Loader2 size={13} className="spin" aria-hidden /> : null} Compare
-        </button>
+        </Button>
       </div>
       {err && <div className="h10-rep-note bad">{err}</div>}
       {out && (

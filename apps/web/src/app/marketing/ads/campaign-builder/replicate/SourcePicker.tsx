@@ -19,6 +19,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Search, Layers, Loader2 } from 'lucide-react'
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 
 export interface SrcAdGroup { id: string; name: string; positives: number; negatives: number; productAds: number }
 export interface SrcCampaign {
@@ -214,7 +217,7 @@ export function SourcePicker({ market, selected, setSelected, onChange, onPickBl
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by campaign or portfolio name" aria-label="Filter sources" />
         </div>
         {selected.size > 0 && (
-          <button type="button" className="h10-rep-clear" onClick={() => setSelected(new Set())}>Clear selection</button>
+          <Button variant="link" size="sm" onClick={() => setSelected(new Set())}>Clear selection</Button>
         )}
       </div>
 

@@ -20,6 +20,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Info, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -406,7 +407,7 @@ export function ReplicateBuilder() {
           <span className="eyebrow">Helium 10 Ads</span>
           <h1>Campaign Builder : Replicate Structure</h1>
         </div>
-        <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+        <Button onClick={() => router.push(EXIT_TO)}>Exit Builder</Button>
       </header>
 
       <nav className="h10-spw-steps" aria-label="Wizard steps">
@@ -571,25 +572,24 @@ export function ReplicateBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <button type="button" className="h10-spw-back" onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</button>}
+        {step > 1 && <Button onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</Button>}
         <span className="grow" />
         {step < 3 && <PlanBar planning={planning} err={planErr} preview={preview} missing={missing} />}
         {/* Step 3 carries its own launch button — a second "Next" there would be
             a button with nothing left to do. */}
         {step < 3 && (
-          <button
-            type="button"
-            className="h10-spw-next"
+          <Button
+            variant="primary"
             disabled={step === 1 && !canAdvance}
             onClick={() => setStep((s) => (s < 3 ? ((s + 1) as StepN) : s))}
           >
             Next
-          </button>
+          </Button>
         )}
         {step === 3 && result && (
-          <button type="button" className="h10-spw-next" onClick={() => router.push('/marketing/ads/campaigns')}>
+          <Button variant="primary" onClick={() => router.push('/marketing/ads/campaigns')}>
             Go to Ad Manager
-          </button>
+          </Button>
         )}
       </footer>
     </div>
