@@ -15,7 +15,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useSearchParams } from 'next/navigation'
 import { Clock, Search, X, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input, Toggle } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input, Toggle } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DateField } from '@/design-system/components/DateField'
 import { useCampaignMap, type CampRef } from './useCampaignMap'
@@ -178,13 +178,13 @@ export function DaypartingTab() {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         {/* market */}
         <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-          <button className={`az-chip quick ${market === '' ? 'on' : ''}`} aria-pressed={market === ''} onClick={() => setMarket('')}>All markets</button>
-          {MARKETS.map((m) => <button key={m} className={`az-chip quick ${market === m ? 'on' : ''}`} aria-pressed={market === m} onClick={() => setMarket(m)}>{m}</button>)}
+          <FilterChip pressed={market === ''} onClick={() => setMarket('')}>All markets</FilterChip>
+          {MARKETS.map((m) => <FilterChip key={m} pressed={market === m} onClick={() => setMarket(m)}>{m}</FilterChip>)}
         </div>
         <span style={{ width: 1, height: 18, background: 'var(--divider)' }} />
         {/* metric */}
         <div style={{ display: 'inline-flex', gap: 4 }} role="group" aria-label="Metric">
-          {METRICS.map((m) => <button key={m.k} className={`az-chip quick ${metric === m.k ? 'on' : ''}`} aria-pressed={metric === m.k} onClick={() => setMetric(m.k)}>{m.label}</button>)}
+          {METRICS.map((m) => <FilterChip key={m.k} pressed={metric === m.k} onClick={() => setMetric(m.k)}>{m.label}</FilterChip>)}
         </div>
         <span style={{ flex: 1 }} />
         {/* product typeahead */}
@@ -363,12 +363,12 @@ export function DaypartingTab() {
               </div>
               <div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Bid modifier in-window</span>
-                <div style={{ display: 'inline-flex', gap: 4 }}>{BID_LADDER.map((m) => <button key={m} className={`az-chip quick ${bidPct === m ? 'on' : ''}`} onClick={() => setBidPct(m)}>{m > 0 ? '+' : ''}{m}%</button>)}</div>
+                <div style={{ display: 'inline-flex', gap: 4 }}>{BID_LADDER.map((m) => <FilterChip key={m} pressed={bidPct === m} onClick={() => setBidPct(m)}>{m > 0 ? '+' : ''}{m}%</FilterChip>)}</div>
               </div>
             </div>
             <div style={{ marginTop: 10 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Days</span>
-              <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{DOW_ORDER.map((dow, di) => <button key={dow} className={`az-chip quick ${win.days.includes(dow) ? 'on' : ''}`} onClick={() => toggleDay(dow)}>{DAYS[di]}</button>)}</div>
+              <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{DOW_ORDER.map((dow, di) => <FilterChip key={dow} pressed={win.days.includes(dow)} onClick={() => toggleDay(dow)}>{DAYS[di]}</FilterChip>)}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
               <Button variant="primary" disabled={busy} onClick={() => void createSchedule()}>{busy ? 'Saving…' : 'Create schedule'}</Button>

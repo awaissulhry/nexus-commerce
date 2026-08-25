@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, Sliders, Check, Trash2 } from 'lucide-react'
-import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, type AutomationDef } from './automations'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
@@ -143,7 +143,7 @@ export function LibraryTab({ ruleNames, busy, onAdd, onAddMany, onEnablePlaybook
           <Button variant="primary" onClick={onBuildCustom}><Plus size={15} />Build custom rule</Button>
         </div>
 
-        <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}{c !== 'All' && <span style={{ opacity: .55, marginLeft: 5 }}>{catCounts[c] ?? 0}</span>}</button>)}</div>
+        <div className="az-cats">{CATEGORIES.map((c) => <FilterChip key={c} pressed={cat === c} count={c === 'All' ? undefined : (catCounts[c] ?? 0)} onClick={() => setCat(c)}>{c}</FilterChip>)}</div>
 
         {filtered.length === 0
           ? <div className="az-lib-empty">No automations match “<b>{q}</b>”{cat !== 'All' ? <> in <b>{cat}</b></> : null}. <Button variant="link" inline onClick={() => { setQ(''); setCat('All') }}>Clear filters</Button> or <Button variant="link" inline onClick={onBuildCustom}>build a custom rule</Button>.</div>

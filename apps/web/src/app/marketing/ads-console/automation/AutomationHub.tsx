@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, Zap, FlaskConical, Trash2, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Copy, ChevronDown, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { checkRuleLogic } from './synthetic-test'
 import { fieldDef, actionDef, triggerDef, OPS, fieldSuffix, condFromRaw, type FieldUnit } from './vocab'
@@ -186,7 +186,10 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         {rules.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
             <Input leadingIcon={<Search size={14} />} aria-label="Find a rule" placeholder="Find a rule" value={ruleQ} onChange={(e) => setRuleQ(e.target.value)} style={{ width: 190 }} />
-            {(['all', 'live', 'dry', 'off'] as const).map((f) => <button key={f} className={`az-chip quick ${ruleFilter === f ? 'on' : ''}`} onClick={() => setRuleFilter(f)}>{f === 'all' ? `All ${rules.length}` : f === 'live' ? `Live ${liveCount}` : f === 'dry' ? `Dry-run ${activeCount - liveCount}` : `Off ${rules.length - activeCount}`}</button>)}
+            {(['all', 'live', 'dry', 'off'] as const).map((f) => {
+              const [label, count] = f === 'all' ? ['All', rules.length] : f === 'live' ? ['Live', liveCount] : f === 'dry' ? ['Dry-run', activeCount - liveCount] : ['Off', rules.length - activeCount]
+              return <FilterChip key={f} pressed={ruleFilter === f} count={count} onClick={() => setRuleFilter(f)}>{label}</FilterChip>
+            })}
             <span style={{ flex: 1 }} />
             <span className="az-rowstat" style={{ fontSize: 12, color: 'var(--ink2)', gap: 8 }}>Group
               <Listbox
