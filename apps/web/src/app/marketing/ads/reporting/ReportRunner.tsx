@@ -550,6 +550,7 @@ export function ReportRunner({ reportId }: { reportId: string }) {
               scrolling and finding it again in a dropdown. They answer one question, so they
               are one menu, on the report. */}
           <Menu
+            className="rpt-deliver-menu"
             align="right"
             label={<><Share2 size={13} /> {exporting ? 'Preparing…' : 'Deliver'}</>}
             triggerProps={{ disabled: exporting !== null, 'aria-label': 'Deliver this report' }}
