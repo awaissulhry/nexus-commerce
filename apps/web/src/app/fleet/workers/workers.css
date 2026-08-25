@@ -32,15 +32,15 @@
   flex: none;
 }
 
-.sbw-badge.neutral { background: #f0f2f5; color: #6b7684; border-color: #e2e6ec; }
+.sbw-badge.neutral { background: var(--nds-grey-100); color: #6b7684; border-color: var(--nds-grey-150); }
 .sbw-badge.good    { background: #e8f6ef; color: #14764f; border-color: #cbe9dc; }
 .sbw-badge.warn    { background: #fdf4e3; color: #91640f; border-color: #f3e3c2; }
 .sbw-badge.bad     { background: #fdeceb; color: #a3312c; border-color: #f5d4d1; }
-.sbw-badge.busy    { background: #eaf2fb; color: #2f6096; border-color: #d3e2f4; }
+.sbw-badge.busy    { background: var(--nds-blue-50); color: #2f6096; border-color: #d3e2f4; }
 
 /* "Not set up" is an outline, not a fill: it is an absence, and it should not
    look like a state the operator chose. */
-.sbw-badge.outline { background: transparent; border-style: dashed; border-color: #c3cad4; color: #6b7684; }
+.sbw-badge.outline { background: transparent; border-style: dashed; border-color: var(--nds-grey-300); color: #6b7684; }
 
 .sbw-badge.busy .dot { animation: sbw-pulse 1.4s ease-in-out infinite; }
 @keyframes sbw-pulse {
@@ -70,9 +70,9 @@
   height: 16px;
   margin-left: 6px;
   padding: 0 6px;
-  border: 1px solid #dbe1ea;
+  border: 1px solid var(--nds-grey-200);
   border-radius: 4px;
-  background: #f2f5f9;
+  background: var(--nds-grey-75);
   color: #6b7684;
   font-size: 10px;
   font-weight: 600;
@@ -87,7 +87,7 @@
   width: 26px; height: 26px; flex: none;
   display: grid; place-items: center;
   border-radius: 7px;
-  background: #eef2f7;
+  background: var(--nds-grey-100);
   color: #6b7d95;
 }
 .sbw-who .nm {
@@ -101,7 +101,7 @@
 .sbw-who .ky {
   display: block;
   font-size: 10.5px;
-  color: #98a2b0;
+  color: var(--nds-grey-450);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -115,7 +115,7 @@
   display: inline-block;
   margin-right: 4px;
   padding: 1px 5px;
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 4px;
   background: var(--nds-white);
   font-size: 10.5px;
@@ -123,8 +123,8 @@
 }
 
 /* ── small shared bits ────────────────────────────────────────────────────── */
-.sbw-dim { color: #98a2b0; }
-.sbw-note { font-size: 11px; color: #8b95a3; }
+.sbw-dim { color: var(--nds-grey-450); }
+.sbw-note { font-size: 11px; color: var(--nds-grey-500); }
 
 /* ── teaching empty state ─────────────────────────────────────────────────
    FX.4's rule: what will appear here, when, and what has to be true first.
@@ -133,7 +133,7 @@
 .sbw-empty strong {
   display: block;
   font-size: 13px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   margin-bottom: 5px;
 }
 .sbw-empty span {
@@ -205,7 +205,7 @@ button.acr-pg-stat {
   cursor: pointer;
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
-.sbw-tile:hover { border-color: #c3d3e6; background: #fcfdff; }
+.sbw-tile:hover { border-color: #c3d3e6; background: var(--nds-white); }
 .sbw-tile:focus-visible {
   outline: none;
   border-color: #9db4d0;
@@ -214,7 +214,7 @@ button.acr-pg-stat {
 .sbw-tile.on {
   border-color: #4a7ab8;
   box-shadow: inset 0 0 0 1px #4a7ab8;
-  background: #f6f9fd;
+  background: var(--nds-grey-25);
 }
 .sbw-tile.on .k { color: #3f6fb5; }
 
@@ -236,13 +236,13 @@ button.acr-pg-stat {
   padding: 0 9px;
   border: 1px solid #b9cde6;
   border-radius: 999px;
-  background: #eef4fc;
+  background: var(--nds-blue-50);
   color: #2f6096;
   font-size: 12px;
   cursor: pointer;
 }
 .sbw-viewchip b { font-weight: 650; }
-.sbw-viewchip:hover { background: #e3edfa; border-color: #9db4d0; }
+.sbw-viewchip:hover { background: var(--nds-blue-100); border-color: #9db4d0; }
 
 /* ── W.3 · named views ────────────────────────────────────────────────────
    Three answers to three questions an operator actually asks in the morning,
@@ -260,7 +260,7 @@ button.acr-pg-stat {
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 8px;
   background: var(--nds-white);
   color: #46525f;
@@ -269,7 +269,7 @@ button.acr-pg-stat {
 }
 .sbw-view:hover { border-color: #c3d3e6; }
 .sbw-view.on {
-  background: #eef4fc;
+  background: var(--nds-blue-50);
   border-color: #9db4d0;
   color: #2f6096;
   font-weight: 600;
@@ -277,7 +277,7 @@ button.acr-pg-stat {
 .sbw-view .n {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: #8d97a6;
+  color: var(--nds-grey-500);
 }
 .sbw-view.on .n { color: #4a7ab8; }
 .sbw-view:focus-visible {
@@ -299,7 +299,7 @@ button.acr-pg-stat {
   min-width: 232px;
   padding: 10px;
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 10px;
   box-shadow: 0 12px 30px rgba(20, 28, 38, 0.14);
 }
@@ -309,7 +309,7 @@ button.acr-pg-stat {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #8d97a6;
+  color: var(--nds-grey-500);
 }
 .sbw-colsrow {
   display: flex;
@@ -317,19 +317,19 @@ button.acr-pg-stat {
   gap: 8px;
   padding: 4px 3px;
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   cursor: pointer;
   border-radius: 6px;
 }
-.sbw-colsrow:hover { background: #f5f8fc; }
-.sbw-colsrow.fixed { color: #8d97a6; cursor: default; }
+.sbw-colsrow:hover { background: var(--nds-grey-50); }
+.sbw-colsrow.fixed { color: var(--nds-grey-500); cursor: default; }
 .sbw-colsrow .sbw-note { margin-left: auto; }
 .sbw-colspop .acr-btn { width: 100%; margin-top: 8px; justify-content: center; }
 
 /* ── W.3 · freshness ────────────────────────────────────────────────────── */
 .sbw-asof {
   font-size: 11.5px;
-  color: #98a2b0;
+  color: var(--nds-grey-450);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -360,7 +360,7 @@ button.acr-pg-stat {
 .sbw-bulksep {
   width: 1px;
   height: 18px;
-  background: #dfe5ec;
+  background: var(--nds-grey-150);
   margin: 0 3px;
 }
 .sbw-bulk .sbw-note { white-space: nowrap; }
@@ -382,8 +382,8 @@ button.acr-pg-stat {
   max-height: 190px;
   overflow-y: auto;
   list-style: none;
-  background: #f7f9fc;
-  border: 1px solid #e6ebf1;
+  background: var(--nds-grey-25);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 8px;
 }
 .sbw-affected li {
@@ -392,14 +392,14 @@ button.acr-pg-stat {
   gap: 8px;
   padding: 3px 0;
   font-size: 12px;
-  color: #34404f;
+  color: var(--nds-grey-700);
 }
-.sbw-affected li + li { border-top: 1px solid #edf1f6; }
+.sbw-affected li + li { border-top: 1px solid var(--nds-grey-100); }
 .sbw-affected li b { font-weight: 600; }
 .sbw-affected li span {
   margin-left: auto;
   font-size: 11px;
-  color: #8b95a3;
+  color: var(--nds-grey-500);
   font-variant-numeric: tabular-nums;
 }
 
@@ -411,16 +411,16 @@ button.acr-pg-stat {
   display: block;
   margin-bottom: 4px;
   font-size: 12px;
-  color: #5a6675;
+  color: var(--nds-grey-600);
 }
 .sbw-field input {
   width: 100%;
   height: 32px;
   padding: 0 10px;
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 7px;
 }
 .sbw-field input:focus {
@@ -447,7 +447,7 @@ button.acr-pg-stat {
    itself and what changed. Page-local rather than added to the shared sheet,
    per the CSS convention in the locks doc. */
 .acr-banner.info {
-  background: #f3f7fd;
+  background: var(--nds-grey-75);
   border: 1px solid #cfe0f4;
   color: #2f6096;
 }
@@ -466,7 +466,7 @@ button.acr-pg-stat {
   width: min(560px, 100%);
   height: 100%;
   background: var(--nds-white);
-  border-left: 1px solid #dfe5ec;
+  border-left: 1px solid var(--nds-grey-150);
   box-shadow: -18px 0 44px rgba(20, 28, 38, 0.18);
   display: flex; flex-direction: column;
 }
@@ -476,13 +476,13 @@ button.acr-pg-stat {
   padding: 14px 18px;
   border-bottom: 1px solid var(--nds-grey-100);
 }
-.sbw-drawerhead h3 { margin: 0; font-size: 15px; color: #26313f; flex: 1 1 auto; }
+.sbw-drawerhead h3 { margin: 0; font-size: 15px; color: var(--nds-grey-800); flex: 1 1 auto; }
 .sbw-drawerfoot { border-bottom: 0; border-top: 1px solid var(--nds-grey-100); justify-content: flex-end; }
 .sbw-drawerbody { flex: 1 1 auto; overflow-y: auto; padding: 16px 18px; }
 .sbw-drawerbody .sbw-field span { font-weight: 500; }
 .sbw-drawerbody textarea {
   width: 100%; padding: 8px 10px; font: inherit; font-size: 12.5px;
-  color: #34404f; background: var(--nds-white); border: 1px solid #dfe5ec; border-radius: 7px;
+  color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 7px;
   resize: vertical;
 }
 .sbw-drawerbody textarea:focus {
@@ -494,11 +494,11 @@ button.acr-pg-stat {
 .sbw-tmpl {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 9px 11px; text-align: left; cursor: pointer;
-  background: var(--nds-white); border: 1px solid #e6ebf1; border-radius: 9px;
-  font: inherit; color: #34404f;
+  background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 9px;
+  font: inherit; color: var(--nds-grey-700);
 }
-.sbw-tmpl:hover { border-color: #c3d3e6; background: #fbfdff; }
-.sbw-tmpl.on { border-color: #4a7ab8; box-shadow: inset 0 0 0 1px #4a7ab8; background: #f6f9fd; }
+.sbw-tmpl:hover { border-color: #c3d3e6; background: var(--nds-grey-25); }
+.sbw-tmpl.on { border-color: #4a7ab8; box-shadow: inset 0 0 0 1px #4a7ab8; background: var(--nds-grey-25); }
 .sbw-tmpl .txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .sbw-tmpl .txt b { font-size: 12.5px; font-weight: 600; }
 
@@ -506,12 +506,12 @@ button.acr-pg-stat {
 .sbw-review {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   margin: 14px 0 10px; padding: 12px;
-  background: #f7f9fc; border: 1px solid #e6ebf1; border-radius: 9px;
+  background: var(--nds-grey-25); border: 1px solid var(--nds-grey-150); border-radius: 9px;
 }
 @media (max-width: 620px) { .sbw-review { grid-template-columns: 1fr; } }
 .sbw-review h4 {
   margin: 0 0 6px; font-size: 10.5px; font-weight: 700;
-  letter-spacing: 0.05em; text-transform: uppercase; color: #8d97a6;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--nds-grey-500);
 }
 .sbw-review ul { margin: 0; padding-left: 16px; }
 .sbw-review li { font-size: 11.5px; line-height: 1.55; color: #46525f; }
@@ -528,5 +528,5 @@ button.acr-pg-stat {
 
 /* Retired: kept for its history, cannot run. Grey rather than red — it is a
    state the operator chose, not a fault. */
-.sbw-diag.retired { border-color: #dbe1ea; background: var(--nds-grey-100); color: #78828f; }
+.sbw-diag.retired { border-color: var(--nds-grey-200); background: var(--nds-grey-100); color: #78828f; }
 .sbw-who .sbw-note { display: block; }

@@ -116,7 +116,7 @@
 .h10-sug-buf .cur { color: var(--nds-text-3); font-size: 12px; }
 .h10-sug-buf input { width: 74px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--nds-text); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: 7px; padding: 4px 8px; }
 .h10-sug-buf input:read-only { background: transparent; border-color: transparent; }
-.h10-sug-buf.on input { border-color: var(--nds-blue-600); background: #f2f7ff; }
+.h10-sug-buf.on input { border-color: var(--nds-blue-600); background: var(--nds-blue-50); }
 .h10-sug-buf.on.edited input { border-color: #c68a2e; background: #fff6e8; }
 .h10-sug-buf input:disabled { color: var(--nds-text-3); background: transparent; border-color: transparent; }
 .h10-sug-buf .rv { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--nds-text-2); cursor: pointer; }

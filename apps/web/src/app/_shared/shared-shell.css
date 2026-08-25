@@ -28,11 +28,11 @@
   /* Pin the rail palette light so this deliberately-light shell (ads cockpit +
      /products/next) never inherits dark-mode rail colours. Only the app-wide
      rail (rendered outside .h10-shell) follows the app theme. */
-  --nds-rail-bg: #f1f3f5; --nds-rail-border: #e3e7ec;
+  --nds-rail-bg: var(--nds-grey-75); --nds-rail-border: var(--nds-grey-150);
   --nds-rail-text: #4a5462; --nds-rail-text-2: var(--nds-grey-600); --nds-rail-text-strong: var(--nds-grey-900);
   --nds-rail-icon: var(--nds-grey-500); --nds-rail-chev: var(--nds-grey-450);
-  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: var(--nds-grey-75);
-  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
+  --nds-rail-item-hover: var(--nds-grey-150); --nds-rail-item-hover-2: var(--nds-grey-75);
+  --nds-rail-chip-bg: var(--nds-grey-150); --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
   --nds-rail-ft: var(--nds-grey-400);
   /* The rail rules also consume these (tokenized in the P1 rail refactor): the
      active item background (--nds-primary), the nav count badge (--nds-danger),
@@ -52,17 +52,17 @@
    shells use the .h10-shell pin instead (always light), so this never affects
    them. TODO(P7): de-duplicate these values against tokens.css via a shared file. */
 .app-rail-host {
-  --nds-rail-bg: #f1f3f5; --nds-rail-border: #e3e7ec;
+  --nds-rail-bg: var(--nds-grey-75); --nds-rail-border: var(--nds-grey-150);
   --nds-rail-text: #4a5462; --nds-rail-text-2: var(--nds-grey-600); --nds-rail-text-strong: var(--nds-grey-900);
   --nds-rail-icon: var(--nds-grey-500); --nds-rail-chev: var(--nds-grey-450);
-  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: var(--nds-grey-75);
-  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
+  --nds-rail-item-hover: var(--nds-grey-150); --nds-rail-item-hover-2: var(--nds-grey-75);
+  --nds-rail-chip-bg: var(--nds-grey-150); --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
   --nds-rail-ft: var(--nds-grey-400);
   --nds-primary: var(--nds-blue-600); --nds-danger: var(--nds-red-500); --nds-warning: var(--nds-amber-600);
   --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
 }
 .dark .app-rail-host {
-  --nds-rail-bg: #18263b; --nds-rail-border: #26323f;
+  --nds-rail-bg: #18263b; --nds-rail-border: var(--nds-grey-800);
   --nds-rail-text: var(--nds-rail-text); --nds-rail-text-2: var(--nds-rail-text-2); --nds-rail-text-strong: var(--nds-rail-text-strong);
   --nds-rail-icon: var(--nds-rail-icon); --nds-rail-chev: #6f7b8b;
   --nds-rail-item-hover: var(--nds-rail-item-hover); --nds-rail-item-hover-2: var(--nds-rail-item-hover-2);

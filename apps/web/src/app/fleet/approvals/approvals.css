@@ -45,7 +45,7 @@
   /* The rule. Carried as the header's own border rather than on a wrapper, so
      nothing is inserted around S2. */
   padding-bottom: 16px;
-  border-bottom: 1px solid #e4e9ef;
+  border-bottom: 1px solid var(--nds-grey-150);
   margin-bottom: 14px;
 }
 
@@ -55,7 +55,7 @@
    for this same role at its S1R. Four fleet pages now carry this one-line
    override, which is the point at which the central fix is cheaper. */
 .aq-page .acr-sub {
-  color: #55616f;
+  color: var(--nds-grey-600);
   line-height: 1.5;
   /* Nothing in S1 had a measure before; the promise ran at 171 characters per
      line and the teaching drawer at 261. WCAG 1.4.8 caps at 80.
@@ -116,14 +116,14 @@
   line-height: 1.4;
   color: #46536a;
   background: var(--nds-white);
-  border: 1px solid #d7dee7;
+  border: 1px solid var(--nds-grey-200);
   border-radius: 6px;
   padding: 6px 11px;
   cursor: pointer;
 }
 .aq-helpbtn:hover {
   background: var(--nds-grey-50);
-  border-color: #c3cdd9;
+  border-color: var(--nds-grey-300);
 }
 .aq-helpbtn:focus-visible {
   outline: 2px solid var(--nds-blue-600);
@@ -137,7 +137,7 @@
 .aq-how {
   font-size: 13px;
   line-height: 1.7;
-  color: #35414f;
+  color: var(--nds-grey-700);
 }
 .aq-how h4 {
   margin: 18px 0 6px;
@@ -213,7 +213,7 @@
 
 .aq-gate {
   margin: 0 0 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 8px;
   background: var(--nds-white);
 }
@@ -222,7 +222,7 @@
    `return null` is why the queue card painted 347px above where it landed. */
 .aq-gateskel {
   min-height: 363px;
-  background: linear-gradient(90deg, #f6f8fa 25%, var(--nds-grey-100) 37%, #f6f8fa 63%);
+  background: linear-gradient(90deg, var(--nds-grey-25) 25%, var(--nds-grey-100) 37%, var(--nds-grey-25) 63%);
   background-size: 400% 100%;
   animation: aq-shimmer 1.4s ease infinite;
   border-color: var(--nds-grey-100);
@@ -280,7 +280,7 @@
   color: var(--nds-grey-900);
 }
 .aq-gate-sub {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 /* One condition per row. An <ol> because it is a list of things, and it reads
@@ -369,12 +369,12 @@
   flex: 0 1 auto;
   min-width: 0;
   font-weight: 400;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .aq-condowner::before {
   content: '·';
   margin-right: 8px;
-  color: #98a2b0;
+  color: var(--nds-grey-450);
 }
 .aq-condowner a {
   color: #2563eb;
@@ -425,7 +425,7 @@
   border-top: 1px solid var(--nds-grey-100);
   font-size: 13px;
   line-height: 1.55;
-  color: #55616f;
+  color: var(--nds-grey-600);
   max-width: 88ch;
 }
 
@@ -461,7 +461,7 @@
   font-variant-numeric: tabular-nums;
   /* Inherited #7b8798 measured 3.65:1 — the joint-worst on the page, on the one
      element whose whole job is to say whether to trust what is on screen. */
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 /* ── S4.c · two sizes, the same ladder S1 and S2 settled on ──────────────
  *
@@ -517,7 +517,7 @@
 }
 .aq-emptywhy {
   margin: 3px 0 0;
-  color: #55616f; /* was #6b7688 at 4.59; 5.83 on white, matching S1's role */
+  color: var(--nds-grey-600); /* was #6b7688 at 4.59; 5.83 on white, matching S1's role */
 }
 .aq-err {
   border-left: 3px solid #c53030;
@@ -537,7 +537,7 @@
   margin: 14px 0 0;
   border: 1px dashed #cbd5e1;
   border-radius: 8px;
-  background: #fbfcfd;
+  background: var(--nds-white);
   padding: 11px 12px 12px;
 }
 .aq-examplenote {
@@ -548,7 +548,7 @@
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.5;
-  color: #55616f;
+  color: var(--nds-grey-600);
   max-width: 76ch;
 }
 .aq-examplechip {
@@ -580,7 +580,7 @@
 .aq-page .aq-clock,
 .aq-page .aq-dfield,
 .aq-page .aq-dfrom {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 /* ── S6.a · the reading order ────────────────────────────────────────────
@@ -619,10 +619,10 @@
 .aq-dfield {
   font-size: 13px;
   font-weight: 400;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .aq-dfrom {
-  color: #55616f;
+  color: var(--nds-grey-600);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
@@ -652,7 +652,7 @@
 .aq-entity {
   margin: 0 0 8px;
   font-size: 13px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   max-width: 58ch;
 }
 .aq-entity strong {
@@ -719,7 +719,7 @@
 .aq-notelabel {
   font-size: 11.5px;
   font-weight: 600;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 .aq-actions {
@@ -750,7 +750,7 @@
   background: none;
   font: inherit;
   font-size: 13px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   cursor: pointer;
 }
 .aq-tlink:hover:not(:disabled) {
@@ -770,7 +770,7 @@
   background: none;
   font: inherit;
   font-size: 13px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -798,7 +798,7 @@
      own #f4f6f9, which is the surface this line actually sits on, because it is
      outside the card. Found while auditing S2 (§13.8) and left alone then
      because it belongs to S5. #55616f is the value S1 settled for this role. */
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .aq-outnone svg {
   flex: 0 0 auto;
@@ -959,7 +959,7 @@
 
 .aq-card {
   padding: 12px 13px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 7px;
   background: var(--nds-white);
   font-size: 13px;
@@ -992,7 +992,7 @@
   /* 3px #e5484d on white = 3.91:1 — a graphic needs 3:1, and the consequence
      sentence plus the ack tick carry the same meaning in words (WCAG 1.4.1). */
   border-left: 3px solid var(--nds-danger);
-  background: #fffdf9;
+  background: var(--nds-white);
 }
 
 .aq-cardhead {
@@ -1016,7 +1016,7 @@
    is genuinely wrong — an expiring request, or a failed execution. */
 .aq-meta {
   font-size: 11.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   white-space: nowrap;
 }
 .aq-clock.urgent {
@@ -1133,9 +1133,9 @@
 .aq-reject {
   margin: 8px 0 0;
   padding: 9px 10px;
-  border: 1px solid #e8edf3;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
-  background: #fbfcfd;
+  background: var(--nds-white);
 }
 .aq-rejectq {
   margin: 0 0 7px;
@@ -1149,7 +1149,7 @@
 }
 .aq-code {
   padding: 4px 9px;
-  border: 1px solid #d7dee8;
+  border: 1px solid var(--nds-grey-200);
   border-radius: 999px;
   background: var(--nds-white);
   color: #3a4658;
@@ -1158,7 +1158,7 @@
   cursor: pointer;
 }
 .aq-code:hover:not(:disabled) {
-  border-color: #9aa7b8;
+  border-color: var(--nds-grey-450);
   background: var(--nds-grey-50);
   color: var(--nds-grey-900);
 }
@@ -1171,7 +1171,7 @@
   width: 100%;
   margin: 8px 0 0;
   padding: 6px 9px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
   background: var(--nds-white);
   font: inherit;
@@ -1179,7 +1179,7 @@
   color: var(--nds-grey-900);
 }
 .aq-note::placeholder {
-  color: #9aa7b8;
+  color: var(--nds-grey-450);
 }
 
 /* ── AQ.8 · edit-then-approve ───────────────────────────────────────────── */
@@ -1212,7 +1212,7 @@
 .aq-edit {
   margin: 9px 0 0;
   padding: 10px 11px;
-  border: 1px solid #cddcf5;
+  border: 1px solid var(--nds-blue-200);
   border-radius: 6px;
   background: var(--nds-imgup-surface);
 }
@@ -1296,7 +1296,7 @@
 }
 .aq-snoozeopt {
   padding: 2px 7px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 999px;
   background: var(--nds-white);
   color: #3a4658;
@@ -1305,7 +1305,7 @@
   cursor: pointer;
 }
 .aq-snoozeopt:hover:not(:disabled) {
-  border-color: #9aa7b8;
+  border-color: var(--nds-grey-450);
   background: var(--nds-grey-50);
 }
 .aq-snoozeopt:disabled {
@@ -1418,7 +1418,7 @@
  */
 .aq-page .acr-btn.go:disabled {
   opacity: 1;
-  background: #eef1f4;
+  background: var(--nds-grey-100);
   color: #4a5563;
 }
 
@@ -1471,7 +1471,7 @@
 .aq-selectall:disabled {
   /* Not opacity — the contrast-under-opacity trap has cost this page a round
      of "verified" numbers already. A solid muted colour instead, 4.6:1. */
-  color: #55616f;
+  color: var(--nds-grey-600);
   text-decoration: none;
   cursor: default;
 }
@@ -1496,7 +1496,7 @@
 }
 .aq-bulktype code {
   padding: 1px 5px;
-  border: 1px solid #d7dee7;
+  border: 1px solid var(--nds-grey-200);
   border-radius: 3px;
   background: var(--nds-grey-50);
   font-size: 12px;
@@ -1507,7 +1507,7 @@
      in a single row, which is where the Spacing exception does not apply. */
   min-height: 26px;
   padding: 3px 7px;
-  border: 1px solid #c3cdd9;
+  border: 1px solid var(--nds-grey-300);
   border-radius: 5px;
   font: inherit;
   font-size: 12.5px;
@@ -1544,7 +1544,7 @@
  */
 .aq-page .ap-decidedmeta {
   font-size: 11.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 /*
@@ -1578,8 +1578,8 @@
   /* 6.02:1 on the #fafbfd this chip sits on, up from 3.77. S10.2 retires the
      chip for accessible text; this makes it legible in the meantime rather
      than leaving a known failure on screen across two deploys. */
-  color: #55616f;
-  border-color: #c3cdd9;
+  color: var(--nds-grey-600);
+  border-color: var(--nds-grey-300);
 }
 
 /*
@@ -1594,14 +1594,14 @@
 .aq-recordnote {
   margin: 0 0 10px;
   padding: 9px 11px;
-  border: 1px solid #e4e9ef;
-  border-left: 3px solid #c3cdd9;
+  border: 1px solid var(--nds-grey-150);
+  border-left: 3px solid var(--nds-grey-300);
   border-radius: 6px;
-  background: #fafbfd;
+  background: var(--nds-grey-25);
   font-size: 11.5px;
   line-height: 1.55;
   /* 6.02:1 on #fafbfd — the page's settled value for secondary prose. */
-  color: #55616f;
+  color: var(--nds-grey-600);
   max-width: 58ch;
 }
 .aq-recordnote strong {
@@ -1613,7 +1613,7 @@
    words in the metadata voice — no border, no background, nothing to decode. */
 .aq-page .aq-prefleet {
   font-size: 11.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 /*
@@ -1628,11 +1628,11 @@
   margin-top: 2px;
   font-size: 11.5px;
   /* 6.02:1 — the page's settled secondary. */
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .aq-marker code {
   padding: 1px 5px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 3px;
   background: var(--nds-grey-50);
   /* 11.5px, not 11. I set this a half-step smaller for monospace optical
@@ -1656,9 +1656,9 @@
 .aq-precedent {
   margin: 16px 0 0;
   padding: 13px 14px;
-  border: 1px solid #e4e9ef;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 7px;
-  background: #fafbfd;
+  background: var(--nds-grey-25);
 }
 .aq-precedent h4 {
   display: flex;
@@ -1671,7 +1671,7 @@
 }
 .aq-precedent h4 svg {
   flex: 0 0 auto;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .aq-precedentwhy,
 .aq-precedentempty {
@@ -1679,7 +1679,7 @@
   font-size: 11.5px;
   line-height: 1.55;
   /* 6.02:1 on #fafbfd. */
-  color: #55616f;
+  color: var(--nds-grey-600);
   max-width: 58ch;
 }
 .aq-precedentempty strong {
@@ -1699,14 +1699,14 @@
   gap: 8px;
   align-items: baseline;
   font-size: 11.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 /* S10.5a — the waiting time on an expired row. Same voice as the rest of the
    metadata line; it is a fact about the row, not a warning about it. */
 .aq-page .aq-waited {
   font-size: 11.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 /* S10.6 — the precedent list reuses `.ap-plabel` (10px) and `.ap-ptext` (12px)

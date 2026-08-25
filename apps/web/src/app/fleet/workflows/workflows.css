@@ -33,7 +33,7 @@
 .wf-card {
   display: block;
   background: var(--nds-white);
-  border: 1px solid #e0e6ee;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 12px;
   padding: 15px 18px 16px;
   text-decoration: none;
@@ -56,7 +56,7 @@
   flex-wrap: wrap;
   padding-bottom: 12px;
   margin-bottom: 13px;
-  border-bottom: 1px solid #eef1f6;
+  border-bottom: 1px solid var(--nds-grey-100);
 }
 .wf-card-spacer { flex: 1 1 auto; }
 
@@ -69,25 +69,25 @@
   flex: none;
   display: grid;
   place-items: center;
-  background: #eef2f7;
-  color: #5f6a78;
+  background: var(--nds-grey-100);
+  color: var(--nds-grey-600);
 }
 .wf-glyph.k-on     { background: #e8f6ef; color: #14764f; }
-.wf-glyph.k-ready  { background: #eaf2fb; color: #2f6096; }
+.wf-glyph.k-ready  { background: var(--nds-blue-50); color: #2f6096; }
 .wf-glyph.k-idle   { background: #fdf4e3; color: #8a5f0e; }
-.wf-glyph.k-off    { background: #f0f2f5; color: #5c6673; }
+.wf-glyph.k-off    { background: var(--nds-grey-100); color: var(--nds-grey-600); }
 .wf-glyph.k-halted { background: #fdeceb; color: #a3312c; }
 
-.wf-card-name { font-size: 15px; font-weight: 650; color: #26313f; }
+.wf-card-name { font-size: 15px; font-weight: 650; color: var(--nds-grey-800); }
 .wf-card:hover .wf-card-name { color: #2f5f9e; }
 
 .wf-kind {
   font-size: 11.5px;
   font-weight: 650;
   letter-spacing: 0.02em;
-  color: #5f6a78;
-  background: #eef2f7;
-  border: 1px solid #e2e7ee;
+  color: var(--nds-grey-600);
+  background: var(--nds-grey-100);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
   padding: 2px 8px;
   white-space: nowrap;
@@ -95,7 +95,7 @@
 
 .wf-card-when {
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -103,14 +103,14 @@
 }
 .wf-card-when .nx {
   font-size: 11.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 .wf-card-when .sep,
 .wf-lastline .sep,
 .wf-listcount .sep { color: #9aa5b2; }
 
-.wf-card-go { color: #9aa7b6; display: inline-flex; flex: none; }
+.wf-card-go { color: var(--nds-grey-450); display: inline-flex; flex: none; }
 .wf-card:hover .wf-card-go { color: #3f6fb5; }
 
 /* ── card body: four lanes, three flexible and one FIXED ─────────────────
@@ -157,7 +157,7 @@
   margin: 0;
   font-size: 12.5px;
   line-height: 1.55;
-  color: #5a6675;
+  color: var(--nds-grey-600);
   max-width: 62ch;
 }
 .wf-touch {
@@ -191,9 +191,9 @@
   font-size: 11.5px;
   font-weight: 650;
   line-height: 1.35;
-  color: #34404f;
-  background: #eef2f7;
-  border: 1px solid #e2e7ee;
+  color: var(--nds-grey-700);
+  background: var(--nds-grey-100);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 5px;
   padding: 2px 7px;
   white-space: nowrap;
@@ -201,21 +201,21 @@
 }
 /* Code steps are math, not judgment — the S2 canvas already draws them
    neutral, and the two surfaces should not disagree about that. */
-.wf-step.k-code { background: #f7f9fc; color: #5f6a78; border-style: dashed; }
+.wf-step.k-code { background: var(--nds-grey-25); color: var(--nds-grey-600); border-style: dashed; }
 /* Violet is where a person sits, matching the S2 pipeline's gate node. */
 .wf-step.k-gate { background: #f6f3ff; color: #5b3fa8; border-color: #e3daf9; }
 /* A worker that will not run: still named, visibly inert. */
 .wf-step.is-off {
-  background: #f4f6f8;
-  color: #5f6a78;
-  border-color: #e6eaef;
+  background: var(--nds-grey-50);
+  color: var(--nds-grey-600);
+  border-color: var(--nds-grey-150);
   text-decoration: line-through;
   text-decoration-color: #b9c2cd;
 }
 
 .wf-chain-empty {
   font-size: 12px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   font-style: italic;
 }
 
@@ -224,18 +224,18 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
 }
 
 .wf-lastline {
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
 }
-.wf-lastline.muted { color: #5f6a78; }
+.wf-lastline.muted { color: var(--nds-grey-600); }
 
 .wf-recent { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
 
@@ -245,7 +245,7 @@
 .wf-factbar {
   display: flex;
   background: var(--nds-white);
-  border: 1px solid #e0e6ee;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 16px;
@@ -254,7 +254,7 @@
   flex: 1 1 0;
   min-width: 0;
   padding: 12px 20px;
-  border-left: 1px solid #edf1f5;
+  border-left: 1px solid var(--nds-grey-100);
 }
 .wf-fact:first-child { border-left: 0; }
 .wf-fact .k {
@@ -263,21 +263,21 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   margin-bottom: 5px;
 }
 .wf-fact .v {
   display: block;
   font-size: 17px;
   font-weight: 700;
-  color: #26313f;
+  color: var(--nds-grey-800);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 .wf-fact .sub {
   display: block;
   font-size: 11.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   margin-top: 3px;
   line-height: 1.45;
 }
@@ -297,24 +297,24 @@
 .wf-listhead-spacer { flex: 1 1 auto; }
 .wf-listcount {
   font-size: 12.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   display: inline-flex;
   align-items: baseline;
   gap: 7px;
 }
 .wf-listcount > span { display: inline-flex; align-items: baseline; gap: 4px; }
-.wf-listcount strong { color: #26313f; font-weight: 650; font-size: 12.5px; }
+.wf-listcount strong { color: var(--nds-grey-800); font-weight: 650; font-size: 12.5px; }
 
 /* status-chip variants fleet-pages.css does not have (it ships halted/running).
    `off` darkened from #78828f (3.43:1 on its own background) to clear AA. */
 .acr-pg-statechip.wf-chip-idle  { background: #fdf4e3; color: #91640f; border: 1px solid #f3e3c2; }
-.acr-pg-statechip.wf-chip-off   { background: #f0f2f5; color: #5c6673; border: 1px solid #e2e6ec; }
-.acr-pg-statechip.wf-chip-ready { background: #eaf2fb; color: #2f6096; border: 1px solid #d3e2f4; }
+.acr-pg-statechip.wf-chip-off   { background: var(--nds-grey-100); color: var(--nds-grey-600); border: 1px solid var(--nds-grey-150); }
+.acr-pg-statechip.wf-chip-ready { background: var(--nds-blue-50); color: #2f6096; border: 1px solid #d3e2f4; }
 
 .wf-sub {
   display: block;
   font-size: 11.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   line-height: 1.5;
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
@@ -336,14 +336,14 @@
   width: 6px;
   min-height: 6px;
   border-radius: 2px;
-  background: #dfe5ec;
+  background: var(--nds-grey-150);
   flex: none;
 }
 .wf-bar.ok    { background: #2f9e6e; }
 .wf-bar.fail  { background: #d4574e; }
 .wf-bar.halt  { background: #e0a63f; }
 .wf-bar.run   { background: #4a7ab8; }
-.wf-bar.empty { background: #e7ecf2; height: 6px; }
+.wf-bar.empty { background: var(--nds-grey-150); height: 6px; }
 
 .wf-halt {
   font-size: 12.5px;
@@ -359,7 +359,7 @@
 
 .wf-asof {
   font-size: 11.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 
@@ -376,7 +376,7 @@
    Two more sizes and one more weight still render, and all of them come from
    components another stream owns: the glossary `Term` (13px) and its tooltip
    (12px), and `.acr-btn` (12.5px/550). Noted in the locks doc, not forked. */
-.wf-page .acr-pg-intro { color: #5a6675; font-size: 12.5px; max-width: 96ch; margin-bottom: 16px; }
+.wf-page .acr-pg-intro { color: var(--nds-grey-600); font-size: 12.5px; max-width: 96ch; margin-bottom: 16px; }
 .wf-page .acr-pg-statechip { font-size: 11.5px; }
 .wf-page .acr-pg-ok,
 .wf-page .acr-pg-warn { font-weight: 650; }
@@ -384,8 +384,8 @@
 .wf-page .acr-pg-stat .sub,
 .wf-page .acr-pg-tbl th,
 .wf-page .acr-pg-muted,
-.wf-page .acr-pg-capnote { color: #5f6a78; }
-.wf-page .acr-pg-empty { color: #5a6675; }
+.wf-page .acr-pg-capnote { color: var(--nds-grey-600); }
+.wf-page .acr-pg-empty { color: var(--nds-grey-600); }
 
 /* The lanes fold, they never span. A lane stretched across two columns gets a
    width its sentence cannot use — measured at 970px holding 490px of prose,
@@ -413,7 +413,7 @@
 }
 @media (max-width: 900px) {
   .wf-factbar { flex-wrap: wrap; }
-  .wf-fact { flex: 1 1 44%; border-left: 0; border-top: 1px solid #edf1f5; }
+  .wf-fact { flex: 1 1 44%; border-left: 0; border-top: 1px solid var(--nds-grey-100); }
   .wf-fact:nth-child(-n + 2) { border-top: 0; }
 }
 @media (max-width: 760px) {
@@ -462,7 +462,7 @@
   gap: 12px;
   flex-wrap: wrap;
   background: var(--nds-white);
-  border: 1px solid #e0e6ee;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 12px;
   padding: 11px 16px;
   margin-bottom: 16px;
@@ -471,7 +471,7 @@
 .wf-statusband .wf-why { max-width: 78ch; }
 .wf-bandwhen {
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -479,13 +479,13 @@
 }
 .wf-bandwhen .nx {
   font-size: 11.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 .wf-bandwhen .sep { color: #9aa5b2; }
 
 /* The subtitle is prose and belongs on the list's prose token, not 13px. */
-.wf-page .acr-sub { font-size: 12.5px; color: #5a6675; max-width: 104ch; }
+.wf-page .acr-sub { font-size: 12.5px; color: var(--nds-grey-600); max-width: 104ch; }
 .wf-page .wf-back { font-weight: 650; }
 
 @media (max-width: 860px) {
@@ -520,7 +520,7 @@
   align-items: flex-start;
   gap: 12px;
   background: var(--nds-white);
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 10px;
   padding: 13px 15px;
   margin-bottom: 14px;
@@ -529,7 +529,7 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #34404f;
+  color: var(--nds-grey-700);
   max-width: 86ch;
 }
 .wf-sentence .acr-pg-statechip { margin-top: 2px; flex: none; }
@@ -547,12 +547,12 @@
   margin: 0;
   font-size: 15px;
   font-weight: 650;
-  color: #26313f;
+  color: var(--nds-grey-800);
   display: inline-flex;
   align-items: center;
   gap: 7px;
 }
-.wf-legend { font-size: 11.5px; color: #5f6a78; }
+.wf-legend { font-size: 11.5px; color: var(--nds-grey-600); }
 
 /* ── WF-S2R / S2.c — the pipeline ────────────────────────────────────────
    Replaces the xyflow canvas in the overview zone. Measured reasons: 9.4%
@@ -617,7 +617,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
 }
 .wf-pipe-steps { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 
@@ -668,17 +668,17 @@
 .wf-pipe-artifact {
   font-size: 10.5px;
   font-weight: 650;
-  color: #5f6a78;
-  background: #eef2f7;
-  border: 1px solid #e2e7ee;
+  color: var(--nds-grey-600);
+  background: var(--nds-grey-100);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 5px;
   padding: 0 6px;
 }
 .wf-pipe-arrow { color: #9aa5b2; flex: none; }
 
 .wf-pipe-step {
-  border: 1px solid #e0e6ee;
-  border-left: 3px solid #c3ccd8;
+  border: 1px solid var(--nds-grey-150);
+  border-left: 3px solid var(--nds-grey-300);
   border-radius: 10px;
   background: var(--nds-white);
   padding: 9px 12px;
@@ -687,9 +687,9 @@
   gap: 3px;
   min-width: 0;
 }
-.wf-pipe-step.k-code { background: #f8fafc; border-left-color: #b3bcc9; }
-.wf-pipe-step.k-gate { background: #fbfaff; border-left-color: #8b5cf6; }
-.wf-pipe-step.is-off { background: #fafbfc; border-left-color: #dfe5ec; }
+.wf-pipe-step.k-code { background: var(--nds-grey-25); border-left-color: var(--nds-grey-400); }
+.wf-pipe-step.k-gate { background: var(--nds-grey-25); border-left-color: #8b5cf6; }
+.wf-pipe-step.is-off { background: var(--nds-grey-25); border-left-color: var(--nds-grey-150); }
 
 .wf-pipe-head {
   display: flex;
@@ -697,9 +697,9 @@
   justify-content: space-between;
   gap: 8px;
 }
-.wf-pipe-head .nm { font-size: 12.5px; font-weight: 650; color: #26313f; }
+.wf-pipe-head .nm { font-size: 12.5px; font-weight: 650; color: var(--nds-grey-800); }
 .wf-pipe-step.is-off .wf-pipe-head .nm {
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   text-decoration: line-through;
   text-decoration-color: #b9c2cd;
 }
@@ -712,21 +712,21 @@
   padding: 1px 6px;
   white-space: nowrap;
   flex: none;
-  background: #f0f2f5;
-  color: #5c6673;
-  border: 1px solid #e2e6ec;
+  background: var(--nds-grey-100);
+  color: var(--nds-grey-600);
+  border: 1px solid var(--nds-grey-150);
 }
-.wf-pipe-role.lvl-observe { background: #eaf2fb; color: #2f6096; border-color: #d3e2f4; }
+.wf-pipe-role.lvl-observe { background: var(--nds-blue-50); color: #2f6096; border-color: #d3e2f4; }
 .wf-pipe-role.lvl-propose { background: #fdf4e3; color: #91640f; border-color: #f3e3c2; }
 .wf-pipe-role.lvl-auto    { background: #e8f6ef; color: #14764f; border-color: #cbe9dc; }
-.wf-pipe-role.k-code      { background: #f7f9fc; color: #5f6a78; border-style: dashed; }
+.wf-pipe-role.k-code      { background: var(--nds-grey-25); color: var(--nds-grey-600); border-style: dashed; }
 .wf-pipe-role.k-gate      { background: #f6f3ff; color: #5b3fa8; border-color: #e3daf9; }
 
-.wf-pipe-sub { font-size: 11.5px; line-height: 1.45; color: #5a6675; }
+.wf-pipe-sub { font-size: 11.5px; line-height: 1.45; color: var(--nds-grey-600); }
 .wf-pipe-deg { font-size: 11px; line-height: 1.4; color: #a3312c; font-weight: 650; }
 .wf-pipe-last {
   font-size: 11.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
   display: flex;
@@ -734,7 +734,7 @@
   gap: 5px;
   flex-wrap: wrap;
 }
-.wf-pipe-last .muted { color: #5f6a78; }
+.wf-pipe-last .muted { color: var(--nds-grey-600); }
 .wf-pipe-last .sep { color: #b3bdc9; }
 
 /* Below the fold of a wide desktop the stages stack, and the gutter's arrow
@@ -756,15 +756,15 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  border: 1px solid #e0e6ee;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 10px;
   background: var(--nds-white);
   padding: 11px 13px;
   text-decoration: none;
 }
 .wf-notfound-item:hover { border-color: #c3d2e6; }
-.wf-notfound-item .nm { font-size: 12.5px; font-weight: 650; color: #26313f; }
-.wf-notfound-item .ds { font-size: 11.5px; line-height: 1.45; color: #5a6675; }
+.wf-notfound-item .nm { font-size: 12.5px; font-weight: 650; color: var(--nds-grey-800); }
+.wf-notfound-item .ds { font-size: 11.5px; line-height: 1.45; color: var(--nds-grey-600); }
 
 /* ── S3: the runs section ────────────────────────────────────────────────
    WF-S3R / S3.a — `table-layout: fixed` with declared widths. Auto layout let
@@ -788,8 +788,8 @@
    twice. The whole row is the mouse target; the "when" button is the keyboard
    one, because a <tr> cannot be. */
 .wf-runs .wf-grouprow { cursor: pointer; }
-.wf-runs .wf-grouprow:hover td { background: #f7f9fc; }
-.wf-runs tr.is-selected td { background: #f2f7fd; }
+.wf-runs .wf-grouprow:hover td { background: var(--nds-grey-25); }
+.wf-runs tr.is-selected td { background: var(--nds-grey-75); }
 .wf-runs tr.is-selected td:first-child { box-shadow: inset 3px 0 0 #3f6fb5; }
 
 .wf-selectbtn {
@@ -800,7 +800,7 @@
   color: inherit;
   cursor: pointer;
   text-align: left;
-  border-bottom: 1px dashed #c3ccd8;
+  border-bottom: 1px dashed var(--nds-grey-300);
 }
 .wf-selectbtn:hover { color: #2f5f9e; border-bottom-color: #9db4d0; }
 .wf-grouprow.is-selected .wf-selectbtn { font-weight: 650; color: #2f5f9e; }
@@ -831,9 +831,9 @@
   gap: 5px;
   font-size: 11.5px;
   font-weight: 650;
-  color: #5f6a78;
-  background: #f4f7fa;
-  border: 1px solid #e6ebf1;
+  color: var(--nds-grey-600);
+  background: var(--nds-grey-50);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
   padding: 1px 8px 1px 6px;
   white-space: nowrap;
@@ -843,7 +843,7 @@
   width: 7px;
   height: 7px;
   border-radius: 2px;
-  background: #dfe5ec;
+  background: var(--nds-grey-150);
   flex: none;
 }
 .wf-stepmark.ok   { background: #2f9e6e; }
@@ -876,12 +876,12 @@
 .wf-runs .wf-expandcell { padding-right: 0; }
 .wf-expandbtn {
   background: none;
-  border: 1px solid #e2e7ee;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 7px;
   padding: 4px 9px;
   min-height: 26px;
   cursor: pointer;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   font-size: 11.5px;
   font-weight: 650;
   display: inline-flex;
@@ -889,8 +889,8 @@
   gap: 5px;
   white-space: nowrap;
 }
-.wf-expandbtn:hover { color: #3f6fb5; border-color: #c3d2e6; background: #f7f9fc; }
-.wf-grouprow td { color: #34404f; }
+.wf-expandbtn:hover { color: #3f6fb5; border-color: #c3d2e6; background: var(--nds-grey-25); }
+.wf-grouprow td { color: var(--nds-grey-700); }
 /* The 42ch clamp is for the SHORT outcome words in a cell, not for the
    explanation sentence — which carries the same outcome class and was being
    clamped with them. Excluded by name rather than by out-specifying it: my
@@ -908,10 +908,10 @@
    exactly the group's x (137.0 both), so the only cue that these rows belonged
    to the one above was a background step of roughly 1% luminance. */
 .wf-subrow td {
-  background: #fbfcfe;
+  background: var(--nds-grey-25);
   border-bottom: 1px solid var(--nds-grey-100);
   font-size: 12px;
-  color: #5a6675;
+  color: var(--nds-grey-600);
 }
 .wf-subrow td:first-child {
   padding-left: 28px;
@@ -928,7 +928,7 @@
   border-radius: 1px;
 }
 .wf-subrow:last-of-type td:first-child::before { bottom: 50%; }
-.wf-subname { font-weight: 650; color: #34404f; }
+.wf-subname { font-weight: 650; color: var(--nds-grey-700); }
 .wf-suboutcome {
   font-weight: 650;
   font-size: 11.5px;
@@ -960,10 +960,10 @@
   align-items: baseline;
   column-gap: 0;
   padding: 7px 0;
-  border-bottom: 1px solid #f0f3f7;
+  border-bottom: 1px solid var(--nds-grey-75);
 }
 .wf-vrow:last-of-type { border-bottom: 0; }
-.wf-vrow.is-active { background: #f7fbf9; }
+.wf-vrow.is-active { background: var(--nds-grey-25); }
 /* The built-in has fewer facts, so its description spans the columns it has
    nothing to put in — the state column stays where it is. */
 .wf-vrow.is-builtin .wf-vname { grid-column: 2 / 5; }
@@ -977,8 +977,8 @@
   grid-column: 2 / -1;
   margin: 8px 0 2px;
   padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #eef1f6;
+  background: var(--nds-grey-25);
+  border: 1px solid var(--nds-grey-100);
   border-radius: 9px;
 }
 .wf-vdiff-k {
@@ -987,7 +987,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   margin-bottom: 7px;
 }
 .wf-vdiff .wf-difflist { margin-bottom: 0; }
@@ -997,7 +997,7 @@
 .wf-vauthor,
 .wf-vwhen {
   font-size: 11.5px;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   min-width: 0;
   padding-right: 10px;
 }
@@ -1009,16 +1009,16 @@
 .wf-vbadge.neutral {
   font-family: inherit;
   font-weight: 650;
-  color: #5f6a78;
-  background: #f2f5f8;
-  border-color: #e2e7ee;
+  color: var(--nds-grey-600);
+  background: var(--nds-grey-50);
+  border-color: var(--nds-grey-150);
 }
 .wf-vbadge {
   font-size: 11.5px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #2f6096;
-  background: #eaf2fb;
+  background: var(--nds-blue-50);
   border: 1px solid #d3e2f4;
   border-radius: 6px;
   padding: 2px 8px;
@@ -1030,16 +1030,16 @@
 .wf-vbadge.neutral {
   font-family: inherit;
   font-weight: 650;
-  color: #5f6a78;
-  background: #f2f5f8;
-  border-color: #e2e7ee;
+  color: var(--nds-grey-600);
+  background: var(--nds-grey-50);
+  border-color: var(--nds-grey-150);
 }
-.wf-vname { font-size: 12.5px; font-weight: 650; color: #26313f; min-width: 0; padding-right: 14px; }
+.wf-vname { font-size: 12.5px; font-weight: 650; color: var(--nds-grey-800); min-width: 0; padding-right: 14px; }
 .wf-vnote {
   margin: 9px 0 0;
   font-size: 12px;
   line-height: 1.6;
-  color: #5a6675;
+  color: var(--nds-grey-600);
   max-width: 86ch;
 }
 
@@ -1064,7 +1064,7 @@
 .wf-steps { display: flex; flex-direction: column; gap: 10px; }
 
 .wf-stepcard {
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 10px;
   background: var(--nds-white);
   padding: 11px 12px;
@@ -1073,7 +1073,7 @@
   gap: 8px;
 }
 .wf-stephead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.wf-stephead .nm { font-weight: 650; color: #26313f; font-size: 12.5px; }
+.wf-stephead .nm { font-weight: 650; color: var(--nds-grey-800); font-size: 12.5px; }
 /* S5.d — `.acr-pg-muted` carries a colour and no size, so the tier suffix fell
    through to the ROOT 16px and rendered larger than the worker's own name
    beside it at 12.5px. Seven of them, on every step head. Found by counting
@@ -1084,7 +1084,7 @@
   border: 0;
   padding: 3px;
   cursor: pointer;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   display: inline-flex;
 }
 .wf-stepremove:hover { color: #a3312c; }
@@ -1095,7 +1095,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   margin-bottom: 4px;
 }
 .wf-gate .acr-pg-ladder { max-width: 280px; }
@@ -1107,7 +1107,7 @@
    `.acr-pg-rung.on`, which falls through to source order — the exact trap that
    shipped twice in S3R reading as fixed. #5f6a78 is already one of this
    page's four greys: 5.51:1. */
-.wf-page .acr-pg-rung:not(.on) { color: #5f6a78; }
+.wf-page .acr-pg-rung:not(.on) { color: var(--nds-grey-600); }
 
 .wf-handsto { display: flex; flex-direction: column; gap: 3px; }
 .wf-handopt {
@@ -1115,7 +1115,7 @@
   align-items: center;
   gap: 7px;
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   cursor: pointer;
 }
 
@@ -1123,7 +1123,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #5a6675;
+  color: var(--nds-grey-600);
 }
 
 /* S5.d — the recovered draft is a moment, not a side-effect. */
@@ -1136,11 +1136,11 @@
   margin-top: 10px;
   padding: 9px 12px;
   border: 1px solid #d7e2f2;
-  background: #f4f8fd;
+  background: var(--nds-grey-50);
   border-radius: 9px;
   font-size: 12.5px;
   line-height: 1.5;
-  color: #34404f;
+  color: var(--nds-grey-700);
 }
 .wf-restore > span:first-child { flex: 1 1 340px; min-width: 0; }
 .wf-restoreacts { display: flex; gap: 8px; flex: none; }
@@ -1150,7 +1150,7 @@
    card. Power Automate's designer does both, and this editor had only the
    summary — at the bottom of a step column measured at 1741.8px, which is
    nowhere near the control you just touched. */
-.wf-stepcard.is-bad { border-color: #e3b9b6; background: #fefaf9; }
+.wf-stepcard.is-bad { border-color: #e3b9b6; background: var(--nds-white); }
 .wf-cardproblem {
   display: flex;
   align-items: flex-start;
@@ -1176,7 +1176,7 @@
   display: block;
   font-size: 11.5px;
   line-height: 1.45;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
 }
 
 .wf-problems {
@@ -1198,7 +1198,7 @@
   margin-top: 12px;
   border: 1px solid #dbe6f2;
   border-radius: 10px;
-  background: #f7fafd;
+  background: var(--nds-grey-25);
   padding: 12px 14px;
 }
 
@@ -1217,20 +1217,20 @@
   gap: 3px;
   min-width: 0;
   padding: 9px 12px;
-  border: 1px solid #e0e6ee;
-  border-left: 3px solid #c3ccd8;
+  border: 1px solid var(--nds-grey-150);
+  border-left: 3px solid var(--nds-grey-300);
   border-radius: 10px;
   background: var(--nds-white);
   font-size: 12.5px;
 }
-.wf-teststep .nm { font-weight: 650; color: #26313f; }
+.wf-teststep .nm { font-weight: 650; color: var(--nds-grey-800); }
 /* The state is on the card, in its border, the way S5.c put a step's error on
    the card that caused it. */
 .wf-teststep.is-running { border-left-color: #3f6fb5; }
 .wf-teststep.is-done    { border-left-color: #1f8a5a; }
 .wf-teststep.is-failed  { border-left-color: #a3312c; }
 .wf-teststep.is-stopped { border-left-color: #b8860b; }
-.wf-teststep.is-pending { background: #fbfcfe; }
+.wf-teststep.is-pending { background: var(--nds-grey-25); }
 
 /* A retry that lives inside a sentence — not a button pretending to be one. */
 .wf-linkbtn {
@@ -1266,9 +1266,9 @@
    findings is not a layout. Wrapping is content-independent; the 300px lane
    is what keeps it to one line in practice. */
 .wf-testfinds li { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; min-width: 0; }
-.wf-findlabel { color: #34404f; font-weight: 650; min-width: 0; }
-.wf-findkind { color: #5f6a78; min-width: 0; }
-.wf-findmore { color: #5f6a78; font-style: italic; grid-column: 1 / -1; }
+.wf-findlabel { color: var(--nds-grey-700); font-weight: 650; min-width: 0; }
+.wf-findkind { color: var(--nds-grey-600); min-width: 0; }
+.wf-findmore { color: var(--nds-grey-600); font-style: italic; grid-column: 1 / -1; }
 .wf-sev {
   flex: none;
   font-size: 10.5px;
@@ -1281,7 +1281,7 @@
 }
 .wf-sev.sev-critical, .wf-sev.sev-high { background: #fdeceb; color: #8f2b26; border-color: #f4d2d0; }
 .wf-sev.sev-medium { background: #fdf4e3; color: #7a5405; border-color: #f3e3c2; }
-.wf-sev.sev-low, .wf-sev.sev-info { background: #eef2f7; color: #4a5563; border-color: #e2e7ee; }
+.wf-sev.sev-low, .wf-sev.sev-info { background: var(--nds-grey-100); color: #4a5563; border-color: var(--nds-grey-150); }
 
 /* The OFF-workers guarantee, said before the spend rather than nowhere. */
 .wf-testoff {
@@ -1308,7 +1308,7 @@
 .wf-cronfield > input.wf-croninput {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   padding: 6px 9px;
 }
 .wf-sub.wf-cronbad { color: #a3312c; font-weight: 650; }
@@ -1316,7 +1316,7 @@
   display: block;
   font-size: 11.5px;
   line-height: 1.45;
-  color: #5f6a78;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1324,8 +1324,8 @@
   width: 100%;
   font: inherit;
   font-size: 12.5px;
-  color: #34404f;
-  border: 1px solid #dfe5ec;
+  color: var(--nds-grey-700);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 7px;
   padding: 8px 10px;
   resize: vertical;
@@ -1354,10 +1354,10 @@
   margin: 0;
   font-size: 12.5px;
   line-height: 1.65;
-  color: #34404f;
+  color: var(--nds-grey-700);
   max-width: 88ch;
 }
-.wf-how strong { color: #26313f; }
+.wf-how strong { color: var(--nds-grey-800); }
 
 @media (max-width: 900px) {
   .wf-sentence { flex-direction: column; }

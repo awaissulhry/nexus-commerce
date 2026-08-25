@@ -16,8 +16,8 @@
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.as-chip.neutral { color: #52627a; background: #eef2f7; border-color: #e2e6ec; }
-.as-chip.busy    { color: #1d4ed8; background: #eaf0ff; border-color: #d3e0ff; }
+.as-chip.neutral { color: #52627a; background: var(--nds-grey-100); border-color: var(--nds-grey-150); }
+.as-chip.busy    { color: #1d4ed8; background: var(--nds-blue-100); border-color: #d3e0ff; }
 .as-chip.good    { color: #146c43; background: #e8f6ee; border-color: #cfe9da; }
 .as-chip.warn    { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
 .as-chip.bad     { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
@@ -106,7 +106,7 @@
   gap: 5px;
   font-size: 11.5px;
   color: #35507a;
-  background: #eef3fb;
+  background: var(--nds-blue-50);
   border: 1px solid #dae4f2;
   border-radius: 6px;
   padding: 2px 8px;
@@ -126,7 +126,7 @@
    is a WCAG 1.4.1 failure and because "gone" is not a shade of blue. */
 .as-target.gone { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
 .as-gonemark { font-weight: 700; flex: none; }
-.as-target.account { color: var(--nds-grey-600); background: var(--nds-grey-50); border-color: #e6eaf0; }
+.as-target.account { color: var(--nds-grey-600); background: var(--nds-grey-50); border-color: var(--nds-grey-150); }
 .as-target.inline { max-width: 26ch; }
 
 .as-outcome {
@@ -212,9 +212,9 @@
   color: var(--nds-grey-600);
   cursor: pointer;
 }
-.as-kebab:hover { background: #eef2f7; border-color: #dfe5ec; color: #26313f; }
+.as-kebab:hover { background: var(--nds-grey-100); border-color: var(--nds-grey-150); color: var(--nds-grey-800); }
 .as-kebab:focus-visible { outline: 2px solid #2f6feb; outline-offset: 1px; }
-.as-kebab[aria-expanded='true'] { background: #eef2f7; border-color: #c6d2e2; }
+.as-kebab[aria-expanded='true'] { background: var(--nds-grey-100); border-color: #c6d2e2; }
 
 /* Portalled to document.body, so it escapes both `.nds-gridcard`'s
    overflow:hidden and the stacking context a sticky cell would open. The
@@ -224,7 +224,7 @@
   z-index: 1200;
   width: 216px;
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 10px;
   box-shadow: 0 12px 28px rgba(23, 35, 52, 0.16);
   padding: 5px;
@@ -239,10 +239,10 @@
   border-radius: 7px;
   padding: 7px 10px;
   font-size: 12.5px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   cursor: pointer;
 }
-.as-menu-item:hover:not(:disabled) { background: #f2f6fb; }
+.as-menu-item:hover:not(:disabled) { background: var(--nds-grey-75); }
 .as-menu-item:focus-visible { outline: 2px solid #2f6feb; outline-offset: -2px; }
 .as-menu-item.danger { color: #a11d2b; }
 .as-menu-item.danger:hover:not(:disabled) { background: #fdecee; }
@@ -294,7 +294,7 @@
   color: var(--nds-grey-600);
   line-height: 1.6;
 }
-.as-gridempty strong { color: #34404f; font-size: 13.5px; }
+.as-gridempty strong { color: var(--nds-grey-700); font-size: 13.5px; }
 .as-gridempty-acts { display: flex; gap: 8px; }
 
 /* ── the due badge. Grey → amber → red, and it never blocks anything. ─── */
@@ -306,7 +306,7 @@
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.as-due.later { color: var(--nds-grey-600); background: var(--nds-grey-50); border-color: #e6eaf0; }
+.as-due.later { color: var(--nds-grey-600); background: var(--nds-grey-50); border-color: var(--nds-grey-150); }
 .as-due.soon  { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
 .as-due.over  { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
 .as-due.none  { color: var(--nds-pill-neutral-fg); font-weight: 400; }
@@ -353,7 +353,7 @@
   display: block;
   font-size: 12px;
   font-weight: 700;
-  color: #35414f;
+  color: var(--nds-grey-700);
   margin-bottom: 6px;
   letter-spacing: 0.01em;
 }
@@ -390,7 +390,7 @@
   display: block;
   width: 100%;
   text-align: left;
-  border: 1px solid #e2e6ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
   background: var(--nds-white);
   padding: 10px 12px;
@@ -404,13 +404,13 @@
   box-shadow: inset 0 0 0 1px #2f6feb;
   background: var(--nds-imgup-surface);
 }
-.as-workerbtn:disabled { cursor: not-allowed; background: #fafbfc; }
+.as-workerbtn:disabled { cursor: not-allowed; background: var(--nds-grey-25); }
 /* display:block is load-bearing, not cosmetic: these are <span>s, so without
    it the name and the description render as one run-on line — "Negative
    miner:Judges which zero-order spenders…". Same defect as the strip tiles,
    and equally invisible to tsc, the DS ratchet and every test. */
 .as-workerbtn .nm { display: block; font-weight: 600; color: #1f2a37; font-size: 13px; }
-.as-workerbtn .ds { display: block; font-size: 11.5px; color: #8d97a6; line-height: 1.5; margin-top: 3px; }
+.as-workerbtn .ds { display: block; font-size: 11.5px; color: var(--nds-grey-500); line-height: 1.5; margin-top: 3px; }
 
 /* The brief box and its examples. `style` props are not used here — the DS
    ratchet blocks inline sizing, and a class is the honest home for it. */
@@ -424,19 +424,19 @@
 
 .as-kinds { display: flex; gap: 8px; flex-wrap: wrap; }
 .as-kind {
-  border: 1px solid #e2e6ec;
+  border: 1px solid var(--nds-grey-150);
   background: var(--nds-white);
   border-radius: 8px;
   padding: 7px 13px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #35414f;
+  color: var(--nds-grey-700);
   cursor: pointer;
 }
 .as-kind[aria-pressed='true'] {
   border-color: #2f6feb;
   color: #1d4ed8;
-  background: #f5f9ff;
+  background: var(--nds-grey-50);
   box-shadow: inset 0 0 0 1px #2f6feb;
 }
 
@@ -523,7 +523,7 @@
   font-weight: 600;
   line-height: 1.6;
   color: #1f3a63;
-  background: #f6faff;
+  background: var(--nds-grey-25);
   border: 1px solid #dbe6f5;
   border-radius: 9px;
   padding: 11px 13px;
@@ -628,9 +628,9 @@
 }
 
 .as-band {
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 10px;
-  background: #fbfcfe;
+  background: var(--nds-grey-25);
   padding: 12px 14px;
   margin-bottom: 18px;
 }
@@ -639,7 +639,7 @@
 .as-bandfact {
   margin: 8px 0 0;
   padding-top: 8px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--nds-grey-150);
   font-size: 12px;
   line-height: 1.6;
   color: #52627a;
@@ -703,7 +703,7 @@
    words that say what the object IS. */
 .as-briefcard { margin-bottom: 18px; }
 .as-detail .as-brief .k { color: var(--nds-grey-600); }      /* was #97a1b0 — 2.41:1 */
-.as-detail .as-why { color: #35414f; }
+.as-detail .as-why { color: var(--nds-grey-700); }
 .as-wantback { margin-top: 14px; }
 .as-detail .as-caveat { color: var(--nds-grey-600); }        /* was #8d97a6 — 2.73:1 */
 .as-mb16 { margin-bottom: 16px; }
@@ -713,7 +713,7 @@
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 700;
-  color: #35414f;
+  color: var(--nds-grey-700);
 }
 
 /* Two dashed boxes of nothing were the largest objects on the page and left
@@ -735,7 +735,7 @@
   align-items: center;
   gap: 10px;
   border: 1px solid #dbe6f5;
-  background: #f6faff;
+  background: var(--nds-grey-25);
   border-radius: 9px;
   padding: 9px 12px;
   font-size: 12.5px;
@@ -791,7 +791,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #97a1b0;
+  color: var(--nds-grey-450);
   display: block;
   margin-bottom: 3px;
 }
@@ -831,15 +831,15 @@
 }
 .as-sev.critical, .as-sev.high { color: #a11d2b; background: #fdecee; }
 .as-sev.medium { color: #92400e; background: #fdf3e3; }
-.as-sev.low, .as-sev.info { color: #52627a; background: #eef2f7; }
+.as-sev.low, .as-sev.info { color: #52627a; background: var(--nds-grey-100); }
 
 .as-caveat {
   font-size: 11.5px;
-  color: #8d97a6;
+  color: var(--nds-grey-500);
   line-height: 1.6;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px dashed #e6eaf0;
+  border-top: 1px dashed var(--nds-grey-150);
   max-width: 78ch;
 }
 
@@ -875,7 +875,7 @@
 .as-how {
   font-size: 13px;
   line-height: 1.7;
-  color: #35414f;
+  color: var(--nds-grey-700);
 }
 .as-how h4 { margin: 16px 0 6px; font-size: 13px; }
 .as-how h4:first-child { margin-top: 0; }
@@ -914,7 +914,7 @@
 /* ── AS.6 — several targets. */
 .as-bulk {
   border: 1px solid #dbe6f5;
-  background: #f6faff;
+  background: var(--nds-grey-25);
   border-radius: 9px;
   padding: 11px 13px;
   margin-top: 12px;

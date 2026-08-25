@@ -77,7 +77,7 @@
   max-width: 78ch;
   font-size: 12.5px;
   line-height: 1.5;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-sub a {
   color: #2b6cb0;
@@ -102,7 +102,7 @@
   margin-right: 18px;
   font-size: 12.5px;
   font-weight: 550;
-  color: #55616f;
+  color: var(--nds-grey-600);
   cursor: pointer;
 }
 .sbm-modetabs button.on {
@@ -124,7 +124,7 @@
 .sbm-gesturehint {
   margin-left: auto;
   font-size: 10.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   white-space: nowrap;
 }
 
@@ -163,7 +163,7 @@
 /* was #8a95a3 = 2.81:1 — the worst text on the page after S1 closed the band */
 .sbm-asof {
   font-size: 11px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 
@@ -232,12 +232,12 @@
  * position is deliberate rather than incidental.
  */
 .sbm-seg button.is-na {
-  color: #55616f; /* 6.31:1 on #fff */
+  color: var(--nds-grey-600); /* 6.31:1 on #fff */
   cursor: default;
 }
 .sbm-seg button.on.is-na {
-  background: #e7ecf2;
-  color: #55616f; /* 5.32:1 on #e7ecf2 — computed, not estimated; AA at 11.5px */
+  background: var(--nds-grey-150);
+  color: var(--nds-grey-600); /* 5.32:1 on #e7ecf2 — computed, not estimated; AA at 11.5px */
   font-weight: 650;
 }
 
@@ -250,7 +250,7 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #55616f;
+  color: var(--nds-grey-600);
   margin-right: -4px;
 }
 
@@ -286,7 +286,7 @@
   row-gap: 8px;
   padding: 9px 12px;
   background: var(--nds-white);
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
 }
 
@@ -314,7 +314,7 @@
   min-height: 17px;
   font-size: 11.5px;
   line-height: 1.45;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-band.tone-halted .sbm-verdict-head svg,
 .sbm-band.tone-failed .sbm-verdict-head svg {
@@ -329,7 +329,7 @@
 .sbm-band.tone-off .sbm-verdict-head svg,
 .sbm-band.tone-empty .sbm-verdict-head svg,
 .sbm-band.tone-entities .sbm-verdict-head svg {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 /* Entity mode has no lens row, so its band is one grid row; without this the
    `lenses` area reserves a track and the band grows a blank strip. */
@@ -426,7 +426,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-bfact .v {
   font-size: 13px;
@@ -440,7 +440,7 @@
   font-style: normal;
   font-size: 11px;
   font-weight: 400;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-bfact:focus-visible {
   outline: 2px solid #2b6cb0;
@@ -471,7 +471,7 @@
   letter-spacing: 0.06em;
   /* The old "ALSO" was #9aa5b3 = 2.50:1, the lowest-contrast text in the
      section and the only thing naming its most important distinction. */
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 .sbm-lens {
@@ -484,7 +484,7 @@
   border: 1px solid #78838f;
   border-radius: 999px;
   background: var(--nds-white);
-  color: #37414f;
+  color: var(--nds-grey-700);
   font-size: 11.5px;
   cursor: pointer;
 }
@@ -517,7 +517,7 @@
   color: var(--nds-grey-900);
 }
 .sbm-lens:hover {
-  background: #f2f6fb;
+  background: var(--nds-grey-75);
   border-color: #4a5666;
 }
 /* The pressed state, which used to be carried by aria-pressed alone: measured
@@ -546,12 +546,12 @@
   gap: 5px;
   font-size: 11.5px;
   line-height: 1.4;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-note .n {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #37414f;
+  color: var(--nds-grey-700);
 }
 
 .sbm-explain {
@@ -568,7 +568,7 @@
   cursor: pointer;
 }
 .sbm-explain:hover {
-  background: #eef4fb;
+  background: var(--nds-blue-50);
   text-decoration: underline;
 }
 .sbm-explain:focus-visible {
@@ -662,13 +662,13 @@
   border-color: #b9c6d6;
 }
 .sbm-chip.on {
-  background: #eef4fb;
+  background: var(--nds-blue-50);
   border-color: #a8c4e4;
   color: #1f4f8b;
 }
 .sbm-chip.subject {
   border-color: #cfd8e3;
-  background: #f7f9fc;
+  background: var(--nds-grey-25);
   font-weight: 600;
 }
 .sbm-chip:focus-visible {
@@ -682,7 +682,7 @@
   /* #667485 measured 4.41:1 against this page's #f4f6f9 background — under AA
      at 11.5px. #55616f measures 5.83:1 on the same ground. (Three other fleet
      streams have quoted 6.02 for this colour; they measured it on white.) */
-  color: #55616f;
+  color: var(--nds-grey-600);
   flex: none;
 }
 .sbm-footnote.warn {
@@ -803,9 +803,9 @@
   flex: 1 1 auto;
   min-height: 0; /* NOT calc(100vh - x): a mobile bar or a live banner would
                     push a hard height off the bottom of the viewport */
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
-  background: #fbfcfe;
+  background: var(--nds-grey-25);
   overflow: hidden;
   /* React Flow gives its root `height: 100%`, and a percentage height cannot
      resolve against a flex parent whose own height is `flex: 1 1 auto` — there
@@ -921,11 +921,11 @@
 .sbm-node.is-dimmed {
   opacity: 1;
   background: var(--nds-grey-25);
-  border-color: #e6ebf1;
+  border-color: var(--nds-grey-150);
   box-shadow: none;
 }
 .sbm-node.is-dimmed .sbm-node-name {
-  color: #55616f; /* 6.31:1 on the dimmed card — was 1.78:1 */
+  color: var(--nds-grey-600); /* 6.31:1 on the dimmed card — was 1.78:1 */
 }
 .sbm-node.is-dimmed .sbm-node-status,
 .sbm-node.is-dimmed .sbm-node-facts,
@@ -944,7 +944,7 @@
    actual finding. */
 .sbm-node.is-neverrun {
   border-style: dashed;
-  background: #fdfefe;
+  background: var(--nds-white);
 }
 
 .sbm-node-top {
@@ -1007,7 +1007,7 @@
   background: var(--ov, #6b7684);
 }
 .sbm-node.is-dimmed .sbm-node-lvl {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-node-tier {
   margin-left: auto;
@@ -1015,7 +1015,7 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #5a6675;
+  color: var(--nds-grey-600);
 }
 /* S2R — three fixed slots, ranked inside each one. The row was an
    undifferentiated run of 10.5px grey (`3 runs  5 open  $0.1090`) with no
@@ -1029,7 +1029,7 @@
 }
 .sbm-fact {
   font-size: 10px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1139,7 +1139,7 @@
 .sbm-handle {
   width: 5px;
   height: 5px;
-  background: #c3ccd8;
+  background: var(--nds-grey-300);
   border: 0;
 }
 
@@ -1155,19 +1155,19 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 14px;
-  background: #f2f5f9;
+  background: var(--nds-grey-75);
   border: 1px solid var(--nds-imgup-spin-track);
   border-radius: 10px;
 }
 .sbm-lane-title {
   font-size: 11px;
   font-weight: 650;
-  color: #5a6675;
+  color: var(--nds-grey-600);
 }
 /* was #8a95a3 = 2.96:1 */
 .sbm-lane-note {
   font-size: 10.5px;
-  color: #55616f;
+  color: var(--nds-grey-600);
   max-width: 62ch;
 }
 
@@ -1180,7 +1180,7 @@
  * had no hover feedback at all, so the affordance was built and never surfaced.
  */
 .sbm-canvas .react-flow__edge.sbm-edge .react-flow__edge-path {
-  stroke: #8a94a3;
+  stroke: var(--nds-grey-500);
   stroke-width: 1.4;
   transition: stroke-width 0.12s ease, stroke 0.12s ease;
 }
@@ -1189,7 +1189,7 @@
 }
 .sbm-canvas .react-flow__edge.never-crossed .react-flow__edge-path {
   stroke-dasharray: 4 4;
-  stroke: #8a94a3;
+  stroke: var(--nds-grey-500);
 }
 .sbm-canvas .react-flow__edge.sbm-edge:hover .react-flow__edge-path,
 .sbm-canvas .react-flow__edge.sbm-edge:focus-visible .react-flow__edge-path {
@@ -1243,7 +1243,7 @@
   margin-top: 8px;
   padding: 14px 16px;
   background: var(--nds-white);
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
 }
 .sbm-how-body p {
@@ -1276,7 +1276,7 @@
    *
    * #55616f is 6.31:1 on white.
    */
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-how-body h4:first-child {
   margin-top: 0;
@@ -1304,7 +1304,7 @@
   padding: 8px 10px;
   border-radius: 7px;
   background: var(--nds-grey-900);
-  color: #eef2f6;
+  color: var(--nds-grey-100);
   font-size: 11.5px;
   line-height: 1.5;
   font-weight: 400;
@@ -1428,13 +1428,13 @@
   height: 62px;
   align-items: center;
   justify-content: center;
-  background: #f7f9fc;
+  background: var(--nds-grey-25);
 }
 .sbm-ent-dot {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #c3ccd8;
+  background: var(--nds-grey-300);
 }
 .sbm-ent-label {
   font-size: 12px;
@@ -1448,7 +1448,7 @@
 }
 .sbm-ent-sub {
   font-size: 10px;
-  color: #9aa5b3;
+  color: var(--nds-grey-450);
 }
 
 /* the relation vocabulary — one class per relation, legend and edge alike */
@@ -1462,10 +1462,10 @@
 .sbm-swatch.rel-promoted { background: #7f9dc0; }
 .sbm-swatch.rel-ranks { background: #4a5666; }
 .sbm-swatch.rel-suppressed { background: #a33a3a; }
-.sbm-swatch.rel-other { background: #c3ccd8; }
+.sbm-swatch.rel-other { background: var(--nds-grey-300); }
 
 .sbm-canvas .react-flow__edge.sbm-eedge .react-flow__edge-path {
-  stroke: #c3ccd8;
+  stroke: var(--nds-grey-300);
   stroke-width: 1.2;
   opacity: 0.75;
 }
@@ -1517,7 +1517,7 @@
  */
 .sbm-viewhint {
   font-size: 11px;
-  color: #55616f; /* was #9aa5b3 = 2.31:1 on the page's #f4f6f9 */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.31:1 on the page's #f4f6f9 */
 }
 
 .sbm-listwrapper {
@@ -1525,7 +1525,7 @@
   min-height: 0;
   overflow: auto;
   background: var(--nds-white);
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
   padding: 4px;
 }
@@ -1610,7 +1610,7 @@
 .sbm-listcause {
   flex: 0 0 100%;
   font-size: 11px;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-liststatus.tone-bad { color: #c53030; }
 .sbm-liststatus.tone-warn { color: #9a6410; } /* was #b7791f = 3.64:1 at 13px — text, not a swatch. Only reachable when something is paused or stopped at a limit, which is why the first sweep of the live fleet missed it. */
@@ -1619,7 +1619,7 @@
 /* ⚠ Not decoration: this is the Role column and the adjacency column's
    "starts the chain" / "ends the chain". */
 .sbm-listdim {
-  color: #55616f; /* was #9aa5b3 = 2.50:1, on 20 nodes */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1, on 20 nodes */
 }
 /*
  * S3R C-S3.3 — the table dims the rows the rail filtered out.
@@ -1646,7 +1646,7 @@
  * is unreliable once cells paint their own background, and the cells here do.
  */
 .sbm-listgrid tbody tr.is-selected > td {
-  background: #eef4fb;
+  background: var(--nds-blue-50);
 }
 .sbm-listgrid tbody tr.is-selected > td:first-child {
   box-shadow: inset 3px 0 0 #2b6cb0;
@@ -1656,12 +1656,12 @@
 }
 .sbm-listgrid tbody tr.is-dimmed td,
 .sbm-listgrid tbody tr.is-dimmed .sbm-listname .nm {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-listfoot {
   margin: 8px 6px 4px;
   font-size: 11px;
-  color: #55616f; /* was #8a95a3 = 3.04:1, and its two <b> inherited it */
+  color: var(--nds-grey-600); /* was #8a95a3 = 3.04:1, and its two <b> inherited it */
 }
 .sbm-listfoot a {
   color: #2b6cb0;
@@ -1727,7 +1727,7 @@
    */
   overflow-y: auto;
   background: var(--nds-white);
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
   padding: 10px;
 }
@@ -1746,7 +1746,7 @@
 .sbm-orail-sec + .sbm-orail-sec {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #eef2f6;
+  border-top: 1px solid var(--nds-grey-100);
 }
 /* S3R — every colour in this rail that was typed as an *aside* rather than as a
    label was set to #9aa5b3 or #7d879a and never measured: three headings at
@@ -1761,7 +1761,7 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #55616f; /* was #9aa5b3 = 2.50:1; now 6.31:1 on the rail's white */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1; now 6.31:1 on the rail's white */
 }
 .sbm-seg.vertical {
   display: flex;
@@ -1770,7 +1770,7 @@
 }
 .sbm-seg.vertical button + button {
   border-left: 0;
-  border-top: 1px solid #e6ebf1;
+  border-top: 1px solid var(--nds-grey-150);
 }
 .sbm-seg.vertical button {
   text-align: left;
@@ -1803,7 +1803,7 @@
   margin: 9px 0 0;
   font-size: 10.5px;
   line-height: 1.45;
-  color: #55616f; /* was #9aa5b3 = 2.50:1 */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1 */
 }
 
 .sbm-legend {
@@ -1829,21 +1829,21 @@
 }
 .sbm-legend .note {
   font-size: 10px;
-  color: #55616f; /* was #9aa5b3 = 2.50:1, on the rail's only real content */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1, on the rail's only real content */
   line-height: 1.4;
 }
 /* S3R — a rung nothing occupies keeps its swatch and its label, drops its
    paragraph, and says so on one line. The marker is right-aligned so the
    empties read as a column rather than as rows you have to parse. */
 .sbm-legend li.is-vacant .lab {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-legend .none {
   flex: none;
   margin-left: auto;
   padding-top: 1px;
   font-size: 10px;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-swatch {
   flex: none;
@@ -1855,7 +1855,7 @@
      `background-image`, which is how `ov-nodata` draws its hatch. The fallback
      is only reachable by the entity legend's `rel-*` swatches, which set their
      own colour. */
-  background-color: var(--ov, #c3ccd8);
+  background-color: var(--ov, var(--nds-grey-300));
   /* The edge is the bucket's own colour, so every swatch has a boundary that
      clears 3:1 by construction. On a solid swatch it vanishes into the fill; on
      the hatched one it is what makes an 11px square of 50%-coverage stripes
@@ -1938,7 +1938,7 @@
     padding-top: 0;
     padding-left: 14px;
     border-top: 0;
-    border-left: 1px solid #eef2f6;
+    border-left: 1px solid var(--nds-grey-100);
   }
   /* Six rungs down a 986px-wide rail would be one item per line and a marker
      stranded 900px from its label. Two columns keeps label and marker together. */
@@ -2111,7 +2111,7 @@
   display: flex;
   flex-direction: column;
   background: var(--nds-white);
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 9px;
   overflow: hidden;
 }
@@ -2120,7 +2120,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 9px 12px;
-  border-bottom: 1px solid #eef2f6;
+  border-bottom: 1px solid var(--nds-grey-100);
   flex: none;
 }
 .sbm-rail-head h3 {
@@ -2129,12 +2129,12 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #55616f; /* was #7d879a = 3.62:1 */
+  color: var(--nds-grey-600); /* was #7d879a = 3.62:1 */
 }
 .sbm-rail-close {
   border: 0;
   background: none;
-  color: #55616f; /* was #8a95a3 = 3.04:1, on an icon-only control */
+  color: var(--nds-grey-600); /* was #8a95a3 = 3.04:1, on an icon-only control */
   cursor: pointer;
   display: flex;
   padding: 2px;
@@ -2173,10 +2173,10 @@
   border: 0;
   background: none;
   cursor: pointer;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sbm-rail-expand:hover {
-  background: #f7f9fc;
+  background: var(--nds-grey-25);
 }
 .sbm-rail-expand:focus-visible {
   outline: 2px solid #1f4f8b;
@@ -2207,7 +2207,7 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #55616f; /* was #9aa5b3 = 2.50:1 */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1 */
 }
 .sbm-rail-body h4:first-child {
   margin-top: 0;
@@ -2217,7 +2217,7 @@
   margin: 0 0 10px;
   font-size: 11.5px;
   line-height: 1.5;
-  color: #55616f; /* was #7d879a = 3.62:1 */
+  color: var(--nds-grey-600); /* was #7d879a = 3.62:1 */
 }
 .sbm-rail-reason {
   margin: 8px 0 4px;
@@ -2226,8 +2226,8 @@
   color: #4a5666;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #f7f9fc;
-  border-left: 3px solid #c3ccd8;
+  background: var(--nds-grey-25);
+  border-left: 3px solid var(--nds-grey-300);
 }
 .sbm-rail-reason.tone-bad { border-left-color: #c53030; }
 .sbm-rail-reason.tone-warn { border-left-color: #b7791f; }
@@ -2248,7 +2248,7 @@
 .sbm-rail-id .ky {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10.5px;
-  color: #55616f; /* was #9aa5b3 = 2.50:1 */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1 */
 }
 
 .sbm-row {
@@ -2261,7 +2261,7 @@
 .sbm-row .k {
   flex: none;
   width: 108px;
-  color: #55616f; /* was #8a95a3 = 3.04:1 — every field label in the panel */
+  color: var(--nds-grey-600); /* was #8a95a3 = 3.04:1 — every field label in the panel */
 }
 .sbm-row .v {
   flex: 1 1 auto;
@@ -2280,7 +2280,7 @@
 /* ⚠ Not decoration. Measured, this class carries the autonomy CEILING
    ("cannot go above OBSERVE"), the severity breakdown, and lifetime spend. */
 .sbm-dim {
-  color: #55616f; /* was #9aa5b3 = 2.50:1 */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1 */
 }
 .sbm-warnline {
   width: 100%;
@@ -2308,7 +2308,7 @@
   border-bottom: 1px solid var(--nds-grey-50);
 }
 .sbm-rail-listbtn:hover {
-  background: #f7f9fc;
+  background: var(--nds-grey-25);
 }
 .sbm-rail-listbtn .nm {
   font-size: 12px;
@@ -2319,7 +2319,7 @@
   font-size: 10.5px;
   font-weight: 600;
 }
-.sbm-rail-listbtn .st.tone-neutral { color: #55616f; } /* was #8a95a3 = 3.04:1 */
+.sbm-rail-listbtn .st.tone-neutral { color: var(--nds-grey-600); } /* was #8a95a3 = 3.04:1 */
 .sbm-rail-listbtn .st.tone-good { color: #2f855a; }
 .sbm-rail-listbtn .st.tone-busy { color: #2b6cb0; }
 .sbm-rail-listbtn .st.tone-warn { color: #9a6410; } /* was #b7791f = 3.64:1 at 10.5px */
@@ -2327,7 +2327,7 @@
 .sbm-rail-listbtn .meta {
   grid-column: 1 / -1;
   font-size: 10.5px;
-  color: #55616f; /* was #9aa5b3 = 2.50:1 */
+  color: var(--nds-grey-600); /* was #9aa5b3 = 2.50:1 */
 }
 /* S4.d — the cause leads the meta line, because "Needs attention" is the same
    word for a failure, a safety limit and an unreadable charter, and hue was the
@@ -2347,8 +2347,8 @@
   line-height: 1.5;
   color: #4a5666;
   padding: 7px 9px;
-  background: #fbfcfe;
-  border: 1px solid #eef2f6;
+  background: var(--nds-grey-25);
+  border: 1px solid var(--nds-grey-100);
   border-radius: 6px;
   margin-bottom: 6px;
 }
@@ -2369,8 +2369,8 @@
   letter-spacing: 0.04em;
   padding: 1px 5px;
   border-radius: 3px;
-  background: #eef2f6;
-  color: #5a6675;
+  background: var(--nds-grey-100);
+  color: var(--nds-grey-600);
 }
 .sbm-samples .sev-critical,
 .sbm-samples .sev-high {
@@ -2419,7 +2419,7 @@
   margin: 14px -12px 0;
   padding: 10px 12px 12px;
   background: var(--nds-white);
-  border-top: 1px solid #eef2f6;
+  border-top: 1px solid var(--nds-grey-100);
 }
 .sbm-rail-exits a {
   display: inline-flex;
@@ -2596,7 +2596,7 @@
 .sbm-foot {
   flex: none;
   font-size: 11px;
-  color: #55616f; /* was #8a95a3 = 2.81:1 */
+  color: var(--nds-grey-600); /* was #8a95a3 = 2.81:1 */
   padding-bottom: 4px;
 }
 

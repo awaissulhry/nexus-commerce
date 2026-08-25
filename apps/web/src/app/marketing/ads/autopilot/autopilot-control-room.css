@@ -16,7 +16,7 @@
 .apr-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--nds-grey-500); background: var(--nds-grey-75); border-radius: 16px; padding: 6px 12px; }
 .apr-live.on { color: var(--nds-green-600); background: #e7f7ec; }
 .apr-run { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-blue-600); background: var(--nds-white); color: var(--nds-blue-600); border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.apr-run:hover { background: #eef4fd; }
+.apr-run:hover { background: var(--nds-blue-50); }
 
 .apr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: stretch; }
 @media (max-width: 1100px) { .apr-grid { grid-template-columns: 1fr; } }
@@ -27,7 +27,7 @@
 .apr-feed .hd span { font-size: 12px; color: var(--nds-grey-500); background: var(--nds-grey-75); border-radius: 12px; padding: 2px 9px; }
 .apr-feed .empty { padding: 24px 16px; font-size: 12.5px; color: var(--nds-grey-500); line-height: 1.5; }
 .apr-feed ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
-.apr-feed li { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid #f4f6f8; font-size: 12px; }
+.apr-feed li { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--nds-grey-50); font-size: 12px; }
 .apr-feed .tag { text-transform: uppercase; font-size: 10px; font-weight: 800; letter-spacing: .3px; color: var(--nds-grey-600); background: var(--nds-grey-100); border-radius: 5px; padding: 2px 6px; }
 .apr-feed .act { font-weight: 700; color: var(--nds-grey-900); }
 .apr-feed .rsn { color: var(--nds-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -37,6 +37,6 @@
 .apr-feed .st.denied, .apr-feed .st.rolled_back { color: var(--nds-red-500); }
 
 /* P-F.2 — backtest / projection summary chip row */
-.apr-backtest { display: flex; align-items: center; gap: 16px; margin: -4px 0 16px; padding: 10px 14px; border: 1px solid #dbe7fb; background: #f3f8ff; border-radius: 10px; font-size: 12.5px; color: var(--nds-grey-800); flex-wrap: wrap; }
+.apr-backtest { display: flex; align-items: center; gap: 16px; margin: -4px 0 16px; padding: 10px 14px; border: 1px solid #dbe7fb; background: var(--nds-blue-50); border-radius: 10px; font-size: 12.5px; color: var(--nds-grey-800); flex-wrap: wrap; }
 .apr-backtest b { font-weight: 800; color: var(--nds-blue-600); }
 .apr-backtest .muted { color: var(--nds-grey-500); }

@@ -11,10 +11,10 @@
 
 .cov-top {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
-  border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white);
+  border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white);
   padding: 16px 18px; margin: 4px 0 14px;
 }
-.cov-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #8d97a6; font-weight: 700; }
+.cov-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-grey-500); font-weight: 700; }
 .cov-hero-v {
   font-size: 30px; font-weight: 650; color: var(--nds-grey-900); line-height: 1.15; margin-top: 3px;
   display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums;
@@ -27,14 +27,14 @@
 .cov-field span { font-size: 11.5px; font-weight: 600; color: #46536a; text-transform: uppercase; letter-spacing: 0.03em; }
 .cov-field select {
   font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white);
-  border: 1px solid #d7dee7; border-radius: 6px; padding: 6px 9px; min-width: 190px;
+  border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 6px 9px; min-width: 190px;
 }
 
 /* ── headroom ────────────────────────────────────────────────────────────── */
-.cov-head-list { list-style: none; margin: 0; padding: 0; border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white); overflow: hidden; }
+.cov-head-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); overflow: hidden; }
 .cov-head-list li {
   display: grid; grid-template-columns: minmax(0, 1fr) 110px 78px 108px;
-  align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #f0f3f6; font-size: 12.5px;
+  align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--nds-grey-75); font-size: 12.5px;
 }
 .cov-head-list li:last-child { border-bottom: 0; }
 .cov-head-term { color: var(--nds-grey-900); font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -44,17 +44,17 @@
 .cov-head-kw.none { color: #8a6320; font-weight: 650; }
 
 /* ── the table ───────────────────────────────────────────────────────────── */
-.cov-tablewrap { border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white); overflow-x: auto; }
+.cov-tablewrap { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); overflow-x: auto; }
 .cov-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .cov-table th {
   text-align: right; padding: 9px 12px; font-size: 10.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em; color: #8d97a6;
-  border-bottom: 1px solid #e3e7ec; white-space: nowrap; background: #fbfcfd;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500);
+  border-bottom: 1px solid var(--nds-grey-150); white-space: nowrap; background: var(--nds-white);
 }
 .cov-table th.l, .cov-table td.l { text-align: left; }
-.cov-table td { padding: 7px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-50); color: #34404f; font-variant-numeric: tabular-nums; }
+.cov-table td { padding: 7px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-50); color: var(--nds-grey-700); font-variant-numeric: tabular-nums; }
 .cov-table tbody tr:last-child td { border-bottom: 0; }
-.cov-table tbody tr:hover td { background: #f9fbfd; }
+.cov-table tbody tr:hover td { background: var(--nds-grey-25); }
 .cov-table td.l { color: var(--nds-grey-900); font-weight: 500; }
 
 /* Share is the point of the page, so it gets the width and the only chart ink. */
@@ -69,9 +69,9 @@
 /* No keyword at all on a real market. */
 .cov-table td.none { color: #8a6320; font-weight: 600; }
 
-.cov-search { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 1px solid #d7dee7; border-radius: 6px; padding: 4px 9px; background: var(--nds-white); }
+.cov-search { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 4px 9px; background: var(--nds-white); }
 .cov-search input { border: 0; outline: 0; font-size: 12.5px; color: var(--nds-grey-900); width: 160px; background: transparent; }
-.cov-search svg { color: #8d97a6; flex-shrink: 0; }
+.cov-search svg { color: var(--nds-grey-500); flex-shrink: 0; }
 
 @media (max-width: 900px) {
   .cov-top { flex-direction: column; gap: 14px; }
@@ -95,18 +95,18 @@
 .cov-banner.err { background: #fdf2f2; border: 1px solid #e6bcba; color: #9c2f2a; }
 
 .cov-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 9px; }
-.cov-sec-head h2 { font-size: 13px; font-weight: 650; color: #34404f; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.cov-sec-count { font-size: 12px; color: #8d97a6; }
+.cov-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.cov-sec-count { font-size: 12px; color: var(--nds-grey-500); }
 
 .cov-btn {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   font-size: 12px; color: #46536a; background: var(--nds-white);
-  border: 1px solid #d7dee7; border-radius: 6px; padding: 7px 11px; cursor: pointer;
+  border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 7px 11px; cursor: pointer;
 }
-.cov-btn:hover:not(:disabled) { background: var(--nds-grey-50); border-color: #c3cdd9; }
+.cov-btn:hover:not(:disabled) { background: var(--nds-grey-50); border-color: var(--nds-grey-300); }
 .cov-btn:disabled { opacity: 0.55; cursor: default; }
 
-.cov-foot { font-size: 12px; color: #8d97a6; margin: 18px 0 0; line-height: 1.55; max-width: 92ch; }
+.cov-foot { font-size: 12px; color: var(--nds-grey-500); margin: 18px 0 0; line-height: 1.55; max-width: 92ch; }
 
 /* The header component owns the page's outer padding; everything below it needs its own. */
 .cov > .cov-top,
@@ -122,7 +122,7 @@
    reason — never as 0%, which on this board would assert we are absent from the top of the
    page rather than admitting we cannot see it. */
 .cov-table td.pw { font-weight: 650; color: var(--nds-grey-900); }
-.cov-unk { color: #b3bcc8; }
+.cov-unk { color: var(--nds-grey-400); }
 .cov-hero-pw {
   font-size: 12px; color: #46536a; margin: 7px 0 0; max-width: 74ch; line-height: 1.55;
   border-top: 1px solid var(--nds-grey-100); padding-top: 7px;
@@ -131,7 +131,7 @@
 
 /* ── ACR.2.3 · tabs ──────────────────────────────────────────────────────────
    Tabs rather than routes: §4.1 adds no sidebar entries, and both views answer one question. */
-.cov-tabs { display: flex; gap: 2px; margin: 0 24px 14px; border-bottom: 1px solid #e3e7ec; }
+.cov-tabs { display: flex; gap: 2px; margin: 0 24px 14px; border-bottom: 1px solid var(--nds-grey-150); }
 .cov-tabs button {
   font-size: 12.5px; font-weight: 550; color: #7b8798; background: transparent;
   border: 0; border-bottom: 2px solid transparent; padding: 9px 14px; cursor: pointer;
@@ -145,15 +145,15 @@
    by 19 campaigns and four of them have ever served, so an undifferentiated list of nineteen
    would bury the collision it exists to show. */
 .cvf-list { margin: 0 24px; display: flex; flex-direction: column; gap: 10px; }
-.cvf-card { border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white); overflow: hidden; }
+.cvf-card { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); overflow: hidden; }
 .cvf-head {
   display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
-  padding: 10px 14px 9px; border-bottom: 1px solid #f0f3f6; background: #fbfcfd;
+  padding: 10px 14px 9px; border-bottom: 1px solid var(--nds-grey-75); background: var(--nds-white);
 }
 .cvf-disc {
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; padding: 0; flex-shrink: 0;
-  border: 1px solid #dfe5ec; border-radius: 5px; background: var(--nds-white); color: #7b8798; cursor: pointer;
+  border: 1px solid var(--nds-grey-150); border-radius: 5px; background: var(--nds-white); color: #7b8798; cursor: pointer;
 }
 .cvf-disc:hover { background: var(--nds-grey-50); color: #46536a; }
 .cvf-term { font-size: 13px; font-weight: 650; color: var(--nds-grey-900); }
@@ -163,38 +163,38 @@
 }
 .cvf-tag { font-size: 10.5px; font-weight: 650; border-radius: 4px; padding: 2px 7px; }
 /* The contest no existing surface could show. */
-.cvf-tag.cross { background: #eaf2fd; color: #1a5cb8; border: 1px solid #cfe0f7; }
+.cvf-tag.cross { background: var(--nds-blue-50); color: #1a5cb8; border: 1px solid var(--nds-blue-200); }
 .cvf-tag.top { background: #fdf0e8; color: #94501c; border: 1px solid #f2d5c2; }
 /* No evidence at all — the champion is a coin toss and the card says so. */
-.cvf-tag.blind { background: var(--nds-grey-50); color: #7b8798; border: 1px solid #e3e7ec; }
-.cvf-counts { font-size: 11.5px; color: #8d97a6; }
+.cvf-tag.blind { background: var(--nds-grey-50); color: #7b8798; border: 1px solid var(--nds-grey-150); }
+.cvf-counts { font-size: 11.5px; color: var(--nds-grey-500); }
 .cvf-money { margin-left: auto; font-size: 12px; color: #46536a; font-variant-numeric: tabular-nums; }
 
 .cvf-champ { font-size: 12.5px; color: #46536a; margin: 0; padding: 9px 14px; line-height: 1.55; border-bottom: 1px solid var(--nds-grey-50); }
 .cvf-champ strong { color: var(--nds-grey-900); font-weight: 650; }
-.cvf-pf { color: #8d97a6; }
+.cvf-pf { color: var(--nds-grey-500); }
 
 .cvf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .cvf-table th {
   text-align: right; padding: 7px 12px; font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em; color: #8d97a6;
-  border-bottom: 1px solid #f0f3f6; white-space: nowrap;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500);
+  border-bottom: 1px solid var(--nds-grey-75); white-space: nowrap;
 }
 .cvf-table th.l, .cvf-table td.l { text-align: left; }
-.cvf-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-25); color: #34404f; font-variant-numeric: tabular-nums; }
+.cvf-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-25); color: var(--nds-grey-700); font-variant-numeric: tabular-nums; }
 .cvf-table tbody tr:last-child td { border-bottom: 0; }
 .cvf-table tr.champ td { background: #f5faf7; }
 .cvf-table tr.dormant td { color: #a6b0bd; }
 .cvf-table td.bad { color: #9c2f2a; font-weight: 600; }
 .cvf-table td.tos { color: #94501c; font-weight: 600; }
 .cvf-pfcell { color: #7b8798; }
-.cvf-pfcell em { font-style: normal; color: #b3bcc8; }
+.cvf-pfcell em { font-style: normal; color: var(--nds-grey-400); }
 .cvf-star { color: #1a8a5a; margin-right: 5px; font-size: 11px; }
 
 .cvf-more {
   display: block; width: 100%; text-align: left;
-  font-size: 11.5px; color: #7b8798; background: #fbfcfd;
-  border: 0; border-top: 1px solid #f0f3f6; padding: 7px 14px; cursor: pointer;
+  font-size: 11.5px; color: #7b8798; background: var(--nds-white);
+  border: 0; border-top: 1px solid var(--nds-grey-75); padding: 7px 14px; cursor: pointer;
 }
 .cvf-more:hover { background: var(--nds-grey-50); color: #46536a; }
 

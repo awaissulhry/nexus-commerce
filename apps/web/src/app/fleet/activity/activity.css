@@ -51,7 +51,7 @@
    text. That file is frozen shared ground another session owns, so the fix
    lives here, under a root only this page carries. */
 .sba-page .acr-sub {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 .sba-head {
@@ -60,7 +60,7 @@
   gap: 6px;
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid #e4e9ef;
+  border-top: 1px solid var(--nds-grey-150);
   /* + the 12px gap on .sba = the 16px step down to the failure band. */
   margin-bottom: 4px;
 }
@@ -105,7 +105,7 @@
   flex-shrink: 0;
   height: 30px;
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 7px;
   overflow: hidden;
 }
@@ -140,7 +140,7 @@
   font-size: 0;
 }
 .sba-freshage {
-  color: #5b6878;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 /* Only while live, where the number ticks every second: reserve the width so
@@ -167,7 +167,7 @@
   animation: acr-spin 0.9s linear infinite;
 }
 .sba-fresh.s-reading .sba-freshword {
-  color: #5b6878;
+  color: var(--nds-grey-600);
 }
 .sba-fresh.s-stale {
   border-color: #ecd9ae;
@@ -187,7 +187,7 @@
 }
 .sba-fresh.s-error .sba-freshdot {
   border-radius: 2px;
-  background: #c0392f;
+  background: var(--nds-red-700);
 }
 .sba-fresh.s-error .sba-freshword {
   color: #9c2f2a;
@@ -203,7 +203,7 @@
   color: #4a5867;
   background: transparent;
   border: 0;
-  border-left: 1px solid #e8edf3;
+  border-left: 1px solid var(--nds-grey-150);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -302,7 +302,7 @@
   gap: 6px;
   max-width: 100%;
   font-size: 13px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   background: var(--nds-white);
   border: 1px solid #d7e0ee;
   border-radius: 999px;
@@ -311,7 +311,7 @@
 }
 .sba-pill:hover {
   border-color: #9db6e4;
-  background: #f4f7fd;
+  background: var(--nds-grey-75);
 }
 .sba-pill:focus-visible {
   outline: 2px solid var(--nds-blue-600);
@@ -410,7 +410,7 @@
 .sba-cellwhy {
   display: block;
   font-size: 12px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
   margin-top: 2px;
   overflow-wrap: anywhere;
 }
@@ -433,7 +433,7 @@
   font-size: 12px;
   font-weight: 600;
   color: #1d4ed8;
-  background: #eff4ff;
+  background: var(--nds-blue-50);
   border: 1px solid #c5d6fb;
   border-radius: 6px;
   padding: 6px 11px;
@@ -468,12 +468,12 @@
   padding: 9px 16px;
   /* Opaque on purpose: a translucent day header let card titles bleed through
      it while scrolling — a defect already fixed once on the Overview. */
-  background: #f6f8fa;
-  border-top: 1px solid #e7ecf2;
-  border-bottom: 1px solid #e7ecf2;
+  background: var(--nds-grey-25);
+  border-top: 1px solid var(--nds-grey-150);
+  border-bottom: 1px solid var(--nds-grey-150);
   font-size: 12px;
   font-weight: 600;
-  color: #34404f;
+  color: var(--nds-grey-700);
 }
 .sba-day:first-child .sba-dayhead {
   border-top: none;
@@ -483,7 +483,7 @@
   /* Was 11.5px at 2.43:1. S1 set a 20/13/12 ladder; S4 is where the two sizes
      below it had been hiding, which is why they kept reappearing in S2 and S3. */
   font-size: 12px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
 }
 
@@ -502,13 +502,13 @@
   gap: 10px;
   align-items: start;
   padding: 10px 16px;
-  border-bottom: 1px solid #f0f3f7;
+  border-bottom: 1px solid var(--nds-grey-75);
 }
 .sba-row:last-child {
   border-bottom: none;
 }
 .sba-row:hover {
-  background: #fcfdfe;
+  background: var(--nds-white);
 }
 
 .sba-marker {
@@ -561,7 +561,7 @@
   /* Was 11.5px at 2.95:1 — on EVERY row, so the most-repeated text on the page
      was the least legible on it. */
   font-size: 12px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
 }
 /* Was a `·` GLYPH at #c6cdd6 — 1.60:1, roughly watermark contrast. Darkening a
    separator until it passes as text defeats what a separator is for, so it
@@ -613,7 +613,7 @@
   color: #4a5867;
 }
 .sba-vintage {
-  color: #5b6878;
+  color: var(--nds-grey-600);
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 
@@ -623,7 +623,7 @@
 .sba-detail {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
   line-height: 1.5;
   max-width: 90ch;
   /* A verbatim provider error is one long unbroken token; without this it
@@ -638,7 +638,7 @@
    primary scan target rather than metadata. Was 11.5px at 2.58:1. */
 .sba-time {
   font-size: 13px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   margin-top: 2px;
@@ -697,7 +697,7 @@
   color: #6b4fa8;
 }
 .sba-badge.flow {
-  background: #eaf3fb;
+  background: var(--nds-blue-50);
   color: #2c5f8f;
 }
 
@@ -709,22 +709,22 @@
   justify-content: space-between;
   gap: 12px;
   padding: 11px 16px;
-  border-top: 1px solid #e7ecf2;
-  background: #fcfdfe;
+  border-top: 1px solid var(--nds-grey-150);
+  background: var(--nds-white);
   font-size: 12px;
 }
 .sba-more {
   font-size: 12px;
   font-weight: 600;
-  color: #34404f;
+  color: var(--nds-grey-700);
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
   padding: 5px 11px;
   cursor: pointer;
 }
 .sba-more:hover:not(:disabled) {
-  background: #f6f8fa;
+  background: var(--nds-grey-25);
 }
 .sba-more:disabled {
   opacity: 0.6;
@@ -740,7 +740,7 @@
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 .sba-notshown ul {
   margin: 0;
@@ -755,7 +755,7 @@
    the contrast floor does not move with the size. */
 .sba-notshown li {
   font-size: 13px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
   line-height: 1.55;
   max-width: 92ch;
 }
@@ -842,7 +842,7 @@
 
 .sba-dsec {
   padding: 12px 0;
-  border-bottom: 1px solid #f0f3f7;
+  border-bottom: 1px solid var(--nds-grey-75);
 }
 .sba-dsec:last-child {
   border-bottom: none;
@@ -851,19 +851,19 @@
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #55616f;
+  color: var(--nds-grey-600);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 .sba-dsec p {
   margin: 0 0 4px;
   font-size: 13px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   line-height: 1.55;
 }
 .sba-dmeta {
   font-size: 12px !important;
-  color: #5b6878 !important;
+  color: var(--nds-grey-600) !important;
 }
 .sba-dwarn {
   color: #8a6320 !important;
@@ -894,7 +894,7 @@
 .sba-stepmeta {
   display: block;
   font-size: 12px;
-  color: #5b6878;
+  color: var(--nds-grey-600);
   font-variant-numeric: tabular-nums;
   margin-top: 1px;
 }
@@ -918,12 +918,12 @@
 .sba-raw {
   margin: 5px 0 0;
   padding: 9px 10px;
-  background: #f6f8fa;
-  border: 1px solid #e7ecf2;
+  background: var(--nds-grey-25);
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
   font-size: 11px;
   line-height: 1.5;
-  color: #34404f;
+  color: var(--nds-grey-700);
   max-height: 260px;
   overflow: auto;
   white-space: pre-wrap;
@@ -932,7 +932,7 @@
 
 .sba-finding {
   padding: 7px 0;
-  border-top: 1px solid #f0f3f7;
+  border-top: 1px solid var(--nds-grey-75);
 }
 .sba-finding:first-of-type {
   border-top: none;
@@ -977,11 +977,11 @@
   gap: 12px;
   padding: 4px 0;
   font-size: 13px;
-  color: #34404f;
+  color: var(--nds-grey-700);
   font-variant-numeric: tabular-nums;
 }
 .sba-costlist li span:first-child {
-  color: #55616f;
+  color: var(--nds-grey-600);
 }
 
 .sba-copy {
@@ -992,13 +992,13 @@
   font-weight: 600;
   color: #4a5867;
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 6px;
   padding: 5px 10px;
   cursor: pointer;
 }
 .sba-copy:hover {
-  background: #f2f5f9;
+  background: var(--nds-grey-75);
 }
 
 /* The row affordance that opens the drawer. A button, not an anchor — it
@@ -1038,7 +1038,7 @@
   flex-direction: column;
   gap: 8px;
   background: var(--nds-white);
-  border: 1px solid #dfe5ec;
+  border: 1px solid var(--nds-grey-150);
   border-radius: 8px;
   padding: 12px 14px;
 }
@@ -1087,7 +1087,7 @@
 }
 .sba-needs.s-checking .sba-needsicon,
 .sba-needs.s-out-of-scope .sba-needsicon {
-  color: #5b6878;
+  color: var(--nds-grey-600);
 }
 /* Neither "checking" nor "cannot say" is good news, so neither gets the ink of
    a headline that is. The previous build rendered a GREEN TICK for both. */
@@ -1101,7 +1101,7 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #5b6878;
+  color: var(--nds-grey-600);
 }
 
 .sba-needsrows {
@@ -1168,7 +1168,7 @@
   cursor: pointer;
 }
 .sba-needsbtn:hover {
-  background: #f4f7fd;
+  background: var(--nds-grey-75);
   border-color: #9db6e4;
 }
 .sba-needsbtn:focus-visible {
@@ -1214,7 +1214,7 @@
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: #34404f;
+  color: var(--nds-grey-700);
   cursor: pointer;
 }
 .sba-howtoggle {
@@ -1224,7 +1224,7 @@
 }
 .sba-howbody {
   padding: 0 16px 14px;
-  border-top: 1px solid #f0f3f7;
+  border-top: 1px solid var(--nds-grey-75);
 }
 .sba-howbody p {
   margin: 10px 0 0;
@@ -1249,7 +1249,7 @@
 .sba-scopelabel {
   font-size: 13px;
   font-weight: 600;
-  color: #34404f;
+  color: var(--nds-grey-700);
 }
 .sba-scopeopt {
   display: inline-flex;
@@ -1288,7 +1288,7 @@
    is not ours to unfreeze, and the value is only wrong on this surface.
    Whoever wants the central fix has the measurement here. */
 .sba-page .acr-pg-muted {
-  color: #5b6878;
+  color: var(--nds-grey-600);
 }
 
 

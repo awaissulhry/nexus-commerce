@@ -33,12 +33,12 @@
   /* Fully opaque: a translucent sticky header let card titles bleed
      through it as it passed over them. */
   background: var(--nds-white);
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--nds-grey-100);
   font-size: 11.5px; font-weight: 700; color: #46525f;
   letter-spacing: 0.02em; text-transform: uppercase;
 }
 .dt-dayhead .dt-daycount {
-  font-weight: 550; text-transform: none; letter-spacing: 0; color: #8d97a6;
+  font-weight: 550; text-transform: none; letter-spacing: 0; color: var(--nds-grey-500);
 }
 
 /* ── one row ────────────────────────────────────────────────────────── */
@@ -52,13 +52,13 @@
   border-radius: 7px;
   position: relative;
 }
-.dt-row + .dt-row { border-top: 1px solid #f0f3f7; }
-.dt-row:hover { background: #f8fafc; }
+.dt-row + .dt-row { border-top: 1px solid var(--nds-grey-75); }
+.dt-row:hover { background: var(--nds-grey-25); }
 
 /* The rail that makes it read as a timeline rather than a list. */
 .dt-row::before {
   content: ''; position: absolute; left: 14px; top: 0; bottom: 0;
-  width: 1px; background: #e8edf3;
+  width: 1px; background: var(--nds-grey-150);
 }
 .dt-row:first-child::before { top: 14px; }
 .dt-row:last-child::before { bottom: calc(100% - 14px); }
@@ -67,7 +67,7 @@
   position: relative; z-index: 1;
   width: 21px; height: 21px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--nds-white); border: 1px solid #dfe5ec; color: #5a6675;
+  background: var(--nds-white); border: 1px solid var(--nds-grey-150); color: var(--nds-grey-600);
   flex-shrink: 0;
 }
 /* Colour is the SECOND signal; the icon inside each marker differs per
@@ -75,7 +75,7 @@
 .dt-marker.o-ok { border-color: #c3e5d3; background: #f1faf5; color: #14724d; }
 .dt-marker.o-bad { border-color: #e6bcba; background: #fdf2f2; color: #9c2f2a; }
 .dt-marker.o-attention { border-color: #ecd9ae; background: #fff8ec; color: #8a6320; }
-.dt-marker.o-neutral { border-color: #dfe5ec; background: #f7f9fc; color: #5a6675; }
+.dt-marker.o-neutral { border-color: var(--nds-grey-150); background: var(--nds-grey-25); color: var(--nds-grey-600); }
 
 .dt-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 
@@ -87,20 +87,20 @@
 
 .dt-meta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  font-size: 11px; color: #8d97a6;
+  font-size: 11px; color: var(--nds-grey-500);
 }
 .dt-meta .dt-sep { color: #ccd4de; }
 
 .dt-detail {
   font-size: 11.5px; color: #616d7c; line-height: 1.5;
   margin: 3px 0 0; padding: 6px 9px;
-  background: #f7f9fc; border-left: 2px solid #dfe5ec; border-radius: 0 5px 5px 0;
+  background: var(--nds-grey-25); border-left: 2px solid var(--nds-grey-150); border-radius: 0 5px 5px 0;
   overflow-wrap: anywhere;
 }
 .dt-detail.bad { background: #fdf5f4; border-left-color: #e6bcba; color: #7d3f3b; }
 
 .dt-time {
-  font-size: 11px; color: #9aa4b2; white-space: nowrap;
+  font-size: 11px; color: var(--nds-grey-450); white-space: nowrap;
   font-variant-numeric: tabular-nums; padding-top: 3px;
 }
 
@@ -109,7 +109,7 @@
   display: inline-flex; align-items: center; gap: 3px;
   padding: 1px 6px; border-radius: 999px;
   font-size: 10px; font-weight: 650; letter-spacing: 0.02em;
-  border: 1px solid #dfe5ec; background: var(--nds-grey-75); color: #5a6675;
+  border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600);
 }
 .dt-state.o-ok { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
 .dt-state.o-bad { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
@@ -120,7 +120,7 @@
   padding: 1px 6px; border-radius: 4px;
   font-size: 10px; font-weight: 650; text-transform: uppercase;
   letter-spacing: 0.03em;
-  border: 1px solid #dfe5ec; background: var(--nds-white); color: #5a6675;
+  border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-600);
 }
 .dt-risk.r-high { border-color: #e6bcba; background: #fdf2f2; color: #9c2f2a; }
 .dt-risk.r-medium { border-color: #ecd9ae; background: #fff8ec; color: #8a6320; }
@@ -137,7 +137,7 @@
 .dt-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 19px; height: 17px; padding: 0 5px;
-  border-radius: 999px; background: #eef2f7; border: 1px solid #dde4ec;
+  border-radius: 999px; background: var(--nds-grey-100); border: 1px solid #dde4ec;
   font-size: 10px; font-weight: 700; color: #46525f;
   font-variant-numeric: tabular-nums;
 }
@@ -145,7 +145,7 @@
 /* ── episodes ───────────────────────────────────────────────────────── */
 
 .dt-episode {
-  border: 1px solid #e5eaf1; border-radius: 9px; background: var(--nds-white);
+  border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white);
   margin: 4px 0; overflow: hidden;
   box-shadow: 0 1px 2px rgb(20 28 38 / 0.03);
 }
@@ -158,19 +158,19 @@
   background: none; border: 0; cursor: pointer; text-align: left;
   font: inherit;
 }
-.dt-ephead:hover { background: #f8fafc; }
+.dt-ephead:hover { background: var(--nds-grey-25); }
 .dt-ephead:focus-visible { outline: 2px solid #7fb0ea; outline-offset: -2px; }
 
 .dt-eptitle { font-size: 12.5px; font-weight: 600; color: #232c37; line-height: 1.4; }
 .dt-epsub {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  font-size: 11px; color: #8d97a6; margin-top: 2px;
+  font-size: 11px; color: var(--nds-grey-500); margin-top: 2px;
 }
 .dt-epright { display: flex; align-items: center; gap: 7px; }
 
 .dt-epbody {
   padding: 2px 11px 10px 8px;
-  border-top: 1px solid #f0f3f7; background: #fcfdfe;
+  border-top: 1px solid var(--nds-grey-75); background: var(--nds-white);
 }
 
 /* The plan story keeps its own styling; it just gets breathing room. */
@@ -186,7 +186,7 @@
 .dt-showing { font-size: 11.5px; color: #7b8798; }
 
 .dt-skeleton {
-  background: linear-gradient(90deg, #f2f5f9 25%, #e9eef4 37%, #f2f5f9 63%);
+  background: linear-gradient(90deg, var(--nds-grey-75) 25%, var(--nds-grey-100) 37%, var(--nds-grey-75) 63%);
   background-size: 400% 100%;
   animation: dt-shimmer 1.4s ease infinite;
   border-radius: 7px;
@@ -203,7 +203,7 @@
 
 .ap-tabs {
   display: flex; gap: 4px; margin: 0 0 12px;
-  border-bottom: 1px solid #e8edf3; padding-bottom: 0;
+  border-bottom: 1px solid var(--nds-grey-150); padding-bottom: 0;
 }
 .ap-tabs button {
   display: inline-flex; align-items: center; gap: 6px;
@@ -217,27 +217,27 @@
 .ap-tabcount {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 19px; height: 17px; padding: 0 5px; border-radius: 999px;
-  background: #eef2f7; border: 1px solid #dde4ec;
+  background: var(--nds-grey-100); border: 1px solid #dde4ec;
   font-size: 10px; font-weight: 700; color: #46525f;
   font-variant-numeric: tabular-nums;
 }
-.ap-tabs button.on .ap-tabcount { background: #e7f0fa; border-color: #c4dbf3; color: #1d4f8b; }
+.ap-tabs button.on .ap-tabcount { background: var(--nds-blue-100); border-color: #c4dbf3; color: #1d4f8b; }
 
 /* ── the card, shaped by consequence ───────────────────────────────── */
 
-.ap-card { border-left: 3px solid #dfe5ec; }
+.ap-card { border-left: 3px solid var(--nds-grey-150); }
 .ap-card.r-medium { border-left-color: #ecd9ae; }
 .ap-card.r-high { border-left-color: #e6bcba; }
 /* Heavy cards sit on a faintly warmer ground so a page of them reads as
    different work from a page of routine ones — never colour alone: they
    also carry the ShieldAlert line and open expanded. */
-.ap-card.heavy { background: #fffdf9; }
+.ap-card.heavy { background: var(--nds-white); }
 
 .ap-chips { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; }
 .ap-undo {
   display: inline-flex; align-items: center; padding: 1px 6px;
   border-radius: 4px; font-size: 10px; font-weight: 650;
-  border: 1px solid #dfe5ec; background: var(--nds-white); color: #5a6675;
+  border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-600);
   white-space: nowrap;
 }
 .ap-undo.u-yes { border-color: #c3e5d3; background: #f4fbf7; color: #14724d; }
@@ -263,7 +263,7 @@
   position: sticky; top: 0; z-index: 3;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   padding: 9px 11px; margin: 0 0 10px;
-  background: #eef4fb; border: 1px solid #c4dbf3; border-radius: 8px;
+  background: var(--nds-blue-50); border: 1px solid #c4dbf3; border-radius: 8px;
   box-shadow: 0 1px 3px rgb(20 28 38 / 0.06);
 }
 .ap-bulkcount { font-size: 12.5px; font-weight: 650; color: #1d4f8b; }
@@ -299,8 +299,8 @@
 .ap-record {
   display: flex; align-items: flex-start; gap: 6px;
   margin: 6px 0 2px; padding: 6px 9px;
-  background: #f7f9fc; border-left: 2px solid #dfe5ec; border-radius: 0 5px 5px 0;
-  font-size: 11.5px; color: #5a6675; line-height: 1.5;
+  background: var(--nds-grey-25); border-left: 2px solid var(--nds-grey-150); border-radius: 0 5px 5px 0;
+  font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.5;
 }
 .ap-record svg { flex-shrink: 0; margin-top: 2px; }
 /* When you have said no more often than yes, the record earns more weight —
@@ -312,7 +312,7 @@
 .ap-ack {
   display: flex; align-items: flex-start; gap: 8px;
   margin: 10px 0 2px; padding: 9px 11px;
-  background: #fffdf9; border: 1px solid #ecd9ae; border-radius: 7px;
+  background: var(--nds-white); border: 1px solid #ecd9ae; border-radius: 7px;
   font-size: 12px; color: #6b5522; line-height: 1.5; cursor: pointer;
 }
 .ap-ack input { width: 15px; height: 15px; margin-top: 1px; cursor: pointer; accent-color: #8a6320; }
@@ -331,7 +331,7 @@
 
 /* ── AP.7: the precedent a decision created ────────────────────────── */
 
-.ap-precedents { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f0f3f7; }
+.ap-precedents { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--nds-grey-75); }
 .ap-precedents .acr-fl-checkstoggle { display: inline-flex; align-items: center; gap: 6px; }
 
 .ap-precedentlist {
@@ -340,13 +340,13 @@
 }
 .ap-precedentlist li {
   display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: start;
-  padding: 7px 8px; background: #fbfcfe; border: 1px solid #eef2f7; border-radius: 6px;
+  padding: 7px 8px; background: var(--nds-grey-25); border: 1px solid var(--nds-grey-100); border-radius: 6px;
 }
 .ap-plabel {
   display: inline-flex; align-items: center; padding: 1px 7px;
   border-radius: 999px; font-size: 10px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.03em;
-  border: 1px solid #dfe5ec; background: var(--nds-grey-75); color: #5a6675; white-space: nowrap;
+  border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600); white-space: nowrap;
 }
 .ap-plabel.l-accepted { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
 .ap-plabel.l-rejected { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
@@ -362,16 +362,16 @@
 .ap-decided {
   display: grid; grid-template-columns: minmax(120px, auto) 1fr;
   gap: 10px; align-items: start;
-  padding: 9px 6px; border-bottom: 1px solid #f0f3f7;
+  padding: 9px 6px; border-bottom: 1px solid var(--nds-grey-75);
 }
 .ap-decided:last-child { border-bottom: 0; }
-.ap-decided:hover { background: #f8fafc; }
+.ap-decided:hover { background: var(--nds-grey-25); }
 
 .ap-outcome {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 7px; border-radius: 999px;
   font-size: 10.5px; font-weight: 650; white-space: nowrap;
-  border: 1px solid #dfe5ec; background: var(--nds-grey-75); color: #5a6675;
+  border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600);
 }
 .ap-outcome.o-ok { background: #f1faf5; border-color: #c3e5d3; color: #14724d; }
 .ap-outcome.o-bad { background: #fdf2f2; border-color: #e6bcba; color: #9c2f2a; }
@@ -380,23 +380,23 @@
 .ap-decidedwhat { font-size: 12.5px; color: #232c37; line-height: 1.45; overflow-wrap: anywhere; }
 .ap-decidedmeta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px;
-  font-size: 11px; color: #8d97a6;
+  font-size: 11px; color: var(--nds-grey-500);
 }
 .ap-reason {
   font-size: 11.5px; color: #616d7c; font-style: italic;
-  margin-top: 2px; padding-left: 8px; border-left: 2px solid #e2e8f0;
+  margin-top: 2px; padding-left: 8px; border-left: 2px solid var(--nds-grey-150);
   overflow-wrap: anywhere;
 }
 .ap-prefleet {
   display: inline-flex; align-items: center; padding: 1px 6px;
   border-radius: 4px; font-size: 10px; font-weight: 650;
-  border: 1px dashed #ccd4de; background: #fafbfd; color: #77828f;
+  border: 1px dashed #ccd4de; background: var(--nds-grey-25); color: #77828f;
   white-space: nowrap;
 }
 
 .ap-foot {
   display: flex; align-items: flex-start; gap: 5px;
-  margin-top: 10px; padding-top: 8px; border-top: 1px solid #f0f3f7;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--nds-grey-75);
   line-height: 1.5;
 }
 .ap-foot svg { flex-shrink: 0; margin-top: 2px; }
@@ -405,7 +405,7 @@
   display: flex; flex-wrap: wrap; gap: 6px 14px;
   padding: 8px 0 4px; margin: 0 0 2px;
   font-size: 11px; color: #7b8798;
-  border-bottom: 1px solid #f0f3f7;
+  border-bottom: 1px solid var(--nds-grey-75);
 }
 .dt-legenditem { display: inline-flex; align-items: center; gap: 5px; }
 .dt-legenditem .dt-marker { width: 17px; height: 17px; }

@@ -18,7 +18,7 @@
 .aiad-status.warn { color: #9a6b00; }
 .aiad-status.warn::before { background: #e8a800; }
 .aiad-status.muted { color: var(--nds-text-3); }
-.aiad-status.muted::before { background: #c3cbd6; }
+.aiad-status.muted::before { background: var(--nds-grey-300); }
 .aiad-status-wrap { display: inline-flex; align-items: center; gap: 10px; }
 .aiad-launch.h10-am-btn { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
 
@@ -30,7 +30,7 @@
 
 /* Budget-utilization bar */
 .aiad-util { display: inline-flex; align-items: center; gap: 8px; min-width: 110px; }
-.aiad-util .bar { flex: 1; min-width: 56px; height: 6px; border-radius: 4px; background: #edf1f6; overflow: hidden; }
+.aiad-util .bar { flex: 1; min-width: 56px; height: 6px; border-radius: 4px; background: var(--nds-grey-100); overflow: hidden; }
 .aiad-util .bar i { display: block; height: 100%; border-radius: 4px; background: var(--nds-primary); }
 .aiad-util.hot .bar i { background: #e8a800; }
 .aiad-util .pct { font-size: 12px; color: var(--nds-text-2); min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -43,7 +43,7 @@
 .aiad-dw-facts .k { font-size: 11px; color: var(--nds-text-3); }
 .aiad-dw-facts .v { font-size: 13px; font-weight: 600; color: var(--nds-text); }
 
-.aiad-auto { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--nds-border); border-radius: 10px; background: #f8fafc; }
+.aiad-auto { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--nds-border); border-radius: 10px; background: var(--nds-grey-25); }
 .aiad-auto .t { flex: 1; min-width: 0; }
 .aiad-auto .t b { display: block; font-size: 13px; color: var(--nds-text); }
 .aiad-auto .t span { display: block; font-size: 11.5px; color: var(--nds-text-2); margin-top: 1px; }
@@ -66,7 +66,7 @@
 .aiad-feed-row .what .rsn { font-size: 12px; color: var(--nds-text); line-height: 1.4; overflow-wrap: anywhere; }
 .aiad-feed-empty { padding: 16px 12px; font-size: 12.5px; color: var(--nds-text-3); text-align: center; }
 .aiad-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--nds-text-3); }
-.aiad-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #c3cbd6; }
+.aiad-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--nds-grey-300); }
 .aiad-live.on { color: var(--nds-green-700); }
 .aiad-live.on::before { background: var(--nds-green-700); }
 

@@ -17,11 +17,11 @@
 .h10-scb-tgt-mtag { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; padding: 1px 5px; border-radius: 4px; vertical-align: middle; }
 .h10-scb-tgt-mtag.broad { background: #e7f7ec; color: var(--nds-green-600); }
 .h10-scb-tgt-mtag.phrase { background: #fff3e0; color: #b76b00; }
-.h10-scb-tgt-mtag.exact { background: #e7f0ff; color: var(--nds-blue-600); }
+.h10-scb-tgt-mtag.exact { background: var(--nds-blue-100); color: var(--nds-blue-600); }
 
 /* per-keyword bid cell in the basket */
 .h10-scb-tgt-bid { display: inline-flex; align-items: center; border: 1px solid var(--nds-grey-200); border-radius: 7px; overflow: hidden; height: 30px; width: 92px; flex-shrink: 0; }
-.h10-scb-tgt-bid .pf { padding: 0 7px; color: var(--nds-grey-500); font-size: 12px; background: #f4f6f8; align-self: stretch; display: inline-flex; align-items: center; }
+.h10-scb-tgt-bid .pf { padding: 0 7px; color: var(--nds-grey-500); font-size: 12px; background: var(--nds-grey-50); align-self: stretch; display: inline-flex; align-items: center; }
 .h10-scb-tgt-bid input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; padding: 0 7px; color: var(--nds-grey-900); }
 
 /* Enter New Keywords textarea + Add / My List empty */
