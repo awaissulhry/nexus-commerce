@@ -21,7 +21,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Button } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Modal, DataGrid } from '@/design-system/components'
 import { useRouter } from 'next/navigation'
 import { X, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -436,22 +436,19 @@ function ScaffoldPreview({ scaffold, loading, hasProducts }: { scaffold: Scaffol
       {scaffold.warnings.map((w) => (
         <div className="aig2-warn" key={w}><AlertTriangle size={15} style={{ flex: 'none', marginTop: 1 }} /><span>{w}</span></div>
       ))}
-      <div className="aig2-pwrap">
-        <table className="aig2-ptable">
-          <thead><tr><th>Campaign</th><th>Role</th><th>Daily Budget</th><th>Targeting</th><th>Negatives</th></tr></thead>
-          <tbody>
-            {scaffold.campaigns.map((c) => (
-              <tr key={c.name}>
-                <td className="nm" title={c.name}>{c.name}</td>
-                <td><Tag tone={ROLE_TONE[c.role] ?? 'neutral'}>{ROLE_LABEL[c.role] ?? c.role}</Tag></td>
-                <td className="num">{eurC(c.budgetCents)}</td>
-                <td>{targeting(c)}</td>
-                <td className="num">{c.negativeKeywords.length + c.negativeAsins.length || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<typeof scaffold.campaigns[number]>
+        className="aig2-ptable"
+        size="sm"
+        rows={scaffold.campaigns}
+        rowKey={(c) => c.name}
+        columns={[
+          { key: 'nm', label: 'Campaign', sortable: true, sortValue: (c) => c.name, render: (c) => <span className="nm" title={c.name}>{c.name}</span> },
+          { key: 'role', label: 'Role', sortable: true, sortValue: (c) => c.role, render: (c) => <Tag tone={ROLE_TONE[c.role] ?? 'neutral'}>{ROLE_LABEL[c.role] ?? c.role}</Tag> },
+          { key: 'bud', label: 'Daily Budget', align: 'right', sortable: true, sortValue: (c) => c.budgetCents, render: (c) => eurC(c.budgetCents) },
+          { key: 'tgt', label: 'Targeting', render: (c) => targeting(c) },
+          { key: 'neg', label: 'Negatives', align: 'right', sortable: true, sortValue: (c) => c.negativeKeywords.length + c.negativeAsins.length, render: (c) => c.negativeKeywords.length + c.negativeAsins.length || '—' },
+        ]}
+      />
       <div className="aig2-rules">
         + {scaffold.rules.length} automation rule{scaffold.rules.length === 1 ? '' : 's'} (harvest &amp; negate, propose-first) and one Autopilot plan the 15-minute conductor drives. Every optimization lands on the Suggestions page for your approval.
       </div>
@@ -543,7 +540,13 @@ function AddSeedKeywords({ suggest, loading, hasProducts, seeds, setSeeds, tab, 
                           <span className="ev">{k.orders} order{k.orders === 1 ? '' : 's'} · {k.clicks} click{k.clicks === 1 ? '' : 's'} · {eurC(k.salesCents)}</span>
                           {k.suggestedBidCents != null && <span className="bid" title={`Starting bid from ${k.bidBasis === 'token-match' ? 'similar keywords you run' : k.bidBasis === 'account-median' ? 'your account median CPC' : 'the default'}`}>{eurC(k.suggestedBidCents)}</span>}
                           <span className="grow" />
-                          <button type="button" disabled={seeds.includes(k.text.toLowerCase()) || seeds.length >= 10} onClick={() => add(k.text)} aria-label={`Add ${k.text}`}>{seeds.includes(k.text.toLowerCase()) ? <Check size={13} /> : <Plus size={13} />}</button>
+                          <ToolbarButton
+                            size="sm" tooltip={false}
+                            icon={seeds.includes(k.text.toLowerCase()) ? <Check size={13} /> : <Plus size={13} />}
+                            label={`Add ${k.text}`}
+                            disabled={seeds.includes(k.text.toLowerCase()) || seeds.length >= 10}
+                            onClick={() => add(k.text)}
+                          />
                         </li>
                       ))}
                     </ul>
@@ -591,7 +594,7 @@ function AddedPanel({ list, setList, max }: { list: string[]; setList: (v: strin
       <div className="kw-added-h"><span>{list.length}/{max} Added</span><Button variant="link" size="sm" onClick={() => setList([])} disabled={!list.length}><Trash2 size={12} /> Remove All</Button></div>
       <div className="kw-added-col">Keyword</div>
       {list.length === 0 ? <div className="kw-added-empty"><ProductsEmptyArt /></div> : (
-        <ul className="kw-added-list">{list.map((k) => <li key={k}>{k}<button type="button" onClick={() => setList(list.filter((x) => x !== k))} aria-label={`Remove ${k}`}><X size={12} /></button></li>)}</ul>
+        <ul className="kw-added-list">{list.map((k) => <li key={k}>{k}<ToolbarButton size="sm" tooltip={false} icon={<X size={12} />} label={`Remove ${k}`} onClick={() => setList(list.filter((x) => x !== k))} /></li>)}</ul>
       )}
     </div>
   )

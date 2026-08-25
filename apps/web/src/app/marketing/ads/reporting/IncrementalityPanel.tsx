@@ -77,10 +77,10 @@ export function IncrementalityPanel() {
   return (
     <section className="rpt-group">
       <h2 className="rpt-group-hd">
-        <button type="button" className="rpt-iro-t" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Button block variant="quiet" className="rpt-iro-t" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           Incremental return (iROAS)
           <ChevronDown size={15} className={open ? 'open' : ''} aria-hidden />
-        </button>
+        </Button>
         <span className="count rpt-iro-tag"><FlaskConical size={11} aria-hidden /> Modeled, not measured</span>
       </h2>
 

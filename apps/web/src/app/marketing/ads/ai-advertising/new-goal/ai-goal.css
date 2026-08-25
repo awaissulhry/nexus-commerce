@@ -36,13 +36,11 @@
 .aig2-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #344054; background: var(--nds-grey-75); border-radius: var(--nds-radius-full); padding: 4px 11px; }
 .aig2-chip b { color: var(--nds-text); }
 .aig2-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #9a6b00; background: var(--nds-note-warn-bg); border: 1px solid #f1e2b6; border-radius: var(--nds-radius-lg); padding: 8px 11px; }
-.aig2-ptable { width: 100%; border-collapse: collapse; }
-.aig2-ptable th { text-align: left; font-size: 11.5px; font-weight: 700; color: #475467; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-150); padding: 8px 12px; white-space: nowrap; }
-.aig2-ptable td { font-size: 12.5px; color: var(--nds-grey-800); border-bottom: 1px solid var(--nds-grey-100); padding: 8px 12px; }
-.aig2-ptable tr:last-child td { border-bottom: 0; }
-.aig2-ptable .nm { font-weight: 600; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aig2-ptable .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.aig2-pwrap { border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); overflow: hidden; }
+/* The plan preview is the DS `DataGrid` at `sm`; it owns the wrapper, header, cells and
+   alignment. Only the name clamp and the numeral face are this table's own. */
+.aig2-ptable .nm { display: inline-block; vertical-align: bottom; font-weight: 600; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aig2-ptable .nds-grid { font-variant-numeric: tabular-nums; }
+/* `.aig2-pwrap` retired — the DataGrid wrapper draws the box. */
 .aig2-pempty { padding: 18px 14px; font-size: 12.5px; color: var(--nds-text-3); text-align: center; }
 .aig2-rules { font-size: 12.5px; color: var(--nds-text-2); }
 
