@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { AlertTriangle, Search, Pin, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, Select } from '@/design-system/primitives'
@@ -499,8 +500,8 @@ export function GuardrailGrid() {
 
           <span className="acr-gg-bulk-grp">
             <span className="acr-gg-bulk-lbl">Automation</span>
-            <button type="button" className="acr-gg-toggle on" disabled={!!bulkBusy} onClick={() => void applyBulkManaged(true)}>Managed</button>
-            <button type="button" className="acr-gg-toggle" disabled={!!bulkBusy} onClick={() => void applyBulkManaged(false)}>Off-limits</button>
+            <Button variant="success" size="xs" inline disabled={!!bulkBusy} onClick={() => void applyBulkManaged(true)}>Managed</Button>
+            <Button variant="secondary" size="xs" inline disabled={!!bulkBusy} onClick={() => void applyBulkManaged(false)}>Off-limits</Button>
           </span>
 
           <Button variant="tonal" size="sm" className="acr-gg-clear" onClick={() => setSel(new Set())}>Clear</Button>
@@ -510,98 +511,100 @@ export function GuardrailGrid() {
       {!g ? <div className="acr-empty">Loading…</div> : shown.length === 0 ? (
         <div className="acr-empty">No campaigns match these filters.</div>
       ) : (
-        <div className="acr-gg-scroll">
-          <table className="acr-gg-tbl">
-            <thead>
-              <tr>
-                <th className="acr-gg-selh">
-                  <Checkbox
-                    checked={allShownSelected} onChange={toggleAll}
-                    aria-label={allShownSelected ? 'Clear selection' : 'Select every campaign shown'}
-                    // Says what it will actually do: it selects the FILTERED rows, not the
-                    // account. With "Managed only" on, that is 82 of 216.
-                    title={`Select the ${shown.length} campaigns currently shown`}
-                  />
-                </th>
-                <th className="acr-gg-name-h">Campaign</th>
-                <th>Managed</th>
-                <th title="Absolute floor, in euros. Enforced on every write to Amazon.">Min bid</th>
-                <th title="Absolute ceiling, in euros. Placement modifiers stack on top, so an effective CPC can still exceed it.">Max bid</th>
-                <th>Budget/day</th>
-                <th>Target ACoS</th>
-                <th title="A multiple of the target's HISTORICAL CPC — so it caps nothing on a keyword with no history, which is why the absolute Min/Max bid columns exist beside it. Blank = off. Clamped 1–10.">CPC ceiling</th>
-                <th title="Hands off, per dimension. Enforced at the write gate.">Hands off</th>
-                <th>Suppressed</th>
-                <th title="Rules bound to this campaign by dragging one onto it.">Bound rules</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => (
-                <tr key={r.id} className={`${saving === r.id ? 'saving' : ''} ${sel.has(r.id) ? 'sel' : ''}`.trim() || undefined}>
-                  <td className="acr-gg-sel">
-                    <Checkbox
-                      checked={sel.has(r.id)} onChange={() => toggleOne(r.id)}
-                      aria-label={`Select ${r.name}`}
-                    />
-                  </td>
-                  <td className="acr-gg-name">
-                    <span className="n" title={r.name}>{r.name}</span>
-                    <span className="m">
-                      {r.marketplace ?? '—'}
-                      {r.portfolioName ? ` · ${r.portfolioName}` : ''}
-                      {r.status !== 'ENABLED' ? ` · ${r.status.toLowerCase()}` : ''}
-                    </span>
-                  </td>
-                  <td>
+        /* The selection column stays hand-rolled rather than using `selectable`. The DS
+           renders a bare `<input type="checkbox">` labelled "Select row" for every row; this
+           one is the DS `Checkbox` primitive and names the campaign it selects, and a
+           substitution that trades a per-row label for a generic one is not an alignment. */
+        <DataGrid<Row>
+          className="acr-gg-tbl"
+          rows={shown}
+          rowKey={(r) => r.id}
+          rowClassName={(r) => [saving === r.id ? 'saving' : '', sel.has(r.id) ? 'sel' : ''].filter(Boolean).join(' ') || undefined}
+          columns={[
+            {
+              key: 'sel', width: 32, align: 'center',
+              label: (
+                <Checkbox
+                  checked={allShownSelected} onChange={toggleAll}
+                  aria-label={allShownSelected ? 'Clear selection' : 'Select every campaign shown'}
+                  // Says what it will actually do: it selects the FILTERED rows, not the
+                  // account. With "Managed only" on, that is 82 of 216.
+                  title={`Select the ${shown.length} campaigns currently shown`}
+                />
+              ),
+              render: (r) => <Checkbox checked={sel.has(r.id)} onChange={() => toggleOne(r.id)} aria-label={`Select ${r.name}`} />,
+            },
+            {
+              key: 'name', label: 'Campaign', width: 300,
+              render: (r) => (
+                <span className="acr-gg-name">
+                  <span className="n" title={r.name}>{r.name}</span>
+                  <span className="m">
+                    {r.marketplace ?? '—'}
+                    {r.portfolioName ? ` · ${r.portfolioName}` : ''}
+                    {r.status !== 'ENABLED' ? ` · ${r.status.toLowerCase()}` : ''}
+                  </span>
+                </span>
+              ),
+            },
+            {
+              key: 'managed', label: 'Managed',
+              render: (r) => (
+                <Button
+                  variant={r.managed ? 'success' : 'secondary'} size="xs" inline
+                  onClick={() => void toggleManaged(r)}
+                  title={r.managed
+                    ? 'Automation may write to this campaign.'
+                    : 'Default-deny: every automated write to this campaign is refused at the gate.'}
+                >
+                  {r.managed ? 'Managed' : 'No'}
+                </Button>
+              ),
+            },
+            { key: 'min', label: <span title="Absolute floor, in euros. Enforced on every write to Amazon.">Min bid</span>, render: (r) => box(r, 'min') },
+            { key: 'max', label: <span title="Absolute ceiling, in euros. Placement modifiers stack on top, so an effective CPC can still exceed it.">Max bid</span>, render: (r) => box(r, 'max') },
+            { key: 'budget', label: 'Budget/day', render: (r) => <>{eur(r.dailyBudgetCents)}</> },
+            { key: 'acos', label: 'Target ACoS', render: (r) => <>{r.targetAcosPct != null ? `${r.targetAcosPct}%` : '—'}</> },
+            {
+              key: 'cpc',
+              label: <span title="A multiple of the target's HISTORICAL CPC — so it caps nothing on a keyword with no history, which is why the absolute Min/Max bid columns exist beside it. Blank = off. Clamped 1–10.">CPC ceiling</span>,
+              render: (r) => cpcBox(r),
+            },
+            {
+              key: 'pins', label: <span title="Hands off, per dimension. Enforced at the write gate.">Hands off</span>,
+              render: (r) => (
+                <div className="acr-gg-pins">
+                  {DIMS.map((d) => (
                     <button
+                      key={d.key}
                       type="button"
-                      className={`acr-gg-toggle ${r.managed ? 'on' : ''}`}
-                      onClick={() => void toggleManaged(r)}
-                      title={r.managed
-                        ? 'Automation may write to this campaign.'
-                        : 'Default-deny: every automated write to this campaign is refused at the gate.'}
+                      className={`acr-gg-pin ${r.pins[d.key] ? 'on' : ''}`}
+                      onClick={() => void togglePin(r, d)}
+                      title={`${d.hint}${r.pins[d.key] && r.pinnedBy ? `\nPinned by ${r.pinnedBy}` : ''}`}
+                      aria-pressed={r.pins[d.key]}
                     >
-                      {r.managed ? 'Managed' : 'No'}
+                      {r.pins[d.key] && <Pin size={9} />}{d.short}
                     </button>
-                  </td>
-                  <td>{box(r, 'min')}</td>
-                  <td>{box(r, 'max')}</td>
-                  <td className="acr-gg-ro">{eur(r.dailyBudgetCents)}</td>
-                  <td className="acr-gg-ro">{r.targetAcosPct != null ? `${r.targetAcosPct}%` : '—'}</td>
-                  <td>{cpcBox(r)}</td>
-                  <td>
-                    <div className="acr-gg-pins">
-                      {DIMS.map((d) => (
-                        <button
-                          key={d.key}
-                          type="button"
-                          className={`acr-gg-pin ${r.pins[d.key] ? 'on' : ''}`}
-                          onClick={() => void togglePin(r, d)}
-                          title={`${d.hint}${r.pins[d.key] && r.pinnedBy ? `\nPinned by ${r.pinnedBy}` : ''}`}
-                          aria-pressed={r.pins[d.key]}
-                        >
-                          {r.pins[d.key] && <Pin size={9} />}{d.short}
-                        </button>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="acr-gg-ro">
-                    {r.suppressedAt
-                      ? <span className="acr-gg-sup" title={`Suppressed by ${r.suppressedBy ?? 'an engine that predates the owner column'}`}>
-                        {r.suppressedBy?.replace('automation:', '') ?? 'unknown owner'}
-                      </span>
-                      : '—'}
-                  </td>
-                  <td className="acr-gg-ro">
-                    {r.boundRules.length
-                      ? <span className="acr-gg-rules" title={r.boundRules.map((x) => x.name).join('\n')}>{r.boundRules.length}</span>
-                      : <span className="acr-gg-dash">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </div>
+              ),
+            },
+            {
+              key: 'sup', label: 'Suppressed',
+              render: (r) => (r.suppressedAt
+                ? <span className="acr-gg-sup" title={`Suppressed by ${r.suppressedBy ?? 'an engine that predates the owner column'}`}>
+                  {r.suppressedBy?.replace('automation:', '') ?? 'unknown owner'}
+                </span>
+                : <>—</>),
+            },
+            {
+              key: 'bound', label: <span title="Rules bound to this campaign by dragging one onto it.">Bound rules</span>,
+              render: (r) => (r.boundRules.length
+                ? <span className="acr-gg-rules" title={r.boundRules.map((x) => x.name).join('\n')}>{r.boundRules.length}</span>
+                : <span className="acr-gg-dash">—</span>),
+            },
+          ]}
+        />
       )}
 
       {g && (

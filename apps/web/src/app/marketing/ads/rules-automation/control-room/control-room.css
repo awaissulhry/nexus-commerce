@@ -562,26 +562,23 @@
 .acr-gg-count { font-size: 11.5px; color: var(--nds-grey-500); margin-left: auto; }
 
 /* Wide grid scrolls inside its own box; the page body never scrolls sideways. */
-.acr-gg-scroll { overflow-x: auto; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); }
-.acr-gg-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.acr-gg-tbl th {
-  text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--nds-grey-500); font-weight: 600; padding: 9px 11px; white-space: nowrap;
-  background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-150);
-}
-.acr-gg-tbl td { padding: 7px 11px; border-bottom: 1px solid var(--nds-grey-75); vertical-align: middle; color: var(--nds-grey-700); }
-.acr-gg-tbl tr:last-child td { border-bottom: none; }
-.acr-gg-tbl tr:hover td { background: var(--nds-white); }
+/* The grid is the DS `DataGrid`. Its wrapper carries the border, the radius and the scroll, so
+   `.acr-gg-scroll` is gone; the header and cell blocks are gone with it — `.nds-grid thead th`
+   and `tbody td` outrank them and always did. What stays is what the DS does not decide: the row
+   dimming while a write is in flight, and the name cell's two lines. The read-only columns'
+   `.acr-gg-ro` is gone too — it painted #46536a (7.76:1) where the DS paints 15.48:1, and a
+   substitution may only ever raise it. */
+.acr-gg-tbl { font-size: 12.5px; }
 .acr-gg-tbl tr.saving td { opacity: 0.55; }
 
-.acr-gg-name-h { min-width: 220px; }
-.acr-gg-name { max-width: 300px; }
+/* 🔴 max-width in px on a name cell is the trap this console has hit before: the column's width
+   is `Column.width`, and the cap that makes the ellipsis work is 100% OF that. */
+.acr-gg-name { display: block; max-width: 100%; }
 .acr-gg-name .n {
   display: block; font-weight: 600; color: var(--nds-grey-900);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .acr-gg-name .m { display: block; font-size: 11px; color: var(--nds-grey-500); margin-top: 1px; }
-.acr-gg-ro { color: #46536a; white-space: nowrap; }
 .acr-gg-dash { color: #b6bfcb; }
 
 /* DS-ALIGN — the bound boxes are the DS `Input`; the primitive carries the border, the hover
@@ -591,13 +588,10 @@
 .acr-gg-num { width: 72px; }
 .nds-field > .acr-gg-fig { text-align: right; font-variant-numeric: tabular-nums; }
 
-.acr-gg-toggle {
-  font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;
-  border: 1px solid var(--nds-grey-150); background: var(--nds-grey-25); color: #7a869a;
-  border-radius: 5px; padding: 4px 9px;
-}
-.acr-gg-toggle.on { background: #e8f6ef; color: var(--nds-success-text); border-color: #bfe3d2; }
-.acr-gg-toggle:hover { filter: brightness(0.97); }
+/* All three `.acr-gg-toggle` call sites are the DS `Button` now — `success` for the managed
+   state, `secondary` for off-limits. The off state was #7a869a on --nds-grey-25, which measures
+   3.49:1: below the 4.5:1 floor for text, on a control whose whole job is to say which of two
+   states a campaign is in. The DS secondary clears it. */
 
 .acr-gg-pins { display: inline-flex; gap: 4px; }
 .acr-gg-pin {
@@ -700,7 +694,6 @@
   font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--nds-grey-500); white-space: nowrap;
 }
-.acr-gg-bulk .acr-gg-toggle { padding: 5px 10px; }
 .acr-gg-bulk .acr-gg-clear { margin-left: auto; }
 
 /* Set / clear as one control, so "pin" and "unpin" cannot be confused for a toggle
@@ -716,9 +709,10 @@
 .acr-gg-bulk-pin button:disabled { opacity: 0.55; cursor: default; }
 .acr-gg-bulk-pin button:hover:not(:disabled) { filter: brightness(0.97); }
 
-.acr-gg-selh, .acr-gg-sel { width: 32px; padding-right: 0 !important; text-align: center; }
-.acr-gg-tbl tr.sel td { background: var(--nds-grey-50); }
-.acr-gg-tbl tr.sel:hover td { background: var(--nds-blue-50); }
+/* `.nds-grid tbody tr.sel td` paints the selected row, and the grid's own hover sits under it —
+   both from the DS now, on the same `sel` class this grid already set. The selection column's
+   32px and its centring are `Column.width` / `Column.align`. */
+.acr-gg-tbl td:first-child { padding-right: 0; }
 
 /* ── ACR.4.3 · undo, on the row that did the thing ───────────────────────── */
 .acr-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 7px 0 0; font-size: 11.5px; }
