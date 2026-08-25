@@ -4,9 +4,23 @@ import { useRef, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 
+/**
+ * How the date READS. `value` and `onChange` are ISO (`yyyy-mm-dd`) whatever this is set to, so
+ * the stored date cannot change meaning — only its presentation does.
+ *
+ * It exists because the component hard-coded `dd/mm/yyyy` while the ads console renders
+ * `m/d/yyyy`, and "08/09" is two different days in those two formats. A page cannot mix them.
+ */
+export type DateFormat = 'dd/mm/yyyy' | 'mm/dd/yyyy' | 'yyyy-mm-dd'
+
 export interface DateFieldProps {
   /** ISO date 'YYYY-MM-DD', or '' for unset */
+  /** ISO `yyyy-mm-dd`. Unaffected by `format`. */
   value: string
+  /** Display format. Default `dd/mm/yyyy`, which is what this component always did. */
+  format?: DateFormat
+  /** BCP-47 locale for the month/year heading. Default `en-GB`. */
+  locale?: string
   onChange: (value: string) => void
   min?: string
   max?: string
@@ -22,9 +36,17 @@ const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const pad = (n: number) => String(n).padStart(2, '0')
 const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const fromIso = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1) }
-const fmt = (s: string) => { const d = fromIso(s); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` }
+const fmt = (s: string, f: DateFormat = 'dd/mm/yyyy') => {
+  const d = fromIso(s)
+  const dd = pad(d.getDate())
+  const mm = pad(d.getMonth() + 1)
+  const yyyy = d.getFullYear()
+  if (f === 'mm/dd/yyyy') return `${mm}/${dd}/${yyyy}`
+  if (f === 'yyyy-mm-dd') return `${yyyy}-${mm}-${dd}`
+  return `${dd}/${mm}/${yyyy}`
+}
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-const monthLabel = (d: Date) => d.toLocaleString('en-GB', { month: 'long', year: 'numeric' })
+const monthLabel = (d: Date, locale = 'en-GB') => d.toLocaleString(locale, { month: 'long', year: 'numeric' })
 const addMonths = (d: Date, n: number) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth() + n); return x }
 
 function monthGrid(month: Date): Array<Date | null> {
@@ -42,7 +64,7 @@ function monthGrid(month: Date): Array<Date | null> {
  * single month, min/max support, optional clear row. Wave 1 gap-fill
  * (2026-07-04).
  */
-export function DateField({ value, onChange, min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, className, disabled }: DateFieldProps) {
+export function DateField({ value, onChange, format = 'dd/mm/yyyy', locale = 'en-GB', min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, className, disabled }: DateFieldProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useClickAway(ref, () => setOpen(false), open)
@@ -64,14 +86,14 @@ export function DateField({ value, onChange, min, max, placeholder = 'not set', 
   return (
     <div className={`nds-datefield${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <button type="button" className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
-        <span className={value ? undefined : 'ph'}>{value ? fmt(value) : placeholder}</span>
+        <span className={value ? undefined : 'ph'}>{value ? fmt(value, format) : placeholder}</span>
         <Calendar size={14} className="chev" aria-hidden />
       </button>
       {open && (
         <div className="nds-dp-pop single" role="dialog" aria-label={ariaLabel ?? 'Pick a date'}>
           <div className="nds-dp-nav">
             <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label="Previous month"><ChevronLeft size={15} /></button>
-            <div className="nds-dp-mh">{monthLabel(view)}</div>
+            <div className="nds-dp-mh">{monthLabel(view, locale)}</div>
             <button type="button" onClick={() => setView(addMonths(view, 1))} aria-label="Next month"><ChevronRight size={15} /></button>
           </div>
           <div className="nds-dp-month">
