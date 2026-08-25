@@ -335,6 +335,23 @@
 .nds-modal.xl {
   width: 920px;
 }
+/* one step past xl, for modals holding a table (keyword/target pickers). Its padding
+   scales with it — 18px reads thin at this width. */
+.nds-modal.xxl {
+  width: 1040px;
+}
+.nds-modal.xxl .nds-modal-h {
+  padding: 20px 28px 14px;
+}
+.nds-modal.xxl .nds-modal-h .t {
+  font-size: 19px;
+}
+.nds-modal.xxl .nds-modal-b {
+  padding: 18px 28px;
+}
+.nds-modal.xxl .nds-modal-f {
+  padding: 16px 28px;
+}
 .nds-modal-h {
   display: flex;
   align-items: flex-start;
@@ -380,6 +397,11 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
+}
+/* a `<span className="grow" />` splits the footer: secondary left, primary right.
+   11 of the 27 ads-console modals use this shape; without it they all collapse right. */
+.nds-modal-f .grow {
+  flex: 1;
 }
 
 /* ── Drawer (right) ──────────────────────────────────────────────── */

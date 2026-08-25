@@ -7,7 +7,7 @@
  */
 import { useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { X } from 'lucide-react'
+import { Modal } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const TARGETING = [
@@ -39,33 +39,35 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
   }
 
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Create Ad Group">
-        <div className="h10-modal-h"><b>Create Ad Group: Settings</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">Set the name, default bid, and type of targeting</div>
-        <div className="h10-modal-b">
-          <div className="h10-cd-field"><label>Ad Group Name</label>
-            <input type="text" placeholder="Enter ad group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          </div>
-          <div className="h10-cd-field s"><label>Default Bid</label>
-            <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Default bid" /></div>
-          </div>
-          <div className="h10-cd-field"><label>Targeting</label>
-            {TARGETING.map((t) => (
-              <label className={`h10-radio-card ${targeting === t.value ? 'on' : ''}`} key={t.value}>
-                <input type="radio" name="targeting" checked={targeting === t.value} onChange={() => setTargeting(t.value)} />
-                <span className="rc-b"><span className="rc-t">{t.title}</span><span className="rc-d">{t.desc}</span></span>
-              </label>
-            ))}
-          </div>
-          {err && <div className="h10-cd-modalerr">{err}</div>}
-        </div>
-        <div className="h10-modal-f">
-     <Button onClick={onClose}>Cancel</Button>
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title="Create Ad Group: Settings"
+      subtitle="Set the name, default bid, and type of targeting"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-     <Button variant="primary" disabled={!valid || busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create Ad Group'}</Button>
-        </div>
+          <Button variant="primary" disabled={!valid || busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create Ad Group'}</Button>
+        </>
+      }
+    >
+      <div className="h10-cd-field"><label>Ad Group Name</label>
+        <input type="text" placeholder="Enter ad group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </div>
-    </div>
+      <div className="h10-cd-field s"><label>Default Bid</label>
+        <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Default bid" /></div>
+      </div>
+      <div className="h10-cd-field"><label>Targeting</label>
+        {TARGETING.map((t) => (
+          <label className={`h10-radio-card ${targeting === t.value ? 'on' : ''}`} key={t.value}>
+            <input type="radio" name="targeting" checked={targeting === t.value} onChange={() => setTargeting(t.value)} />
+            <span className="rc-b"><span className="rc-t">{t.title}</span><span className="rc-d">{t.desc}</span></span>
+          </label>
+        ))}
+      </div>
+      {err && <div className="h10-cd-modalerr">{err}</div>}
+    </Modal>
   )
 }
