@@ -1268,3 +1268,89 @@
 .nds-dp-nav button:hover { background: var(--nds-surface-hover); }
 .nds-datefield-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
 .nds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--color-primary); cursor: pointer; }
+
+/* ── ported from apps/web components.css on 2026-08-25 ──────────────────────────────
+   ColumnGroupModal / ToolbarButton / Tabs / Card use these; factory had the
+   components' older markup and none of this CSS, so copying the newer .tsx
+   without them would have rendered unstyled with every gate green. ── */
+.nds-card-headmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nds-tab-ic {
+  display: inline-flex;
+  align-items: center;
+}
+.nds-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--nds-surface-sunken);
+  
+  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
+  color: var(--nds-text-2);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.nds-tab.on .nds-tab-count {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.nds-tabs.lg .nds-tab-count {
+  min-width: 0;
+  padding: 1px 7px;
+  box-shadow: none;
+  font-size: 11.5px;
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-tabs.lg .nds-tab.on .nds-tab-count {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.nds-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.nds-cgm-list { display: flex; flex-direction: column; gap: 2px; }
+.nds-cgm-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 4px; border-radius: var(--nds-radius-lg);
+}
+.nds-cgm-row:hover { background: var(--nds-surface-hover); }
+.nds-cgm-grip {
+  flex: none; display: inline-flex; padding: 0;
+  border: none; background: none; color: var(--nds-text-disabled);
+  cursor: grab;
+}
+.nds-cgm-grip:hover { color: var(--nds-text-3); }
+.nds-cgm-grip:active { cursor: grabbing; }
+.nds-cgm-grip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-pill); }
+.nds-cgm-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--nds-text-3); }
+.nds-cgm-dot[data-color='blue'],
+.nds-cgm-dot[data-color='sky'] { background: var(--nds-primary); }
+.nds-cgm-dot[data-color='purple'],
+.nds-cgm-dot[data-color='violet'] { background: var(--nds-targeting-manual); }
+.nds-cgm-dot[data-color='emerald'],
+.nds-cgm-dot[data-color='teal'] { background: var(--nds-success); }
+.nds-cgm-dot[data-color='amber'],
+.nds-cgm-dot[data-color='orange'] { background: var(--nds-warning); }
+.nds-cgm-dot[data-color='cyan'] { background: var(--nds-badge-sd-fg); }
+.nds-cgm-dot[data-color='red'] { background: var(--nds-danger); }
+.nds-cgm-main { flex: 1; min-width: 0; }
+.nds-cgm-label { font-size: 13px; font-weight: 500; color: var(--nds-text-strong); }
+.nds-cgm-label[data-hidden] { color: var(--nds-text-3); }
+.nds-cgm-count { margin-left: 8px; font-size: 11.5px; color: var(--nds-text-muted); }
+.nds-cgm-foot { display: flex; width: 100%; align-items: center; justify-content: space-between; }
+.nds-cgm-foot-actions { display: flex; gap: 8px; }
+.nds-cgm-reset { display: inline-flex; align-items: center; gap: 6px; }
+.nds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }

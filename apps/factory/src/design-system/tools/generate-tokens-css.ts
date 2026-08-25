@@ -5,14 +5,18 @@
  *   npm run tokens:gen      # write tokens.css
  *   npm run tokens:check    # CI: fail if tokens.css is stale (no write)
  *
- * Runs via the root `tsx` (CJS) so paths resolve off __dirname; CWD doesn't matter.
+ * Resolves off import.meta.url (this package is ESM); CWD doesn't matter.
  */
 import { readFileSync, writeFileSync } from 'fs'
+import { fileURLToPath } from 'url'
 import { resolve } from 'path'
 import { cssVars, cssVarsDark } from '../tokens/css-vars'
 import type { CssVar } from '../tokens/css-vars'
 
-const OUT = resolve(__dirname, '../styles/tokens.css')
+// apps/factory is `"type": "module"` (apps/web is not), so __dirname does not exist here —
+// this generator could not run at all until 2026-08-25.
+const HERE = fileURLToPath(new URL('.', import.meta.url))
+const OUT = resolve(HERE, '../styles/tokens.css')
 
 const HEAD = `/**
  * GENERATED — do not edit by hand.

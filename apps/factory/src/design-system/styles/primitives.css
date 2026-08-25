@@ -603,3 +603,48 @@
   font-size: 12px;
   padding: 4px 10px;
 }
+
+/* ── ported from apps/web primitives.css on 2026-08-25 ──────────────────────────────
+   ColumnGroupModal / ToolbarButton / Tabs / Card use these; factory had the
+   components' older markup and none of this CSS, so copying the newer .tsx
+   without them would have rendered unstyled with every gate green. ── */
+.nds-tooltip--end > .tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.nds-tooltip--end > .tip::after {
+  left: auto;
+  
+  right: 10px;
+  transform: none;
+}
+.nds-tbtn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex: none; padding: 0;
+  border: none; background: none; border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-2); font: inherit; cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.nds-tbtn:hover:not(:disabled) { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-tbtn[aria-pressed='true'] { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-tbtn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-tbtn:disabled { pointer-events: none; opacity: .4; }
+.nds-tbtn-badge {
+  position: absolute; top: -2px; right: -2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary); color: var(--nds-white);
+  font-size: 9px; font-weight: 700; line-height: 1;
+  pointer-events: none;
+}
+.nds-tbtn-tip { display: flex; flex-direction: column; gap: 2px; max-width: 200px; }
+.nds-tbtn-tip-head { display: flex; align-items: center; gap: 8px; }
+.nds-tbtn-tip-label { font-size: 12px; font-weight: 600; color: var(--nds-tooltip-light-fg); }
+.nds-tbtn-tip-desc { font-size: 11px; line-height: 1.35; color: var(--nds-tooltip-light-fg-2); }
+.nds-tbtn-kbd { font-size: 9px; }
+.nds-tdivider {
+  width: 1px; height: 16px; flex: none; margin: 0 4px;
+  background: var(--nds-border);
+}
