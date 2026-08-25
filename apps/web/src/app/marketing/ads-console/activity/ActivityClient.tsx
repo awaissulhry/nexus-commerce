@@ -13,6 +13,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Activity, RefreshCw, ExternalLink, Radio } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ToolbarButton } from '@/design-system/primitives'
 import { campaignHref } from '../automation/useCampaignMap'
 import { amazonCampaignHref } from '../_shared/amazonLinks'
 
@@ -146,7 +147,7 @@ export function ActivityClient({ initial }: { initial: Execution[] }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14 }}>
-        <button className="az-iconbtn" onClick={() => void reload()} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
+        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={() => void reload()} />
       </div>
 
       {shown.length === 0 && (
