@@ -36,3 +36,11 @@
 .h10-rep-namerow .spw-field { flex: 1; }
 .spw-field .over { color: var(--nds-danger-text); }
 .spw-cap-field { width: 100%; }
+
+/* ── DS `Tabs` adoption (2026-08-25) ──────────────────────────────────────────
+   The legacy containers had to GO, not just be joined: `.h10-spw-ps-tabs button`
+   and `.h10-spw-tgt-tabs button` are (0,1,1) and beat `.nds-tab` (0,1,0), so a
+   DS tab left inside one kept the old #8a93a1 idle label — 3.10:1, a live AA
+   failure. Dropping the class lets the DS paint it at 5.91:1; all the class was
+   really carrying is this margin. */
+.spw-tabs { margin-bottom: 14px; }

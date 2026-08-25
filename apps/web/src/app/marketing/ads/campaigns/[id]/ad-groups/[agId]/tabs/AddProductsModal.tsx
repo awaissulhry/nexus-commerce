@@ -11,7 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Modal, Tabs } from '@/design-system/components'
 import { X, Search, PlusCircle, Check, Trash2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../../../../campaigns-ds.css'
@@ -131,10 +131,12 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
     >
       <div className="h10-apm">
         <div className="apm-left">
-          <div className="apm-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'on' : ''} onClick={() => setTab('search')}>Search for Products</button>
-            <button type="button" role="tab" aria-selected={tab === 'enter'} className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Products</button>
-          </div>
+          <Tabs
+            className="apm-tabsrow"
+            active={tab}
+            onChange={(id) => setTab(id as 'search' | 'enter')}
+            tabs={[{ id: 'search', label: 'Search for Products' }, { id: 'enter', label: 'Enter Products' }]}
+          />
           {tab === 'search' ? (
             <>
               <div className="apm-srow">

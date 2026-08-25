@@ -27,6 +27,8 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/design-system/primitives/Button'
+import { Tabs } from '@/design-system/components'
+import '@/design-system/styles/components.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { AutomationDock, ruleDropProps, setRuleScope } from '../../_shared/AutomationDock'
@@ -248,16 +250,18 @@ export function FamilyCockpitClient() {
 
       {dropMsg && <div className="fc-banner ok"><Check size={15} /> {dropMsg}</div>}
 
-      <nav className="fc-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t}
-            className={`fc-tab ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
-            {t}
-            {t === 'Keywords' && ck.contests.length > 0 && <em>{ck.contests.length}</em>}
-            {t === 'Automation' && (ck.proposals?.pending ?? 0) > 0 && <em>{ck.proposals?.pending}</em>}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        className="fc-tabs"
+        active={tab}
+        onChange={(id) => setTab(id as Tab)}
+        tabs={TABS.map((t) => ({
+          id: t,
+          label: t,
+          count: t === 'Keywords' && ck.contests.length > 0 ? ck.contests.length
+            : t === 'Automation' && (ck.proposals?.pending ?? 0) > 0 ? ck.proposals?.pending
+            : undefined,
+        }))}
+      />
 
       {/* ══ Overview — the campaigns, with their controls inline ══ */}
       {tab === 'Overview' && (

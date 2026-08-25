@@ -13,7 +13,7 @@
  */
 import { useMemo, useState } from 'react'
 import { Button, Checkbox, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Modal, Tabs } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../../../../campaigns-ds.css'
@@ -104,10 +104,12 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
       </div>
       <div className="h10-apm">
         <div className="apm-left">
-          <div className="apm-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={tab === 'keyword'} className={tab === 'keyword' ? 'on' : ''} onClick={() => { setTab('keyword'); setText('') }}>Keyword Targeting</button>
-            <button type="button" role="tab" aria-selected={tab === 'product'} className={tab === 'product' ? 'on' : ''} onClick={() => { setTab('product'); setText('') }}>Product Targeting</button>
-          </div>
+          <Tabs
+            className="apm-tabsrow"
+            active={tab}
+            onChange={(id) => { setTab(id as 'keyword' | 'product'); setText('') }}
+            tabs={[{ id: 'keyword', label: 'Keyword Targeting' }, { id: 'product', label: 'Product Targeting' }]}
+          />
           {tab === 'keyword' ? (
             <>
               <div className="apm-ctrl">

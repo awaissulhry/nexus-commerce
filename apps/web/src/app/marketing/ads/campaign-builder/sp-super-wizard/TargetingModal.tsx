@@ -10,12 +10,13 @@
  */
 import { useEffect, useState } from 'react'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
-import { Modal } from '@/design-system/components'
+import { Modal, Tabs } from '@/design-system/components'
 import { Button, Input, Radio, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwMatch } from '../../_shared/KeywordTargetingPanel'
 import { AUTO_GROUP_META, type SpwCampaign, type NegKeyword, type NegMatch, type AutoGroup } from './CampaignSetup'
@@ -158,10 +159,12 @@ export function TargetingModal({ campaign, mode, autoNegate, currency = '€', p
         <p className="h10-neg-autonote">{autoNegs.length} negative{autoNegs.length === 1 ? '' : 's'} added automatically by the funnel (badged <b>auto</b> below). Add your own on top — turn the funnel off in Structure to drop the auto ones.</p>
       )}
       {showTabs && (
-        <div className="h10-spw-tgt-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={tab === 'kw'} className={tab === 'kw' ? 'on' : ''} onClick={() => setTab('kw')}>Negative Keywords</button>
-          <button type="button" role="tab" aria-selected={tab === 'prod'} className={tab === 'prod' ? 'on' : ''} onClick={() => setTab('prod')}>Negative Products</button>
-        </div>
+        <Tabs
+          className="spw-tabs"
+          active={tab}
+          onChange={(id) => setTab(id as 'kw' | 'prod')}
+          tabs={[{ id: 'kw', label: 'Negative Keywords' }, { id: 'prod', label: 'Negative Products' }]}
+        />
       )}
       {isAutoTgt && <p className="h10-neg-autonote">Amazon splits Auto targeting into 4 groups — toggle each on/off and bid it separately. Bids are pre-set by intent (Close &amp; Substitutes higher, Loose &amp; Complements lower); adjust as you like.</p>}
       {active === 'prod' ? (

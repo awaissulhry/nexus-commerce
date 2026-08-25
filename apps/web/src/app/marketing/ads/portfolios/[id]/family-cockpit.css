@@ -25,11 +25,8 @@
 .fc-vitals .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--nds-grey-500); }
 .fc-vitals .v { font-size: 14px; font-weight: 650; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
-.fc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--nds-grey-150); margin: 4px 0 14px; }
-.fc-tab { font-size: 13px; font-weight: 550; color: #667485; background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 13px; margin-bottom: -1px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.fc-tab:hover { color: var(--nds-grey-700); }
-.fc-tab.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
-.fc-tab em { font-style: normal; font-size: 10.5px; font-weight: 700; background: var(--nds-blue-50); color: #2a5399; border-radius: var(--nds-radius-lg); padding: 1px 7px; }
+/* the tab bar is the DS `Tabs`; only its page rhythm stays here. */
+.fc-tabs { margin: 4px 0 14px; }
 
 .fc-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 20px 0 9px; flex-wrap: wrap; }
 .fc-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }

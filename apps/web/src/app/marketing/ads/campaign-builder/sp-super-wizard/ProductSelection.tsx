@@ -38,7 +38,7 @@
 import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronRight, ChevronDown, X, Save } from 'lucide-react'
 import { Button, Checkbox, Input, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
-import { Pagination } from '@/design-system/components'
+import { Pagination, Tabs } from '@/design-system/components'
 // A shared component must not depend on its HOST importing these. Eight of the
 // nine call sites happen to, but ai-advertising/new-goal does NOT — so the DS
 // controls below would have rendered unstyled there. Next dedupes CSS imports,
@@ -516,10 +516,12 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
   return (
     <div className="h10-spw-ps">
       <div className="h10-spw-ps-left">
-        <div className="h10-spw-ps-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'on' : ''} onClick={() => setTab('search')}>Search for Products</button>
-          <button type="button" role="tab" aria-selected={tab === 'enter'} className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Products</button>
-        </div>
+        <Tabs
+          className="spw-tabs"
+          active={tab}
+          onChange={(id) => setTab(id as 'search' | 'enter')}
+          tabs={[{ id: 'search', label: 'Search for Products' }, { id: 'enter', label: 'Enter Products' }]}
+        />
 
         {/* The scope is stated, not implied — the operator should never wonder
             why a product they own is absent. */}

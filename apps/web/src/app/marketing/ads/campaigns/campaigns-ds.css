@@ -32,3 +32,9 @@
 .cd-field:last-child { margin-bottom: 0; }
 .cd-field.s { max-width: 220px; }
 .h10-cd-daterow .cd-field { margin-bottom: 0; }
+
+/* ── DS `Tabs` adoption (2026-08-25) ──────────────────────────────────────────
+   Same reason as the builders': `.h10-apm .apm-tabs button` is (0,2,1) and would
+   repaint a DS tab. The class is dropped; its 14px inset — which lines the bar up
+   with the panel below it — is all that is left. */
+.apm-tabsrow { padding: 0 14px; }
