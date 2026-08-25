@@ -594,9 +594,12 @@ export function AdsDataGrid<T>({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [keyboardNav, onRowClick, onRowKey])
+  // WG.2b — scope to THIS grid. `document.querySelector('.h10-am-grid …')` took the first match on
+  // the page, so with two grids mounted the keyboard focus scrolled the wrong one.
+  const rootRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (focusIdx < 0) return
-    document.querySelector('.h10-am-grid tr.kbd-focus')?.scrollIntoView({ block: 'nearest' })
+    rootRef.current?.querySelector('tr.kbd-focus')?.scrollIntoView({ block: 'nearest' })
   }, [focusIdx])
 
   // ── BID.S0 — URL-linkable sort + filters (additive; only for consumers that opted in) ──────────
@@ -874,7 +877,7 @@ export function AdsDataGrid<T>({
       </div>
 
       {/* grid */}
-      <div className={`h10-am-grid${selectable ? '' : ' nosel'}`}>
+      <div ref={rootRef} className={`h10-am-grid${selectable ? '' : ' nosel'}`}>
         <table>
           <thead>
             <tr>

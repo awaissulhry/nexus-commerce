@@ -949,6 +949,10 @@ export function CampaignsGrid() {
   const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; anchor: PopAnchor } | null>(null)
   /** U13 — campaigns whose bid-automation PATCH is in flight. Transient, so the switch may go `disabled`. */
   const [busyAuto, setBusyAuto] = useState<Set<string>>(new Set())
+  // WG.2b — this page hand-rolls its grid, and every DOM interaction below used to reach it with
+  // `document.querySelector('.h10-am-grid')`, which returns the FIRST match on the page and ties
+  // the behaviour to a class name the WorkspaceGrid extraction has to rename.
+  const gridElRef = useRef<HTMLDivElement | null>(null)
   const colHiRef = useRef<string | null>(null) // header hover → column highlight, toggled via direct DOM (no grid re-render)
   // pointer-based column reorder — smooth chip + live drop-indicator driven by
   // direct DOM (NO per-move grid re-renders); the reorder commits once on release.
@@ -1083,8 +1087,8 @@ export function CampaignsGrid() {
   const setColHi = (key: string | null) => {
     if (document.body.classList.contains('col-dragging')) return
     if (colHiRef.current === key) return
-    if (colHiRef.current) document.querySelectorAll(`.h10-am-grid [data-col="${CSS.escape(colHiRef.current)}"]`).forEach((el) => el.classList.remove('colhi'))
-    if (key) document.querySelectorAll(`.h10-am-grid [data-col="${CSS.escape(key)}"]`).forEach((el) => el.classList.add('colhi'))
+    if (colHiRef.current) Array.from(gridElRef.current?.querySelectorAll(`[data-col="${CSS.escape(colHiRef.current)}"]`) ?? []).forEach((el) => el.classList.remove('colhi'))
+    if (key) Array.from(gridElRef.current?.querySelectorAll(`[data-col="${CSS.escape(key)}"]`) ?? []).forEach((el) => el.classList.add('colhi'))
     colHiRef.current = key
   }
   // Pointer-driven LIVE reorder: as the cursor crosses a header, the dragged item
@@ -1128,19 +1132,19 @@ export function CampaignsGrid() {
         setColHi(null) // clear any hover highlight before the drag takes over
         document.body.style.userSelect = 'none'
         document.body.classList.add('col-dragging') // suppresses header tooltips while dragging
-        const g = document.querySelector('.h10-am-grid') as HTMLElement | null
+        const g = gridElRef.current
         d.scrollEl = g; d.initScroll = g?.scrollLeft ?? 0
         // freeze each visible column's bounds ONCE (incl. off-screen ones) → stable
         // hit-testing; we account for auto-scroll via the scrollLeft delta.
         const byItem = new Map<string, { item: string; left: number; right: number }>()
-        document.querySelectorAll('.h10-am-grid thead th[data-item]').forEach((el) => {
+        Array.from(gridElRef.current?.querySelectorAll('thead th[data-item]') ?? []).forEach((el) => {
           const r = el.getBoundingClientRect(); const it = el.getAttribute('data-item') as string
           const cur = byItem.get(it)
           if (cur) { cur.left = Math.min(cur.left, r.left); cur.right = Math.max(cur.right, r.right) }
           else byItem.set(it, { item: it, left: r.left, right: r.right })
         })
         d.bounds = Array.from(byItem.values()).map((b) => ({ ...b, center: (b.left + b.right) / 2 })).sort((a, b) => a.left - b.left)
-        const fz = document.querySelector('.h10-am-grid thead th.nm.fz') as HTMLElement | null
+        const fz = (gridElRef.current?.querySelector('thead th.nm.fz') ?? null) as HTMLElement | null
         const gr = g?.getBoundingClientRect()
         const head = (g?.querySelector('thead') as HTMLElement | null)?.getBoundingClientRect()
         d.frozenRight = fz ? fz.getBoundingClientRect().right : (gr?.left ?? 0)
@@ -1923,7 +1927,7 @@ export function CampaignsGrid() {
       </div>
 
       {/* grid */}
-      <div className="h10-am-grid">
+      <div className="h10-am-grid" ref={gridElRef}>
         <table>
           <thead>
             <tr>

@@ -427,6 +427,67 @@ lines 19–3071 — not a contiguous block, not a cut-and-paste. Plus three app-
 dependencies: `FilterDropdown` (370 lines), `AdsFilterBar` (178), `enabledRank` (20). Any estimate
 of #13 that counts only `AdsDataGrid.tsx`'s 967 lines is short by more than half.
 
+### WG.2 census 2026-08-25 — the plan had the shape wrong, and the blocker is not CSS volume
+
+Measured before moving anything. Three corrections to the WG.2 line above:
+
+**1. The CSS is 265 rules across FOUR stylesheets, not 312 in `ads.css`.**
+
+| stylesheet | rules on a grid root |
+|---|---|
+| `ads.css` | 237 |
+| `rules-automation/rules-automation.css` | 25 |
+| `reporting/reporting.css` | 2 |
+| `rules-automation/dayparting/rank-dayparting.css` | 1 |
+
+Extracting "the grid's CSS out of `ads.css`" would leave three other stylesheets styling a component
+whose styles had supposedly moved.
+
+**2. Only 23 of 279 rules (8%) sit on a root the grid alone renders.** Partitioned by anchor root —
+the first class of the selector, which is what a rule is actually attached to:
+
+- **movable** (8 roots, 23 rules): `h10-dd-opt`, `h10-am-searchbox`, `h10-hc`, `h10-am-searchbtn`,
+  `h10-dd-pop`, `h10-hc-anchor`, `h10-dd-empty`, `h10-dd-list`
+- **entangled** (21 roots, 256 rules): led by `h10-am-grid` itself at **129 rules spanning lines
+  32–3025** — interleaved through the whole file, exactly as warned.
+
+Three of the entangled roots are not grid concepts at all and should be extracted as their own:
+`h10-am-link` (+33 files), `h10-cd-field` (+10), `h10-am-card` (+8). The DS already has `Link`-like,
+`Input`/field and `Card` primitives for these.
+
+**3. 🔴 The real blocker: four call sites hand-roll the grid's markup and depend on its classes.**
+
+`AdsDataGrid` has 64 render sites — and **`CampaignsGrid.tsx`, the flagship Ad Manager page, is not
+one of them.** It hand-rolls `<div className="h10-am-grid"><table>…` itself (its own line 1720
+comment admits it "carries its own copy of the banding"). So do three eBay wizard steps
+(`ReviewStep`, `RatesStep`, `KeywordsStep`).
+
+That makes `.h10-am-grid` a public API, not a component-private class. Renaming it to `nds-wsgrid-*`
+— which WG.3 implies — silently unstyles four surfaces, and CSS never errors.
+
+### WG.2b shipped 2026-08-25 — the DOM coupling, removed first
+
+Seven call sites reached the grid with `document.querySelector('.h10-am-grid …')`. That is worse
+than coupling: it takes the **first match on the page**, so with two grids mounted the column
+hover-highlight, the drag hit-testing and the keyboard-focus scroll all targeted whichever grid
+rendered first. All seven now scope to a ref on their own root — a correctness fix in its own
+right, and the prerequisite for any rename.
+
+(One transform hazard worth recording: replacing `document.querySelectorAll(…)` with
+`(ref.current?.querySelectorAll(…) ?? [])` put a **leading paren** on a line after one with no
+semicolon, so ASI parsed the previous `new Map<…>()` as a *call*. `Array.from(…)` starts with an
+identifier and avoids it — and also collapses the `NodeListOf | never[]` union that made `.forEach`
+uncallable.)
+
+**Revised order.** WG.2 cannot start with the CSS:
+
+| | | |
+|---|---|---|
+| WG.2b | scope the 7 DOM queries to refs | ✅ 2026-08-25 |
+| WG.2a | the 4 hand-rolled call sites adopt the component, or get an explicit bare-table class | blocks the rename |
+| WG.2c | extract `h10-am-link` / `h10-cd-field` / `h10-am-card` as their own concepts | they are not grid |
+| WG.2d | move the 265 rules, across all four stylesheets | only now safe |
+
 ### 🔴 The requirement: pinning must become an OPERATOR preference, not developer config
 
 Operator, 2026-08-25: *"I want the ability to be able to stick the column and lock the columns and
