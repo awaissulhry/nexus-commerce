@@ -1595,3 +1595,13 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-eng-card { border: 1px solid var(--divider); border-radius: 10px; background: #fff; padding: 16px; }
 .az-eng-card h4 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
 .az-eng-card p { margin: 0 0 12px; color: var(--ink2); font-size: 12px; line-height: 1.5; }
+
+/* The row-delete `ToolbarButton` in the budget-pacing grid. `.az-kebab` carried an inline
+   `color: #cc1100` at the call site; the primitive owns the box, so only the danger tint is
+   left here — and as a TOKEN, because the raw-hex ratchet holds this file at its count and
+   caught the literal I first wrote. Contrast measured, not assumed: see the commit. */
+.az-del-btn { color: var(--nds-danger-text); }
+.az-del-btn:hover:not(:disabled) { color: var(--nds-danger-strong); }
+
+/* The harvest grid keeps the 18px gap its `.az-tablewrap` carried inline. */
+.az-grid-mb { margin-bottom: 18px; }

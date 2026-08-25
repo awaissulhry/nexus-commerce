@@ -14,11 +14,24 @@ import { useEffect, useMemo, useState } from 'react'
 import { Crosshair, RefreshCw, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
 interface Target { id: string; text: string; kind: string; bidCents: number; status: string; campaignId: string; campaignName: string; marketplace: string | null; adGroupId: string; adGroupName: string }
+
+/** Alignment inverts between the two grids — Bid was the only column with no `.l`. */
+const CONQUEST_COLUMNS: Array<Column<Target>> = [
+  { key: 'asin', label: 'Competitor ASIN', render: (t) => <span style={{ fontWeight: 500, fontFamily: 'monospace' }}>{t.text || '—'}</span> },
+  { key: 'campaign', label: 'Campaign · ad group', render: (t) => (<>
+      <a className="cn" href={campaignHref(t.campaignId)} target="_blank" rel="noopener noreferrer">{t.campaignName}</a>
+      <div className="az-cell-sub">{t.adGroupName}</div>
+    </>) },
+  { key: 'market', label: 'Market', render: (t) => <span className="az-cell-sub">{t.marketplace ?? '—'}</span> },
+  { key: 'bid', label: 'Bid', align: 'right', render: (t) => eur(t.bidCents) },
+  { key: 'status', label: 'Status', render: (t) => <span className="az-badge">{t.status}</span> },
+]
 interface AdGroup { adGroupId: string; adGroupName: string; campaignId: string; campaignName: string; marketplace: string | null }
 
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
@@ -102,24 +115,12 @@ export function RankConquestMode() {
       </div>
 
       <h4 style={{ margin: '4px 2px 8px', fontSize: 13.5 }}>Conquesting targets you already run <span style={{ color: 'var(--ink2)', fontWeight: 500, fontSize: 12 }}>· {existing.length}</span></h4>
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr><th className="l">Competitor ASIN</th><th className="l">Campaign · ad group</th><th className="l">Market</th><th>Bid</th><th className="l">Status</th></tr></thead>
-          <tbody>
-            {rows === null && <tr><td className="az-empty" colSpan={5}>Loading…</td></tr>}
-            {rows !== null && existing.length === 0 && <tr><td className="az-empty" colSpan={5}>No conquesting (product) targets yet {market === 'All' ? '' : `in ${market}`}.</td></tr>}
-            {existing.map((t) => (
-              <tr key={t.id}>
-                <td className="l" style={{ fontWeight: 500, fontFamily: 'monospace' }}>{t.text || '—'}</td>
-                <td className="l"><a className="cn" href={campaignHref(t.campaignId)} target="_blank" rel="noopener noreferrer">{t.campaignName}</a><div className="sub">{t.adGroupName}</div></td>
-                <td className="l"><span className="sub">{t.marketplace ?? '—'}</span></td>
-                <td className="num">{eur(t.bidCents)}</td>
-                <td className="l"><span className="az-badge">{t.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Target>
+        rows={rows === null ? [] : existing}
+        rowKey={(t) => t.id}
+        columns={CONQUEST_COLUMNS}
+        emptyState={rows === null ? 'Loading…' : `No conquesting (product) targets yet ${market === 'All' ? '' : `in ${market}`}.`}
+      />
     </div>
   )
 }

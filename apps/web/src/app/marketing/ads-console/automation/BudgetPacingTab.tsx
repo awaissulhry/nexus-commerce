@@ -9,10 +9,36 @@
 import { useEffect, useState } from 'react'
 import { Wallet, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 
 interface PlanRow { id: string; marketplace: string; tag?: string | null; month: string; monthlyBudgetCents: number; autoPacing: boolean; stopOverSpend: boolean; spendCents: number | null; pct: number | null; expectedPct: number | null; status: string }
+
+/** A factory: the delete column needs `busy` and `del`, which are component state.
+ *  Alignment inverts between the two grids — the two money columns carried no `.l`. The
+ *  trailing `<th />` becomes a labelled-but-blank column; `Column.label` is a ReactNode, and
+ *  an empty string is what the header was. The kebab becomes a `ToolbarButton`, which gives it
+ *  the accessible name the bare `<button>` never had. */
+const pacingColumns = (busy: boolean, del: (id: string) => void | Promise<void>): Array<Column<PlanRow>> => [
+  { key: 'marketplace', label: 'Marketplace', render: (r) => <span style={{ fontWeight: 600 }}>{r.marketplace}{r.tag ? ` · ${r.tag}` : ''}</span> },
+  { key: 'budget', label: 'Monthly budget', align: 'right', render: (r) => eur(r.monthlyBudgetCents) },
+  { key: 'spent', label: 'Spent', align: 'right', render: (r) => eur(r.spendCents) },
+  { key: 'pace', label: 'Pace', render: (r) => (
+    <span style={{ display: 'block', minWidth: 160 }}>
+      <span style={{ position: 'relative', display: 'block', height: 8, background: 'var(--bg2)', borderRadius: 4, overflow: 'hidden' }}>
+        <span style={{ position: 'absolute', height: '100%', width: `${Math.min(100, (r.pct ?? 0) * 100)}%`, background: statusColor[r.status] ?? 'var(--link)' }} />
+        {r.expectedPct != null && <span style={{ position: 'absolute', height: '100%', width: 2, left: `${Math.min(100, r.expectedPct * 100)}%`, background: 'var(--ink)' }} title="expected pace" />}
+      </span>
+      <span className="az-cell-sub">{r.pct != null ? `${(r.pct * 100).toFixed(0)}% spent` : '—'}{r.expectedPct != null ? ` · ${(r.expectedPct * 100).toFixed(0)}% expected` : ''}</span>
+    </span>
+  ) },
+  { key: 'status', label: 'Status', render: (r) => <span style={{ fontWeight: 700, color: statusColor[r.status] ?? 'var(--ink)', textTransform: 'capitalize' }}>{r.status.replace('-', ' ')}</span> },
+  { key: 'settings', label: 'Settings', render: (r) => <span className="az-cell-sub">{r.autoPacing ? 'auto-pace' : 'flat'}{r.stopOverSpend ? ' · hard stop' : ''}</span> },
+  { key: 'del', label: '', render: (r) => (
+    <ToolbarButton icon={<Trash2 size={15} />} label={`Delete the ${r.marketplace} budget plan`} tooltip={false} disabled={busy} onClick={() => void del(r.id)} className="az-del-btn" />
+  ) },
+]
 interface Resp { month: string; daysInMonth: number; dayOfMonth: number; rows: PlanRow[]; totals: { budgetCents: number; spendCents: number; pct: number | null } }
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -56,31 +82,12 @@ export function BudgetPacingTab() {
         </div>
       </div>
 
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr><th className="l">Marketplace</th><th>Monthly budget</th><th>Spent</th><th className="l">Pace</th><th className="l">Status</th><th className="l">Settings</th><th /></tr></thead>
-          <tbody>
-            {(d?.rows ?? []).length === 0 && <tr><td className="az-empty" colSpan={7}>No budget plans yet — set one above to cap &amp; pace monthly spend.</td></tr>}
-            {(d?.rows ?? []).map((r) => (
-              <tr key={r.id}>
-                <td className="l" style={{ fontWeight: 600 }}>{r.marketplace}{r.tag ? ` · ${r.tag}` : ''}</td>
-                <td className="num">{eur(r.monthlyBudgetCents)}</td>
-                <td className="num">{eur(r.spendCents)}</td>
-                <td className="l" style={{ minWidth: 160 }}>
-                  <div style={{ position: 'relative', height: 8, background: 'var(--bg2)', borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', height: '100%', width: `${Math.min(100, (r.pct ?? 0) * 100)}%`, background: statusColor[r.status] ?? 'var(--link)' }} />
-                    {r.expectedPct != null && <div style={{ position: 'absolute', height: '100%', width: 2, left: `${Math.min(100, r.expectedPct * 100)}%`, background: 'var(--ink)' }} title="expected pace" />}
-                  </div>
-                  <span className="sub">{r.pct != null ? `${(r.pct * 100).toFixed(0)}% spent` : '—'}{r.expectedPct != null ? ` · ${(r.expectedPct * 100).toFixed(0)}% expected` : ''}</span>
-                </td>
-                <td className="l"><span style={{ fontWeight: 700, color: statusColor[r.status] ?? 'var(--ink)', textTransform: 'capitalize' }}>{r.status.replace('-', ' ')}</span></td>
-                <td className="l"><span className="sub">{r.autoPacing ? 'auto-pace' : 'flat'}{r.stopOverSpend ? ' · hard stop' : ''}</span></td>
-                <td><button className="az-kebab" disabled={busy} onClick={() => void del(r.id)} style={{ color: '#cc1100' }}><Trash2 size={15} /></button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<PlanRow>
+        rows={d?.rows ?? []}
+        rowKey={(r) => r.id}
+        columns={pacingColumns(busy, del)}
+        emptyState="No budget plans yet — set one above to cap & pace monthly spend."
+      />
       <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '12px 2px' }}><Wallet size={12} style={{ verticalAlign: 'text-bottom' }} /> Pair with the <b>Monthly spend cap</b> automations (Library) for a hard failsafe that pauses everything at your limit.</div>
     </div>
   )

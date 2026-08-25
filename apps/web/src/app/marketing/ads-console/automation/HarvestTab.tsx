@@ -11,14 +11,42 @@ import { useEffect, useMemo, useState } from 'react'
 import { Sprout, Ban, RefreshCw, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
-import { TableSkel } from './_ui'
+import { GridSkel } from './_ui'
 import { downloadCsv } from './_csv'
 import { useAmazonLinks, buildAmazonCampaignHref } from './useAmazonLinks'
 import { ExternalLink } from 'lucide-react'
 
 interface Term { query: string; externalCampaignId: string; externalAdGroupId: string; impressions: number; clicks: number; costCents: number; orders: number; salesCents: number }
+
+/** A factory: the campaign cell needs `campMap`/`profileMap` and the orders tint needs `kind`,
+ *  all component state. Alignment inverts between `.az-table` and `.nds-grid` — the five
+ *  numeric columns carried no `.l`. */
+const harvestColumns = (
+  campMap: Record<string, { id: string; name: string; marketplace?: string | null }>,
+  profileMap: Record<string, string>,
+  kind: string,
+): Array<Column<Term>> => [
+  { key: 'term', label: 'Search term', render: (t) => <span style={{ fontWeight: 500 }}>{t.query}</span> },
+  { key: 'campaign', label: 'Campaign · market', render: (t) => {
+    const c = campMap[t.externalCampaignId]
+    const amzHref = buildAmazonCampaignHref(t.externalCampaignId, c?.marketplace, profileMap)
+    return (<>
+      {c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="az-cell-sub">{t.externalCampaignId}</span>}
+      <div className="az-cell-sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {c?.marketplace ? `${c.marketplace} · ` : ''}AG {t.externalAdGroupId}
+        {amzHref && <a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Amazon <ExternalLink size={9} /></a>}
+      </div>
+    </>)
+  } },
+  { key: 'impressions', label: 'Impressions', align: 'right', render: (t) => num(t.impressions) },
+  { key: 'clicks', label: 'Clicks', align: 'right', render: (t) => num(t.clicks) },
+  { key: 'spend', label: 'Spend', align: 'right', render: (t) => eur(t.costCents) },
+  { key: 'orders', label: 'Orders', align: 'right', render: (t) => <span style={{ color: kind === 'grad' ? 'var(--green)' : undefined }}>{num(t.orders)}</span> },
+  { key: 'sales', label: 'Sales', align: 'right', render: (t) => eur(t.salesCents) },
+]
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
 const num = (n: number) => new Intl.NumberFormat('en-US').format(n)
 
@@ -42,29 +70,13 @@ export function HarvestTab() {
   const wastedTotal = useMemo(() => negatives.reduce((s, t) => s + t.costCents, 0), [negatives])
 
   const tbl = (terms: Term[], kind: 'grad' | 'neg') => (
-    <div className="az-tablewrap" style={{ marginBottom: 18 }}>
-      <table className="az-table">
-        <thead><tr><th className="l">Search term</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>Sales</th></tr></thead>
-        <tbody>
-          {loading && <TableSkel cols={7} />}
-          {!loading && terms.length === 0 && <tr><td className="az-empty" colSpan={7}>{kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.'}</td></tr>}
-          {terms.map((t, i) => { const c = campMap[t.externalCampaignId]; const amzHref = buildAmazonCampaignHref(t.externalCampaignId, c?.marketplace, profileMap); return (
-            <tr key={`${t.query}-${i}`}>
-              <td className="l" style={{ fontWeight: 500 }}>{t.query}</td>
-              <td className="l">
-                {c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="sub">{t.externalCampaignId}</span>}
-                <div className="sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {c?.marketplace ? `${c.marketplace} · ` : ''}AG {t.externalAdGroupId}
-                  {amzHref && <a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Amazon <ExternalLink size={9} /></a>}
-                </div>
-              </td>
-              <td className="num">{num(t.impressions)}</td><td className="num">{num(t.clicks)}</td><td className="num">{eur(t.costCents)}</td>
-              <td className="num" style={{ color: kind === 'grad' ? 'var(--green)' : undefined }}>{num(t.orders)}</td><td className="num">{eur(t.salesCents)}</td>
-            </tr>
-          ) })}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid<Term>
+        rows={loading ? [] : terms}
+        rowKey={(t) => `${t.query}:${t.externalCampaignId}:${t.externalAdGroupId}`}
+        columns={harvestColumns(campMap, profileMap, kind)}
+        className="az-grid-mb"
+        emptyState={loading ? <GridSkel /> : (kind === 'grad' ? 'No converting terms to graduate right now.' : 'No wasteful terms to negate right now.')}
+      />
   )
 
   return (
