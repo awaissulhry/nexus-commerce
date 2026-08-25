@@ -15,12 +15,37 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, RefreshCw, Zap } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
 interface Target { id: string; text: string; kind: string; matchType: string | null; bidCents: number; status: string; campaignId: string; campaignName: string; marketplace: string | null; adGroupName: string; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null; roas: number | null }
+
+/** A factory: the SoV lookup and the bid target are component-scoped. Alignment inverts between
+ *  `.az-table` and `.nds-grid` — the six columns with no `.l` are the right-aligned ones. The
+ *  leading checkbox column is gone; `DataGrid` renders selection. */
+const keywordColumns = (
+  sovFor: (t: Target) => { sovPct: number } | undefined,
+  targetBid: (t: Target) => number,
+): Array<Column<Target>> => [
+  { key: 'keyword', label: 'Keyword', render: (t) => <span style={{ fontWeight: 500 }}>{t.text}</span> },
+  { key: 'match', label: 'Match', render: (t) => <span className="az-cell-sub">{(t.matchType ?? '').replace('SEARCH_', '').replace('_', ' ').toLowerCase() || '—'}</span> },
+  { key: 'campaign', label: 'Campaign · market', render: (t) => (<>
+      <a className="cn" href={campaignHref(t.campaignId)} target="_blank" rel="noopener noreferrer">{t.campaignName}</a>
+      <div className="az-cell-sub">{t.marketplace ?? ''}</div>
+    </>) },
+  { key: 'bid', label: 'Bid', align: 'right', render: (t) => eur(t.bidCents) },
+  { key: 'sov', label: 'SoV', align: 'right', render: (t) => { const s = sovFor(t); return s ? pct(s.sovPct, 0) : '—' } },
+  { key: 'impr', label: 'Impr.', align: 'right', render: (t) => num(t.impressions) },
+  { key: 'acos', label: 'ACOS', align: 'right', render: (t) => pct(t.acos, 0) },
+  { key: 'roas', label: 'ROAS', align: 'right', render: (t) => (t.roas == null ? '—' : `${t.roas.toFixed(1)}×`) },
+  { key: 'newbid', label: 'New bid', align: 'right', render: (t) => {
+    const nb = targetBid(t); const up = nb > t.bidCents
+    return <span style={{ fontWeight: 700, color: up ? 'var(--green)' : 'var(--ink2)' }}>{eur(nb)}{up ? ' ↑' : ''}</span>
+  } },
+]
 interface Sov { query: string; sovPct: number; cpcCents: number; impressions: number }
 
 const eur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100)
@@ -66,8 +91,6 @@ export function RankKeywordsMode() {
     return Math.max(t.bidCents, Math.round(going * (winMult / 100))) // bid to win = beat going CPC
   }
 
-  const allSel = shown.length > 0 && shown.every((t) => sel.has(t.id))
-  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   const apply = async () => {
     const targets = shown.filter((t) => sel.has(t.id))
@@ -109,32 +132,16 @@ export function RankKeywordsMode() {
       </div>
       {msg && <div style={{ color: msg.includes('Queued') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{msg}</div>}
 
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr>
-            <th className="l" style={{ width: 32 }}><Checkbox aria-label="Select all keywords" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((t) => t.id)) : new Set())} /></th>
-            <th className="l">Keyword</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Bid</th><th>SoV</th><th>Impr.</th><th>ACOS</th><th>ROAS</th><th>New bid</th>
-          </tr></thead>
-          <tbody>
-            {rows === null && <tr><td className="az-empty" colSpan={10}>Loading keywords…</td></tr>}
-            {rows !== null && shown.length === 0 && <tr><td className="az-empty" colSpan={10}>No keyword targets {market === 'All' ? '' : `in ${market}`} match.</td></tr>}
-            {shown.map((t) => { const s = sovFor(t); const nb = targetBid(t); const up = nb > t.bidCents; return (
-              <tr key={t.id} className={sel.has(t.id) ? 'sel' : ''}>
-                <td className="l"><Checkbox aria-label={`Select ${t.text}`} checked={sel.has(t.id)} onChange={() => toggle(t.id)} /></td>
-                <td className="l" style={{ fontWeight: 500 }}>{t.text}</td>
-                <td className="l"><span className="sub">{(t.matchType ?? '').replace('SEARCH_', '').replace('_', ' ').toLowerCase() || '—'}</span></td>
-                <td className="l"><a className="cn" href={campaignHref(t.campaignId)} target="_blank" rel="noopener noreferrer">{t.campaignName}</a><div className="sub">{t.marketplace ?? ''}</div></td>
-                <td className="num">{eur(t.bidCents)}</td>
-                <td className="num">{s ? pct(s.sovPct, 0) : '—'}</td>
-                <td className="num">{num(t.impressions)}</td>
-                <td className="num">{pct(t.acos, 0)}</td>
-                <td className="num">{t.roas == null ? '—' : `${t.roas.toFixed(1)}×`}</td>
-                <td className="num" style={{ fontWeight: 700, color: up ? 'var(--green)' : 'var(--ink2)' }}>{eur(nb)}{up ? ' ↑' : ''}</td>
-              </tr>
-            ) })}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Target>
+        rows={rows === null ? [] : shown}
+        rowKey={(t) => t.id}
+        columns={keywordColumns(sovFor, targetBid)}
+        selectable
+        selected={sel}
+        onSelectedChange={setSel}
+        selectAllHint="Select every keyword in this view"
+        emptyState={rows === null ? 'Loading keywords…' : `No keyword targets ${market === 'All' ? '' : `in ${market}`} match.`}
+      />
     </div>
   )
 }

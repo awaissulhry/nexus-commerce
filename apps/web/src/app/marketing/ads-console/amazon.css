@@ -1605,3 +1605,11 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 
 /* The harvest grid keeps the 18px gap its `.az-tablewrap` carried inline. */
 .az-grid-mb { margin-bottom: 18px; }
+
+/* The compact keyword-bid grid. `.az-kwb-table`'s `.sub2`, `.up` and `.dim` were all scoped
+   under it, so a DS grid cell cannot reach them — these are the same three values, reachable.
+   Colours unchanged from the originals; only the selector moved. */
+.az-kwb-grid tr.on td { background: var(--bg2); }
+.az-kwb-sub { font-size: 10.5px; color: var(--ink3); text-transform: capitalize; }
+.az-kwb-up { color: var(--nds-success-text); font-weight: 700; }
+.az-kwb-dim { color: var(--ink3); }
