@@ -6,8 +6,9 @@
  * shared "set bid for N selected" dialog used by Ad Groups (Default Bid) and Targets (Bid).
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
+import '../campaigns-ds.css'
 
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -32,14 +33,14 @@ export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€'
       subtitle={<>Set the {bidLabel.toLowerCase()} for {count} selected {noun}{count === 1 ? '' : 's'}.</>}
       footer={
         <>
-<Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-     <Button variant="primary" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onApply(Number(bid)) } finally { setBusy(false) } }}>{busy ? 'Applying…' : 'Apply'}</Button>
+          <Button variant="primary" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onApply(Number(bid)) } finally { setBusy(false) } }}>{busy ? 'Applying…' : 'Apply'}</Button>
         </>
       }
     >
       <div className="h10-cd-field s"><label>{bidLabel}</label>
-        <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} autoFocus aria-label={bidLabel} /></div>
+        <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} autoFocus aria-label={bidLabel} fieldClassName="cd-money-field" />
       </div>
     </Modal>
   )

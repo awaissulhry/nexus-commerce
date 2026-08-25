@@ -8,8 +8,8 @@
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, Pill } from '@/design-system/primitives'
-import { Listbox, Modal } from '@/design-system/components'
+import { Button, Pill, Toggle } from '@/design-system/primitives'
+import { Listbox, Modal, Pagination } from '@/design-system/components'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
@@ -760,7 +760,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
             <div className="h10-bulk-row">
               <label className="ck"><input type="checkbox" checked={enAuto} onChange={() => setEnAuto((v) => !v)} aria-label="Change Bid Automation" /></label>
               <span className="it">Bid Automation</span>
-              <div className="ac"><button type="button" className={`h10-bktoggle ${autoOn ? 'on' : ''}`} onClick={() => setAutoOn((v) => !v)} role="switch" aria-checked={autoOn} aria-label="Bid Automation"><span /></button></div>
+              <div className="ac"><Toggle checked={autoOn} onChange={setAutoOn} aria-label="Bid Automation" /></div>
             </div>
 
             <div className="h10-bulk-row">
@@ -819,7 +819,7 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
     <div className="h10-bm-boost">
       <div className="bt">{title} <InfoTip tip={tip} /></div>
       {desc && <div className="bd">{desc}</div>}
-      <label className="h10-bm-tog"><button type="button" className={`h10-bktoggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} aria-label={label} onClick={set}><span /></button> {label}</label>
+      <label className="h10-bm-tog"><Toggle checked={on} onChange={() => set()} aria-label={label} /> {label}</label>
     </div>
   )
   return (
@@ -1990,13 +1990,7 @@ export function CampaignsGrid() {
       {/* pagination + latest report (H10 footer) */}
       <div className="h10-am-pager">
         <span className="grow" />
-        <div className="pg">
-          <button type="button" className="pgbtn" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">‹</button>
-          {Array.from({ length: Math.min(pageCount, 9) }).map((_, i) => (
-            <button type="button" key={i} className={`pgbtn ${safePage === i + 1 ? 'on' : ''}`} onClick={() => setPage(i + 1)}>{i + 1}</button>
-          ))}
-          <button type="button" className="pgbtn" disabled={safePage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} aria-label="Next page">›</button>
-        </div>
+        <div className="pg"><Pagination page={safePage} pageCount={pageCount} onPage={setPage} /></div>
         <div className="rpp">Rows per page:
           <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>

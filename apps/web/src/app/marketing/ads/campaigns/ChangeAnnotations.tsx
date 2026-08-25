@@ -22,6 +22,9 @@
  * read, so a marker here and a row there can never disagree.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Checkbox } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface RawChange {
@@ -118,15 +121,19 @@ export function AnnotationToggle({ on, onToggle, includeRoutine, onToggleRoutine
 }) {
   return (
     <span className="h10-gann-ctl">
-      <label title="Mark the days something changed, so a move in the chart can be traced to what caused it.">
-        <input type="checkbox" checked={on} onChange={(e) => onToggle(e.target.checked)} />
-        Changes{on && total > 0 ? ` (${total})` : ''}
-      </label>
+      <Checkbox
+        title="Mark the days something changed, so a move in the chart can be traced to what caused it."
+        checked={on}
+        onChange={(e) => onToggle(e.target.checked)}
+        label={`Changes${on && total > 0 ? ` (${total})` : ''}`}
+      />
       {on && (
-        <label title="Bids and placement percentages move every 15 minutes. Off by default, because a marker on every day marks nothing.">
-          <input type="checkbox" checked={includeRoutine} onChange={(e) => onToggleRoutine(e.target.checked)} />
-          include bid moves
-        </label>
+        <Checkbox
+          title="Bids and placement percentages move every 15 minutes. Off by default, because a marker on every day marks nothing."
+          checked={includeRoutine}
+          onChange={(e) => onToggleRoutine(e.target.checked)}
+          label="include bid moves"
+        />
       )}
     </span>
   )
