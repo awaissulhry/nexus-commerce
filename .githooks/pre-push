@@ -92,6 +92,14 @@ node scripts/check-alias-form.mjs --check || {
   exit 1
 }
 
+# apps/factory carries a COPY of the design system, not an import. A file identical in
+# both apps must stay identical — a DS fix that lands in one app is not applied to the
+# platform, and nothing else in this hook can see that.
+node scripts/check-ds-fork-drift.mjs --check || {
+  echo "❌ DS fork-drift ratchet FAILED — see message above (rule + why: scripts/check-ds-fork-drift.mjs header)"
+  exit 1
+}
+
 # TECH_DEBT #62 (2026-08-06) — tokens.css is generated from
 # tokens/css-vars.ts; a hand-edit to the output silently dies on the next
 # regen (the rail vars lived that way for five weeks). Fail the push when

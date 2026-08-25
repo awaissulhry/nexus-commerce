@@ -1,0 +1,23 @@
+{
+  "note": "Files the two DS copies already differ on. This list may only SHRINK. A shared file absent here must stay byte-identical in both apps.",
+  "updatedAt": "2026-08-25",
+  "sharedFiles": 78,
+  "differing": [
+    "components/Card.tsx",
+    "components/ColumnGroupModal.tsx",
+    "components/DataGrid.tsx",
+    "components/Drawer.tsx",
+    "components/Tabs.tsx",
+    "components/index.ts",
+    "patterns/index.ts",
+    "primitives/ToolbarButton.tsx",
+    "primitives/index.ts",
+    "styles/components.css",
+    "styles/patterns.css",
+    "styles/primitives.css",
+    "styles/tokens.css",
+    "tokens/colors.ts",
+    "tokens/css-vars.ts",
+    "tools/generate-tokens-css.ts"
+  ]
+}

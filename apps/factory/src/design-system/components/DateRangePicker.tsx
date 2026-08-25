@@ -13,6 +13,16 @@ export interface DateRangePickerProps {
   value: DateRange
   onChange: (range: DateRange) => void
   className?: string
+  /**
+   * Override the preset rail. Omit it and you get `DEFAULT_PRESETS` — the eight the operator
+   * picked as the platform default, matching the ads console's picker.
+   *
+   * A prop rather than a hardcoded list because the default DROPPED the three day-count presets
+   * (`Last 7 / 30 / 90 days`) that shipped before it, and a surface that genuinely reasons in
+   * rolling days should be able to say so instead of being told the platform no longer counts
+   * that way.
+   */
+  presets?: ReadonlyArray<{ label: string; get: () => DateRange }>
 }
 
 function sod(d: Date) {
@@ -25,9 +35,21 @@ function addDays(d: Date, n: number) {
   x.setDate(x.getDate() + n)
   return x
 }
+/**
+ * Month arithmetic that CLAMPS to the target month's length.
+ *
+ * `setMonth` alone overflows: from 2026-03-31, `setMonth(month - 1)` asks for February 31st and
+ * JavaScript hands back March 3rd — a "last month" range that starts AFTER it ends. It never
+ * surfaced while the only caller was the month navigation, which always works from the 1st, where
+ * no month is too short. `Last 3 Months` / `Last 12 Months` call it with TODAY, so it surfaces on
+ * the 29th, 30th and 31st.
+ */
 function addMonths(d: Date, n: number) {
   const x = new Date(d)
+  const day = x.getDate()
+  x.setDate(1) // never sit on a day the target month may not have while the month changes
   x.setMonth(x.getMonth() + n)
+  x.setDate(Math.min(day, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()))
   return x
 }
 function sameDay(a: Date, b: Date) {
@@ -49,19 +71,38 @@ function monthGrid(month: Date): Array<Date | null> {
   return cells
 }
 
-const PRESETS: Array<{ label: string; get: () => DateRange }> = [
+/** Sunday-start, because the calendar beside it renders S M T W T F S. A week preset that
+ *  disagreed with the grid it sits next to would be the picker contradicting itself. */
+function startOfWeek(d: Date) {
+  const x = sod(d)
+  x.setDate(x.getDate() - x.getDay())
+  return x
+}
+
+/**
+ * The platform default, chosen by the operator 2026-08-25 from the ads console's picker: eight
+ * presets, calendar-relative rather than rolling-day.
+ *
+ * This REPLACES the previous seven. `Last 7 / 30 / 90 days` are gone from the default — a rolling
+ * window and a calendar period answer different questions, and mixing both in one rail made the
+ * list read as two half-finished ideas. Anything that needs them passes `presets`.
+ */
+export const DEFAULT_PRESETS: ReadonlyArray<{ label: string; get: () => DateRange }> = [
   { label: 'Today', get: () => { const t = sod(new Date()); return { start: t, end: t } } },
   { label: 'Yesterday', get: () => { const y = sod(addDays(new Date(), -1)); return { start: y, end: y } } },
-  { label: 'Last 7 days', get: () => ({ start: sod(addDays(new Date(), -6)), end: sod(new Date()) }) },
-  { label: 'Last 30 days', get: () => ({ start: sod(addDays(new Date(), -29)), end: sod(new Date()) }) },
-  { label: 'Last 90 days', get: () => ({ start: sod(addDays(new Date(), -89)), end: sod(new Date()) }) },
-  { label: 'This month', get: () => { const n = new Date(); return { start: sod(new Date(n.getFullYear(), n.getMonth(), 1)), end: sod(n) } } },
-  { label: 'Last month', get: () => { const n = new Date(); return { start: sod(new Date(n.getFullYear(), n.getMonth() - 1, 1)), end: sod(new Date(n.getFullYear(), n.getMonth(), 0)) } } },
+  { label: 'This Week', get: () => ({ start: startOfWeek(new Date()), end: sod(new Date()) }) },
+  { label: 'Last Week', get: () => { const s = addDays(startOfWeek(new Date()), -7); return { start: s, end: addDays(s, 6) } } },
+  { label: 'This Month', get: () => { const n = new Date(); return { start: sod(new Date(n.getFullYear(), n.getMonth(), 1)), end: sod(n) } } },
+  { label: 'Last Month', get: () => { const n = new Date(); return { start: sod(new Date(n.getFullYear(), n.getMonth() - 1, 1)), end: sod(new Date(n.getFullYear(), n.getMonth(), 0)) } } },
+  // Calendar months back, not 90/365 days — and via the clamping `addMonths` above, so the 31st
+  // does not ask for a date the target month has never had.
+  { label: 'Last 3 Months', get: () => ({ start: sod(addMonths(new Date(), -3)), end: sod(new Date()) }) },
+  { label: 'Last 12 Months', get: () => ({ start: sod(addMonths(new Date(), -12)), end: sod(new Date()) }) },
 ]
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, className, presets = DEFAULT_PRESETS }: DateRangePickerProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => new Date(value.start.getFullYear(), value.start.getMonth(), 1))
   const [draftStart, setDraftStart] = useState<Date | null>(null)
@@ -118,7 +159,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
       {open && (
         <div className="nds-dp-pop">
           <div className="nds-dp-presets">
-            {PRESETS.map((p) => (
+            {presets.map((p) => (
               <button
                 key={p.label}
                 type="button"
