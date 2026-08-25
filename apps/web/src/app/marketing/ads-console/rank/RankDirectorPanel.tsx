@@ -14,6 +14,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Power, Play, RotateCcw, Info, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
+import { Modal } from '@/design-system/components/Modal'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
 import { RankTargetEditor } from './RankTargetEditor'
@@ -173,10 +176,15 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
       {/* Step 1 — pick a product */}
       <div className="az-rd-pick">
         <span className="lbl"><Package size={14} /> Product</span>
-        <select value={productId} onChange={e => onPickProduct(e.target.value)} aria-label="Pick a product">
-          <option value="">Select a product…</option>
-          {products.map(p => <option key={p.productId} value={p.productId}>{p.name.slice(0, 60)}{p.campaignCount ? ` · ${p.campaignCount} campaigns` : ''}</option>)}
-        </select>
+        <Listbox
+          ariaLabel="Pick a product"
+          width={420}
+          value={productId}
+          onChange={onPickProduct}
+          emptyLabel="Select a product…"
+          emptyIsPlaceholder
+          options={products.map(p => ({ value: p.productId, label: `${p.name.slice(0, 60)}${p.campaignCount ? ` · ${p.campaignCount} campaigns` : ''}` }))}
+        />
         {plan && <span className="az-rd-haveplan"><ShieldCheck size={12} /> has a plan</span>}
       </div>
 
@@ -191,9 +199,9 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
             <span className="t"><Crosshair size={14} /> {fam?.parentName?.slice(0, 48) ?? selName.slice(0, 48)}</span>
             <span className="sub">{fam?.campaignCount ?? 0} campaigns · <b>{fam?.demand.familyOrders ?? 0} actual orders</b> · {demandDays}d</span>
             <span className="grow" />
-            {fam?.smoothed && <label className="az-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
-            <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">{[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}</select>
-            <button type="button" className="az-btn" onClick={useRecommended} disabled={!fam?.recommended?.windows?.length}><Wand2 size={13} /> Use recommended windows</button>
+            {fam?.smoothed && <Checkbox className="az-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales." checked={smooth} onChange={e => setSmooth(e.target.checked)} label="smooth" />}
+            <Listbox ariaLabel="Demand timeframe" width={110} value={String(demandDays)} onChange={v => setDemandDays(Number(v))} options={[7, 14, 30, 60, 90, 180].map(d => ({ value: String(d), label: `last ${d}d` }))} />
+            <Button onClick={useRecommended} disabled={!fam?.recommended?.windows?.length}><Wand2 size={13} /> Use recommended windows</Button>
           </div>
           {fam?.demand?.hasData ? (() => { const dv = smooth && fam.smoothed ? fam.smoothed : fam.demand; return <DemandReadout grid={dv.grid} hourProfile={dv.hourProfile} weekdayProfile={dv.weekdayProfile} timezone={fam.demand.timezone} metric={fam.demand.metric} /> })() : <div className="az-rd-empty">Not enough order history to show a demand shape yet.</div>}
 
@@ -214,7 +222,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                 <button type="button" role="tab" aria-selected={winView === 'grid'} className={winView === 'grid' ? 'on' : ''} onClick={() => setWinView('grid')}>Grid</button>
                 <button type="button" role="tab" aria-selected={winView === 'list'} className={winView === 'list' ? 'on' : ''} onClick={() => setWinView('list')}>List</button>
               </span>
-              {winView === 'list' && <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
+              {winView === 'list' && <Button variant="link" onClick={addWindow}><Plus size={12} /> Add window</Button>}
             </div>
             {winView === 'grid' ? (
               <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && fam?.smoothed ? fam.smoothed : fam?.demand)?.grid ?? null} onUseDemandPeaks={fam?.recommended?.windows?.length ? useRecommended : undefined} onEditTargets={() => setEditorOpen(true)} onOpenTemplates={() => setTplOpen(true)} />
@@ -223,11 +231,11 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
               {windows.map((w, i) => (
                 <div key={i} className="az-rp-win">
                   <div className="days">{DAYS.map((d, di) => <button key={di} type="button" className={w.days.includes(di) ? 'on' : ''} onClick={() => toggleDay(i, di)}>{d[0]}</button>)}</div>
-                  <select value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</select>
+                  <Listbox ariaLabel="Start hour" width={96} value={String(w.startHour)} onChange={v => setWin(i, { startHour: Number(v) })} options={Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hh(h) }))} />
                   <span className="to">to</span>
-                  <select value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</select>
+                  <Listbox ariaLabel="End hour" width={110} value={String(w.endHour)} onChange={v => setWin(i, { endHour: Number(v) })} options={Array.from({ length: 25 }, (_, h) => ({ value: String(h), label: `${hh(h % 24)}${h === 24 ? ' (24)' : ''}` }))} />
                   <span className="arrow">→</span>
-                  <select value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</select>
+                  <Listbox ariaLabel="Rank target" width={170} value={w.targetKey ?? ''} onChange={v => setWin(i, { targetKey: v })} options={targets.map(t => ({ value: t.key, label: t.name }))} />
                   <span className="grow" />
                   <button type="button" className="az-kebab" onClick={() => removeWin(i)} style={{ color: '#cc1100' }} aria-label="Remove window"><Trash2 size={13} /></button>
                 </div>
@@ -239,20 +247,20 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
           <div className="az-rp-sec">
             <div className="az-rp-lbl">Family guardrails (shared across all {fam?.campaignCount ?? 0} campaigns):</div>
             <div className="az-rd-guards">
-              <label>Daily budget cap <span>€</span><input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="none" /></label>
-              <label>ACOS cap <input type="number" min="0" value={acosCap} onChange={e => setAcosCap(e.target.value)} placeholder="none" /><span>%</span></label>
-              <label>Max campaigns <input type="number" min="1" value={maxCamp} onChange={e => setMaxCamp(e.target.value)} placeholder="none" /></label>
-              <label>Lead-time <input type="number" min="0" value={lead} onChange={e => setLead(e.target.value)} /><span>min</span></label>
+              <label>Daily budget cap <Input type="number" min="0" prefix="€" aria-label="Daily budget cap" value={budget} onChange={e => setBudget(e.target.value)} placeholder="none" style={{ width: 66 }} /></label>
+              <label>ACOS cap <Input type="number" min="0" suffix="%" aria-label="ACOS cap" value={acosCap} onChange={e => setAcosCap(e.target.value)} placeholder="none" style={{ width: 66 }} /></label>
+              <label>Max campaigns <Input type="number" min="1" aria-label="Max campaigns" value={maxCamp} onChange={e => setMaxCamp(e.target.value)} placeholder="none" style={{ width: 66 }} /></label>
+              <label>Lead-time <Input type="number" min="0" suffix="min" aria-label="Lead-time" value={lead} onChange={e => setLead(e.target.value)} style={{ width: 66 }} /></label>
             </div>
           </div>
 
           {/* Save / Discard */}
           <div className="az-rd-foot">
             {dirty && <span className="az-rp-dirty">Unsaved</span>}
-            <button type="button" className="az-btn" disabled={!windows.length} onClick={() => { setCopyMsg(''); setCopySel(new Set()); setCopyOpen(true) }} title="Copy this week's rank schedule onto other products' plans"><Copy size={13} /> Copy to products…</button>
+            <Button disabled={!windows.length} onClick={() => { setCopyMsg(''); setCopySel(new Set()); setCopyOpen(true) }} title="Copy this week's rank schedule onto other products' plans"><Copy size={13} /> Copy to products…</Button>
             <span className="grow" />
-            <button type="button" className="az-btn" disabled={!dirty || busy} onClick={discard}><Undo2 size={13} /> Discard</button>
-            <button type="button" className="az-btn dark" disabled={!dirty || busy} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : plan ? 'Save plan' : 'Create plan'}</button>
+            <Button disabled={!dirty || busy} onClick={discard}><Undo2 size={13} /> Discard</Button>
+            <Button variant="primary" disabled={!dirty || busy} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : plan ? 'Save plan' : 'Create plan'}</Button>
           </div>
           {msg && <div className="az-rp-msg">{msg}</div>}
           <div className="az-rp-note">Saving stores the plan in Nexus. One plan drives every campaign advertising this product family — winners hold the slot during your windows, redundant campaigns fall to the baseline (no self-competition), and OOS / over-budget / over-ACOS are guarded automatically. Real Amazon pushes still honour the write-gate.</div>
@@ -263,10 +271,10 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
               <div className="az-rp-lbl">This plan controls {(famDetail?.campaigns ?? []).filter(c => !excludeIds.has(c.id)).length} of {famDetail?.campaigns?.length ?? fam?.campaignCount ?? 0} campaigns{famDetail?.attribution?.overallPct != null ? ` · ${famDetail.attribution.overallPct}% attribution health` : ''}:</div>
               <div className="az-rd-arm">
                 <button type="button" className={`az-rp-defend ${plan.enabled ? 'on' : ''}`} onClick={() => void armToggle()} disabled={arming} title="When ON, the loop continuously holds this plan across the family on its cadence"><Power size={12} /> Fully automatic {plan.enabled ? 'ON' : 'OFF'}</button>
-                <label className="az-rd-manual"><input type="checkbox" checked={plan.manualOnly} onChange={e => void setManual(e.target.checked)} /> Manual only</label>
+                <Checkbox className="az-rd-manual" checked={plan.manualOnly} onChange={e => void setManual(e.target.checked)} label="Manual only" />
                 <span className="grow" />
-                <button type="button" className="az-btn" onClick={() => void applyNow()} disabled={arming}><Play size={12} /> Apply now</button>
-                <button type="button" className="az-btn" onClick={() => void revertAll()} disabled={arming}><RotateCcw size={12} /> Revert all</button>
+                <Button onClick={() => void applyNow()} disabled={arming}><Play size={12} /> Apply now</Button>
+                <Button onClick={() => void revertAll()} disabled={arming}><RotateCcw size={12} /> Revert all</Button>
               </div>
               {armMsg && <div className="az-rp-msg">{armMsg}</div>}
               {preview?.selfCompetition && preview.selfCompetition.length > 0 && (
@@ -279,7 +287,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                   <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set())} title="Control every campaign in the family">Include all</button>
                   <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => c.status !== 'ENABLED').map(c => c.id)))} title="Exclude every paused / archived campaign">Active only</button>
                   <button type="button" className="az-tr-mini" onClick={() => setExcludeIds(new Set(famDetail.campaigns.filter(c => !recentlyDelivered(c.lastDeliveredAt, 7)).map(c => c.id)))} title="Keep only campaigns that delivered in the last 7 days">Delivered ≤7d</button>
-                  {dirty && <button type="button" className="az-btn dark sm" disabled={busy} onClick={() => void save()}><Save size={12} /> {busy ? 'Saving…' : 'Save scope'}</button>}
+                  {dirty && <Button variant="primary" size="sm" disabled={busy} onClick={() => void save()}><Save size={12} /> {busy ? 'Saving…' : 'Save scope'}</Button>}
                 </div>
                 <div className="az-rd-camps" style={{ maxHeight: 360, overflowY: 'auto' }}>
                   {famDetail.campaigns.map(c => {
@@ -287,7 +295,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                     const inc = !excludeIds.has(c.id)
                     return (
                       <label key={c.id} className={`az-rd-camp scope ${inc ? '' : 'excl'}`}>
-                        <input type="checkbox" checked={inc} onChange={() => setExcludeIds(s => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })} />
+                        <Checkbox checked={inc} onChange={() => setExcludeIds(s => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })} aria-label={`Include ${c.name}`} />
                         <span className="st" style={{ color: c.status === 'ENABLED' ? undefined : '#94a3b8' }}>{c.status === 'ENABLED' ? '●' : '○'}</span>
                         <span className="nm" title={c.name}>{c.name}</span>
                         <span className="rec">{recencyLabel(c.lastDeliveredAt, c.recentSpendCents)}</span>
@@ -307,34 +315,35 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
         </>
       )}
 
-      {copyOpen && (
-        <div className="az-rd-copymodal" role="dialog" aria-modal="true" aria-label="Copy schedule to other products" onClick={() => setCopyOpen(false)}>
-          <div className="box" onClick={e => e.stopPropagation()}>
-            <div className="hd"><Copy size={14} /> Copy this schedule to other products<span className="grow" /><button type="button" className="az-kebab" onClick={() => setCopyOpen(false)} aria-label="Close">✕</button></div>
-            <div className="sub">Applies the painted windows + baseline to each selected product&apos;s plan in {market} (creates a disabled plan where none exists). Guardrails and armed state are left untouched.</div>
-            <div className="list">
-              {products.filter(p => p.productId !== productId).map(p => {
-                const on = copySel.has(p.productId)
-                return (
-                  <label key={p.productId} className={`row ${on ? 'on' : ''}`}>
-                    <input type="checkbox" checked={on} onChange={() => setCopySel(s => { const n = new Set(s); if (n.has(p.productId)) n.delete(p.productId); else n.add(p.productId); return n })} />
-                    <span className="nm" title={p.name}>{p.name || p.parentAsin || p.productId}</span>
-                    <span className="cc">{p.campaignCount ?? 0} camp</span>
-                  </label>
-                )
-              })}
-              {products.filter(p => p.productId !== productId).length === 0 && <div className="az-rp-empty">No other products in {market}.</div>}
-            </div>
-            {copyMsg && <div className="az-rp-msg" style={{ margin: '0 15px' }}>{copyMsg}</div>}
-            <div className="ft">
-              <span className="cnt">{copySel.size} selected</span>
-              <span className="grow" />
-              <button type="button" className="az-btn" onClick={() => setCopyOpen(false)}>Close</button>
-              <button type="button" className="az-btn dark" disabled={!copySel.size || copyBusy} onClick={() => void doCopy()}>{copyBusy ? 'Copying…' : `Copy to ${copySel.size || 0} product${copySel.size === 1 ? '' : 's'}`}</button>
-            </div>
+      <Modal
+        open={copyOpen}
+        onClose={() => setCopyOpen(false)}
+        title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Copy size={14} /> Copy this schedule to other products</span>}
+        subtitle={`Applies the painted windows + baseline to each selected product's plan in ${market} (creates a disabled plan where none exists). Guardrails and armed state are left untouched.`}
+        footer={<>
+          <span style={{ fontSize: 12, color: 'var(--ink2)', fontWeight: 700 }}>{copySel.size} selected</span>
+          <span className="grow" />
+          <Button onClick={() => setCopyOpen(false)}>Close</Button>
+          <Button variant="primary" disabled={!copySel.size || copyBusy} onClick={() => void doCopy()}>{copyBusy ? 'Copying…' : `Copy to ${copySel.size || 0} product${copySel.size === 1 ? '' : 's'}`}</Button>
+        </>}
+      >
+        <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {products.filter(p => p.productId !== productId).map(p => {
+              const on = copySel.has(p.productId)
+              return (
+                <label key={p.productId} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12.5, background: on ? '#eaf2ff' : undefined }}>
+                  <Checkbox checked={on} onChange={() => setCopySel(s => { const n = new Set(s); if (n.has(p.productId)) n.delete(p.productId); else n.add(p.productId); return n })} aria-label={`Copy to ${p.name || p.productId}`} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name || p.parentAsin || p.productId}</span>
+                  <span style={{ color: 'var(--ink3)', fontSize: 11, flex: 'none' }}>{p.campaignCount ?? 0} camp</span>
+                </label>
+              )
+            })}
+            {products.filter(p => p.productId !== productId).length === 0 && <div className="az-rp-empty">No other products in {market}.</div>}
           </div>
+          {copyMsg && <div className="az-rp-msg">{copyMsg}</div>}
         </div>
-      )}
+      </Modal>
 
       <RankTargetEditor
         open={editorOpen}

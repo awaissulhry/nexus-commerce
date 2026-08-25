@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { X, Loader2, Check, AlertTriangle, Clock, Trash2, History, Undo2, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox } from '@/design-system/primitives'
 import type { RankUndoApi } from './useRankUndo'
 
 interface FieldChange { field: string; oldValue: string | null; newValue: string | null }
@@ -93,10 +94,7 @@ export function StagedChangesTray({ campaignId, open, tab, onTab, onClose, onCha
       {tab === 'staged' && (<>
       {data && (
         <div className="az-tray-gate">
-          <label className="az-tray-toggle">
-            <input type="checkbox" checked={data.campaign.liveBidWritesEnabled} disabled={busy === 'gate'} onChange={e => void toggleGate(e.target.checked)} />
-            <span>Send staged changes to Amazon (write-gate)</span>
-          </label>
+          <Checkbox className="az-tray-toggle" checked={data.campaign.liveBidWritesEnabled} disabled={busy === 'gate'} onChange={e => void toggleGate(e.target.checked)} label={<span>Send staged changes to Amazon (write-gate)</span>} />
           <span className="sp" />
           <span className={`az-tray-mode ${data.adsMode === 'live' ? 'live' : ''}`}>{data.adsMode === 'live' ? 'LIVE account' : 'Sandbox'}</span>
           {data.gate.allowed
@@ -131,9 +129,9 @@ export function StagedChangesTray({ campaignId, open, tab, onTab, onClose, onCha
 
       {data && data.pending.length > 0 && (
         <div className="az-tray-foot">
-          <button type="button" className="az-btn" disabled={busy === 'all'} onClick={() => void discardAll()}>{busy === 'all' ? <><Loader2 size={13} className="az-spin" /> …</> : <><Trash2 size={13} /> Discard all {data.pending.length}</>}</button>
+          <Button disabled={busy === 'all'} onClick={() => void discardAll()}>{busy === 'all' ? <><Loader2 size={13} className="az-spin" /> …</> : <><Trash2 size={13} /> Discard all {data.pending.length}</>}</Button>
           <span className="sp" />
-          {!data.campaign.liveBidWritesEnabled && <button type="button" className="az-btn dark" disabled={busy === 'gate'} onClick={() => void toggleGate(true)}><Check size={13} /> Open gate &amp; send {data.pending.length}</button>}
+          {!data.campaign.liveBidWritesEnabled && <Button variant="danger" disabled={busy === 'gate'} onClick={() => void toggleGate(true)}><Check size={13} /> Open gate &amp; send {data.pending.length}</Button>}
         </div>
       )}
 
