@@ -2333,7 +2333,7 @@
 .h10-rep-tot .spend .n { font-size: 24px; font-weight: 800; color: var(--nds-blue-600); letter-spacing: -0.02em; line-height: 1.1; }
 .h10-rep-tot .spend .l { font-size: 12px; color: #7c8794; }
 
-.h10-rep-note { padding: 12px 15px; font-size: 13px; line-height: 1.55; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); }
+.h10-rep-note { padding: 12px 15px; font-size: 13px; line-height: 1.55; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); }
 .h10-rep-note b { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-rep-note p { margin: 5px 0 0; }
 .h10-rep-note ul { margin: 6px 0 0; padding-left: 20px; }

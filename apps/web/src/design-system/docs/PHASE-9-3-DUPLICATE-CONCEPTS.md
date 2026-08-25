@@ -991,3 +991,55 @@ it is not what blocks WG.6.
 
 **So WG.6 stays open deliberately**, and the DS keeps two grids until the commerce rebuild decides
 the six, and the operator decides the flat-file four. Nothing about that is a refactoring problem.
+
+## Appendix F — the consistency sweep (2026-08-25), and what it could not decide
+
+Started from one operator report — *the Customize button on the Ad Manager does not open what the
+design system opens* — which was true and was a fork. Generalising it found rather more.
+
+### The detector that worked
+
+Grouping CSS rules by **semantic suffix + body** — "the same named concept under different page
+prefixes". Grouping by body alone returns 182 hits and most are noise (`display:flex; gap:8px`
+recurring is flexbox, not a defect). Suffix-scoped, it returns 50 real clusters.
+
+A second pass grouping by **suffix + radius** found 40 concepts rendered at two or more radii.
+
+### Fixed
+
+| | |
+|---|---|
+| Customize dialog | CampaignsGrid opened a flat popover with live toggles; every other grid opens the DS `PreferencesModal`. Also collapsed `colOrder`+`colVisible` — two arrays that could disagree — into the modal's one ordered list. |
+| Empty states | 8 page classes, 7 byte-identical and `sov` drifted to `max-width: 580px`. `b`/`span`/`.lnk` were copy-pasted 8, 8 and 5 times. **31 rules → 6**, 35 render sites. |
+| "Stale" | FIVE browns for one meaning. One token at the darkest measured value: 5.89 → 8.27. |
+| Marketplace label | A chip on 5 pages, plain bold text on 3, in the same grid cell. |
+| Caption `-said` | 12px on four pages, 12.5px on four. No majority, so legibility decided. |
+| Note severities | Seven families, SIX palettes. Two tokens, set to the highest-contrast variant that existed: error 6.24 → 9.23, caution 5.79 → 6.63. |
+| `.bad` overload | It meant BOTH "this failed" and "heads up" — a failed write and a 5,000-row cap rendered identically. Split into `.warn` (caution) and a red `.bad` (error), reclassified by reading all six call sites. |
+| Radius vocabulary | **1,421 declarations, zero used a DS token.** 851 exactly matched a scale step; they now name it. Plus `--nds-radius-full` for 84 capsules the DS itself was writing as `999px` nine times. |
+
+### 🔴 What the sweep could NOT decide, and why
+
+**570 radii are genuinely off the DS scale** — 5px ×157, 4px ×101, 9px ×97, 3px ×34, 2px ×21,
+11px ×10. The instinct is to snap them. Looking at what they style says otherwise: 2px is on tab
+underline indicators, 3px on bars and swatches, 5px on small chips, 9px on buttons and popovers.
+**Small elements need small radii**, and the DS scale starts at 6px with nothing between 8 and 10.
+So the console is not undisciplined — the scale is incomplete. Extending it vs curating down to
+fewer steps is a design decision, not a substitution, and snapping 570 elements on a guess would
+change how the product looks.
+
+**40 concepts render at split radii** and most have no clean majority: `-chip` uses five different
+values, `-seg` five, `-toggle` four, `-cell` five. Where a majority WAS clear and the components
+were genuinely the same, it was fixed (`-note`, now uniform at `lg` to match its unified colours).
+The rest are listed for a design pass.
+
+### Method notes
+
+- `.h10-kt-note.out` stopped a wrong fix: `-note` looked like six-boxed-versus-three-plain drift
+  until that modifier turned up — kt is plain by DEFAULT with an opt-in box. Two deliberate tiers.
+- `.h10-ra-note` is defined ONLY under `.h10-am-fpanel`. All four of its call sites are inside
+  `AdsFilterBar`'s `notesSlot`, checked before touching — otherwise they would have had no styling
+  at all and the "fix" would have been to the wrong thing.
+- 🔴 A descendant check written as `\.h10-…-empty[^ {,]` EXCLUDES a space and therefore excluded
+  `.h10-bd-empty .lnk` — the exact selectors it was looking for. 31 rules were deleted believing
+  there were 10; caught only by reading the diff before committing.

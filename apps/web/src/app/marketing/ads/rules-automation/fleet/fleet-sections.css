@@ -248,7 +248,7 @@
 .ap-heavy-note {
   display: flex; align-items: flex-start; gap: 6px;
   margin: 6px 0 2px; padding: 7px 9px;
-  background: #fdf5f4; border: 1px solid #f0d7d5; border-radius: var(--nds-radius-sm);
+  background: #fdf5f4; border: 1px solid #f0d7d5; border-radius: var(--nds-radius-lg);
   font-size: 11.5px; color: #7d3f3b; line-height: 1.5;
 }
 .ap-heavy-note svg { flex-shrink: 0; margin-top: 1px; }

@@ -1107,7 +1107,7 @@
 .h10-d2-diff .r .v { color: var(--nds-grey-900); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-d2-none { padding: 16px 10px; font-size: 12.5px; color: #4a5462; line-height: 1.5; }
 .h10-d2-none b { color: var(--nds-grey-900); }
-.h10-d2-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px; border-radius: var(--nds-radius-md); background: var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); font-size: 12px; line-height: 1.45; }
+.h10-d2-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px; border-radius: var(--nds-radius-lg); background: var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); font-size: 12px; line-height: 1.45; }
 .h10-d2-note svg { flex: none; margin-top: 1px; }
 
 /* ── G3 — event overrides ──────────────────────────────────────────────────────────────────
