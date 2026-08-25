@@ -28,16 +28,16 @@ say(`first metric control: ${metrics}`)
 // Open the metric dropdown and read every option — Budget Utilization must be offered.
 await p.locator('[aria-label="Metric"]').first().click()
 await p.waitForTimeout(400)
-const opts = await p.locator('.h10-dd-pop .h10-dd-opt').allTextContents()
+const opts = await p.locator('.nds-combo-pop button').allTextContents()
 say(`metric options (${opts.length}): ${opts.join(' · ')}`)
 say(`Budget Utilization offered: ${opts.some((o) => o.includes('Budget Utilization'))}`)
 // Screenshot the OPEN menu — a textContent hit proves the string exists, not that it is on screen.
-const bu = p.locator('.h10-dd-pop .h10-dd-opt', { hasText: 'Budget Utilization' }).first()
+const bu = p.locator('.nds-combo-pop button', { hasText: 'Budget Utilization' }).first()
 if (await bu.count()) {
   const st = await bu.evaluate((el) => { const c = getComputedStyle(el); return { opacity: c.opacity, color: c.color, display: c.display, fontSize: c.fontSize } })
   say(`"Budget Utilization" option: visible=${await bu.isVisible()} ${JSON.stringify(st)}`)
 }
-await p.locator('.h10-dd-pop').first().screenshot({ path: `${OUT}/budp-metrics.png` })
+await p.locator('.nds-combo-pop').first().screenshot({ path: `${OUT}/budp-metrics.png` })
 await p.keyboard.press('Escape')
 await p.waitForTimeout(200)
 

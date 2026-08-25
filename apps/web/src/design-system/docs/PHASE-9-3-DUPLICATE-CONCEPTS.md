@@ -936,6 +936,33 @@ root, so a dispatched `mouseenter` never reaches it; a REAL hover lit 101 cells.
 automated gesture doing nothing was indistinguishable from code doing nothing. **Confirm the gesture
 before blaming the code.**
 
+### 🔴 The honest limit of WG.3e: the grid is in the DS, its filter panel's CSS is not
+
+Audited after the move, by listing every class the moved files render and asking where each is
+DEFINED. **23 of 69 class tokens resolve only in app CSS.** Discounting single-letter modifiers
+(`.f`, `.i`, `.mm`) that are scoped inside parent selectors, the structural ones are real:
+
+    .h10-am-fpanel  .ffield  .ffnote  .fft  .fphead  .fpsum  .frow  .is-collapsed  .tog
+    .h10-am-latest  .h10-cardstack  .h10-dd-back  .h10-discard  .h10-edit-actions  .h10-edit-in
+
+That is **`AdsFilterBar`'s entire CSS surface**, still in `ads.css` while the component sits in
+`design-system/patterns`. WG.2d moved the grid TABLE's rules and deliberately left the filter
+panel's 36, because `ReportRunner` renders `.h10-am-fpanel` markup of its own — the same
+"who else renders this" question that `card` and `link` each needed answering before they could
+move.
+
+So: **a DS component whose styling is completed by an app stylesheet.** Inside the ads console it
+renders correctly, which is why nothing failed and no guard fired. Consumed anywhere else it would
+be unstyled. The fix is the `h10-am-fpanel` concept extraction, blocked on the one non-grid
+consumer — not on anything about the grid.
+
+Recorded rather than papered over: a component can move without its styles, and the toolchain
+cannot see the difference while the old stylesheet still happens to load.
+
+(Also swept here: `.h10-dd-pop`, dead the moment `FilterDropdown` retired — it was the only
+renderer. Its two rules are gone; `.h10-dd-list` / `.h10-dd-opt` / `.h10-dd-search` stay, still
+rendered by `StatusOptions`, `EbDateField` and `AiGoalBuilder`.)
+
 ### What is left of #13
 
 `DataGrid` has **10 renders across 6 files**, and WG.6 — retiring it — is blocked by two things

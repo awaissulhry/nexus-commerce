@@ -26,7 +26,7 @@ const readModal = async () => ({
 // ── A: DE scope on the idle starter ──
 await setup(2)
 await p.locator('[aria-label="Marketplace scope"]').first().click(); await p.waitForTimeout(400)
-await p.locator('.h10-dd-pop .h10-dd-opt', { hasText: 'Germany (DE)' }).first().click(); await p.waitForTimeout(300)
+await p.locator('.nds-combo-pop button', { hasText: 'Germany (DE)' }).first().click(); await p.waitForTimeout(300)
 await openPreview()
 let m = await readModal(); say(`A) DE scope  rows=${m.rows}  foot="${m.foot}"`)
 await p.locator('.h10-rb-prev').screenshot({ path: `${OUT}/budpp-de.png` })
@@ -34,7 +34,7 @@ await p.keyboard.press('Escape')
 
 // ── B: FR scope — no DE campaign can match, so the modal must SAY why, not just be empty ──
 await p.locator('[aria-label="Marketplace scope"]').first().click(); await p.waitForTimeout(400)
-await p.locator('.h10-dd-pop .h10-dd-opt', { hasText: 'France (FR)' }).first().click(); await p.waitForTimeout(300)
+await p.locator('.nds-combo-pop button', { hasText: 'France (FR)' }).first().click(); await p.waitForTimeout(300)
 await openPreview()
 m = await readModal(); say(`B) FR scope  rows=${m.rows}  msg="${m.msg}"`)
 await p.locator('.h10-rb-prev').screenshot({ path: `${OUT}/budpp-empty.png` })

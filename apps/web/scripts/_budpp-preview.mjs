@@ -20,7 +20,7 @@ await p.waitForTimeout(400)
 // Scope to DE.
 await p.locator('[aria-label="Market scope"], [aria-label="Marketplace"]').first().click().catch(() => {})
 await p.waitForTimeout(300)
-const de = p.locator('.h10-dd-pop .h10-dd-opt', { hasText: 'Germany (DE)' }).first()
+const de = p.locator('.nds-combo-pop button', { hasText: 'Germany (DE)' }).first()
 if (await de.count()) { await de.click(); say('scope: Germany (DE)') } else say('scope control not found — leaving All markets')
 await p.waitForTimeout(300)
 
