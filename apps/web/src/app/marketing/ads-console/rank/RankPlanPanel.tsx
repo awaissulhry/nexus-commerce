@@ -13,6 +13,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
 import { RankTargetEditor } from './RankTargetEditor'
@@ -148,9 +150,9 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
         {sched && <button type="button" className={`az-rp-defend ${sched.enabled ? 'on' : ''}`} onClick={() => void toggleDefend()} title="When ON, the engine continuously holds this plan on its cadence"><Power size={12} /> Auto-defend {sched.enabled ? 'ON' : 'OFF'}</button>}
         <span className="grow" />
         {dirty && <span className="az-rp-dirty">Unsaved</span>}
-        <button type="button" className="az-btn" disabled={!dirty || busy !== ''} onClick={discard}><Undo2 size={13} /> Discard</button>
-        <button type="button" className="az-btn" disabled={!dirty || busy !== ''} onClick={() => void save()}><Save size={13} /> {busy === 'save' ? 'Saving…' : 'Save'}</button>
-        <button type="button" className="az-btn dark" disabled={busy !== '' || (!baseline && windows.length === 0)} onClick={() => void publish()}><UploadCloud size={13} /> {busy === 'publish' ? 'Publishing…' : 'Publish'}</button>
+        <Button disabled={!dirty || busy !== ''} onClick={discard}><Undo2 size={13} /> Discard</Button>
+        <Button disabled={!dirty || busy !== ''} onClick={() => void save()}><Save size={13} /> {busy === 'save' ? 'Saving…' : 'Save'}</Button>
+        <Button variant="primary" disabled={busy !== '' || (!baseline && windows.length === 0)} onClick={() => void publish()}><UploadCloud size={13} /> {busy === 'publish' ? 'Publishing…' : 'Publish'}</Button>
       </div>
 
       {!loaded ? <div className="az-rp-load">Loading rank plan…</div> : <>
@@ -170,11 +172,9 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
             <div className="az-rp-lbl az-rp-dphd">
               <span>When this product&apos;s family sells{famName ? ` · ${famName.slice(0, 26)}` : ''}: <b className="az-rp-sample">{demand.familyOrders} actual orders · {demandDays}d</b></span>
               <span className="grow" />
-              {smoothed && <label className="az-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
-              <select className="az-rp-tf" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
-                {[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}
-              </select>
-              {rec && rec.windows.length > 0 && <button type="button" className="az-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
+              {smoothed && <Checkbox className="az-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales." checked={smooth} onChange={e => setSmooth(e.target.checked)} label="smooth" />}
+              <Listbox ariaLabel="Demand timeframe" width={110} value={String(demandDays)} onChange={v => setDemandDays(Number(v))} options={[7, 14, 30, 60, 90, 180].map(d => ({ value: String(d), label: `last ${d}d` }))} />
+              {rec && rec.windows.length > 0 && <Button variant="link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</Button>}
             </div>
             <DemandReadout grid={(smooth && smoothed ? smoothed : demand).grid} hourProfile={(smooth && smoothed ? smoothed : demand).hourProfile} weekdayProfile={(smooth && smoothed ? smoothed : demand).weekdayProfile} timezone={demand.timezone} metric={demand.metric} />
           </div>
@@ -187,7 +187,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
               <button type="button" role="tab" aria-selected={winView === 'grid'} className={winView === 'grid' ? 'on' : ''} onClick={() => setWinView('grid')}>Grid</button>
               <button type="button" role="tab" aria-selected={winView === 'list'} className={winView === 'list' ? 'on' : ''} onClick={() => setWinView('list')}>List</button>
             </span>
-            {winView === 'list' && <button type="button" className="az-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
+            {winView === 'list' && <Button variant="link" onClick={addWindow}><Plus size={12} /> Add window</Button>}
           </div>
           {winView === 'grid' ? (
             <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={(smooth && smoothed ? smoothed : demand)?.grid ?? null} onUseDemandPeaks={rec?.windows?.length ? applyRecommended : undefined} onEditTargets={() => setEditorOpen(true)} onOpenTemplates={() => setTplOpen(true)} />
@@ -196,11 +196,11 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
             {windows.map((w, i) => (
               <div key={i} className="az-rp-win">
                 <div className="days">{DAYS.map((d, di) => <button key={di} type="button" className={w.days.includes(di) ? 'on' : ''} onClick={() => toggleDay(i, di)}>{d[0]}</button>)}</div>
-                <select value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</select>
+                <Listbox ariaLabel="Start hour" width={96} value={String(w.startHour)} onChange={v => setWin(i, { startHour: Number(v) })} options={Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hh(h) }))} />
                 <span className="to">to</span>
-                <select value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</select>
+                <Listbox ariaLabel="End hour" width={110} value={String(w.endHour)} onChange={v => setWin(i, { endHour: Number(v) })} options={Array.from({ length: 25 }, (_, h) => ({ value: String(h), label: `${hh(h % 24)}${h === 24 ? ' (24)' : ''}` }))} />
                 <span className="arrow">→</span>
-                <select value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</select>
+                <Listbox ariaLabel="Rank target" width={170} value={w.targetKey ?? ''} onChange={v => setWin(i, { targetKey: v })} options={targets.map(t => ({ value: t.key, label: t.name }))} />
                 <span className="grow" />
                 <button type="button" className="az-kebab" onClick={() => removeWin(i)} style={{ color: '#cc1100' }} aria-label="Remove window"><Trash2 size={13} /></button>
               </div>
