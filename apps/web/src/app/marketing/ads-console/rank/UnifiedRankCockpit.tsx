@@ -25,6 +25,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info, Package, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input, Kbd, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { RankPlacementCockpit } from '../automation/RankPlacementCockpit'
 import { StagedChangesTray } from './StagedChangesTray'
 import { useRankUndo } from './useRankUndo'
@@ -189,15 +191,23 @@ export function UnifiedRankCockpit() {
       <div className="az-urc-bar">
         <span className="az-urc-crumb"><Crosshair size={15} /> Rank Control <ChevronRight size={11} /> <b>{viewLabel}</b>{view === 'cockpit' && campaign ? <> <ChevronRight size={11} /> {campaign.name}</> : ''}</span>
         <span className="sp" />
-        <label className="az-urc-ctl"><span>Market</span><select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select></label>
-        <button type="button" className={`az-urc-modebtn ${view === 'plan' ? 'on' : ''}`} onClick={() => setParams({ mode: view === 'plan' ? 'cockpit' : 'plan' })} title="Rank Director — manage rank by product across all its campaigns at once"><Package size={13} /> By product</button>
+        <span className="az-urc-ctl"><span>Market</span><Listbox ariaLabel="Market" width={92} value={market} onChange={setMarket} options={MARKETS.map(m => ({ value: m, label: m }))} /></span>
+        <Button size="sm" active={view === 'plan'} aria-pressed={view === 'plan'} onClick={() => setParams({ mode: view === 'plan' ? 'cockpit' : 'plan' })} title="Rank Director — manage rank by product across all its campaigns at once"><Package size={13} /> By product</Button>
         {view === 'cockpit' && (<>
-          <label className="az-urc-ctl"><span>Window</span><select value={lookback} onChange={e => setLookback(Number(e.target.value))}>{LOOKBACKS.map(d => <option key={d} value={d}>{d}d</option>)}</select></label>
-          <label className="az-urc-ctl"><span>Show</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'active' | 'inactive' | 'all')}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label>
-          <div className="az-urc-search">
-            <Search size={13} />
-            <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true) }} onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 150)} placeholder={`Search ${inMarket.length} campaigns…`} aria-label="Search campaigns" />
-            {!searchOpen && <kbd title="Command palette">⌘K</kbd>}
+          <span className="az-urc-ctl"><span>Window</span><Listbox ariaLabel="Window" width={96} value={String(lookback)} onChange={v => setLookback(Number(v))} options={LOOKBACKS.map(d => ({ value: String(d), label: `${d}d` }))} /></span>
+          <span className="az-urc-ctl"><span>Show</span><Listbox ariaLabel="Show" width={116} value={statusFilter} onChange={v => setStatusFilter(v as 'active' | 'inactive' | 'all')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'all', label: 'All' }]} /></span>
+          <span className="az-urc-search" style={{ border: 'none', padding: 0 }}>
+            <Input
+              leadingIcon={<Search size={13} />}
+              suffix={!searchOpen ? <Kbd>⌘K</Kbd> : undefined}
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSearchOpen(true) }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              placeholder={`Search ${inMarket.length} campaigns…`}
+              aria-label="Search campaigns"
+              style={{ width: 190 }}
+            />
             {searchOpen && inMarket.length > 0 && (
               <div className="az-urc-results" role="listbox">
                 {searchResults.map(c => <button key={c.id} type="button" role="option" aria-selected={c.id === campaignId} className={c.id === campaignId ? 'on' : ''} onMouseDown={() => pickCampaign(c.id)}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}{c.marketplace ? <span className="mk">{c.marketplace}</span> : null}</button>)}
@@ -211,14 +221,14 @@ export function UnifiedRankCockpit() {
                 })()}
               </div>
             )}
-          </div>
+          </span>
         </>)}
         <span className="sp" />
         <span className={`az-urc-chip ${tone}`} title="Global automation posture (all advertising rules)">{tone === 'off' ? <AlertTriangle size={12} /> : <Zap size={12} />} {autonomyLabel}</span>
         {view === 'cockpit' && (
           <div className="az-urc-undo">
-            <button type="button" disabled={!canUndo} onClick={() => void undo()} title="Undo last change (⌘Z)" aria-label="Undo"><Undo2 size={15} /></button>
-            <button type="button" disabled={!canRedo} onClick={() => void redo()} title="Redo (⇧⌘Z)" aria-label="Redo"><Redo2 size={15} /></button>
+            <ToolbarButton variant="boxed" icon={<Undo2 size={15} />} label="Undo" shortcut="⌘Z" description="Undo the last change" disabled={!canUndo} onClick={() => void undo()} />
+            <ToolbarButton variant="boxed" icon={<Redo2 size={15} />} label="Redo" shortcut="⇧⌘Z" description="Redo the last undone change" disabled={!canRedo} onClick={() => void redo()} />
           </div>
         )}
       </div>
@@ -270,7 +280,7 @@ export function UnifiedRankCockpit() {
         <section className="az-cr-sec">
           <div className="az-cr-sechd"><span className="n">3</span><div className="x"><b>Adjust placement &amp; bids</b><span>Quick-set the push, or fine-tune the placement ladder &amp; bids below.</span></div></div>
           {campaignId && autoDefend.on && (
-            <div className="az-cr-managed"><Lock size={13} /> <span>Top-of-Search placement is <b>managed by your rank goal</b> (§2) — it auto-adjusts to hold your target, so manual changes here would be overridden. Keyword bids &amp; strategy below are unaffected.</span><button type="button" onClick={() => void takeManualControl()}>Take manual control</button></div>
+            <div className="az-cr-managed"><Lock size={13} /> <span>Top-of-Search placement is <b>managed by your rank goal</b> (§2) — it auto-adjusts to hold your target, so manual changes here would be overridden. Keyword bids &amp; strategy below are unaffected.</span><Button size="sm" variant="primary" onClick={() => void takeManualControl()}>Take manual control</Button></div>
           )}
           {campaignId && <QuickRankSet campaignId={campaignId} onChanged={loadPending} locked={autoDefend.on} />}
           <RankPlacementCockpit market={market} campaignId={campaignId} lookbackDays={lookback} onMarketChange={setMarket} onCampaignChange={setCampaignId} hideScopeBar hideKeywordManager hideDayparting topManaged={autoDefend.on} />
