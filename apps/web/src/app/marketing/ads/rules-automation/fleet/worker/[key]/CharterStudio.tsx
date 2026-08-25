@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { AlertTriangle, Check, FlaskConical, History, PlayCircle, RotateCcw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, Textarea } from '@/design-system/primitives'
@@ -257,26 +258,22 @@ export function CharterStudio({
                 ? 'This draft measured better than what is running.'
                 : 'Too close to call — no measured improvement either way.'}
           </strong>
-          <table className="acr-fl-table">
-            <thead>
-              <tr>
-                <th>Measure</th>
-                <th>Running now</th>
-                <th>Your draft</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evaluation.measures.map((m) => (
-                <tr key={m.measure}>
-                  <td>{m.measure}</td>
-                  <td>{fmt(m.baseline)}</td>
-                  <td className={m.better === true ? 'good' : m.better === false ? 'bad' : ''}>
-                    {fmt(m.candidate)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Three columns and static — the kind this round is allowed to leave alone. It is
+              converted anyway because `acr-fl-table` has three call sites: leaving one raw would
+              mean one class rendering two different tables in the same console. */}
+          <DataGrid
+            className="acr-fl-table"
+            rows={evaluation.measures}
+            rowKey={(m) => m.measure}
+            columns={[
+              { key: 'measure', label: 'Measure', render: (m) => <>{m.measure}</> },
+              { key: 'baseline', label: 'Running now', align: 'right', render: (m) => <>{fmt(m.baseline)}</> },
+              {
+                key: 'candidate', label: 'Your draft', align: 'right',
+                render: (m) => <span className={m.better === true ? 'good' : m.better === false ? 'bad' : undefined}>{fmt(m.candidate)}</span>,
+              },
+            ]}
+          />
           <span className="acr-fl-sub">
             {evaluation.baseline.cases} run(s) each, on the same evidence · cost $
             {evaluation.costUSD.toFixed(4)}

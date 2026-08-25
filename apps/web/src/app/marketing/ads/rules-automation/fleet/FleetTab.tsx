@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { Bot, RefreshCw, ShieldAlert } from 'lucide-react'
@@ -748,49 +749,34 @@ export function FleetTab() {
             </ResponsiveContainer>
           </div>
         ) : null}
-        <table className="acr-fl-table">
-          <thead>
-            <tr>
-              <th>Worker</th>
-              <th>7d cost</th>
-              {haveScorecards ? (
-                <>
-                  <th><Term k="grade">Grade</Term></th>
-                  <th><Term k="shadow-agreement">Agrees with engines</Term></th>
-                  <th>Trust</th>
-                </>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {charters.map((c) => {
-              const card = latest14ByCharter.get(c.key)
-              return (
-                <tr key={c.key}>
-                  <td>{c.name}</td>
-                  <td>{usd(cost7dByCharter.get(c.key) ?? 0)}</td>
-                  {haveScorecards ? (
-                    <>
-                      <td>{card?.grade ?? '—'}</td>
-                      <td>
-                        {card?.shadowAgreement == null
-                          ? 'unknown'
-                          : `${Math.round(Number(card.shadowAgreement) * 100)}%`}
-                      </td>
-                      <td>
-                        {card?.promotionEligible
-                          ? 'earned the next rung'
-                          : c.autonomyLevel === 'OFF'
-                            ? 'switched off'
-                            : 'earning it'}
-                      </td>
-                    </>
-                  ) : null}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        {/* Three of the five columns exist only once a report card does — a grade column
+            full of em-dashes says "no grade" where the truth is "no card yet", which the
+            paragraph below states properly. */}
+        <DataGrid<CharterRow>
+          className="acr-fl-table"
+          rows={charters}
+          rowKey={(c) => c.key}
+          columns={[
+            { key: 'worker', label: 'Worker', render: (c) => <>{c.name}</> },
+            { key: 'cost', label: '7d cost', align: 'right', render: (c) => <>{usd(cost7dByCharter.get(c.key) ?? 0)}</> },
+            ...(haveScorecards ? [
+              { key: 'grade', label: <Term k="grade">Grade</Term>, render: (c: CharterRow) => <>{latest14ByCharter.get(c.key)?.grade ?? '—'}</> },
+              {
+                key: 'agree', label: <Term k="shadow-agreement">Agrees with engines</Term>, align: 'right' as const,
+                render: (c: CharterRow) => {
+                  const card = latest14ByCharter.get(c.key)
+                  return <>{card?.shadowAgreement == null ? 'unknown' : `${Math.round(Number(card.shadowAgreement) * 100)}%`}</>
+                },
+              },
+              {
+                key: 'trust', label: 'Trust',
+                render: (c: CharterRow) => (<>{latest14ByCharter.get(c.key)?.promotionEligible
+                  ? 'earned the next rung'
+                  : c.autonomyLevel === 'OFF' ? 'switched off' : 'earning it'}</>),
+              },
+            ] : []),
+          ]}
+        />
         <p className="acr-fl-sub">
           Costs here cover the {runs.length} most recent runs and reconcile against the sweep
           report.{' '}

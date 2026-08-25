@@ -658,10 +658,9 @@
 
 .acr-week-table { width: 100%; border-collapse: collapse; margin: 14px 0 0; font-size: 12.5px; }
 
-.acr-week-table th.n, .acr-week-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
 
 .acr-week-table td:last-child, .acr-week-table th:last-child { padding-right: 0; }
-.acr-week-table td.bad { color: #a3342b; font-weight: 600; }
+.acr-week-table .bad { color: #a3342b; font-weight: 600; }
 .acr-week-table .acr-mode { font-size: 10px; padding: 1px 5px; }
 
 /* The gate, stated rather than flipped. */
@@ -920,16 +919,11 @@
 .acr-fl-reasonfield { width: 220px; }
 
 /* cost ledger */
-.acr-fl-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; }
-.acr-fl-table th {
-  text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em;
-  text-transform: uppercase; color: var(--nds-grey-500); padding: 4px 10px 6px 0;
-  border-bottom: 1px solid var(--nds-grey-150);
-}
-.acr-fl-table td {
-  padding: 6px 10px 6px 0; border-bottom: 1px solid var(--nds-grey-100);
-  color: var(--nds-grey-700); font-variant-numeric: tabular-nums;
-}
+.acr-fl-table { font-size: 12.5px; margin-bottom: 8px; }
+/* All three call sites are the DS `DataGrid` now — the header and cell blocks that used to sit
+   here set only what `.nds-grid thead th` / `tbody td` set at higher specificity, so none of it
+   reached the page. Kept: the figures line up, which the DS does not decide. */
+.acr-fl-table td, .acr-week-table td { font-variant-numeric: tabular-nums; }
 
 /* brief */
 .acr-fl-sweeps { margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--nds-grey-700); }
@@ -1121,7 +1115,6 @@
   border-color: var(--nds-grey-100);
 }
 @keyframes acr-fl-shimmer { to { background-position: -200% 0; } }
-.acr-fl-table { display: block; overflow-x: auto; }
 @media (max-width: 900px) {
   .acr-fl-stepper { flex-direction: column; gap: 6px; }
   .acr-fl-stagearrow { display: none; }
@@ -1240,8 +1233,8 @@
 .acr-cs-result.bad { border-color: #e6bcba; background: #fdf2f2; }
 .acr-cs-result.verdict-better { border-color: #c3e5d3; background: #f1faf5; }
 .acr-cs-result.verdict-worse { border-color: #e6bcba; background: #fdf2f2; }
-.acr-cs-result td.good { color: var(--nds-success-text); font-weight: 650; }
-.acr-cs-result td.bad { color: var(--nds-danger-text); font-weight: 650; }
+.acr-cs-result .good { color: var(--nds-success-text); font-weight: 650; }
+.acr-cs-result .bad { color: var(--nds-danger-text); font-weight: 650; }
 .acr-cs-findings { margin: 0; padding-left: 18px; font-size: 12px; color: var(--nds-grey-600); }
 .acr-cs-revlist { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .acr-cs-revlist li { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--nds-grey-100); }
@@ -1254,4 +1247,5 @@
    the one cell property it does not decide, and both of these stack a second line inside a cell.
    Stated here rather than in `rules-automation.css`: this stylesheet does not borrow. */
 .acr-dw-tbl td,
+.acr-fl-table td,
 .acr-week-table td { vertical-align: top; }

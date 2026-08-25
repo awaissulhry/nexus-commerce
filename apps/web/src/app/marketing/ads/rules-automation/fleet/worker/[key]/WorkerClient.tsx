@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import Link from 'next/link'
 import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -640,27 +641,21 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
                   : ' It has not yet earned a promotion.'}
               </p>
             ) : null}
-            <table className="acr-fl-table">
-              <thead>
-                <tr>
-                  <th>Window</th><th>Found</th><th>Into plans</th><th>Approved</th><th>Rejected</th><th>Agrees with engines</th><th>Grade</th><th>Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scorecards.slice(0, 6).map((s) => (
-                  <tr key={`${s.windowDays}-${s.periodEnd}`}>
-                    <td>{s.windowDays}d to {new Date(s.periodEnd).toISOString().slice(0, 10)}</td>
-                    <td>{s.findings}</td>
-                    <td>{s.promoted}</td>
-                    <td>{s.approved}</td>
-                    <td>{s.rejected}</td>
-                    <td>{s.shadowAgreement == null ? 'unknown' : `${Math.round(Number(s.shadowAgreement) * 100)}%`}</td>
-                    <td>{s.grade ?? '—'}</td>
-                    <td>{usd(s.costUSD)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataGrid
+              className="acr-fl-table"
+              rows={scorecards.slice(0, 6)}
+              rowKey={(s) => `${s.windowDays}-${s.periodEnd}`}
+              columns={[
+                { key: 'window', label: 'Window', render: (s) => <>{s.windowDays}d to {new Date(s.periodEnd).toISOString().slice(0, 10)}</> },
+                { key: 'found', label: 'Found', align: 'right', render: (s) => <>{s.findings}</> },
+                { key: 'promoted', label: 'Into plans', align: 'right', render: (s) => <>{s.promoted}</> },
+                { key: 'approved', label: 'Approved', align: 'right', render: (s) => <>{s.approved}</> },
+                { key: 'rejected', label: 'Rejected', align: 'right', render: (s) => <>{s.rejected}</> },
+                { key: 'agree', label: 'Agrees with engines', align: 'right', render: (s) => <>{s.shadowAgreement == null ? 'unknown' : `${Math.round(Number(s.shadowAgreement) * 100)}%`}</> },
+                { key: 'grade', label: 'Grade', render: (s) => <>{s.grade ?? '—'}</> },
+                { key: 'cost', label: 'Cost', align: 'right', render: (s) => <>{usd(s.costUSD)}</> },
+              ]}
+            />
           </>
         )}
       </section>

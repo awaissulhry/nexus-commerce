@@ -293,7 +293,10 @@ const WEEK_COLUMNS: Array<Column<DigestRule>> = [
   { key: 'proposed', label: 'Proposed', align: 'right', render: (r) => <>{r.proposed || '—'}</> },
   { key: 'applied', label: 'You applied', align: 'right', render: (r) => <>{r.applied || '—'}</> },
   { key: 'denied', label: 'You declined', align: 'right', render: (r) => <>{r.denied || '—'}</> },
-  { key: 'failed', label: 'Failed', align: 'right', render: (r) => <>{r.failed || '—'}</> },
+  // The count was a `td.bad` before this table was a DataGrid, and `Column` has nowhere to put
+  // a cell class (DS-GAPS) — so the colour moves onto the number itself. A red zero would be
+  // the opposite of the point, hence the guard.
+  { key: 'failed', label: 'Failed', align: 'right', render: (r) => (r.failed > 0 ? <b className="bad">{r.failed}</b> : <>—</>) },
 ]
 
 export function ActivityTab() {
