@@ -27,7 +27,7 @@ interface CondRow { field: string; op: string; value: string }
 interface ActRow { type: string; params: Record<string, string> }
 interface Conn { marketplace: string }
 
-const ACTION_CATS = [...new Set(ACTIONS.map((a) => a.cat))]
+
 const opSym = (op: string) => OPS.find((o) => o.v === op)?.l ?? op
 const seedParams = (type: string): Record<string, string> => Object.fromEntries((actionDef(type)?.params ?? []).map((p) => [p.k, String(p.def)]))
 const defaultRow = (trigger: string): CondRow => ({ field: suggestedFields(trigger)[0]?.f ?? 'campaign.acos', op: 'gte', value: '' })
@@ -274,9 +274,13 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
           <h4>Then (actions)</h4>
           {acts.map((a, ai) => (
             <div key={ai} style={{ ...rowStyle, flexWrap: 'wrap' }}>
-              <select value={a.type} onChange={(e) => setActType(ai, e.target.value)}>
-                {ACTION_CATS.map((cat) => <optgroup key={cat} label={cat}>{ACTIONS.filter((x) => x.cat === cat).map((x) => <option key={x.t} value={x.t}>{x.label}</option>)}</optgroup>)}
-              </select>
+              <Listbox
+                ariaLabel="Action"
+                width={230}
+                value={a.type}
+                onChange={(v) => setActType(ai, v)}
+                options={ACTIONS.map((x) => ({ value: x.t, label: x.label, group: x.cat }))}
+              />
               {paramInput(ai, a)}
               <button className="az-kebab" onClick={() => removeAct(ai)} style={{ color: '#cc1100' }} aria-label="Remove action"><Trash2 size={14} /></button>
             </div>
