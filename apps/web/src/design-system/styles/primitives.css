@@ -848,3 +848,59 @@
 .nds-toggle.xs         { width: 24px; height: 14px; }
 .nds-toggle.xs::after  { width: 10px; height: 10px; }
 .nds-toggle.xs.on::after { transform: translateX(10px); }
+
+/* ── FilterChip ────────────────────────────────────────────────────────────
+   A chip that toggles a filter. The two measurable hand-rolled versions agree on the shape
+   (white fill, hairline border, full radius) so the capsule is unanimous; they disagree on the
+   engaged text and one is under AA. See FilterChip.tsx for the numbers. */
+.nds-fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.nds-fchip:hover:not(:disabled):not([aria-pressed='true']) {
+  background: var(--nds-surface-hover);
+  border-color: var(--nds-border-strong);
+}
+.nds-fchip:focus-visible {
+  outline: none;
+  border-color: var(--nds-primary);
+  box-shadow: var(--nds-focus-ring);
+}
+/* blue-900 on blue-50 — 7.41:1. NOT blue-600, which is 4.36:1 and under AA. */
+.nds-fchip[aria-pressed='true'] {
+  background: var(--nds-blue-50);
+  border-color: var(--nds-blue-200);
+  color: var(--nds-blue-900);
+}
+.nds-fchip .c {
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nds-fchip[aria-pressed='true'] .c {
+  color: var(--nds-blue-900);
+}
+.nds-fchip .b {
+  padding: 1px 6px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-note-error-bg);
+  color: var(--nds-note-error-fg);
+  font-size: 11px;
+  font-weight: 700;
+}
+.nds-fchip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

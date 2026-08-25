@@ -1,6 +1,7 @@
 export { type Tone, TONES } from './tone'
 export { type Size } from './size'
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from './Button'
+export { FilterChip, type FilterChipProps } from './FilterChip'
 export { Pill, type PillProps } from './Pill'
 export { Badge, type BadgeProps, type AdProgram } from './Badge'
 export { Tag, type TagProps, type TagTone, type LegacyTagTone } from './Tag'
