@@ -1,0 +1,33 @@
+{
+  "note": "Selectors ending in a bare input/select/button/textarea inside a descendant chain \u2014 they shadow the DS primitive. This may only FALL. A file absent here is held at zero. See the script header for the two fixes and why they differ. Baselined from COMMITTED content: a working-tree scan captured another session's in-flight improvement to rules-automation.css (51 vs 54 at HEAD), which would have failed THEIR next push for work they had not done.",
+  "updatedAt": "2026-08-25",
+  "total": 394,
+  "files": {
+    "app/fleet/activity/activity.css": 1,
+    "app/fleet/approvals/approvals.css": 4,
+    "app/fleet/assignments/assignments.css": 4,
+    "app/fleet/map/map.css": 11,
+    "app/fleet/workers/workers.css": 4,
+    "app/marketing/ads/_shared/SponsoredBrandSettings.css": 2,
+    "app/marketing/ads/_shared/keyword-targeting.css": 4,
+    "app/marketing/ads/ads.css": 156,
+    "app/marketing/ads/ai-advertising/new-goal/ai-goal.css": 2,
+    "app/marketing/ads/budget-manager/budget-manager.css": 2,
+    "app/marketing/ads/budget-manager/control-plane.css": 5,
+    "app/marketing/ads/bulk/bulk.css": 5,
+    "app/marketing/ads/campaign-builder/sb-sd/sb-sd.css": 5,
+    "app/marketing/ads/campaign-builder/single/single.css": 6,
+    "app/marketing/ads/dashboard/dashboard.css": 1,
+    "app/marketing/ads/ebay/ebay.css": 4,
+    "app/marketing/ads/health/health.css": 4,
+    "app/marketing/ads/portfolios/[id]/family-cockpit.css": 3,
+    "app/marketing/ads/portfolios/portfolios.css": 3,
+    "app/marketing/ads/reporting/reporting.css": 8,
+    "app/marketing/ads/rules-automation/_schedule/dayparting.css": 3,
+    "app/marketing/ads/rules-automation/control-room/control-room.css": 6,
+    "app/marketing/ads/rules-automation/fleet/fleet-sections.css": 4,
+    "app/marketing/ads/rules-automation/rules-automation.css": 54,
+    "app/marketing/ads/suggestions/suggestions.css": 5,
+    "app/marketing/ads-console/amazon.css": 88
+  }
+}

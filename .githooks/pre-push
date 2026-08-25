@@ -108,6 +108,16 @@ node scripts/check-css-radius-ratchet.mjs --check || {
   exit 1
 }
 
+# 2026-08-25 — DS-shadow ratchet. A page rule ending in a bare input/select/button/textarea
+# inside a descendant chain BEATS the design-system primitive (.h10-aig-field input is (0,2,1)
+# against .nds-field > input's (0,1,1)), so a converted control renders as design-system markup
+# and page-stylesheet pixels. 391 of them across 28 sheets when this was measured, which is why
+# it freezes rather than bans. The two fixes are NOT the same fix — see the script header.
+node scripts/check-css-ds-shadow-ratchet.mjs --check || {
+  echo "❌ DS-shadow ratchet FAILED — see message above (rule + why: scripts/check-css-ds-shadow-ratchet.mjs header)"
+  exit 1
+}
+
 # TECH_DEBT #62 (2026-08-06) — tokens.css is generated from
 # tokens/css-vars.ts; a hand-edit to the output silently dies on the next
 # regen (the rail vars lived that way for five weeks). Fail the push when
