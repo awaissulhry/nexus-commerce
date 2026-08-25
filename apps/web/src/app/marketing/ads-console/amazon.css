@@ -1192,6 +1192,18 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-table .cn { color: var(--link); font-weight: 500; cursor: pointer; }
 .az-table .cn:hover { color: var(--link-hover); text-decoration: underline; }
 .az-table .sub { color: var(--ink2); font-size: 11.5px; }
+/* `.az-table .num` carried `tabular-nums` and is scoped, so a converted grid loses digit
+   alignment and numeric columns jitter down the page. `DataGrid` sets `font-variant-numeric` on
+   NO selector (checked by walking every declaration in components.css), so there is nothing to
+   inherit. In these grids `align: 'right'` marks exactly the numeric columns, which is what
+   `.num` marked before — so this is the same page-owned typographic choice, re-homed through a
+   markup change, not a DS feature invented locally. Filed upstream as well: 60 files render a
+   DataGrid and every one of them has the same problem.
+   🔴 Not `.nds-grid td.r input` or similar — never style a bare element through the DS's
+   internals; see scripts/check-css-ds-shadow-ratchet.mjs. */
+.nds-grid th.r,
+.nds-grid td.r { font-variant-numeric: tabular-nums; }
+
 /* The same secondary cell text, reachable from a DS `DataGrid` cell. `.sub` exists ONLY as
    `.az-table .sub` — moving a cell into `.nds-grid` makes it match nothing and the text
    silently returns to 13px `--nds-text`. Same colour as the row above (--ink2, 7.07:1), so a

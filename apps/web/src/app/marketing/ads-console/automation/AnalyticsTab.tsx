@@ -14,6 +14,7 @@ import { BarChart3, RefreshCw, Download } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { cleanName } from './_icons'
 import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 
@@ -21,6 +22,17 @@ interface Rule { id: string; name: string; trigger: string; actions: Array<{ typ
 interface Health { executions30d?: { total: number; success: number; failed: number; dryRun: number }; matches30d?: number; successRatePct?: number | null; estTimeSavedHours?: number; rules?: { total: number; live: number; dryRun: number; disabled: number } }
 interface RecResp { counts?: Record<string, number>; potentialMonthlyImpactCents?: number }
 interface Trend { date: string; adSpendCents: number; adSalesCents: number }
+
+/** `.az-table` right-aligns by default and opts into left with `.l`; `.nds-grid` is the reverse.
+ *  The three counts carried no `.l`, so they — and only they — declare `align: 'right'`. */
+const LEADERBOARD_COLUMNS: Array<Column<Rule>> = [
+  { key: 'rule', label: 'Rule', render: (r) => <span style={{ fontWeight: 500 }}>{cleanName(r.name)}</span> },
+  { key: 'trigger', label: 'Trigger', render: (r) => (r.trigger === 'SCHEDULE' ? 'Scheduled' : r.trigger.replace(/_/g, ' ').toLowerCase()) },
+  { key: 'status', label: 'Status', render: (r) => (r.enabled ? <span className={`az-live ${r.dryRun ? 'dry' : 'on'}`}>{r.dryRun ? 'Dry run' : 'LIVE'}</span> : <span className="az-badge paused">Off</span>) },
+  { key: 'evaluations', label: 'Evaluations', align: 'right', render: (r) => r.evaluationCount },
+  { key: 'matches', label: 'Matches', align: 'right', render: (r) => r.matchCount },
+  { key: 'executions', label: 'Executions', align: 'right', render: (r) => r.executionCount },
+]
 
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(c / 100))
 const ACTION_LABEL: Record<string, string> = { bid_down: 'Bid down', bid_up: 'Bid up', lower_bid_to_floor: 'Bid → floor', adjust_ad_budget: 'Adj. budget', set_daily_budget: 'Set budget', set_campaign_target_acos: 'Target ACOS', pause_campaign: 'Pause camp.', pause_ad_group: 'Pause group', pause_all_campaigns: 'Pause all', archive_keyword: 'Archive kw', add_negative_exact: 'Negate', promote_to_exact: 'Promote', harvest_and_negate: 'Harvest', retail_guard: 'Retail guard', liquidate_aged_stock: 'Liquidate', create_amazon_promotion: 'Promo', set_placement_multiplier: 'Placement', reroute_marketplace_budget: 'Reroute', sync_negatives_across_campaigns: 'Sync neg.', raise_bids_for_rank_defense: 'Rank defend', scale_bids_for_price_change: 'Re-bid price', bid_to_target_acos: 'Bid optimise', alert_operator: 'Alert', notify: 'Notify', resume_campaign: 'Resume', enable_campaign: 'Enable' }
@@ -129,22 +141,12 @@ export function AnalyticsTab() {
       )}
 
       <h4 style={{ margin: '4px 2px 8px', fontSize: 13.5 }}>Rule leaderboard</h4>
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr><th className="l">Rule</th><th className="l">Trigger</th><th className="l">Status</th><th>Evaluations</th><th>Matches</th><th>Executions</th></tr></thead>
-          <tbody>
-            {leaderboard.length === 0 && <tr><td className="az-empty" colSpan={6}>{loading ? 'Loading…' : 'No rules yet.'}</td></tr>}
-            {leaderboard.map((r) => (
-              <tr key={r.id}>
-                <td className="l" style={{ fontWeight: 500 }}>{cleanName(r.name)}</td>
-                <td className="l">{r.trigger === 'SCHEDULE' ? 'Scheduled' : r.trigger.replace(/_/g, ' ').toLowerCase()}</td>
-                <td className="l">{r.enabled ? <span className={`az-live ${r.dryRun ? 'dry' : 'on'}`}>{r.dryRun ? 'Dry run' : 'LIVE'}</span> : <span className="az-badge paused">Off</span>}</td>
-                <td className="num">{r.evaluationCount}</td><td className="num">{r.matchCount}</td><td className="num">{r.executionCount}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Rule>
+        rows={leaderboard}
+        rowKey={(r) => r.id}
+        columns={LEADERBOARD_COLUMNS}
+        emptyState={loading ? 'Loading…' : 'No rules yet.'}
+      />
     </div>
   )
 }

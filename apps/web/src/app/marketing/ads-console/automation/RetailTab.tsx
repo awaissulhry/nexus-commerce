@@ -12,9 +12,25 @@ import { useEffect, useMemo, useState } from 'react'
 import { ShieldAlert, RefreshCw, PauseCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 
 interface Camp { campaignId: string; name: string; marketplace: string; status: string; products: number; outOfStock: number; lostBuyBox: number; uncompetitive: number; unknown: number; verdict: string; reason: string }
+
+/** Alignment is inverted between the two grids — see the header comment in HealthTab. The four
+ *  counts carried no `.l` and so are the only right-aligned columns. `.sub` becomes
+ *  `.az-cell-sub`: the original exists ONLY as `.az-table .sub` and matches nothing in a
+ *  `.nds-grid`. */
+const RETAIL_COLUMNS: Array<Column<Camp>> = [
+  { key: 'campaign', label: 'Campaign', render: (c) => <span style={{ fontWeight: 500 }}>{c.name}</span> },
+  { key: 'market', label: 'Market', render: (c) => c.marketplace },
+  { key: 'products', label: 'Products', align: 'right', render: (c) => c.products },
+  { key: 'oos', label: 'OOS', align: 'right', render: (c) => <span style={{ color: c.outOfStock ? '#cc1100' : undefined }}>{c.outOfStock}</span> },
+  { key: 'lostbb', label: 'Lost BB', align: 'right', render: (c) => <span style={{ color: c.lostBuyBox ? 'var(--amber)' : undefined }}>{c.lostBuyBox}</span> },
+  { key: 'uncompetitive', label: 'Uncompetitive', align: 'right', render: (c) => c.uncompetitive },
+  { key: 'verdict', label: 'Verdict', render: (c) => (c.verdict === 'pause' ? <span className="az-badge warn">min bid</span> : <span className="az-badge deliver">ok</span>) },
+  { key: 'reason', label: 'Reason', render: (c) => <span className="az-cell-sub">{c.reason}</span> },
+]
 const num = (n: number) => new Intl.NumberFormat('en-US').format(n)
 
 export function RetailTab() {
@@ -55,27 +71,13 @@ export function RetailTab() {
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
         <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr><th className="l">Campaign</th><th className="l">Market</th><th>Products</th><th>OOS</th><th>Lost BB</th><th>Uncompetitive</th><th className="l">Verdict</th><th className="l">Reason</th></tr></thead>
-          <tbody>
-            {loading && <tr><td className="az-empty" colSpan={8}>Loading…</td></tr>}
-            {!loading && shown.length === 0 && <tr><td className="az-empty" colSpan={8}>All advertised products are sellable.</td></tr>}
-            {shown.map((c) => (
-              <tr key={c.campaignId} className={c.verdict === 'pause' ? 'sel' : ''}>
-                <td className="l" style={{ fontWeight: 500 }}>{c.name}</td>
-                <td className="l">{c.marketplace}</td>
-                <td className="num">{c.products}</td>
-                <td className="num" style={{ color: c.outOfStock ? '#cc1100' : undefined }}>{c.outOfStock}</td>
-                <td className="num" style={{ color: c.lostBuyBox ? 'var(--amber)' : undefined }}>{c.lostBuyBox}</td>
-                <td className="num">{c.uncompetitive}</td>
-                <td className="l">{c.verdict === 'pause' ? <span className="az-badge warn">min bid</span> : <span className="az-badge deliver">ok</span>}</td>
-                <td className="l"><span className="sub">{c.reason}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Camp>
+        rows={loading ? [] : shown}
+        rowKey={(c) => c.campaignId}
+        columns={RETAIL_COLUMNS}
+        rowClassName={(c) => (c.verdict === 'pause' ? 'sel' : undefined)}
+        emptyState={loading ? 'Loading…' : 'All advertised products are sellable.'}
+      />
       <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '12px 2px' }}>Make this permanent: add the <b>Retail guard</b> automation (Library) to auto-pause &amp; auto-resume as stock and Buy Box change — every 15 minutes, hands-free.</div>
     </div>
   )
