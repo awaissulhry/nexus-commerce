@@ -765,3 +765,40 @@
   border-color: var(--nds-primary);
   color: var(--nds-text-inverse);
 }
+
+/* Quiet — text-coloured, borderless until hover. For an inline value-edit trigger, where
+   `link`'s blue reads as navigation rather than "change this". Replaces `.az-editbtn`. */
+.nds-btn.quiet {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--nds-text-strong);
+}
+.nds-btn.quiet:hover:not(:disabled) {
+  background: var(--nds-surface-hover);
+  border-color: var(--nds-border);
+}
+.nds-btn.quiet:disabled {
+  background: none;
+  border-color: transparent;
+}
+
+/* Inline — for a button inside running text. MUST stay last: it unsets the box that every
+   variant above sets, and at equal specificity source order is what decides. */
+.nds-btn.inline {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  line-height: inherit;
+  gap: 4px;
+  vertical-align: baseline;
+}
+.nds-btn.inline:hover:not(:disabled) {
+  background: none;
+}
+.nds-btn.inline:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+  box-shadow: none;
+}

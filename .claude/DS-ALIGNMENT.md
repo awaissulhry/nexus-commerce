@@ -73,6 +73,11 @@ called `-m` and fail. Never `git add .`, never a bare `git commit`.
 2. **Resolve by computation, not by class name** — a class called `w-560` rendered at 1000px.
    Use `getComputedStyle` on the real class *combination*.
 3. **Never lower contrast** — a substitution may only ever raise it. Measure both colours.
+   ONE documented exception: `ads-console/` inherits Amazon's palette, whose `--ink` is #0f1111
+   (18.94:1). The DS `--nds-text-strong` is #3a4452 (9.87:1). Adopting the DS token lowers the
+   number and is still AAA — that is the alignment working, not a regression. It applies to that
+   token pair only; everywhere else the rule is absolute. Going the other way, `--link` #0a7cd1
+   is 4.36:1, BELOW the 4.5 text minimum, and the DS `--nds-primary` fixes it at 4.79:1.
 4. **Verify in three dimensions** — `tsc`, a string-literal diff of the change, and *pixels*.
    Each catches what the other two cannot see.
 5. **Delete the CSS you orphaned.** A converted button leaves a dead rule behind.
