@@ -25,9 +25,9 @@ import {
   AlertTriangle, CheckCircle2, Loader2, RotateCcw, TrendingUp, Save,
   ArrowRight, Pencil, Info,
 } from 'lucide-react'
-import { Modal } from '@/design-system/components'
-import { Button, Input, RadioCard } from '@/design-system/primitives'
-import type { Plan, CopyScope, PlanEdits } from './replicate-types'
+import { DataGrid, Modal } from '@/design-system/components'
+import { Button, Input, RadioCard, ToolbarButton } from '@/design-system/primitives'
+import type { Plan, PlanCampaign, CopyScope, PlanEdits } from './replicate-types'
 import { COPY_ITEMS, BIDDING_STRATEGIES } from './replicate-types'
 import { describeChanges } from './edit-model'
 import { InfoTip } from '../../campaigns/InfoTip'
@@ -211,56 +211,59 @@ export function LaunchStep({
       {/* ── every campaign this will create ──────────────────────────────── */}
       <div className="h10-spw-card h10-rep-manifest">
         <h3>Every campaign this will create <InfoTip tip="Exactly what lands in Amazon, after your step-2 edits. Click one to go back and change it." /></h3>
-        <div className="h10-rep-tblwrap">
-          <table className="h10-rep-tbl camps">
-            <thead>
-              <tr>
-                <th>Campaign</th><th className="ct">Type</th><th className="strat">Bidding</th><th className="ct">Targets</th>
-                <th className="ct">Negatives</th><th className="ct">Ads</th><th className="plc">Placements</th><th className="bud">Daily budget</th><th className="act" />
-              </tr>
-            </thead>
-            <tbody>
-              {plan.campaigns.map((c) => {
-                const targets = c.adGroups.flatMap((g) => g.targets)
-                const plc = (c.placementBidding ?? []).filter((p) => p.percentage > 0)
-                return (
-                  <tr key={c.id}>
-                    <td className="exp">
-                      <b>{c.name}</b>
-                      <span className="whrline">{c.adGroups.length} ad group{c.adGroups.length === 1 ? '' : 's'}</span>
-                    </td>
-                    <td className="ct"><span className={`tag ${c.targetingType === 'AUTO' ? 'auto' : ''}`}>{c.targetingType === 'AUTO' ? 'auto' : 'manual'}</span></td>
-                    <td className="strat">
-                      {/* Amazon's own words for these are LEGACY_FOR_SALES / AUTO_FOR_SALES,
-                          which say nothing about what they do to your bid. */}
-                      <span className="tag">{BIDDING_STRATEGIES.find((s) => s.key === (c.biddingStrategy ?? 'LEGACY_FOR_SALES'))?.label ?? 'Down only'}</span>
-                    </td>
-                    <td className="ct">{targets.filter((x) => !x.isNegative).length}</td>
-                    <td className="ct">{targets.filter((x) => x.isNegative).length}</td>
-                    <td className="ct">{c.adGroups.reduce((s, g) => s + g.asins.length, 0)}</td>
-                    <td className="plc">
-                      {plc.length
-                        ? <span className="tag" title={plc.map((p) => `${p.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${p.percentage}%`).join(', ')}>{plc.map((p) => `+${p.percentage}%`).join(' / ')}</span>
-                        : <span className="dash">—</span>}
-                    </td>
-                    <td className="bud">€{Number(c.dailyBudget ?? 0).toFixed(2)}</td>
-                    <td className="act">
-                      <InfoTip tip={`Go back to step 2 with ${c.name} open, to change its budget, bidding, placements or targets.`}>
-                        <button type="button" className="lnk" onClick={() => onResolve({ kind: 'campaign', label: '', campaignId: c.id })}
-                          aria-label={`Edit ${c.name}`}>
-                          <Pencil size={13} aria-hidden />
-                        </button>
-                      </InfoTip>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr><td colSpan={7} /><td className="bud"><b>€{t.dailyBudgetTotal.toFixed(2)}</b></td><td /></tr>
-            </tfoot>
-          </table>
-        </div>
+        <DataGrid<PlanCampaign>
+          className="h10-rep-tbl"
+          rows={plan.campaigns}
+          rowKey={(c) => c.id}
+          showTotals
+          columns={[
+            {
+              key: 'campaign', label: 'Campaign',
+              render: (c) => (
+                <span className="exp">
+                  <b>{c.name}</b>
+                  <span className="whrline">{c.adGroups.length} ad group{c.adGroups.length === 1 ? '' : 's'}</span>
+                </span>
+              ),
+            },
+            { key: 'type', label: 'Type', align: 'center', width: 86, render: (c) => <span className={`tag ${c.targetingType === 'AUTO' ? 'auto' : ''}`}>{c.targetingType === 'AUTO' ? 'auto' : 'manual'}</span> },
+            {
+              key: 'bidding', label: 'Bidding', align: 'center', width: 116,
+              /* Amazon's own words for these are LEGACY_FOR_SALES / AUTO_FOR_SALES,
+                 which say nothing about what they do to your bid. */
+              render: (c) => <span className="tag">{BIDDING_STRATEGIES.find((st) => st.key === (c.biddingStrategy ?? 'LEGACY_FOR_SALES'))?.label ?? 'Down only'}</span>,
+            },
+            { key: 'targets', label: 'Targets', align: 'center', width: 86, render: (c) => c.adGroups.flatMap((g) => g.targets).filter((x) => !x.isNegative).length },
+            { key: 'negatives', label: 'Negatives', align: 'center', width: 86, render: (c) => c.adGroups.flatMap((g) => g.targets).filter((x) => x.isNegative).length },
+            { key: 'ads', label: 'Ads', align: 'center', width: 86, render: (c) => c.adGroups.reduce((sum, g) => sum + g.asins.length, 0) },
+            {
+              key: 'placements', label: 'Placements', align: 'center', width: 104,
+              render: (c) => {
+                const plc = (c.placementBidding ?? []).filter((pb) => pb.percentage > 0)
+                return plc.length
+                  ? <span className="tag" title={plc.map((pb) => `${pb.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${pb.percentage}%`).join(', ')}>{plc.map((pb) => `+${pb.percentage}%`).join(' / ')}</span>
+                  : <span className="dash">—</span>
+              },
+            },
+            {
+              key: 'budget', label: 'Daily budget', align: 'right', width: 120,
+              total: <b>€{t.dailyBudgetTotal.toFixed(2)}</b>,
+              render: (c) => `€${Number(c.dailyBudget ?? 0).toFixed(2)}`,
+            },
+            {
+              key: 'act', label: '', align: 'right', width: 46,
+              render: (c) => (
+                <InfoTip tip={`Go back to step 2 with ${c.name} open, to change its budget, bidding, placements or targets.`}>
+                  <ToolbarButton
+                    size="sm" tooltip={false} icon={<Pencil size={13} />}
+                    label={`Edit ${c.name}`}
+                    onClick={() => onResolve({ kind: 'campaign', label: '', campaignId: c.id })}
+                  />
+                </InfoTip>
+              ),
+            },
+          ]}
+        />
       </div>
 
       {/* ── what will NOT be created ─────────────────────────────────────── */}

@@ -28,6 +28,7 @@ import {
   Search, SlidersHorizontal, Check, X,
 } from 'lucide-react'
 import { Button, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid } from '@/design-system/components'
 import { InfoTip } from '../../campaigns/InfoTip'
 import {
   viewPlan, conflictGroups, dropConflicts, restoreConflicts, describeChanges,
@@ -504,63 +505,70 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
           <button type="button" onClick={onBulkBudget}>Set all budgets</button>
         </InfoTip>
       </div>
-      <table className="h10-rep-tbl camps">
-        <thead>
-          <tr>
-            <th>Campaign</th><th className="ct">Type</th><th className="ct">Targets</th><th className="ct">Negatives</th>
-            <th className="ct">Products</th><th className="plc">Placements</th><th className="bud">Daily budget</th><th className="act" />
-          </tr>
-        </thead>
-        <tbody>
-          {campaigns.map((c) => {
-            const t = c.adGroups.flatMap((g) => g.targets).filter((x) => !x.removed)
-            const conf = t.filter((x) => x.conflict && x.decision !== 'accept').length
-            const plc = c.placementBidding.filter((p) => p.percentage > 0)
-            return (
-              <tr key={c.id} className={c.removed ? 'cut' : ''}>
-                <td className="exp">
+      <DataGrid<CampaignView>
+        className="h10-rep-tbl"
+        rows={campaigns}
+        rowKey={(c) => c.id}
+        showTotals
+        rowClassName={(c) => (c.removed ? 'cut' : '')}
+        columns={[
+          {
+            key: 'campaign', label: 'Campaign',
+            render: (c) => {
+              const t = c.adGroups.flatMap((g) => g.targets).filter((x) => !x.removed)
+              const conf = t.filter((x) => x.conflict && x.decision !== 'accept').length
+              return (
+                <span className="exp">
                   <button type="button" className="expbtn" title={`Open ${c.name} — its bidding, placements and targets`} onClick={() => onOpen(c.id)}>
                     <b>{c.name}</b>
                   </button>
                   {conf > 0 && <span className="tag cf">{conf} conflict{conf === 1 ? '' : 's'}</span>}
                   <span className="whrline">{c.adGroups.length} ad group{c.adGroups.length === 1 ? '' : 's'}</span>
-                </td>
-                <td className="ct"><span className={`tag ${c.targetingType === 'AUTO' ? 'auto' : ''}`}>{c.targetingType === 'AUTO' ? 'auto' : 'manual'}</span></td>
-                <td className="ct">{t.filter((x) => !x.isNegative).length}</td>
-                <td className="ct">{t.filter((x) => x.isNegative).length}</td>
-                <td className="ct">{c.adGroups.reduce((s, g) => s + g.asins.length, 0)}</td>
-                <td className="plc">
-                  {plc.length
-                    ? <span className="tag" title={plc.map((p) => `${p.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${p.percentage}%`).join(', ')}>{plc.length} set</span>
-                    : <span className="dash">—</span>}
-                </td>
-                <td className="bud">
-                  <label className="inl">
-                    <span>€</span>
-                    <input inputMode="decimal" value={String(c.dailyBudget)} aria-label={`Daily budget for ${c.name}`}
-                      onChange={(e) => onBudget(c.id, Number(e.target.value) || 0)} />
-                  </label>
-                </td>
-                <td className="act">
-                  <InfoTip tip={c.removed
-                    ? `Put ${c.name} back into the plan.`
-                    : `Leave ${c.name} out of this replication entirely — its ad groups, targets and product ads with it. Reversible until you launch.`}>
-                    <ToolbarButton
-                      size="sm" tooltip={false} tone={c.removed ? 'neutral' : 'danger'} active={c.removed}
-                      icon={c.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
-                      label={c.removed ? `Restore ${c.name}` : `Don’t create ${c.name}`}
-                      onClick={() => onRemove(c.id)}
-                    />
-                  </InfoTip>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr><td colSpan={6} /><td className="bud"><b>€{total.toFixed(2)}/day</b></td><td /></tr>
-        </tfoot>
-      </table>
+                </span>
+              )
+            },
+          },
+          { key: 'type', label: 'Type', align: 'center', width: 86, render: (c) => <span className={`tag ${c.targetingType === 'AUTO' ? 'auto' : ''}`}>{c.targetingType === 'AUTO' ? 'auto' : 'manual'}</span> },
+          { key: 'targets', label: 'Targets', align: 'center', width: 86, render: (c) => c.adGroups.flatMap((g) => g.targets).filter((x) => !x.removed && !x.isNegative).length },
+          { key: 'negatives', label: 'Negatives', align: 'center', width: 86, render: (c) => c.adGroups.flatMap((g) => g.targets).filter((x) => !x.removed && x.isNegative).length },
+          { key: 'products', label: 'Products', align: 'center', width: 86, render: (c) => c.adGroups.reduce((sum, g) => sum + g.asins.length, 0) },
+          {
+            key: 'placements', label: 'Placements', align: 'center', width: 104,
+            render: (c) => {
+              const plc = c.placementBidding.filter((pb) => pb.percentage > 0)
+              return plc.length
+                ? <span className="tag" title={plc.map((pb) => `${pb.placement.replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()} +${pb.percentage}%`).join(', ')}>{plc.length} set</span>
+                : <span className="dash">—</span>
+            },
+          },
+          {
+            key: 'budget', label: 'Daily budget', align: 'right', width: 120,
+            total: <b>€{total.toFixed(2)}/day</b>,
+            render: (c) => (
+              <label className="inl">
+                <span>€</span>
+                <input inputMode="decimal" value={String(c.dailyBudget)} aria-label={`Daily budget for ${c.name}`}
+                  onChange={(e) => onBudget(c.id, Number(e.target.value) || 0)} />
+              </label>
+            ),
+          },
+          {
+            key: 'act', label: '', align: 'right', width: 46,
+            render: (c) => (
+              <InfoTip tip={c.removed
+                ? `Put ${c.name} back into the plan.`
+                : `Leave ${c.name} out of this replication entirely — its ad groups, targets and product ads with it. Reversible until you launch.`}>
+                <ToolbarButton
+                  size="sm" tooltip={false} tone={c.removed ? 'neutral' : 'danger'} active={c.removed}
+                  icon={c.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
+                  label={c.removed ? `Restore ${c.name}` : `Don’t create ${c.name}`}
+                  onClick={() => onRemove(c.id)}
+                />
+              </InfoTip>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }
