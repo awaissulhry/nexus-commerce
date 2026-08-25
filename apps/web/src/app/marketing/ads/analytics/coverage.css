@@ -7,7 +7,7 @@
  */
 
 .cov { padding: 0 0 48px; }
-.cov-empty { font-size: 13px; color: #7b8798; padding: 28px 24px; }
+.cov-empty { font-size: 13px; color: var(--nds-text-muted); padding: 28px 24px; }
 
 .cov-top {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
@@ -19,8 +19,8 @@
   font-size: 30px; font-weight: 650; color: var(--nds-grey-900); line-height: 1.15; margin-top: 3px;
   display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums;
 }
-.cov-hero-sub { font-size: 12.5px; font-weight: 500; color: #7b8798; letter-spacing: 0; }
-.cov-hero-note { font-size: 12px; color: #7b8798; margin: 5px 0 0; max-width: 68ch; line-height: 1.5; }
+.cov-hero-sub { font-size: 12.5px; font-weight: 500; color: var(--nds-text-muted); letter-spacing: 0; }
+.cov-hero-note { font-size: 12px; color: var(--nds-text-muted); margin: 5px 0 0; max-width: 68ch; line-height: 1.5; }
 
 .cov-controls { display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
 .cov-field { display: flex; flex-direction: column; gap: 5px; }
@@ -39,7 +39,7 @@
 .cov-head-list li:last-child { border-bottom: 0; }
 .cov-head-term { color: var(--nds-grey-900); font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cov-head-market, .cov-head-share { text-align: right; font-variant-numeric: tabular-nums; color: #46536a; }
-.cov-head-kw { text-align: right; font-size: 11.5px; color: #7b8798; }
+.cov-head-kw { text-align: right; font-size: 11.5px; color: var(--nds-text-muted); }
 /* A big market with no keyword at all is the most actionable row on the page. */
 .cov-head-kw.none { color: #8a6320; font-weight: 650; }
 
@@ -133,7 +133,7 @@
    Tabs rather than routes: §4.1 adds no sidebar entries, and both views answer one question. */
 .cov-tabs { display: flex; gap: 2px; margin: 0 24px 14px; border-bottom: 1px solid var(--nds-grey-150); }
 .cov-tabs button {
-  font-size: 12.5px; font-weight: 550; color: #7b8798; background: transparent;
+  font-size: 12.5px; font-weight: 550; color: var(--nds-text-muted); background: transparent;
   border: 0; border-bottom: 2px solid transparent; padding: 9px 14px; cursor: pointer;
   margin-bottom: -1px;
 }
@@ -153,12 +153,12 @@
 .cvf-disc {
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; padding: 0; flex-shrink: 0;
-  border: 1px solid var(--nds-grey-150); border-radius: 5px; background: var(--nds-white); color: #7b8798; cursor: pointer;
+  border: 1px solid var(--nds-grey-150); border-radius: 5px; background: var(--nds-white); color: var(--nds-text-muted); cursor: pointer;
 }
 .cvf-disc:hover { background: var(--nds-grey-50); color: #46536a; }
 .cvf-term { font-size: 13px; font-weight: 650; color: var(--nds-grey-900); }
 .cvf-match {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: #7b8798;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: var(--nds-text-muted);
   background: var(--nds-grey-100); border-radius: 4px; padding: 2px 6px;
 }
 .cvf-tag { font-size: 10.5px; font-weight: 650; border-radius: 4px; padding: 2px 7px; }
@@ -166,7 +166,7 @@
 .cvf-tag.cross { background: var(--nds-blue-50); color: #1a5cb8; border: 1px solid var(--nds-blue-200); }
 .cvf-tag.top { background: #fdf0e8; color: #94501c; border: 1px solid #f2d5c2; }
 /* No evidence at all — the champion is a coin toss and the card says so. */
-.cvf-tag.blind { background: var(--nds-grey-50); color: #7b8798; border: 1px solid var(--nds-grey-150); }
+.cvf-tag.blind { background: var(--nds-grey-50); color: var(--nds-text-muted); border: 1px solid var(--nds-grey-150); }
 .cvf-counts { font-size: 11.5px; color: var(--nds-grey-500); }
 .cvf-money { margin-left: auto; font-size: 12px; color: #46536a; font-variant-numeric: tabular-nums; }
 
@@ -187,13 +187,13 @@
 .cvf-table tr.dormant td { color: #a6b0bd; }
 .cvf-table td.bad { color: var(--nds-danger-text); font-weight: 600; }
 .cvf-table td.tos { color: #94501c; font-weight: 600; }
-.cvf-pfcell { color: #7b8798; }
+.cvf-pfcell { color: var(--nds-text-muted); }
 .cvf-pfcell em { font-style: normal; color: var(--nds-grey-400); }
 .cvf-star { color: #1a8a5a; margin-right: 5px; font-size: 11px; }
 
 .cvf-more {
   display: block; width: 100%; text-align: left;
-  font-size: 11.5px; color: #7b8798; background: var(--nds-white);
+  font-size: 11.5px; color: var(--nds-text-muted); background: var(--nds-white);
   border: 0; border-top: 1px solid var(--nds-grey-75); padding: 7px 14px; cursor: pointer;
 }
 .cvf-more:hover { background: var(--nds-grey-50); color: #46536a; }

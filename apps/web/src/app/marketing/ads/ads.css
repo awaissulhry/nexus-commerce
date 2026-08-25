@@ -690,7 +690,7 @@
 .h10-am-grid td.nm .nmw .tg { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-white); border-radius: 5px; flex-shrink: 0; }
 .h10-am-grid td.nm .nmw .tg[data-t="A"] { background: var(--nds-blue-800); }
 .h10-am-grid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
-.h10-am-grid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: #6b7585; background: var(--nds-white); border: 1px solid #cfd6de; border-radius: 5px; flex-shrink: 0; }
+.h10-am-grid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-white); border: 1px solid #cfd6de; border-radius: 5px; flex-shrink: 0; }
 
 /* ── CBN.2h.8 — bulk modal select-all header checkbox + rows-per-page dropdown ── */
 .h10-bulk-hd .ck { display: flex; align-items: center; }
@@ -844,7 +844,7 @@
 /* U11c — the note + error lines the SHARED popovers add (`_shared/RuleColumnEditors.tsx`).
    Source order: these sit at the end of the .h10-mmbid block they belong to, and the identical
    pair for .h10-editpop sits at the end of that one. */
-.h10-mmbid .n, .h10-editpop .n { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: #6b7585; }
+.h10-mmbid .n, .h10-editpop .n { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--nds-text-muted); }
 .h10-mmbid .e, .h10-editpop .e { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: #a3320f; }
 .h10-mmbid .h10-am-link[disabled], .h10-editpop .h10-am-link[disabled] { opacity: .5; cursor: default; }
 
@@ -905,7 +905,7 @@
 .h10-cd-back svg { stroke-width: 2.4; }
 .h10-cd-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 .h10-cd-titlecol { min-width: 0; }
-.h10-cd-titlecol .lbl { font-size: 12.5px; color: #6b7585; margin-bottom: 5px; }
+.h10-cd-titlecol .lbl { font-size: 12.5px; color: var(--nds-text-muted); margin-bottom: 5px; }
 .h10-cd-titlecol h1 { display: flex; align-items: center; gap: 11px; margin: 0; font-size: 25px; font-weight: 700; color: #1b2230; line-height: 1.15; min-width: 0; }
 .h10-cd-titlecol h1 .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-cd-badge { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 7px; background: #0048b0; color: var(--nds-white); font-size: 16px; font-weight: 700; line-height: 1; }
@@ -924,7 +924,7 @@
 
 /* ── bodies (3.1 placeholders; replaced by the Details form + shared grid in 3.3–3.6) ── */
 .h10-cd-body { min-height: 340px; }
-.h10-cd-empty { text-align: center; padding: 70px 20px; color: #6b7585; }
+.h10-cd-empty { text-align: center; padding: 70px 20px; color: var(--nds-text-muted); }
 .h10-cd-empty h3 { font-size: 17px; font-weight: 700; color: #1b2230; margin: 0 0 6px; }
 .h10-cd-empty p { font-size: 13.5px; margin: 0; }
 .h10-cd-error { padding: 22px; border: 1px solid #f0d4d4; background: #fdf5f5; border-radius: 10px; color: #9a3434; font-size: 13.5px; }
@@ -974,7 +974,7 @@
 .h10-cd-sec { scroll-margin-top: 16px; margin-bottom: 30px; }
 .h10-cd-sec h2 { font-size: 17px; font-weight: 700; color: #1b2230; margin: 0 0 4px; }
 .h10-cd-sec h2.mt { margin-top: 26px; }
-.h10-cd-sec .sub { font-size: 13px; color: #6b7585; margin: 0 0 14px; }
+.h10-cd-sec .sub { font-size: 13px; color: var(--nds-text-muted); margin: 0 0 14px; }
 
 .h10-cd-card { border: 1px solid var(--nds-grey-200); border-radius: 12px; background: var(--nds-white); padding: 20px; }
 .h10-cd-card.pad { padding: 4px 20px; }
@@ -991,7 +991,7 @@
 
 .h10-cd-money, .h10-cd-pct, .h10-cd-date { display: inline-flex; align-items: center; height: 38px; border: 1px solid #6d839f; border-radius: 8px; background: var(--nds-white); overflow: hidden; box-sizing: border-box; }
 .h10-cd-money { max-width: 150px; }
-.h10-cd-money .pf { padding: 0 7px 0 11px; color: #6b7585; font-size: 14px; }
+.h10-cd-money .pf { padding: 0 7px 0 11px; color: var(--nds-text-muted); font-size: 14px; }
 /* These [type] qualifiers raise specificity to beat `.h10-cd-field input[type=number]`
    (0,2,1) so the input INSIDE the money/date wrapper never draws its own border —
    the wrapper draws the single border. Without this the field looked like a box-in-box. */
@@ -1031,7 +1031,7 @@
 .h10-cd-radio input { margin: 2px 0 0; accent-color: var(--nds-blue-600); width: 16px; height: 16px; flex-shrink: 0; }
 .h10-cd-radio .rc { display: flex; flex-direction: column; gap: 3px; }
 .h10-cd-radio .rc .t { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); }
-.h10-cd-radio .rc .d { font-size: 12.5px; color: #6b7585; line-height: 1.45; }
+.h10-cd-radio .rc .d { font-size: 12.5px; color: var(--nds-text-muted); line-height: 1.45; }
 
 .h10-cd-banner { display: flex; align-items: center; gap: 8px; background: #fdf6dd; border: 1px solid #f3e6a8; color: #7a6312; font-size: 12.5px; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
 .h10-cd-banner svg { flex-shrink: 0; }
@@ -1063,7 +1063,7 @@
 .h10-cd-algo .hd .ic { color: var(--nds-grey-450); }
 .h10-cd-algo.on .hd .ic { color: var(--nds-blue-600); }
 .h10-cd-algo .ti { font-size: 14.5px; font-weight: 700; color: #1b2230; }
-.h10-cd-algo .d { font-size: 12px; color: #6b7585; line-height: 1.45; }
+.h10-cd-algo .d { font-size: 12px; color: var(--nds-text-muted); line-height: 1.45; }
 .h10-cd-none { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 12px; border: 1.5px solid var(--nds-grey-150); border-radius: 12px; background: var(--nds-white); padding: 13px 14px; font: inherit; font-size: 14px; font-weight: 600; color: var(--nds-grey-600); cursor: pointer; }
 .h10-cd-none svg { color: var(--nds-grey-450); }
 .h10-cd-none.on { border-color: var(--nds-blue-600); box-shadow: inset 0 0 0 1px var(--nds-blue-600); color: var(--nds-blue-600); }
@@ -1094,7 +1094,7 @@
 /* right padding clears the persistent "Ask AI" widget (bottom-right), matching the Ad
    Manager edit-footer fix (commit 7e49af7e) so the Save button never sits under it. */
 .h10-cd-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; margin: 0 -30px -26px; padding: 13px 150px 13px 30px; background: var(--nds-white); border-top: 1px solid var(--nds-grey-150); box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06); z-index: 20; }
-.h10-cd-footer .msg { font-size: 12.5px; color: #6b7585; }
+.h10-cd-footer .msg { font-size: 12.5px; color: var(--nds-text-muted); }
 
 /* ── CBN.3.5 — product cell (Ads tab first column): thumb + title + ASIN/SKU ── */
 .h10-pcell { display: flex; align-items: center; gap: 9px; min-width: 0; }
@@ -1116,7 +1116,7 @@
 .h10-modal.neg .h10-modal-b { padding: 18px 28px; }
 .h10-modal.neg .h10-modal-f { padding: 16px 28px; }
 .h10-neg-camp { border: 1px solid var(--nds-grey-150); border-radius: 10px; padding: 12px 16px; margin-bottom: 22px; }
-.h10-neg-camp .lbl { display: block; font-size: 13px; color: #6b7585; margin-bottom: 8px; }
+.h10-neg-camp .lbl { display: block; font-size: 13px; color: var(--nds-text-muted); margin-bottom: 8px; }
 .h10-neg-camp .val { display: inline-flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-neg-camp .val .h10-cd-badge { width: 26px; height: 26px; font-size: 13px; border-radius: 6px; }
 .h10-neg-cols { display: flex; gap: 26px; align-items: flex-start; }
@@ -1144,7 +1144,7 @@
 .h10-neg-empty { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--nds-grey-500); font-size: 14px; }
 .h10-neg-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--nds-grey-75); font-size: 13px; }
 .h10-neg-row .kw { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-grey-800); }
-.h10-neg-row .mt { font-size: 11.5px; color: #6b7585; flex-shrink: 0; }
+.h10-neg-row .mt { font-size: 11.5px; color: var(--nds-text-muted); flex-shrink: 0; }
 .h10-neg-row .rm { border: none; background: none; color: #b6bdc8; cursor: pointer; padding: 3px; border-radius: 5px; display: inline-flex; flex-shrink: 0; }
 .h10-neg-row .rm:hover { background: #fdecec; color: #d6453d; }
 /* NT.3 — match-type chip + auto badge in the negative list */
@@ -1163,14 +1163,14 @@
 .h10-spw-auto-ed .row.off { opacity: .5; }
 .h10-spw-auto-ed .row .nm { flex: 1; min-width: 0; }
 .h10-spw-auto-ed .row .nm .t { display: block; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-spw-auto-ed .row .nm .d { display: block; font-size: 12px; color: #6b7585; margin-top: 3px; line-height: 1.4; }
+.h10-spw-auto-ed .row .nm .d { display: block; font-size: 12px; color: var(--nds-text-muted); margin-top: 3px; line-height: 1.4; }
 .h10-spw-auto-ed .row .bid { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .h10-spw-auto-ed .row .bid .money { display: inline-flex; align-items: center; border: 1px solid var(--nds-grey-200); border-radius: 7px; overflow: hidden; background: var(--nds-white); width: 116px; }
 /* AT.3 — data-grounded suggested-bid link under each auto-group bid */
 .h10-spw-auto-sug { font: inherit; font-size: 11px; font-weight: 600; color: var(--nds-blue-600); background: none; border: none; cursor: pointer; padding: 0; white-space: nowrap; }
 .h10-spw-auto-sug:hover:not(:disabled) { text-decoration: underline; }
 .h10-spw-auto-sug:disabled { color: var(--nds-grey-400); cursor: default; }
-.h10-spw-auto-ed .row .bid .money .pf { padding: 0 3px 0 11px; color: #6b7585; font-size: 13px; }
+.h10-spw-auto-ed .row .bid .money .pf { padding: 0 3px 0 11px; color: var(--nds-text-muted); font-size: 13px; }
 .h10-spw-auto-ed .row .bid .money input { border: none; outline: none; padding: 9px 11px 9px 2px; width: 100%; font-size: 13.5px; color: var(--nds-grey-900); background: transparent; }
 .h10-spw-auto-ed .row .bid .money input:disabled { color: var(--nds-grey-400); }
 .h10-spw-auto-ed .row.off .bid .money { background: var(--nds-grey-50); }
@@ -1250,7 +1250,7 @@
 .h10-cd-aud { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 16px; align-items: start; }
 .h10-cd-aud .aud-left { border: 1px solid var(--nds-grey-150); border-radius: 10px; background: var(--nds-white); padding: 14px 14px 12px; }
 .h10-cd-aud .aud-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--nds-grey-100); margin-bottom: 12px; }
-.h10-cd-aud .aud-tabs button { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: #6b7585; padding: 0 0 10px; cursor: pointer; position: relative; }
+.h10-cd-aud .aud-tabs button { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--nds-text-muted); padding: 0 0 10px; cursor: pointer; position: relative; }
 .h10-cd-aud .aud-tabs button.on { color: var(--nds-blue-600); }
 .h10-cd-aud .aud-tabs button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--nds-blue-600); border-radius: 2px; }
 .h10-cd-aud .aud-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 0 11px; height: 36px; margin-bottom: 6px; }
@@ -1261,17 +1261,17 @@
 .h10-cd-aud .aud-item:last-child { border-bottom: 0; }
 .h10-cd-aud .aud-item .ai-tx { min-width: 0; }
 .h10-cd-aud .aud-item .ai-tx b { display: block; font-size: 13px; font-weight: 600; color: var(--nds-grey-900); margin-bottom: 3px; }
-.h10-cd-aud .aud-item .ai-tx span { font-size: 12px; color: #6b7585; line-height: 1.45; }
+.h10-cd-aud .aud-item .ai-tx span { font-size: 12px; color: var(--nds-text-muted); line-height: 1.45; }
 .h10-cd-aud .aud-add { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #b9d0f3; background: var(--nds-white); color: var(--nds-blue-600); font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 7px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
 .h10-cd-aud .aud-add:hover:not(:disabled) { background: var(--nds-blue-50); }
 .h10-cd-aud .aud-add.added { color: #1f9d57; border-color: #bce6cd; background: #f3fbf6; }
 .h10-cd-aud .aud-add:disabled { cursor: default; }
 .h10-cd-aud .aud-none { padding: 28px 8px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; }
 .h10-cd-aud .aud-pager { display: flex; align-items: center; gap: 8px; padding-top: 12px; }
-.h10-cd-aud .pg-nav { width: 26px; height: 26px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); color: #6b7585; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.h10-cd-aud .pg-nav { width: 26px; height: 26px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); color: var(--nds-text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .h10-cd-aud .pg-nav:disabled { color: #c8d0db; cursor: default; }
 .h10-cd-aud .pg-n { width: 26px; height: 26px; border-radius: 6px; background: #28415f; color: var(--nds-white); display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; }
-.h10-cd-aud .pg-rpp { margin-left: auto; font-size: 12.5px; color: #6b7585; display: inline-flex; align-items: center; gap: 7px; }
+.h10-cd-aud .pg-rpp { margin-left: auto; font-size: 12.5px; color: var(--nds-text-muted); display: inline-flex; align-items: center; gap: 7px; }
 .h10-cd-aud .rpp-sel { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 3px 8px; color: var(--nds-grey-900); }
 .h10-cd-aud .aud-right { border: 1px solid var(--nds-grey-150); border-radius: 10px; background: var(--nds-white); overflow: hidden; }
 .h10-cd-aud .ar-head { padding: 13px 16px; font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); }
@@ -1282,11 +1282,11 @@
 .h10-cd-aud .arn { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .h10-cd-aud .arn b { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-cd-aud .arn span { font-size: 11px; color: var(--nds-grey-500); }
-.h10-cd-aud .arsize { font-size: 12.5px; color: #6b7585; }
+.h10-cd-aud .arsize { font-size: 12.5px; color: var(--nds-text-muted); }
 .h10-cd-aud .h10-cd-pct.sm { width: 100px; max-width: 100px; height: 32px; }
 .h10-cd-aud .ar-x { border: 0; background: transparent; color: var(--nds-grey-450); cursor: pointer; display: inline-flex; padding: 0; }
 .h10-cd-aud .ar-x:hover { color: var(--nds-red-600); }
-.h10-cd-aud .ar-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 34px 16px 44px; color: #6b7585; font-size: 13px; }
+.h10-cd-aud .ar-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 34px 16px 44px; color: var(--nds-text-muted); font-size: 13px; }
 .h10-cd-aud .ar-art { display: block; }
 /* From AMC tab: Select-a-Type + search row, then the "No data / create instance" state */
 .h10-cd-aud .aud-amc-row { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
@@ -1295,7 +1295,7 @@
 .h10-cd-aud .aud-amc-row .aud-search { flex: 1; margin-bottom: 0; }
 .h10-cd-aud .aud-amc-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 30px 16px 34px; text-align: center; }
 .h10-cd-aud .aud-amc-empty b { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); margin-top: 2px; }
-.h10-cd-aud .aud-amc-empty span { font-size: 12px; color: #6b7585; max-width: 300px; line-height: 1.45; }
+.h10-cd-aud .aud-amc-empty span { font-size: 12px; color: var(--nds-text-muted); max-width: 300px; line-height: 1.45; }
 .h10-cd-aud .aud-instance { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; background: var(--nds-blue-600); color: var(--nds-white); border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; }
 .h10-cd-aud .aud-instance:hover { background: var(--nds-blue-700); }
 
@@ -1353,7 +1353,7 @@
 .h10-apm { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
 .h10-apm .apm-left, .h10-apm .apm-right { border: 1px solid var(--nds-grey-150); border-radius: 10px; background: var(--nds-white); overflow: hidden; display: flex; flex-direction: column; min-height: 360px; }
 .h10-apm .apm-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--nds-grey-100); padding: 0 14px; }
-.h10-apm .apm-tabs button { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: #6b7585; padding: 12px 0 10px; cursor: pointer; position: relative; }
+.h10-apm .apm-tabs button { border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--nds-text-muted); padding: 12px 0 10px; cursor: pointer; position: relative; }
 .h10-apm .apm-tabs button.on { color: var(--nds-blue-600); }
 .h10-apm .apm-tabs button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--nds-blue-600); border-radius: 2px; }
 .h10-apm .apm-srow { padding: 12px 14px 0; }
@@ -1366,7 +1366,7 @@
 .h10-apm .apm-addall { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--nds-grey-150); background: var(--nds-grey-50); color: var(--nds-grey-700); font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 7px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
 .h10-apm .apm-addall:hover { background: var(--nds-grey-100); }
 .h10-apm .apm-addall:disabled { color: var(--nds-grey-400); background: var(--nds-grey-25); cursor: default; }
-.h10-apm .apm-addall svg { color: #6b7585; }
+.h10-apm .apm-addall svg { color: var(--nds-text-muted); }
 .h10-apm .apm-list { flex: 1; overflow-y: auto; max-height: 340px; }
 .h10-apm .apm-item, .h10-apm .apm-rrow { display: flex; align-items: center; gap: 11px; padding: 9px 14px; border-top: 1px solid var(--nds-grey-75); }
 .h10-apm .apm-thumb { position: relative; flex-shrink: 0; width: 38px; height: 38px; }
@@ -1375,7 +1375,7 @@
 .h10-apm .ai { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-apm .ai .t { font-size: 12.5px; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-apm .ai .m { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--nds-grey-450); min-width: 0; }
-.h10-apm .ai .m .asin { color: #6b7585; }
+.h10-apm .ai .m .asin { color: var(--nds-text-muted); }
 .h10-apm .ai .m .sep { color: var(--nds-grey-300); }
 .h10-apm .ai .m .sku { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-apm .apm-cp { border: 0; background: transparent; color: var(--nds-grey-400); cursor: pointer; display: inline-flex; padding: 1px; border-radius: 4px; flex-shrink: 0; }
@@ -1408,7 +1408,7 @@
    single paste textarea (no search), and an ASIN-column staged list. */
 .h10-modal.apm .apm-ctx { display: flex; gap: 48px; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-modal.apm .apm-ctx-c { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.h10-modal.apm .apm-ctx-c .lbl { font-size: 12.5px; color: #6b7585; }
+.h10-modal.apm .apm-ctx-c .lbl { font-size: 12.5px; color: var(--nds-text-muted); }
 .h10-modal.apm .apm-ctx-c .val { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-modal.apm .apm-ctx-c .val svg { color: var(--nds-grey-900); flex-shrink: 0; }
 .h10-apm .apm-thead .apm-sort { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; font: inherit; font-size: 11px; font-weight: 700; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .03em; cursor: pointer; padding: 0; }
@@ -1431,14 +1431,14 @@
 .h10-apm .apm-bid { display: inline-flex; align-items: center; gap: 8px; }
 .h10-apm .apm-bid .lbl { font-size: 12.5px; font-weight: 600; color: #37495b; }
 .h10-apm .apm-bidbox { display: inline-flex; align-items: stretch; border: 1px solid var(--nds-grey-200); border-radius: 7px; height: 32px; overflow: hidden; }
-.h10-apm .apm-bidbox .cur { display: inline-flex; align-items: center; padding: 0 8px; color: #6b7585; font-size: 13px; background: var(--nds-grey-75); border-right: 1px solid var(--nds-grey-150); }
+.h10-apm .apm-bidbox .cur { display: inline-flex; align-items: center; padding: 0 8px; color: var(--nds-text-muted); font-size: 13px; background: var(--nds-grey-75); border-right: 1px solid var(--nds-grey-150); }
 .h10-apm .apm-bidbox input { width: 64px; border: 0; outline: 0; font: inherit; font-size: 13px; padding: 0 8px; color: var(--nds-grey-900); }
 .h10-apm .apm-thead.tgt, .h10-apm .apm-rrow.tgt { display: grid; grid-template-columns: 1fr 92px 70px 26px; align-items: center; gap: 10px; }
 .h10-apm .apm-rrow.tgt .ai .t { font-size: 13px; color: var(--nds-grey-900); }
-.h10-apm .apm-tcol { font-size: 12px; color: #6b7585; white-space: nowrap; }
+.h10-apm .apm-tcol { font-size: 12px; color: var(--nds-text-muted); white-space: nowrap; }
 .h10-apm .apm-bcol { font-size: 12.5px; color: var(--nds-grey-900); font-weight: 600; white-space: nowrap; }
 .h10-apm .apm-rrow.kw .ai .t { font-size: 13px; color: var(--nds-grey-900); }
-.h10-apm .apm-rrow.kw .apm-mtcol { margin-left: auto; flex-shrink: 0; font-size: 12px; color: #6b7585; white-space: nowrap; }
+.h10-apm .apm-rrow.kw .apm-mtcol { margin-left: auto; flex-shrink: 0; font-size: 12px; color: var(--nds-text-muted); white-space: nowrap; }
 .h10-cd-products li .pi .m .cp:hover { color: var(--nds-blue-600); background: var(--nds-blue-50); }
 
 /* ── CBN — Campaign Builder (type chooser), Helium 10 Ads match ─────────────── */
@@ -1723,7 +1723,7 @@
 .h10-rr-mm { display: flex; gap: 8px; }
 
 /* inline 🔍 search next to the toolbar count (AdsDataGrid `searchable`) */
-.h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: #6b7585; border-radius: 7px; cursor: pointer; }
+.h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: var(--nds-text-muted); border-radius: 7px; cursor: pointer; }
 .h10-am-searchbtn:hover { background: var(--nds-grey-100); color: var(--nds-blue-600); }
 .h10-am-searchbox { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--nds-grey-300); border-radius: 8px; background: var(--nds-white); }
 .h10-am-searchbox svg { color: var(--nds-grey-500); flex-shrink: 0; }
@@ -1735,7 +1735,7 @@
 .h10-rules-soon { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; padding: 86px 20px; border: 1px solid var(--nds-grey-150); border-radius: 14px; background: var(--nds-white); }
 .h10-rules-soon .ic { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 15px; background: var(--nds-blue-50); color: var(--nds-blue-600); margin-bottom: 4px; }
 .h10-rules-soon h3 { font-size: 18px; font-weight: 700; color: #1b2230; margin: 0; }
-.h10-rules-soon p { font-size: 13.5px; color: #6b7585; margin: 0 0 12px; max-width: 400px; line-height: 1.5; }
+.h10-rules-soon p { font-size: 13.5px; color: var(--nds-text-muted); margin: 0 0 12px; max-width: 400px; line-height: 1.5; }
 
 /* R-vid2: selection-bar bulk actions (Automation · Assign Rule · Target ACoS · Min/Max Bid) — H10 blue-outline buttons shown when ≥1 campaign is selected */
 .h10-rr-selacts { display: inline-flex; align-items: center; gap: 8px; }
@@ -1924,7 +1924,7 @@
 .h10-spw-bulk-field .l { font-size: 13px; font-weight: 600; color: var(--nds-grey-700); }
 .h10-spw-bulk-numfield { width: 150px; }
 .h10-spw-bulk-txtfield { width: 280px; max-width: 100%; }
-.h10-spw-bulk-hint { font-size: 12px; color: #6b7585; margin: 12px 0 0; }
+.h10-spw-bulk-hint { font-size: 12px; color: var(--nds-text-muted); margin: 12px 0 0; }
 .h10-spw-bulk-hint b { color: var(--nds-grey-900); font-weight: 600; }
 .h10-spw-bulk-clearwrap { position: relative; }
 .h10-spw-bulk-clearwrap .menu { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; min-width: 168px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 10px; box-shadow: 0 12px 32px rgba(20,30,45,.16); padding: 6px; }
@@ -2257,7 +2257,7 @@
 .h10-spw-st-auto { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--nds-grey-100); }
 .h10-spw-st-auto .sw { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; }
 .h10-spw-st-auto .sw .t { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); }
-.h10-spw-st-auto .h { display: block; margin-top: 5px; font-size: 12px; color: #6b7585; }
+.h10-spw-st-auto .h { display: block; margin-top: 5px; font-size: 12px; color: var(--nds-text-muted); }
 .h10-spw-st-title { font-size: 16px; font-weight: 700; color: var(--nds-grey-900); margin: 0 0 18px; }
 .h10-spw-st-grid { display: grid; align-items: center; row-gap: 12px; min-width: 780px; }
 .h10-spw-st-grid .hd { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-700); text-align: center; padding-bottom: 10px; }
@@ -3026,7 +3026,7 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
 /* U14 — an absent answer, in the shared cells' own stylesheet so it resolves on every grid that
    mounts them (`.h10-ar-nd` lives in rules-automation.css and the Ad Manager never loads it).
    #667080 on the #fff row ground is 5.01:1 — measured in the deployed DOM, not estimated. */
-.h10-rc-unknown { font-size: 11px; font-style: italic; color: #667080; }
+.h10-rc-unknown { font-size: 11px; font-style: italic; color: var(--nds-text-muted); }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    SG.1 — two shared-component styles PROMOTED from rules-automation.css, verbatim.
@@ -3039,7 +3039,7 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
    Lives INSIDE the merged filter bar, under the controls (see `_shared/ScopeNotes.tsx`). The
    neutral form is the intersection and the blind-spot facts; `.bad` is the server's refusal. */
 .h10-am-fpanel .h10-ra-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-am-fpanel .h10-ra-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-am-fpanel .h10-ra-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-am-fpanel .h10-ra-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-am-fpanel .h10-ra-note .lnk { font: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .h10-am-fpanel .h10-ra-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }

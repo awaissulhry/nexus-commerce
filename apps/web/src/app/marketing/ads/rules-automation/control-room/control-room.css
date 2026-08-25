@@ -114,7 +114,7 @@
 
 .acr-what { font-size: 12.5px; color: #56637a; margin: 5px 0 0; }
 /* The answer to "why is it like this" — muted but always present, never truncated. */
-.acr-why { font-size: 12px; color: #7b8798; margin: 3px 0 0; font-style: italic; }
+.acr-why { font-size: 12px; color: var(--nds-text-muted); margin: 3px 0 0; font-style: italic; }
 .acr-warn { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #8a6320; margin: 7px 0 0; font-style: normal; }
 
 /* ── facts ───────────────────────────────────────────────────────────────── */
@@ -150,9 +150,9 @@
   border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 7px 10px; width: 100%;
 }
 .acr-fields input:focus { outline: 2px solid #bcd4f5; outline-offset: -1px; border-color: var(--nds-blue-600); }
-.acr-hint { font-size: 11.5px; color: #7b8798; }
+.acr-hint { font-size: 11.5px; color: var(--nds-text-muted); }
 .acr-hint strong { color: var(--nds-grey-700); font-weight: 600; }
-.acr-note { font-size: 12px; color: #7b8798; margin: 12px 0 0; line-height: 1.55; max-width: 82ch; }
+.acr-note { font-size: 12px; color: var(--nds-text-muted); margin: 12px 0 0; line-height: 1.55; max-width: 82ch; }
 .acr-note code { font-size: 11.5px; background: var(--nds-grey-75); border-radius: 3px; padding: 1px 5px; color: #46536a; }
 
 .acr-counts { display: flex; gap: 30px; }
@@ -195,7 +195,7 @@
 
 .acr-ceiling { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #8a6320; margin: 6px 0 0; }
 
-.acr-empty { font-size: 13px; color: #7b8798; padding: 28px 0; }
+.acr-empty { font-size: 13px; color: var(--nds-text-muted); padding: 28px 0; }
 .acr-foot { font-size: 12px; color: var(--nds-grey-500); margin: 18px 0 0; line-height: 1.55; max-width: 76ch; }
 
 /* Below ~980px the facts grid crowds the description — stack instead of squeezing. */
@@ -218,7 +218,7 @@
 .acr-change-what strong { font-weight: 600; }
 .acr-delta { font-size: 12.5px; color: #46536a; margin-left: 6px; font-variant-numeric: tabular-nums; }
 .acr-change-when { font-size: 11.5px; color: var(--nds-grey-450); margin-left: auto; white-space: nowrap; }
-.acr-change-sub { font-size: 12px; color: #7b8798; margin-top: 2px; }
+.acr-change-sub { font-size: 12px; color: var(--nds-text-muted); margin-top: 2px; }
 .acr-change-why { font-size: 12px; color: #56637a; margin-top: 4px; }
 
 /* Delivery is a separate fact from intent — a change we made is not a change Amazon took. */
@@ -229,7 +229,7 @@
 
 .acr-ev {
   display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
-  font-size: 11.5px; color: #7b8798; font-variant-numeric: tabular-nums;
+  font-size: 11.5px; color: var(--nds-text-muted); font-variant-numeric: tabular-nums;
 }
 .acr-ev strong { color: var(--nds-grey-700); font-weight: 600; }
 .acr-ev-k { background: var(--nds-grey-75); border-radius: 3px; padding: 1px 6px; color: #46536a; }
@@ -251,8 +251,8 @@
   font-size: 27px; font-weight: 650; color: var(--nds-grey-900); line-height: 1.15; margin-top: 3px;
   display: flex; align-items: baseline; gap: 9px; font-variant-numeric: tabular-nums;
 }
-.acr-today-hero-sub { font-size: 12.5px; font-weight: 500; color: #7b8798; letter-spacing: 0; }
-.acr-today-hero-note { font-size: 12px; color: #7b8798; margin: 5px 0 0; max-width: 62ch; line-height: 1.5; }
+.acr-today-hero-sub { font-size: 12.5px; font-weight: 500; color: var(--nds-text-muted); letter-spacing: 0; }
+.acr-today-hero-note { font-size: 12px; color: var(--nds-text-muted); margin: 5px 0 0; max-width: 62ch; line-height: 1.5; }
 
 .acr-today-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
 .acr-today-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
@@ -390,7 +390,7 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-fs-can.yes { background: #e8f6ef; color: var(--nds-success-text); }
 .acr-fs-can.no { background: var(--nds-grey-75); color: #7a869a; }
-.acr-fs-engine-facts { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 7px; font-size: 12px; color: #7b8798; }
+.acr-fs-engine-facts { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 7px; font-size: 12px; color: var(--nds-text-muted); }
 .acr-fs-engine-facts strong { color: var(--nds-grey-700); font-weight: 600; font-variant-numeric: tabular-nums; }
 .acr-fs-next { font-variant-numeric: tabular-nums; }
 
@@ -427,7 +427,7 @@ a.acr-refresh { text-decoration: none; }
 
 /* The evidence sentence. Not italic like .acr-why — that one is the engine explaining its own
    state, this one is a judgement about the rule, and they must not read as one voice. */
-.acr-grad-why { font-size: 11.5px; line-height: 1.5; color: #7b8798; margin: 6px 0 0; max-width: 84ch; }
+.acr-grad-why { font-size: 11.5px; line-height: 1.5; color: var(--nds-text-muted); margin: 6px 0 0; max-width: 84ch; }
 .acr-grad-why.ready { color: var(--nds-success-text); }
 .acr-grad-why.unseen { color: #8a6320; }
 .acr-grad-why.failing { color: #a3342b; }
@@ -472,7 +472,7 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-dw-x {
   flex-shrink: 0; background: none; border: none; cursor: pointer;
-  color: #7b8798; padding: 3px; border-radius: 5px; line-height: 0;
+  color: var(--nds-text-muted); padding: 3px; border-radius: 5px; line-height: 0;
 }
 .acr-dw-x:hover { background: var(--nds-grey-75); color: var(--nds-grey-700); }
 
@@ -484,7 +484,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-dw-runbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .acr-dw-norun {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: #7b8798;
+  font-size: 12px; color: var(--nds-text-muted);
 }
 .acr-dw-health { display: flex; gap: 22px; margin: 0; }
 .acr-dw-health div { min-width: 0; }
@@ -492,7 +492,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-dw-health dd { font-size: 12.5px; color: var(--nds-grey-700); margin: 0; white-space: nowrap; }
 .acr-dw-health dd.bad { color: #b3352f; }
 
-.acr-dw-hint { font-size: 11.5px; color: #7b8798; margin: 11px 0 0; line-height: 1.55; max-width: 76ch; }
+.acr-dw-hint { font-size: 11.5px; color: var(--nds-text-muted); margin: 11px 0 0; line-height: 1.55; max-width: 76ch; }
 .acr-dw-last { display: flex; align-items: baseline; gap: 8px; margin: 11px 0 0; flex-wrap: wrap; }
 .acr-dw-last span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); }
 .acr-dw-last code {
@@ -534,7 +534,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-dw-why { display: block; font-size: 11px; color: var(--nds-grey-500); margin-top: 2px; line-height: 1.4; }
 
 .acr-dw-none {
-  font-size: 12.5px; color: #7b8798; line-height: 1.55;
+  font-size: 12.5px; color: var(--nds-text-muted); line-height: 1.55;
   border: 1px dashed var(--nds-grey-150); border-radius: 8px; padding: 14px 15px; background: var(--nds-white);
 }
 
@@ -547,7 +547,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-row.openable:hover { border-color: var(--nds-grey-300); background: var(--nds-white); }
 .acr-row.openable:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 1px; }
 .acr-row-open {
-  font-size: 11px; color: #7b8798; white-space: nowrap; align-self: center; flex-shrink: 0;
+  font-size: 11px; color: var(--nds-text-muted); white-space: nowrap; align-self: center; flex-shrink: 0;
 }
 
 @media (max-width: 900px) {
@@ -673,7 +673,7 @@ a.acr-refresh { text-decoration: none; }
 }
 .acr-week-tile .k { font-size: 11px; font-weight: 600; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .04em; }
 .acr-week-tile b { font-size: 20px; font-weight: 660; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; line-height: 1.25; }
-.acr-week-tile .s { font-size: 11.5px; color: #7b8798; }
+.acr-week-tile .s { font-size: 11.5px; color: var(--nds-text-muted); }
 .acr-week-tile.good b { color: var(--nds-success-text); }
 .acr-week-tile.warn b { color: #8a6320; }
 .acr-week-tile.bad { border-color: #f3cbc7; background: #fdf7f6; }
@@ -786,7 +786,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-breaker.tripped { color: #a3342b; background: #fdf6f5; border-color: #f3cbc7; }
 .acr-breaker svg { flex: none; margin-top: 2px; }
 .acr-breaker strong { display: block; font-weight: 650; }
-.acr-breaker p { margin: 4px 0 0; color: #7b8798; font-size: 11.5px; }
+.acr-breaker p { margin: 4px 0 0; color: var(--nds-text-muted); font-size: 11.5px; }
 .acr-breaker-trip { margin-top: 3px; font-variant-numeric: tabular-nums; }
 
 /* ACR.1.3e — CPC ceiling cell. The multiplier reads as a multiplier, so the unit sits
@@ -804,7 +804,7 @@ a.acr-refresh { text-decoration: none; }
    the room; the fleet map is xyflow (D-D2), laid out deterministically —
    tier → column, index → row. */
 .acr-fleet { display: flex; flex-direction: column; gap: 14px; }
-.acr-fl-loading { font-size: 13px; color: #7b8798; }
+.acr-fl-loading { font-size: 13px; color: var(--nds-text-muted); }
 .acr-fl-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin-bottom: 10px;
@@ -814,8 +814,8 @@ a.acr-refresh { text-decoration: none; }
   font-size: 13.5px; font-weight: 650; color: #232c37;
 }
 .acr-fl-headright { display: flex; align-items: center; gap: 8px; }
-.acr-fl-sub { font-size: 11.5px; color: #7b8798; }
-.acr-fl-empty { font-size: 12.5px; color: #7b8798; margin: 6px 0 0; }
+.acr-fl-sub { font-size: 11.5px; color: var(--nds-text-muted); }
+.acr-fl-empty { font-size: 12.5px; color: var(--nds-text-muted); margin: 6px 0 0; }
 
 .acr-fl-pill {
   display: inline-flex; align-items: center; padding: 2px 8px;
@@ -873,7 +873,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-fln-meta { display: flex; align-items: center; gap: 7px; }
 .acr-fln-level {
   font-size: 9.5px; font-weight: 750; letter-spacing: 0.08em; padding: 1.5px 7px;
-  border-radius: 999px; background: var(--nds-grey-75); color: #7b8798;
+  border-radius: 999px; background: var(--nds-grey-75); color: var(--nds-text-muted);
 }
 .acr-fln-level.lv-observe { color: var(--nds-blue-600); background: var(--nds-blue-100); }
 .acr-fln-level.lv-propose { color: #8a6320; background: #fff8ec; }
@@ -908,7 +908,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-dial { display: inline-flex; gap: 4px; }
 .acr-dial .acr-btn.on { background: var(--nds-blue-600); color: var(--nds-white); border-color: var(--nds-blue-600); }
 .acr-fl-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-700); cursor: pointer; }
-.acr-fl-facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: #7b8798; margin-bottom: 10px; }
+.acr-fl-facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--nds-text-muted); margin-bottom: 10px; }
 .acr-fl-degraded { color: var(--nds-danger-text); font-weight: 650; }
 .acr-fl-runs { display: flex; flex-direction: column; gap: 4px; }
 .acr-fl-run { border-top: 1px solid var(--nds-grey-100); padding-top: 4px; }
@@ -937,7 +937,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-planbody ul { margin: 6px 0; padding-left: 18px; }
 .acr-fl-planbody li { padding: 1px 0; }
 .acr-fl-critic { color: #8a6320; }
-.acr-fl-planbody details summary { cursor: pointer; font-size: 11.5px; color: #7b8798; }
+.acr-fl-planbody details summary { cursor: pointer; font-size: 11.5px; color: var(--nds-text-muted); }
 
 /* approval inbox */
 .acr-fl-inboxgroup { border-top: 1px solid var(--nds-grey-100); padding: 8px 0; }
@@ -1011,7 +1011,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-action.v-cleared { border-left-color: #1a9d6a; }
 .acr-fl-action.v-held { border-left-color: var(--nds-grey-300); }
 .acr-fl-actiontext { font-size: 13px; color: #232c37; }
-.acr-fl-actionwhy { font-size: 11.5px; color: #7b8798; }
+.acr-fl-actionwhy { font-size: 11.5px; color: var(--nds-text-muted); }
 .acr-fl-actionreason { font-size: 11.5px; color: var(--nds-danger-text); }
 .acr-fl-vchip {
   display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
@@ -1022,7 +1022,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-vchip.v-cleared { background: #f1faf5; color: var(--nds-success-text); }
 .acr-fl-vchip.v-held { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 
-.acr-fl-dropped summary { cursor: pointer; font-size: 12px; color: #7b8798; }
+.acr-fl-dropped summary { cursor: pointer; font-size: 12px; color: var(--nds-text-muted); }
 .acr-fl-dropped ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--nds-grey-600); }
 
 /* checks checklist */
@@ -1038,7 +1038,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-checks li.ck-fail svg { color: var(--nds-red-600); }
 .acr-fl-checks li.ck-na svg { color: var(--nds-grey-400); }
 .acr-fl-checkq { color: #232c37; font-weight: 600; flex: none; }
-.acr-fl-checknote { color: #7b8798; font-size: 11.5px; }
+.acr-fl-checknote { color: var(--nds-text-muted); font-size: 11.5px; }
 
 .acr-fl-narrative p { margin: 8px 0 0; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.6; }
 
@@ -1046,14 +1046,14 @@ a.acr-refresh { text-decoration: none; }
   align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
   font-size: 11px; color: var(--nds-grey-400); text-decoration: underline dotted;
 }
-.acr-fl-rawtoggle:hover { color: #7b8798; }
+.acr-fl-rawtoggle:hover { color: var(--nds-text-muted); }
 .acr-fl-raw {
   margin: 0; padding: 10px; border-radius: 7px; background: var(--nds-grey-25);
   border: 1px solid var(--nds-grey-100); font-size: 10.5px; overflow-x: auto; max-height: 380px;
 }
 
 /* ── FX.3 — worker profile pages ─────────────────────────────────────── */
-.acr-flw-back { display: inline-flex; align-items: center; margin-right: 6px; color: #7b8798; }
+.acr-flw-back { display: inline-flex; align-items: center; margin-right: 6px; color: var(--nds-text-muted); }
 .acr-flw-back:hover { color: var(--nds-blue-600); }
 .acr-flw-plain { margin: 6px 0 0; font-size: 13px; color: var(--nds-grey-700); line-height: 1.6; }
 .acr-flw-pipeline { margin: 4px 0; padding: 0 0 0 4px; list-style: none; display: flex; flex-direction: column; gap: 0; }
@@ -1200,7 +1200,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-eg-toggle { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); }
 .acr-eg-toggle button {
   border: 0; background: none; padding: 4px 11px; border-radius: 6px; cursor: pointer;
-  font-size: 12px; font-weight: 600; color: #7b8798;
+  font-size: 12px; font-weight: 600; color: var(--nds-text-muted);
 }
 .acr-eg-toggle button:hover { color: var(--nds-grey-700); }
 .acr-eg-toggle button.on { background: var(--nds-white); color: var(--nds-blue-600); box-shadow: 0 1px 2px rgb(20 28 38 / 0.08); }

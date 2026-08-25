@@ -57,7 +57,24 @@ through a tier-2 role.
 
 | role | tokens |
 |---|---|
-| text | `--nds-text` `--nds-text-2` `--nds-text-3` `--nds-text-strong` `--nds-text-disabled` `--nds-text-inverse` `--nds-text-link` |
+| text | `--nds-text` `--nds-text-2` `--nds-text-muted` `--nds-text-3` `--nds-text-strong` `--nds-text-disabled` `--nds-text-inverse` `--nds-text-link` |
+
+**🔴 The text ramp is not uniformly AA.** Measured on white, 2026-08-25:
+
+| token | value | on white | use for |
+|---|---|---:|---|
+| `--nds-text` | `#1c2530` | 15.48 ✓ | anything |
+| `--nds-text-2` | `#5b6573` | 5.91 ✓ | anything |
+| `--nds-text-muted` | `#667080` | **5.01 ✓** | the smallest text you still expect people to read |
+| `--nds-text-3` | `#8a93a1` | **3.10 ✗** | **icons and ≥24px only** — it FAILS AA below 18.66px |
+
+`--nds-text-3` was being used at 9–12.5px by 18 design-system components, so every consumer shipped
+sub-AA secondary text. Those now use `--nds-text-muted`. The uses that remain are icons, where
+WCAG 1.4.11 asks 3:1 for graphical objects and 3.10 clears it.
+
+Before this, this document annotated the tertiary tone as *"~4.7:1 (AA body)"*. That was true of
+`globals.css`'s channel value `#64748b` and never of the DS token beside it — the same name meaning
+two different colours, which is the trap the top of this file is about.
 | surface | `--nds-bg` `--nds-surface` `--nds-surface-raised` `--nds-surface-sunken` `--nds-surface-hover` |
 | border | `--nds-border` `--nds-border-subtle` `--nds-border-strong` |
 | brand | `--nds-primary` `--nds-primary-hover` `--nds-primary-dark` `--nds-primary-soft` |

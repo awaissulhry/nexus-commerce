@@ -4,7 +4,7 @@
  * shipped unstyled on prod for exactly that mistake.
  */
 .fc { padding: 18px 24px 48px; max-width: 1400px; }
-.fc-empty { font-size: 13px; color: #7b8798; padding: 28px 24px; }
+.fc-empty { font-size: 13px; color: var(--nds-text-muted); padding: 28px 24px; }
 
 .fc-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .fc-head-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }

@@ -127,7 +127,7 @@
 
 /* ── rolled-up repeats ──────────────────────────────────────────────── */
 
-.dt-rollup { font-size: 11px; color: #7b8798; }
+.dt-rollup { font-size: 11px; color: var(--nds-text-muted); }
 .dt-rollupbtn {
   border: 0; background: none; padding: 0; cursor: pointer;
   font: inherit; color: #2f6fb5; text-decoration: underline;
@@ -183,7 +183,7 @@
   padding: 10px 0 2px;
 }
 
-.dt-showing { font-size: 11.5px; color: #7b8798; }
+.dt-showing { font-size: 11.5px; color: var(--nds-text-muted); }
 
 .dt-skeleton {
   background: linear-gradient(90deg, var(--nds-grey-75) 25%, var(--nds-grey-100) 37%, var(--nds-grey-75) 63%);
@@ -404,7 +404,7 @@
 .dt-legend {
   display: flex; flex-wrap: wrap; gap: 6px 14px;
   padding: 8px 0 4px; margin: 0 0 2px;
-  font-size: 11px; color: #7b8798;
+  font-size: 11px; color: var(--nds-text-muted);
   border-bottom: 1px solid var(--nds-grey-75);
 }
 .dt-legenditem { display: inline-flex; align-items: center; gap: 5px; }

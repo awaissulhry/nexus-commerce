@@ -183,6 +183,15 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // so folding it into the ramp would move 74 declarations visibly to satisfy a naming
   // convention. A semantic token carrying its own computed value is the honest shape — the same
   // one --nds-rail-* already uses.
+  // ── the missing AA step in the text ramp ─────────────────────────────────────────────────────
+  // Measured 2026-08-25, on white: --nds-text 15.48 ✓ · --nds-text-2 5.91 ✓ · --nds-text-3 3.10 ✗.
+  // WCAG AA needs 4.5:1 under 18.66px, so the ramp jumps from comfortable straight to failing
+  // with nothing usable in between — and 18 DS components were using text-3 at 9–12.5px.
+  //
+  // #667080 is 5.01:1 and is not invented: the ads console computed it and used it 207 times,
+  // noting "measured in the deployed DOM, not estimated". Same story as the status -text tier —
+  // the console hit a gap in this system and filled it correctly.
+  { name: '--nds-text-muted', value: '#667080' },
   { name: '--nds-success-text', value: '#14724d' },
   { name: '--nds-warning-text', value: '#8a5316' },
   { name: '--nds-danger-text', value: '#9c2f2a' },

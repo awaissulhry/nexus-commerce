@@ -106,6 +106,7 @@
   --nds-info-soft: var(--nds-blue-100);
   --nds-info: var(--nds-blue-600);
   --nds-info-strong: var(--nds-blue-700);
+  --nds-text-muted: #667080;
   --nds-success-text: #14724d;
   --nds-warning-text: #8a5316;
   --nds-danger-text: #9c2f2a;
