@@ -89,7 +89,7 @@ export function RatesStep({ plan, set, listings }: {
 
             <div className="h10-am-card">
               <div className="h10-am-toolbar"><span className="cnt">Promoting <b>{included.length}</b> listing(s)</span></div>
-              <div className="h10-am-grid" style={{ maxHeight: 380 }}>
+              <div className="eb-tablebox" style={{ maxHeight: 380 }}>
                 <table>
                   <thead><tr><th className="ed">Listing</th><th className="num">Break-even</th><th className="num">Rate %</th><th className="num">30d sales</th><th className="num">Fee forecast/mo</th></tr></thead>
                   <tbody>

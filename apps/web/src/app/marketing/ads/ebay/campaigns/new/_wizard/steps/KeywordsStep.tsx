@@ -87,7 +87,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
           {g.seeds.length === 0 ? (
             <p className="eb-be-hint">No keywords in this group yet.</p>
           ) : (
-            <div className="h10-am-grid" style={{ maxHeight: 260 }}>
+            <div className="eb-tablebox" style={{ maxHeight: 260 }}>
               <table>
                 <thead><tr><th className="ed">Keyword ({g.seeds.filter((s) => s.on).length} selected)</th><th className="ed">Source</th><th className="ed">Match</th><th className="num">Bid €</th></tr></thead>
                 <tbody>

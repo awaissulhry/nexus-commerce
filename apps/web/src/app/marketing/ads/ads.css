@@ -29,20 +29,26 @@
 .h10-am-toolbar .cnt b { color: var(--nds-grey-900); }
 .h10-am-toolbar .grow { flex: 1; }
 
-.h10-am-grid { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; overflow: auto; }
+.h10-am-grid,
+.eb-tablebox { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; overflow: auto; }
 /* CBN.3 — unify toolbar + grid + pager into ONE card (H10: the toolbar lives inside the grid
    rectangle, just above the header). Scoped to .h10-am-card so the standalone .h10-am-grid /
    .h10-am-toolbar used by CampaignsGrid stay exactly as they are. */
 .h10-am-card { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; margin-top: 16px; }
 .h10-am-card .h10-am-toolbar { padding: 14px 16px; }
-.h10-am-card .h10-am-grid { border: none; border-radius: 0; background: transparent; }
+.h10-am-card .h10-am-grid,
+.h10-am-card .eb-tablebox { border: none; border-radius: 0; background: transparent; }
 .h10-am-card .h10-am-pager { padding: 12px 16px 14px; }
 .h10-am-card + .h10-am-latest { margin-top: 12px; }
-.h10-am-grid table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.h10-am-grid thead th { position: sticky; top: 0; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-200); font-size: 11.5px; font-weight: 700; color: #475467; text-align: left; padding: 10px 14px; white-space: nowrap; }
-.h10-am-grid th.num, .h10-am-grid td.num { text-align: right; }
+.h10-am-grid table,
+.eb-tablebox table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.h10-am-grid thead th,
+.eb-tablebox thead th { position: sticky; top: 0; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-200); font-size: 11.5px; font-weight: 700; color: #475467; text-align: left; padding: 10px 14px; white-space: nowrap; }
+.h10-am-grid th.num, .h10-am-grid td.num,
+.eb-tablebox th.num, .eb-tablebox td.num { text-align: right; }
 .h10-am-grid th.ck, .h10-am-grid td.ck { width: 40px; text-align: center; }
-.h10-am-grid tbody td { border-bottom: 1px solid var(--nds-grey-150); padding: 11px 14px; color: var(--nds-grey-800); font-weight: 500; white-space: nowrap; }
+.h10-am-grid tbody td,
+.eb-tablebox tbody td { border-bottom: 1px solid var(--nds-grey-150); padding: 11px 14px; color: var(--nds-grey-800); font-weight: 500; white-space: nowrap; }
 .h10-am-grid tbody tr:hover { background: var(--nds-imgup-surface); }
 .h10-am-grid tbody tr.on { background: var(--nds-blue-50); }
 .h10-am-grid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
@@ -377,7 +383,8 @@
 .h10-am-latest .lk { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; }
 
 /* CBN.2e.3 — edit-mode columns (left-aligned controls + cell chrome, H10 match) */
-.h10-am-grid th.ed, .h10-am-grid td.ed { text-align: left; }
+.h10-am-grid th.ed, .h10-am-grid td.ed,
+.eb-tablebox th.ed, .eb-tablebox td.ed { text-align: left; }
 .h10-bidrule { display: inline-flex; align-items: center; gap: 5px; color: var(--nds-grey-800); font-weight: 600; }
 .h10-rules { display: inline-flex; align-items: center; gap: 5px; color: var(--nds-grey-500); }
 .h10-rules b { color: var(--nds-grey-800); font-weight: 600; }
@@ -539,7 +546,8 @@
 .h10-am-grid th.ck, .h10-am-grid td.ck { position: sticky; left: 0; background: var(--nds-white); }
 .h10-am-grid th.nm, .h10-am-grid td.nm { position: sticky; left: 40px; background: var(--nds-white); width: 300px; min-width: 300px; box-shadow: 1px 0 0 var(--nds-grey-150); }
 .h10-am-grid tbody td.ck, .h10-am-grid tbody td.nm { z-index: 3; }
-.h10-am-grid thead th { z-index: 4; }
+.h10-am-grid thead th,
+.eb-tablebox thead th { z-index: 4; }
 .h10-am-grid thead th.ck, .h10-am-grid thead th.nm { z-index: 6; background: var(--nds-grey-25); }
 .h10-am-grid tbody tr:hover td.ck, .h10-am-grid tbody tr:hover td.nm { background: var(--nds-imgup-surface); }
 .h10-am-grid tbody tr.on td.ck, .h10-am-grid tbody tr.on td.nm { background: var(--nds-blue-50); }
@@ -552,10 +560,14 @@
 
 /* CBN.2h.3 — H10-faithful sizing (taller rows, bigger checkbox + badges/icon, all
    consistent) + distinct A/M colours sampled from H10 (A #134DA3 blue, M #7400BC purple) */
-.h10-am-grid table { font-size: 13px; }
-.h10-am-grid thead th { padding: 12px 14px; font-size: 11.5px; }
-.h10-am-grid tbody td { padding: 12px 14px; }
-.h10-am-grid input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--nds-blue-600); cursor: pointer; }
+.h10-am-grid table,
+.eb-tablebox table { font-size: 13px; }
+.h10-am-grid thead th,
+.eb-tablebox thead th { padding: 12px 14px; font-size: 11.5px; }
+.h10-am-grid tbody td,
+.eb-tablebox tbody td { padding: 12px 14px; }
+.h10-am-grid input[type="checkbox"],
+.eb-tablebox input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--nds-blue-600); cursor: pointer; }
 .h10-am-grid th.ck, .h10-am-grid td.ck { width: 46px; }
 .h10-am-grid th.nm, .h10-am-grid td.nm { left: 46px; }
 .h10-am-grid td.nm .nmw { gap: 8px; }
@@ -571,7 +583,8 @@
 /* CBN.2h.4 — first-column balance: centered checkbox, uniform tight gap, SQUARE
    A/M badges (flex-centered) + consistent-height SP/SD, all the same visual size */
 .h10-am-grid th.ck, .h10-am-grid td.ck { text-align: center; vertical-align: middle; }
-.h10-am-grid input[type="checkbox"] { width: 17px; height: 17px; margin: 0; vertical-align: middle; accent-color: var(--nds-blue-600); cursor: pointer; }
+.h10-am-grid input[type="checkbox"],
+.eb-tablebox input[type="checkbox"] { width: 17px; height: 17px; margin: 0; vertical-align: middle; accent-color: var(--nds-blue-600); cursor: pointer; }
 .h10-am-grid td.nm { vertical-align: middle; }
 .h10-am-grid td.nm .nmw { gap: 6px; align-items: center; }
 .h10-am-grid td.nm .nmw .bulb { width: 16px; height: 16px; }
@@ -670,31 +683,37 @@
 .h10-am-pager .rpp .h10-dd-btn { height: 30px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; }
 
 /* ── CBN.2h.9 — custom rounded checkboxes (H10), ~19px, grid + bulk modal ── */
-.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input {
+.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
+.eb-tablebox input[type="checkbox"] {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   width: 19px; height: 19px; min-width: 19px; margin: 0; padding: 0;
   border: 1.5px solid var(--nds-grey-300); border-radius: 5px; background: var(--nds-white);
   cursor: pointer; position: relative; box-sizing: border-box; vertical-align: middle;
 }
-.h10-am-grid input[type="checkbox"]:hover, .h10-bulk-row .ck input:hover, .h10-bulk-hd .ck input:hover { border-color: var(--nds-blue-600); }
+.h10-am-grid input[type="checkbox"]:hover, .h10-bulk-row .ck input:hover, .h10-bulk-hd .ck input:hover,
+.eb-tablebox input[type="checkbox"]:hover { border-color: var(--nds-blue-600); }
 /* BALANCE RULE: the tick is a CENTRED SVG (background-position:center), not a
    rotated-border ::after with hand-tuned left/top offsets. Those offsets were cut
    for a 19px box, broke when it grew to 20px, and never truly centred anyway. A
    centred background glyph is exact and size-independent — never hand-place a tick. */
 .h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
-.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate {
+.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate,
+.eb-tablebox input[type="checkbox"]:checked, .eb-tablebox input[type="checkbox"]:indeterminate {
   background-color: var(--nds-blue-600); border-color: var(--nds-blue-600);
   background-repeat: no-repeat; background-position: center; background-size: 13px 13px;
 }
-.h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked {
+.h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
+.eb-tablebox input[type="checkbox"]:checked {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 7'/></svg>");
 }
-.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate {
+.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate,
+.eb-tablebox input[type="checkbox"]:indeterminate {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'><path d='M6 12h12'/></svg>");
 }
 
 /* ── CBN.2h.10 — uniform square badges = checkbox size (lightbulb · A/M · SP/SD all 20px squares) ── */
-.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input { width: 20px; height: 20px; min-width: 20px; }
+.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
+.eb-tablebox input[type="checkbox"] { width: 20px; height: 20px; min-width: 20px; }
 .h10-am-grid td.nm .nmw .bulb,
 .h10-am-grid td.nm .nmw .tg,
 .h10-am-grid td.nm .nmw .pb {
