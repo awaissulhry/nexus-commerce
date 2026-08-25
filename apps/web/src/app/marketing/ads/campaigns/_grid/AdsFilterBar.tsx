@@ -26,7 +26,8 @@
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
 import { ChevronDown } from 'lucide-react'
-import { FilterDropdown, MultiSelect } from '../FilterDropdown'
+import { FilterDropdown } from '../FilterDropdown'
+import { MultiSelect } from '@/design-system/components'
 import { InfoTip } from '../InfoTip'
 import type { GridFilter, FilterState, RangeVal } from './AdsDataGrid'
 

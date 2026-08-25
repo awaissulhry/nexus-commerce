@@ -125,71 +125,8 @@ export function FilterDropdown({
 // which grew `width`, `searchable` and a per-option `title` to receive them. Its `held`/`onHeld`
 // pair was NOT ported: a thoughtful alternative to `disabled` that no call site ever used.
 
-// CBN.3.8 — checkbox multi-select (H10's Status filter). Reuses the .h10-ms-* shell
-// shared with the Ad Manager. "Select All" is the first plain row (checked when all on,
-// indeterminate when some); the button summarises as the placeholder / single label /
-// "All" / "N selected". Values are an array; empty ⇒ no filter (matches H10).
-export function MultiSelect({ options, value, onChange, placeholder = 'All', ariaLabel, searchable, searchPlaceholder = 'Search…' }: {
-  options: Opt[]
-  value: string[]
-  onChange: (v: string[]) => void
-  placeholder?: string
-  ariaLabel?: string
-  /** Force the in-popover search box. Otherwise it auto-shows past SEARCH_THRESHOLD options. */
-  searchable?: boolean
-  searchPlaceholder?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [q, setQ] = useState('')
-  const ref = useClickAway<HTMLDivElement>(() => { setOpen(false); setQ('') })
-  const allOn = options.length > 0 && value.length === options.length
-  const some = value.length > 0 && !allOn
-  const toggle = (v: string) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])
-  // OS.3 — a Portfolio/Campaign multi-filter could run to dozens of checkboxes with no way to find
-  // one. "Select All" deliberately still applies to ALL options, not just the visible matches —
-  // silently selecting a filtered subset from a control labelled "Select All" would be a lie.
-  const showSearch = searchable || options.length > SEARCH_THRESHOLD
-  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
-  const toggleAll = () => onChange(allOn ? [] : options.map((o) => o.value))
-  const summary = value.length === 0 ? placeholder
-    : allOn ? 'All'
-    : value.length === 1 ? (options.find((o) => o.value === value[0])?.label ?? '1 selected')
-    : `${value.length} selected`
-  return (
-    <div className={`h10-ms ${open ? 'open' : ''}`} ref={ref}>
-      <button type="button" className={`h10-ms-btn ${value.length === 0 ? 'ph' : ''}`} onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}>
-        <span>{summary}</span><ChevronDown size={14} />
-      </button>
-      {open && (
-        <div className="h10-ms-pop" role="listbox">
-          {showSearch && (
-            <div className="h10-dd-search">
-              <Search size={13} />
-              <input
-                autoFocus
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); setQ('') } }}
-                placeholder={searchPlaceholder}
-                aria-label="Search options"
-              />
-            </div>
-          )}
-          <label className="h10-ms-opt">
-            <input type="checkbox" checked={allOn} ref={(el) => { if (el) el.indeterminate = some }} onChange={toggleAll} /> Select All
-          </label>
-          {matches.length === 0 ? (
-            <div className="h10-dd-empty">No matches</div>
-          ) : matches.map((o, i) => (
-            <label key={`${o.value}__${i}`} className={`h10-ms-opt ${value.includes(o.value) ? 'sel' : ''}`}>
-              <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} /> {o.label}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
+// MultiSelect was here. Retired 2026-08-25 — its one consumer (AdsFilterBar) now renders the DS
+// `MultiSelect`, which grew `ariaLabel`, `searchable` and the ranked option search to receive it.
 
 // CBN.3 G6 — shared ad-status options. Inline option list (reuses the .h10-dd-* list
 // styling) for use INSIDE the hover-edit popover, where a nested floating dropdown

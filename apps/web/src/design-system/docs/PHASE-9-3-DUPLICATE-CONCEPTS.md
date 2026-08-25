@@ -812,13 +812,13 @@ Measured, it is four, and two of them are circular.
     AdsDataGrid  ⇄  AdsFilterBar          ← MUTUAL: AdsFilterBar imports GridFilter/FilterState
                                             FROM AdsDataGrid. They move as ONE unit or not at all.
     AdsFilterBar  →  FilterDropdown       (FilterDropdown, MultiSelect)
-                  →  InfoTip
+                  →  InfoTip              ← NOT an app dep: a re-export shim onto the DS
 
 ### Where each stands
 
 | concept | app | DS | verdict |
 |---|---|---|---|
-| `InfoTip` | **25 render sites**, via 4 different relative paths | `primitives/InfoTip.tsx`, **0 uses** | the HoverCard shape again — promote the app's |
+| ~~`InfoTip`~~ | 25 sites — **already the DS one**, reached through a re-export shim | `primitives/InfoTip.tsx` | ✅ done 2026-08-20 (W6). See the correction below. |
 | `MultiSelect` | 3 implementations (see below) | `components/MultiSelect`, 2 consumers | consolidate, but the DS one lacks `searchable`/`ariaLabel` |
 | `FilterDropdown` | 3 render sites | — | small |
 | `AdsFilterBar` | **15 sites in 14 files**, `notesSlot` used by 9 | `FilterBar` 3 consumers, `FilterPanel` **0** | the app's is the adopted one |
@@ -847,6 +847,24 @@ The DS `FilterBar`'s 3 consumers are `products/next`, `fulfillment/stock` and `f
 sites onto a component with 3 users and a missing feature — which is backwards, and the same
 inversion `HoverCard` turned out to be.
 
+### ⚠️ CORRECTED — `InfoTip` was already in the design system
+
+**The row above was wrong when written.** `InfoTip` was promoted into
+`design-system/primitives/InfoTip.tsx` on 2026-08-20 (W6). `app/marketing/ads/campaigns/InfoTip.tsx`
+is a **six-line re-export** kept so 27 existing relative imports did not have to change. Those "25
+app render sites" were the DS component all along, and the DS's "0 uses" was an artifact of
+counting the import path.
+
+There is exactly one `InfoTip` implementation in the repo, and `AdsFilterBar`'s import of it is not
+an app dependency at all.
+
+🔴 **The lesson, which invalidates a whole class of measurement:** a re-export shim makes the import
+path lie about the implementation. Resolving a symbol means **following re-exports to a definition**,
+not parsing the `from '…'` and stopping. Every adoption figure in this document that reads a path
+rather than a definition is suspect for the same reason — the ones here were re-checked against
+`export function` sites, which is why `MultiSelect`'s two CampaignsGrid-local implementations and
+`GridToolbar`'s 130-line Tailwind one are trustworthy: they were read, not inferred.
+
 ### ⚠️ A counting error worth recording
 
 An earlier pass in this appendix reported component adoption as "N sites" when the counter
@@ -858,7 +876,7 @@ render occurrences, not files, and say which one a figure is.
 
 | | | |
 |---|---|---|
-| WG.3d.1 | `InfoTip` — promote the app's (25 sites) over the unused DS one | bounded, same shape as HoverCard |
+| ~~WG.3d.1~~ | `InfoTip` — already promoted in W6; the shim only preserved 27 relative imports | ✅ nothing to do |
 | WG.3d.2 | `MultiSelect` — 4 implementations to 1; DS one needs `searchable`/`ariaLabel` as `Listbox` did | medium |
 | WG.3d.3 | `AdsFilterBar` + `AdsDataGrid` move together, `FilterBar`/`FilterPanel` consolidation deferred with the commerce rebuild | the unit |
 | WG.3e | component move + the 227-occurrence rename, one pass | last |
