@@ -23,7 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -629,11 +629,11 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="MM/DD/YYYY" aria-label="Start date" /></div>
                   <div className="f"><label>End Date</label>
                     <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="Enter a Date" disabled={neverExpire} aria-label="End date" /></div>
-                  <label className="h10-sb-toggle"><button type="button" className={`h10-bktoggle ${neverExpire ? 'on' : ''}`} role="switch" aria-checked={neverExpire} aria-label="Never expire" onClick={() => setNeverExpire((v) => !v)}><span /></button> Never Expire</label>
+                  <label className="h10-sb-toggle"><Toggle checked={neverExpire} aria-label="Never expire" onChange={setNeverExpire} /> Never Expire</label>
                   {/* W4 — dayparting keeps its boolean toggle (its store is a different shape);
                       budget gets the REAL control, because the executor reads date ranges. */}
                   {isDayparting && (
-                    <label className="h10-sb-toggle"><button type="button" className={`h10-bktoggle ${excludeDates ? 'on' : ''}`} role="switch" aria-checked={excludeDates} aria-label="Exclude dates" onClick={() => setExcludeDates((v) => !v)}><span /></button> Exclude Dates</label>
+                    <label className="h10-sb-toggle"><Toggle checked={excludeDates} aria-label="Exclude dates" onChange={setExcludeDates} /> Exclude Dates</label>
                   )}
                 </div>
                 {!isDayparting && (

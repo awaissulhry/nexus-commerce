@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1721,7 +1721,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <div className="h10-rb-brand">
                 <div className="bl"><b>Brand &amp; competitor filters</b><span>{isHarvest ? 'Don’t harvest your own brand terms; optionally only harvest competitor ASINs.' : 'Never negate your own brand terms; optionally only negate competitor ASINs.'}</span></div>
                 <Textarea className="h10-rb-ta brand" value={brandExclude} onChange={(e) => setBrandExclude(e.target.value)} placeholder={isHarvest ? 'Brand terms to never harvest (one per line or comma-separated)' : 'Brand terms to never negate (one per line or comma-separated)'} aria-label="Brand terms to protect" />
-                <label className="h10-rb-compt"><button type="button" className={`h10-bktoggle ${competitorOnly ? 'on' : ''}`} role="switch" aria-checked={competitorOnly} aria-label="Only competitor ASINs" onClick={() => setCompetitorOnly((v) => !v)}><span /></button> Only {isHarvest ? 'harvest' : 'negate'} competitor ASINs (exclude same-brand search terms)</label>
+                <label className="h10-rb-compt"><Toggle checked={competitorOnly} aria-label="Only competitor ASINs" onChange={setCompetitorOnly} /> Only {isHarvest ? 'harvest' : 'negate'} competitor ASINs (exclude same-brand search terms)</label>
               </div>
             </section>
             )}
@@ -1885,7 +1885,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
               </p>
               <div className="h10-rb-card control">
                 {surface === 'search-terms' && (<div className="h10-rb-dedupe">
-                  <button type="button" className={`h10-bktoggle ${dedupe ? 'on' : ''}`} role="switch" aria-checked={dedupe} aria-label="Do not suggest existing search terms" onClick={() => setDedupe((v) => !v)}><span /></button>
+                  <Toggle checked={dedupe} aria-label="Do not suggest existing search terms" onChange={setDedupe} />
                   {/* NEG-P2 — one toggle, two truths: for a negative rule the duplicate being
                       skipped is an existing NEGATIVE at the chosen level, not a keyword. */}
                   <span>{isNegative
@@ -1894,13 +1894,13 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 </div>)}
                 {isNegative && (
                 <div className="h10-rb-dedupe">
-                  <button type="button" className={`h10-bktoggle ${protectConverting ? 'on' : ''}`} role="switch" aria-checked={protectConverting} aria-label="Protect converting search terms" onClick={() => setProtectConverting((v) => !v)}><span /></button>
+                  <Toggle checked={protectConverting} aria-label="Protect converting search terms" onChange={setProtectConverting} />
                   <span>Never create a negative for a term that <b>converted</b> (≥1 order) in the last <Input size="xs" fieldClassName="h10-rb-ninline" className="h10-rb-nincenter" inputMode="numeric" value={protectDays} onChange={(e) => setProtectDays(e.target.value)} aria-label="Protection window in days" /> days in any campaign — protects proven keywords from being blocked.</span>
                 </div>
                 )}
                 {isHarvest && (
                 <div className="h10-rb-dedupe">
-                  <button type="button" className={`h10-bktoggle ${negateInSource ? 'on' : ''}`} role="switch" aria-checked={negateInSource} aria-label="Negate harvested terms in source" onClick={() => setNegateInSource((v) => !v)}><span /></button>
+                  <Toggle checked={negateInSource} aria-label="Negate harvested terms in source" onChange={setNegateInSource} />
                   <span>Also add each harvested term as a <b>negative</b> in its source ad group — stops the source (Auto/Broad) campaign from competing with the new target.</span>
                 </div>
                 )}

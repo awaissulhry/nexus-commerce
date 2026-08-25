@@ -109,16 +109,13 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
       render: (r) => {
         const builder = isBuilderRule(raw.get(r.id))
         return (
-          <button
-            type="button"
-            className={`h10-bktoggle ${r.automation ? 'on' : ''}`}
-            role="switch"
-            aria-checked={r.automation}
+          <Toggle
+            checked={r.automation}
             aria-label={`Automation for ${r.name}`}
             disabled={r.live && !builder}
             title={r.live && !builder ? 'This rule’s mode is set on the Automations page' : undefined}
             onClick={() => { if (!r.live || builder) void setAutomation(r.id, !r.automation) }}
-          ><span /></button>
+          />
         )
       },
     },

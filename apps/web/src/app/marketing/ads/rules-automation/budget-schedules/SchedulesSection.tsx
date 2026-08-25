@@ -61,7 +61,7 @@
  * dailyBudget writers (BSP.6).
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Toggle } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
@@ -198,13 +198,12 @@ export function SchedulesSection({ market }: { market?: string }) {
         const s = scheduleStatus(r, todayIso)
         return (
           <span className="h10-bs-statecell">
-            <button
-              type="button" role="switch" aria-checked={r.enabled}
-              className={`h10-bktoggle ${r.enabled ? 'on' : ''}`}
+            <Toggle
+              checked={r.enabled}
               aria-label={`${r.enabled ? 'Pause' : 'Resume'} ${r.name}`}
               title={r.enabled ? 'Pause this schedule — its campaigns are restored to their base budgets.' : 'Resume this schedule.'}
               onClick={() => void toggleEnabled(r.id, !r.enabled)}
-            ><span /></button>
+            />
             <span className={`h10-bd7-posture ${s.cls}`} title={s.why}>{s.word}</span>
           </span>
         )

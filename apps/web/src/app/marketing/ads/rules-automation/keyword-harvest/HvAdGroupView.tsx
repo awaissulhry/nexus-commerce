@@ -33,7 +33,7 @@
  * release — never a stale-constant column ([[reference_fleet_stale_constant_class]]).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Toggle } from '@/design-system/primitives'
 import { AlertTriangle, Plus, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
@@ -339,16 +339,14 @@ export function HvAdGroupView() {
               {m.map((x) => (
                 <span key={x.id} className={`h10-hv-pathway${x.paused ? ' paused' : ''}`}>
                   <a className="h10-nt-name" href={`${BUILDER}?ruleId=${x.id}`} title={`“${x.name}” is mapped to this ad group specifically.${x.paused ? ' This pathway is PAUSED — the engine reads nothing from it and creates nothing in it until it is resumed.' : ''}`}>{x.name}</a>
-                  <button
-                    type="button"
-                    className={`h10-bktoggle sm${x.paused ? '' : ' on'}`}
-                    role="switch"
-                    aria-checked={!x.paused}
+                  <Toggle
+                    className="sm"
+                    checked={!x.paused}
                     aria-disabled={busy(x.id)}
                     aria-label={`Pathway active for ${x.name} on ${r.adGroup}`}
                     title={x.paused ? 'Paused — this ad group neither feeds this rule nor receives from it. Click to resume.' : 'Active — click to pause just this pathway; the rule and its other ad groups keep running.'}
                     onClick={() => { if (!busy(x.id)) setPathwayPaused(x.id, r, !x.paused) }}
-                  ><span /></button>
+                  />
                   <button
                     type="button"
                     className="h10-hv-detach"

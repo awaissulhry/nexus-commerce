@@ -1050,11 +1050,9 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
           ? `${cap!.reason} Its ceiling is ${LEVEL_WORD[cap!.ceiling] ?? cap!.ceiling}, so Automation cannot be turned on here. That is policy about what this rule DOES, not a setting — it is raised in the engine's graduation rules, not on this page.`
           : `On = Auto (it acts on its own, inside its daily cap and the write gate). Off = Propose (it queues its actions on the Suggestions page; nothing reaches Amazon until you accept them). Currently ${LEVEL_WORD[r.level] ?? (r.level || 'unset')}.${r.enabled ? '' : ' This rule is disabled — turning Automation on will also enable it.'}`
         return (
-          <button
-            type="button"
-            className={`h10-bktoggle${r.automation ? ' on' : ''}${held ? ' held' : ''}${busy ? ' busy' : ''}`}
-            role="switch"
-            aria-checked={r.automation}
+          <Toggle
+            checked={r.automation}
+            className={`${held ? 'held' : ''}${busy ? ' busy' : ''}`.trim() || undefined}
             /**
              * 🔴 `aria-disabled`, NEVER the `disabled` attribute — see ⑤ at the top of this file.
              * A disabled control takes no focus, no click and shows no tooltip, so the `title`
@@ -1071,7 +1069,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
               if (held) { setNotice(`“${r.name}” — ${why}`); return }
               void setAutomation(r.id, !r.automation)
             }}
-          ><span /></button>
+          />
         )
       },
     },

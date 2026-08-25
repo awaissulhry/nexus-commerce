@@ -11,7 +11,7 @@
  * NO_CEILING and never reads as unlimited.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, Toggle } from '@/design-system/primitives'
 import { AlertTriangle, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -158,7 +158,7 @@ export function LimitsView({ scopeOptions, global }: {
                     ? <i title="Opened but not set — resolves to NO_CEILING; it does NOT mean unlimited.">not set</i>
                     : eur(c.dailyCapCents)}</td>
                   <td>
-                    <button type="button" className={`h10-bktoggle ${c.enabled ? 'on' : ''}`} role="switch" aria-checked={c.enabled} aria-label={`Ceiling for ${c.label}`} disabled={busy} onClick={() => void toggle(c)}><span /></button>
+                    <Toggle checked={c.enabled} aria-label={`Ceiling for ${c.label}`} disabled={busy} onClick={() => void toggle(c)} />
                   </td>
                   <td>
                     <button type="button" className="h10-au-limitdel" disabled={busy} onClick={() => void remove(c)} aria-label={`Delete ceiling for ${c.label}`}><Trash2 size={13} aria-hidden /></button>

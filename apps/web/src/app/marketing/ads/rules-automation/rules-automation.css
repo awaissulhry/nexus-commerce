@@ -336,10 +336,10 @@
 .h10-rb-card.adv .freqrow .lbl { font-size: 13px; color: var(--nds-grey-600); }
 /* DS-ALIGN — the DS `Input`; only its width is this row's. */
 .h10-rb-num { width: 150px; }
-/* Control: "do not suggest existing" toggle above Manual/Automate (reuses .h10-bktoggle from ads.css) */
+/* Control: "do not suggest existing" toggle above Manual/Automate (the DS `Toggle`) */
 .h10-rb-dedupe { display: flex; align-items: flex-start; gap: 12px; padding: 2px 0 14px; margin-bottom: 10px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-rb-dedupe span { font-size: 13px; color: var(--nds-grey-700); line-height: 1.45; }
-.h10-rb-dedupe .h10-bktoggle { flex-shrink: 0; margin-top: 1px; }
+.h10-rb-dedupe .nds-toggle { flex-shrink: 0; margin-top: 1px; }
 /* N2: inline day-count inside the "don't negate converting" sentence (negative-targeting only) */
 /* DS-ALIGN — the DS `Input` at `xs`, sitting inside a sentence. The `.nds-field >` prefix on
    the alignment rule is load-bearing: `.nds-field > input` declares `font: inherit`, and at
@@ -5109,10 +5109,11 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-hv-pathway { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); background: var(--nds-grey-25); }
 .h10-hv-pathway.paused { background: var(--nds-grey-50); border-style: dashed; }
 .h10-hv-pathway.paused .h10-nt-name { color: #74808f; }
-/* base toggle is 34×19 with an abspos left-anim knob (ads.css) — the sm variant keeps that model */
-.h10-hv-pathway .h10-bktoggle.sm { width: 26px; height: 15px; flex-shrink: 0; }
-.h10-hv-pathway .h10-bktoggle.sm span { width: 11px; height: 11px; top: 2px; left: 2px; }
-.h10-hv-pathway .h10-bktoggle.sm.on span { left: 13px; }
+/* DS-ALIGN — the switch is the DS `Toggle` (30x17 with a ::after knob). The `sm` variant keeps
+   the same model at the size a pathway chip needs; the knob offsets follow from the track. */
+.h10-hv-pathway .nds-toggle.sm { width: 26px; height: 15px; flex-shrink: 0; }
+.h10-hv-pathway .nds-toggle.sm::after { width: 11px; height: 11px; top: 2px; left: 2px; }
+.h10-hv-pathway .nds-toggle.sm.on::after { transform: translateX(11px); }
 .h10-hv-detach { border: 0; background: none; color: var(--nds-grey-450); cursor: pointer; display: inline-flex; padding: 2px; border-radius: 5px; }
 .h10-hv-detach:hover { color: var(--nds-red-500); background: #fdecec; }
 .h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: var(--nds-radius-sm); font-size: 11px; font-weight: 800; letter-spacing: .01em; background: var(--nds-blue-100); color: var(--nds-info-text); }
@@ -5184,8 +5185,8 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    the operator ruled the question-mark cursor out everywhere (2026-08-20) — the default cursor
    stays, and the tooltip + click answer carry the explanation. `not-allowed` stays out too: it
    would promise the same silence the defect was made of. */
-.h10-bktoggle.held, .h10-bktoggle.busy { opacity: .55; }
-.h10-bktoggle.busy { cursor: progress; }
+.nds-toggle.held, .nds-toggle.busy { opacity: .55; }
+.nds-toggle.busy { cursor: progress; }
 .h10-au-notch.above { background: var(--nds-grey-50); color: var(--nds-grey-600); }
 .h10-au-notch.above svg { opacity: .55; }
 
