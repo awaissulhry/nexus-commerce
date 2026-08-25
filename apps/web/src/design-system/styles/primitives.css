@@ -773,7 +773,11 @@
 .nds-btn.quiet {
   background: none;
   border: 1px solid transparent;
-  color: var(--nds-text-strong);
+  /* INHERITS on purpose. `.acr-btn`, the 25-call-site class this replaces, declares no colour at
+     all: the same button renders #9c2f2a inside an error card, --nds-text-strong in a normal row
+     and --nds-text in a card header. Hard-setting a colour here made those 25 unconvertible.
+     Pass a tone by setting `color` on the container, exactly as the surfaces already do. */
+  color: inherit;
 }
 .nds-btn.quiet:hover:not(:disabled) {
   background: var(--nds-surface-hover);
@@ -964,4 +968,17 @@
 }
 .nds-check.danger input {
   accent-color: var(--nds-danger-text);
+}
+
+/* Dense icon button for a tight action column. */
+.nds-tbtn.sm {
+  width: 24px;
+  height: 24px;
+}
+/* Danger tone — the HOVER is the cue. The buttons this replaces (.del, .mbrm, .strm) wash red on
+   hover and that colour is the only signal they destroy something; their pair measured 5.94:1,
+   this one is 9.23:1. */
+.nds-tbtn.danger:hover:not(:disabled) {
+  background: var(--nds-note-error-bg);
+  color: var(--nds-note-error-fg);
 }

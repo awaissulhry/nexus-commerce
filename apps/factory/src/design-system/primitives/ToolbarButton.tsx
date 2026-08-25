@@ -51,6 +51,14 @@ export interface ToolbarButtonProps
    * icon button, which is why three pages each invented one.
    */
   variant?: 'bare' | 'boxed'
+  /** `sm` is 24x24 rather than 28x28, for a dense action column. */
+  size?: 'md' | 'sm'
+  /**
+   * `danger` turns the HOVER red. For a button whose only cue that it destroys something is that
+   * colour — `.del`, `.mbrm`, `.strm`. Their wash measured 5.94:1; the DS note-error pair is
+   * 9.23:1.
+   */
+  tone?: 'neutral' | 'danger'
   /**
    * Wrap in a `Tooltip`. Default true, matching every existing call site.
    *
@@ -76,6 +84,8 @@ export function ToolbarButton({
   tooltipContent,
   tooltipAlign,
   variant = 'bare',
+  size = 'md',
+  tone = 'neutral',
   tooltip = true,
   ...rest
 }: ToolbarButtonProps) {
@@ -100,7 +110,7 @@ export function ToolbarButton({
       disabled={disabled}
       aria-label={label}
       {...(active !== undefined && !isDisclosure ? { 'aria-pressed': active } : {})}
-      className={cx('nds-tbtn', variant === 'boxed' && 'boxed', className)}
+      className={cx('nds-tbtn', variant === 'boxed' && 'boxed', size === 'sm' && 'sm', tone === 'danger' && 'danger', className)}
       {...rest}
     >
       {icon}

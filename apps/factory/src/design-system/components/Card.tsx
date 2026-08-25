@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 
-export interface CardProps {
+// HTMLElement, not HTMLDivElement: the root is a <div> OR a <button> depending on `onClick`, and
+// div-specific attributes do not spread onto a button. This is the set common to both, which is
+// what a caller actually wants here — title, aria-*, data-*, id, style.
+export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, 'title' | 'onClick'> {
   /** padded body (ignored when `header` is set — header layout has its own padding) */
   padded?: boolean
   /** resting card shadow */
@@ -24,8 +27,6 @@ export interface CardProps {
   onClick?: () => void
   /** engaged state for a tile that toggles something; emits `aria-pressed`. Needs `onClick`. */
   pressed?: boolean
-  /** accessible name, when the card's visible content does not read as one */
-  'aria-label'?: string
   children?: ReactNode
   className?: string
 }

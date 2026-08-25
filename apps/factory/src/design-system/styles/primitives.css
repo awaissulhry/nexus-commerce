@@ -704,7 +704,8 @@
 .nds-btn.quiet {
   background: none;
   border: 1px solid transparent;
-  color: var(--nds-text-strong);
+  /* INHERITS on purpose — see apps/web's copy. */
+  color: inherit;
 }
 .nds-btn.quiet:hover:not(:disabled) {
   background: var(--nds-surface-hover);
@@ -895,4 +896,17 @@
 }
 .nds-check.danger input {
   accent-color: var(--nds-danger-text);
+}
+
+/* Dense icon button for a tight action column. */
+.nds-tbtn.sm {
+  width: 24px;
+  height: 24px;
+}
+/* Danger tone — the HOVER is the cue. The buttons this replaces (.del, .mbrm, .strm) wash red on
+   hover and that colour is the only signal they destroy something; their pair measured 5.94:1,
+   this one is 9.23:1. */
+.nds-tbtn.danger:hover:not(:disabled) {
+  background: var(--nds-note-error-bg);
+  color: var(--nds-note-error-fg);
 }

@@ -18,8 +18,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** `secondary` (white + border) is the base look; `primary` = blue fill; `ghost` = blue outline;
    *  `danger` = red fill for irreversible/live-write actions (call sites were hand-rolling
    *  `!bg-red-600` overrides, which drifted apart and beat every token);
-   *  `quiet` = TEXT-coloured and borderless until hover, which then reveals the border and fill.
-   *  For an inline value-edit trigger, where `link`'s blue reads as navigation.
+   *  `quiet` = borderless until hover, which then reveals the border and fill. It INHERITS its
+   *  context's colour rather than declaring one — the class it replaces (`.acr-btn`, 25 sites)
+   *  renders red inside an error card and normal text elsewhere, and a fixed colour made those
+   *  sites unconvertible. For an inline value-edit trigger, where `link`'s blue reads as
+   *  navigation.
    *
    *  Four more, each filed by a session with the contrast already measured, and each RAISING it:
    *    `success`        green fill, white text — 5.02:1 (`.acr-btn.go` was 4.96)
