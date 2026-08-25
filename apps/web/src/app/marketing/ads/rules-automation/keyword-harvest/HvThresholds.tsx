@@ -117,16 +117,16 @@ export function HvThresholds({ criteria, attrition, census, scope, push, reload,
         <span className="h10-hv-lbl">Counts as a candidate</span>
 
         <Field label="Min orders" over={over.has('minOrders')}>
-          <Stepper value={c.minOrders} min={1} max={20} onChange={(v) => set({ [PARAM.minOrders]: String(v) })} ariaLabel="Minimum orders" />
+          <NumberStepper value={c.minOrders} min={1} max={20} onChange={(v) => set({ [PARAM.minOrders]: String(v) })} ariaLabel="Minimum orders" />
         </Field>
 
         <Field label="Min clicks" over={over.has('minClicks')} tip="A fluke guard, not a volume gate. At this account's 1.3–2.5% conversion rate, 2 orders on 1 click is an attribution artefact rather than demand.">
-          <Stepper value={c.minClicks} min={0} max={100} onChange={(v) => set({ [PARAM.minClicks]: String(v) })} ariaLabel="Minimum clicks" />
+          <NumberStepper value={c.minClicks} min={0} max={100} onChange={(v) => set({ [PARAM.minClicks]: String(v) })} ariaLabel="Minimum clicks" />
         </Field>
 
         <Field label="Max ACoS" over={over.has('maxAcosPct')} tip="Defaults to 45% — this account's own blended ACoS on all search-term traffic over 60 days. No campaign carries a target ACoS, so there is nothing else to inherit. A candidate with orders but no attributed sales has no ACoS and is never excluded by this.">
           <span className="h10-hv-acos">
-            <Stepper
+            <NumberStepper
               value={c.maxAcosPct ?? 0} min={0} max={500} step={5} disabled={c.maxAcosPct == null}
               onChange={(v) => set({ [PARAM.maxAcosPct]: String(v) })} ariaLabel="Maximum ACoS percent" suffix="%"
             />
@@ -253,7 +253,11 @@ function Field({ label, tip, over, children }: { label: string; tip?: string; ov
 }
 
 /** A number the operator nudges. Typing is allowed; the value is clamped on the server too. */
-function Stepper({
+// Renamed from `Stepper` 2026-08-25: the DS exports a `Stepper` too, and it is a WIZARD PROGRESS
+// indicator — an <ol> of done/active/upcoming steps. This is a numeric input with +/- buttons.
+// Both are legitimate meanings of the word; sharing the name only invites importing the wrong one.
+// The DS has no numeric stepper at all, so this stays local until one is wanted.
+function NumberStepper({
   value, min, max, step = 1, onChange, ariaLabel, suffix, disabled,
 }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; ariaLabel: string; suffix?: string; disabled?: boolean }) {
   const clamp = (v: number) => Math.max(min, Math.min(max, v))

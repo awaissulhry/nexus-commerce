@@ -1088,7 +1088,7 @@
 .h10-d2-list { margin-top: 10px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .h10-d2-opt { text-align: left; border: 0; background: none; font: inherit; font-size: 13px; color: var(--nds-grey-900); padding: 8px 10px; border-radius: var(--nds-radius-md); cursor: pointer; }
 .h10-d2-opt:hover { background: var(--nds-grey-75); }
-.h10-d2-empty { padding: 18px 10px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; }
+.h10-d2-empty { padding: 12px 9px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; }
 .h10-d2-diff .pick { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--nds-grey-900); padding-bottom: 10px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-d2-diff .pick b { font-weight: 700; }
 .h10-d2-diff .pick .chg { margin-left: auto; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: #2563eb; cursor: pointer; padding: 2px 4px; }
@@ -1114,7 +1114,7 @@
    A LIVE event uses the alarm tone rather than a success tone: it means the weekly plan is not
    running right now, which is the thing you most need to notice on this page. */
 .h10-evt { border: 1px solid var(--nds-grey-100); border-radius: 9px; overflow: hidden; margin-bottom: 10px; }
-.h10-evt-empty { padding: 16px; font-size: 12.5px; color: var(--nds-grey-500); text-align: center; }
+.h10-evt-empty { padding: 12px 9px; font-size: 12.5px; color: var(--nds-grey-500); text-align: center; }
 .h10-evt-r { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-bottom: 1px solid var(--nds-grey-50); }
 .h10-evt-r:last-child { border-bottom: 0; }
 .h10-evt-r.live { background: #fffaf3; }
@@ -4237,8 +4237,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngrec-head h3 { margin: 0; font-size: 14px; font-weight: 800; color: #10151c; letter-spacing: -0.01em; }
 .h10-ngrec-head p { margin: 5px 0 0; font-size: 12px; line-height: 1.6; color: #4a5566; max-width: 82ch; }
 
-.h10-ngrec-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 12px; }
-.h10-ngrec-tab { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px;
+.h10-ngrec-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 12px; }
+.h10-ngrec-tab { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 11px;
   border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); background: var(--nds-white); cursor: pointer;
   font-size: 11.5px; color: var(--nds-grey-700); }
 .h10-ngrec-tab b { font-size: 13px; font-weight: 800; color: #10151c; }

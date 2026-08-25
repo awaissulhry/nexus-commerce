@@ -142,7 +142,7 @@
 .h10-cms-search { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 7px; margin: 0 0 5px; padding: 6px 9px; background: var(--nds-white); border: 1px solid var(--nds-grey-300); border-radius: var(--nds-radius-md); color: var(--nds-grey-500); }
 .h10-cms-search input { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; background: transparent; color: var(--nds-grey-900); }
 .h10-cms-search input::placeholder { color: var(--nds-grey-400); }
-.h10-cms-empty { padding: 14px 9px; text-align: center; font-size: 12.5px; color: var(--nds-grey-500); }
+.h10-cms-empty { padding: 12px 9px; text-align: center; font-size: 12.5px; color: var(--nds-grey-500); }
 .h10-ms-opt .h10-cms-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* campaign typeahead combobox */
