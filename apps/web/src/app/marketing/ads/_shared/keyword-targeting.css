@@ -9,8 +9,6 @@
 .h10-scb-tgt-mt label.on { color: var(--nds-blue-600); font-weight: 600; }
 .h10-scb-tgt-mt input[type="radio"] { width: 14px; height: 14px; accent-color: var(--nds-blue-600); cursor: pointer; }
 .h10-scb-tgt-mt .grow { flex: 1; }
-.h10-scb-tgt-mt .addall { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-blue-600); background: none; border: none; cursor: pointer; }
-.h10-scb-tgt-mt .addall:disabled { color: #b5bcc6; cursor: default; }
 
 /* keyword text + match-type badge in lists/baskets */
 .h10-scb-tgt-kw { flex: 1; min-width: 0; font-size: 13px; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -28,7 +26,3 @@
 .h10-scb-tgt-enter { display: flex; flex-direction: column; gap: 10px; }
 .h10-scb-tgt-mylist { padding: 30px 16px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; line-height: 1.5; }
 
-/* Advanced Negative Keywords toggle */
-.h10-scb-tgt-adv { display: inline-flex; align-items: center; gap: 7px; margin: 18px 0 14px; font: inherit; font-size: 13px; font-weight: 700; color: var(--nds-blue-600); background: none; border: none; cursor: pointer; }
-.h10-scb-tgt-adv svg { transition: transform .15s; }
-.h10-scb-tgt-adv svg.up { transform: rotate(180deg); }

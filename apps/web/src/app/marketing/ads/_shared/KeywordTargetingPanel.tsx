@@ -86,7 +86,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
               ))}
             </>}
             <span className="grow" />
-            <button type="button" className="addall" disabled={tab !== 'suggested' || !shown.length} onClick={() => addMany(shown)}><Plus size={13} /> Add All</button>
+            <Button variant="link" size="xs" disabled={tab !== 'suggested' || !shown.length} onClick={() => addMany(shown)}><Plus size={13} /> Add All</Button>
           </div>
           {tab === 'suggested' ? (
             <div className="h10-spw-ps-list">
@@ -134,7 +134,11 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
       </div>
 
       {!hideNegatives && (<>
-      <button type="button" className="h10-scb-tgt-adv" aria-expanded={negOpen} onClick={() => setNegOpen((o) => !o)}><ChevronDown size={15} className={negOpen ? 'up' : ''} /> Advanced Negative Keywords (Optional)</button>
+      {/* The chevron rotates inline, not via `.h10-scb-tgt-adv svg.up`: that rule is scoped to the
+          class this drops, so it would have become a silently static chevron. */}
+      <Button variant="link" style={{ margin: '18px 0 14px', fontWeight: 700 }} aria-expanded={negOpen} onClick={() => setNegOpen((o) => !o)}>
+        <ChevronDown size={15} style={{ transform: negOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} /> Advanced Negative Keywords (Optional)
+      </Button>
       {negOpen && (
         <div className="h10-spw-ps">
           <div className="h10-spw-ps-left">
