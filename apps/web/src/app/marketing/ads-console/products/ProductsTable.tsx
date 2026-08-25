@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Search, ChevronDown, ChevronRight, RefreshCw, Download, Image as ImageIcon, ChevronLeft, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
@@ -157,7 +158,7 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
 
       <div className="az-listhead">
         <span className="title">Advertised products <ChevronDown size={18} /></span>
-        <div className="az-search" style={{ minWidth: 320 }}><Search size={15} /><input placeholder="Find a product, ASIN or SKU" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+        <Input leadingIcon={<Search size={15} />} placeholder="Find a product, ASIN or SKU" aria-label="Find a product, ASIN or SKU" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 294 }} />
         <span style={{ flex: 1 }} />
       </div>
 
@@ -165,21 +166,21 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
 
       <div className="az-tbar2">
         <span className="az-menuwrap">
-          <span className="ctl" onClick={() => setShowRange((v) => !v)}>{rangeLabel} <ChevronDown size={14} /></span>
+          <Button variant="quiet" size="sm" aria-haspopup="menu" aria-expanded={showRange} onClick={() => setShowRange((v) => !v)}>{rangeLabel} <ChevronDown size={14} /></Button>
           {showRange && <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setShowRange(false)} />
             <div className="az-menu">{RANGES.map((r) => <button key={r.d} className={days === r.d ? 'on' : ''} onClick={() => { setDays(r.d); setShowRange(false) }}>{r.label}{days === r.d && <span>✔</span>}</button>)}</div>
           </>}
         </span>
-        <button className="az-iconbtn" onClick={() => void refetch()} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
-        <span className="ctl" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></span>
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={() => void refetch()} />
+        <Button variant="quiet" size="sm" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></Button>
       </div>
 
       <div className="az-tablewrap">
         <table className="az-table">
           <thead>
             <tr>
-              <th className="l az-cellsticky"><input className="az-check" type="checkbox" checked={allChecked} onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((p) => { if (e.target.checked) n.add(p.id); else n.delete(p.id) }); return n })} /></th>
+              <th className="l az-cellsticky"><Checkbox checked={allChecked} aria-label="Select all products on this page" onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((p) => { if (e.target.checked) n.add(p.id); else n.delete(p.id) }); return n })} /></th>
               <th className="l az-prodstick" onClick={() => toggleSort('product')}>Product{arrow('product')}</th>
               {COLS.map((c) => <th key={c.key} onClick={() => toggleSort(c.key)}>{c.label}{arrow(c.key)}</th>)}
             </tr>
@@ -193,7 +194,7 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
               return (
                 <Fragment key={p.id}>
                   <tr className={sel.has(p.id) ? 'sel' : ''}>
-                    <td className="l az-cellsticky"><input className="az-check" type="checkbox" checked={sel.has(p.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} /></td>
+                    <td className="l az-cellsticky"><Checkbox checked={sel.has(p.id)} aria-label={`Select ${p.name}`} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} /></td>
                     <td className="l az-prodstick">
                       <span className="az-prod">
                         {canExpand
