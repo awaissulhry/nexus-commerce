@@ -47,12 +47,24 @@ function computeHealth(a: AlertsResult | null, r: Retail | null, au: Automation 
   if (aged) factors.push({ text: `${aged} aged-inventory SKU${aged > 1 ? 's' : ''} flagged`, pts: clamp(aged * 2, 10), dot: '#b87503' })
   const penalty = factors.reduce((sum, f) => sum + f.pts, 0)
   const score = Math.max(0, 100 - penalty)
-  // A score of 100 has to MEAN something. It is computed by subtracting penalties from the four
-  // signal sources, so when none of them answered there are no penalties and the arithmetic says
-  // 100 — "Healthy" for an account nothing is known about. `scored` is what separates "we looked
-  // and found nothing wrong" from "we could not look".
-  const scored = a != null || r != null || au != null || b != null
-  return { score, scored, factors, high, med, pause, suppressing }
+  // A score of 100 has to MEAN something. It is computed by subtracting penalties from the five
+  // signal sources, so a source that did not answer contributes no penalty and silently pushes
+  // the score UP. With none of them answering the arithmetic says 100 — "Healthy" for an account
+  // nothing is known about. A partial answer is the subtler and likelier case: one 500 on
+  // /alerts alone would take thirteen high-severity alerts out of the sum and move 56 to 92.
+  //
+  // So the page reports its own coverage. `scored` is whether any source answered at all;
+  // `missing` names the ones that did not, and the hero says so rather than implying the score
+  // saw everything.
+  const missing = [
+    a == null ? 'alerts' : null,
+    r == null ? 'retail-readiness' : null,
+    au == null ? 'automation' : null,
+    b == null ? 'budget' : null,
+    s == null ? 'summary' : null,
+  ].filter((x): x is string => x != null)
+  const scored = missing.length < 5
+  return { score, scored, missing, factors, high, med, pause, suppressing }
 }
 
 /**
@@ -108,7 +120,7 @@ export function HealthClient() {
   }, [])
   useEffect(() => { load(market, windowDays) }, [load, market, windowDays])
 
-  const { score, scored, factors } = computeHealth(alerts, retail, automation, budget, summary)
+  const { score, scored, missing, factors } = computeHealth(alerts, retail, automation, budget, summary)
   // Retail is account-wide from the endpoint → filter to the chosen market client-side.
   const retailRows = (retail?.campaigns ?? []).filter((c) => c.verdict !== 'ok').filter((c) => market === 'all' || c.marketplace === market)
     .sort((a, b) => (a.verdict === 'pause' ? -1 : 1) - (b.verdict === 'pause' ? -1 : 1))
@@ -154,6 +166,13 @@ export function HealthClient() {
                   <span className="hl-factor-pts">−{f.pts}</span>
                 </div>
               ))}
+          {/* A missing source subtracts nothing, so it can only ever flatter the score. Say which
+              ones are absent rather than letting the number imply it saw everything. */}
+          {!loading && scored && missing.length > 0 && (
+            <span className="hl-tile-sub muted">
+              Partial reading — {missing.join(', ')} did not answer, so anything wrong there is not in this score.
+            </span>
+          )}
         </div>
       </div>
 
