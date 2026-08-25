@@ -212,7 +212,7 @@ export function LaunchStep({
       <div className="h10-spw-card h10-rep-manifest">
         <h3>Every campaign this will create <InfoTip tip="Exactly what lands in Amazon, after your step-2 edits. Click one to go back and change it." /></h3>
         <DataGrid<PlanCampaign>
-          className="h10-rep-tbl"
+          className="h10-rep-tbl" size="sm"
           rows={plan.campaigns}
           rowKey={(c) => c.id}
           showTotals

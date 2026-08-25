@@ -424,7 +424,7 @@ export function FamilyCockpitClient() {
                 </span></div>
               </div>
               <DataGrid<CoverageSetTerm>
-                className="fc-grid gap"
+                className="fc-grid gap" size="sm"
                 rows={covSet.terms.filter((t) => t.status !== 'RETIRED')}
                 rowKey={(t) => t.id}
                 rowClassName={(t) => (t.status === 'PAUSED' ? 'off' : '')}
@@ -519,7 +519,7 @@ export function FamilyCockpitClient() {
                     <div className="fc-banner ok"><Check size={15} /> No bid would move — every evaluated term is holding, capped, or awaiting a target.</div>
                   ) : (
                     <DataGrid<EnginePreviewDecision>
-                      className="fc-grid gap"
+                      className="fc-grid gap" size="sm"
                       rows={preview.decisions.filter((d) => d.action !== 'hold')}
                       rowKey={(d) => d.term}
                       columns={[
@@ -549,7 +549,7 @@ export function FamilyCockpitClient() {
                 </div>
               ) : (
                 <DataGrid<EngineLogRow>
-                  className="fc-grid gap"
+                  className="fc-grid gap" size="sm"
                   rows={engineLog}
                   rowKey={(r) => `${r.at}-${r.term ?? ''}-${r.action}`}
                   columns={[
@@ -582,7 +582,7 @@ export function FamilyCockpitClient() {
                 <span className="fc-sec-sub">market counted once per term · our side is THIS family&rsquo;s ASINs only</span>
               </div>
               <DataGrid<CoverageRow>
-                className="fc-grid"
+                className="fc-grid" size="sm"
                 rows={covRows}
                 rowKey={(r) => r.term}
                 columns={[
@@ -670,7 +670,7 @@ export function FamilyCockpitClient() {
             <div className="fc-banner ok"><Check size={15} /> Nothing pending for this family.</div>
           ) : (
             <DataGrid<PricedProposal>
-              className="fc-grid"
+              className="fc-grid" size="sm"
               rows={ck.proposals!.top}
               rowKey={(p) => p.id}
               columns={[

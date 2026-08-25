@@ -127,7 +127,7 @@ export function LaunchReceipt({ v, onRecheck, onContinue, rechecking }: {
 
           {open && (
             <DataGrid<LaunchEntityResult>
-              className="h10-vt-receipt-grid"
+              className="h10-vt-receipt-grid" size="xs"
               rows={failed}
               rowKey={(e) => `${e.entityType}-${e.localId}`}
               columns={[

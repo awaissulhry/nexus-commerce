@@ -198,6 +198,7 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
           ) : (
             <DataGrid<ProposedRow>
               className="bp-tbl"
+              size="xs"
               maxHeight={260}
               rows={preview.proposed}
               rowKey={(r) => r.allocationId}

@@ -506,7 +506,7 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
         </InfoTip>
       </div>
       <DataGrid<CampaignView>
-        className="h10-rep-tbl"
+        className="h10-rep-tbl" size="sm"
         rows={campaigns}
         rowKey={(c) => c.id}
         showTotals

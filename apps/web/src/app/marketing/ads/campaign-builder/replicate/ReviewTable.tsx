@@ -61,7 +61,7 @@ export function TargetTable({
 
   return (
     <DataGrid<TargetView>
-      className="h10-rep-tbl"
+      className="h10-rep-tbl" size="sm"
       rows={rows}
       rowKey={(r) => r.id}
       selectable
