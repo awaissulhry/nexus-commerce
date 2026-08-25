@@ -91,7 +91,7 @@
 .as-want {
   display: block;
   font-size: 11.5px;
-  color: #5b6573; /* was #8d97a6 — 2.73:1, below the 4.5:1 floor */
+  color: var(--nds-grey-600); /* was #8d97a6 — 2.73:1, below the 4.5:1 floor */
   line-height: 1.5;
   max-width: 44ch;
   margin-top: 2px;
@@ -126,7 +126,7 @@
    is a WCAG 1.4.1 failure and because "gone" is not a shade of blue. */
 .as-target.gone { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
 .as-gonemark { font-weight: 700; flex: none; }
-.as-target.account { color: #5b6573; background: #f4f6f9; border-color: #e6eaf0; }
+.as-target.account { color: var(--nds-grey-600); background: var(--nds-grey-50); border-color: #e6eaf0; }
 .as-target.inline { max-width: 26ch; }
 
 .as-outcome {
@@ -139,13 +139,13 @@
 }
 /* was #97a1b0 — 2.41:1, and it is the colour of "never run", the one word this
    page exists to say about a fleet that has never run anything. */
-.as-outcome.muted { color: #5b6573; }
+.as-outcome.muted { color: var(--nds-grey-600); }
 
 .as-when { font-size: 12px; color: #52627a; font-variant-numeric: tabular-nums; }
 /* The em-dash placeholders are not decoration — they say "there is nothing
    here", which is this page's most common answer. Measured at #8a93a1 they
    were 3.1:1; #6b7480 is 4.73:1 and still reads as quieter than a value. */
-.as-when.muted { color: #6b7480; }
+.as-when.muted { color: var(--nds-pill-neutral-fg); }
 
 /* ── S1.a · the grid card ─────────────────────────────────────────────────
    Scoped to `.as-page`, a root class this page alone wears, NOT to `.acr-fleet`
@@ -172,7 +172,7 @@
 /* The header's own colour is the DS `--text-secondary` (#5b6573 on #f7f9fb =
    5.6:1), which is why moving to this substrate fixes the 2.73:1 header that
    `acr-pg-tbl` shipped. Recorded so nobody "helpfully" re-greys it. */
-.as-page .nds-grid-empty { color: #5b6573; padding: 34px 20px; }
+.as-page .nds-grid-empty { color: var(--nds-grey-600); padding: 34px 20px; }
 
 .as-page .nds-toolbar { flex-wrap: wrap; row-gap: 6px; }
 .as-search { min-width: 240px; }
@@ -182,7 +182,7 @@
 .as-order,
 .as-asof {
   font-size: 11.5px;
-  color: #5b6573;
+  color: var(--nds-grey-600);
   white-space: nowrap;
 }
 .as-order::before { content: '↕ '; opacity: 0.7; }
@@ -209,7 +209,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
-  color: #5b6573;
+  color: var(--nds-grey-600);
   cursor: pointer;
 }
 .as-kebab:hover { background: #eef2f7; border-color: #dfe5ec; color: #26313f; }
@@ -223,7 +223,7 @@
   position: fixed;
   z-index: 1200;
   width: 216px;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #dfe5ec;
   border-radius: 10px;
   box-shadow: 0 12px 28px rgba(23, 35, 52, 0.16);
@@ -246,7 +246,7 @@
 .as-menu-item:focus-visible { outline: 2px solid #2f6feb; outline-offset: -2px; }
 .as-menu-item.danger { color: #a11d2b; }
 .as-menu-item.danger:hover:not(:disabled) { background: #fdecee; }
-.as-menu-item:disabled { color: #8a93a1; cursor: not-allowed; }
+.as-menu-item:disabled { color: var(--nds-grey-500); cursor: not-allowed; }
 
 .as-menu-confirm {
   display: flex;
@@ -291,7 +291,7 @@
   flex-direction: column;
   align-items: center;
   gap: 9px;
-  color: #5b6573;
+  color: var(--nds-grey-600);
   line-height: 1.6;
 }
 .as-gridempty strong { color: #34404f; font-size: 13.5px; }
@@ -306,10 +306,10 @@
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.as-due.later { color: #5b6573; background: #f4f6f9; border-color: #e6eaf0; }
+.as-due.later { color: var(--nds-grey-600); background: var(--nds-grey-50); border-color: #e6eaf0; }
 .as-due.soon  { color: #92400e; background: #fdf3e3; border-color: #f5e2c0; }
 .as-due.over  { color: #a11d2b; background: #fdecee; border-color: #f6d4d9; }
-.as-due.none  { color: #6b7480; font-weight: 400; }
+.as-due.none  { color: var(--nds-pill-neutral-fg); font-weight: 400; }
 
 /* ── S1.b · the filter band ───────────────────────────────────────────────
    One row: All, the six open states, then the closed remainder. The whole
@@ -329,7 +329,7 @@
 
 .as-remainder {
   font-size: 11.5px;
-  color: #5b6573;
+  color: var(--nds-grey-600);
   margin-left: 2px;
 }
 .as-remainder button {
@@ -359,7 +359,7 @@
 }
 .as-hint {
   font-size: 11.5px;
-  color: #5b6573; /* was #8d97a6 — 2.95:1, and these sentences are the teaching */
+  color: var(--nds-grey-600); /* was #8d97a6 — 2.95:1, and these sentences are the teaching */
   line-height: 1.55;
   margin-top: 6px;
 }
@@ -373,8 +373,8 @@
    that passes at full strength quietly fails when it is quieted. These carry
    real teaching text, so they are quieted with an explicit colour that still
    measures ≥4.5:1. */
-.as-step-ghost .as-steplabel { font-weight: 600; color: #6b7480; }
-.as-step-ghost .as-hint { color: #6b7480; }
+.as-step-ghost .as-steplabel { font-weight: 600; color: var(--nds-pill-neutral-fg); }
+.as-step-ghost .as-hint { color: var(--nds-pill-neutral-fg); }
 .as-step-ghost .opt { font-weight: 400; text-transform: none; letter-spacing: 0; }
 .as-refusal {
   font-size: 11.5px;
@@ -392,7 +392,7 @@
   text-align: left;
   border: 1px solid #e2e6ec;
   border-radius: 9px;
-  background: #fff;
+  background: var(--nds-white);
   padding: 10px 12px;
   cursor: pointer;
   margin-bottom: 7px;
@@ -402,7 +402,7 @@
 .as-workerbtn[aria-pressed='true'] {
   border-color: #2f6feb;
   box-shadow: inset 0 0 0 1px #2f6feb;
-  background: #f7faff;
+  background: var(--nds-imgup-surface);
 }
 .as-workerbtn:disabled { cursor: not-allowed; background: #fafbfc; }
 /* display:block is load-bearing, not cosmetic: these are <span>s, so without
@@ -425,7 +425,7 @@
 .as-kinds { display: flex; gap: 8px; flex-wrap: wrap; }
 .as-kind {
   border: 1px solid #e2e6ec;
-  background: #fff;
+  background: var(--nds-white);
   border-radius: 8px;
   padding: 7px 13px;
   font-size: 12.5px;
@@ -463,7 +463,7 @@
   margin: 0;
   font-size: 11.5px;
   line-height: 1.5;
-  color: #5b6573;
+  color: var(--nds-grey-600);
 }
 .as-commitline.blocked { color: #7a5a22; font-weight: 600; }
 .as-commitacts { display: flex; gap: 8px; flex: none; }
@@ -491,13 +491,13 @@
   align-items: center;
   margin-top: 7px;
   font-size: 11.5px;
-  color: #5b6573;
+  color: var(--nds-grey-600);
 }
 
 /* The count line is the fix for a silent cap: it renders 8 of N and says N. */
 .as-pickcount {
   font-size: 11.5px;
-  color: #5b6573;
+  color: var(--nds-grey-600);
   margin: 9px 0 5px;
 }
 .as-pickcount strong { color: #1f2a37; font-variant-numeric: tabular-nums; }
@@ -558,17 +558,17 @@
    override this page owns missed it. `.as-drawer` is that root.
    Two DS roles measured below the floor inside it on prod: the drawer
    subtitle at 3.10:1 and the DateField placeholder at 3.10:1. */
-.as-drawer .nds-drawer-h .st { color: #5b6573; }
+.as-drawer .nds-drawer-h .st { color: var(--nds-grey-600); }
 .as-drawer input::placeholder,
-.as-drawer textarea::placeholder { color: #6b7480; }
+.as-drawer textarea::placeholder { color: var(--nds-pill-neutral-fg); }
 /* The DateField's "No deadline" is NOT a `::placeholder` — it is a
    `<span class="ph">` inside the DS listbox button, so the rule above sailed
    straight past it and it stayed at 3.10:1. Measured, not assumed: the probe
    found one survivor and the survivor named itself. */
-.as-drawer .nds-listbox-btn .ph { color: #6b7480; }
+.as-drawer .nds-listbox-btn .ph { color: var(--nds-pill-neutral-fg); }
 /* The worker descriptions were 2.82–2.95:1 — and they are the only text on
    this screen that tells you which worker to pick. */
-.as-drawer .as-workerbtn .ds { color: #5b6573; }
+.as-drawer .as-workerbtn .ds { color: var(--nds-grey-600); }
 
 /* ⚠ A FLEET-WIDE DEFECT, fixed here only, and I introduced this instance.
    S2.c gave the primary action the shared `.acr-btn.go` so it reads as the
@@ -686,7 +686,7 @@
 .as-actdanger { display: flex; align-items: center; margin-left: 6px; }
 
 .as-actspacer { flex: 1 1 auto; }
-.as-asofdetail { font-size: 11.5px; color: #5b6573; white-space: nowrap; }
+.as-asofdetail { font-size: 11.5px; color: var(--nds-grey-600); white-space: nowrap; }
 
 /* The shared primary is white on #1a9d6a = 3.46:1. Same page-local fix as the
    create drawer, same reason, and the central fix at control-room.css:53 is
@@ -702,10 +702,10 @@
    the worst at 2.39 — including every label in the brief, which is the five
    words that say what the object IS. */
 .as-briefcard { margin-bottom: 18px; }
-.as-detail .as-brief .k { color: #5b6573; }      /* was #97a1b0 — 2.41:1 */
+.as-detail .as-brief .k { color: var(--nds-grey-600); }      /* was #97a1b0 — 2.41:1 */
 .as-detail .as-why { color: #35414f; }
 .as-wantback { margin-top: 14px; }
-.as-detail .as-caveat { color: #5b6573; }        /* was #8d97a6 — 2.73:1 */
+.as-detail .as-caveat { color: var(--nds-grey-600); }        /* was #8d97a6 — 2.73:1 */
 .as-mb16 { margin-bottom: 16px; }
 .as-mt22 { margin-top: 22px; }
 
@@ -722,7 +722,7 @@
   margin: 0 0 4px;
   font-size: 12.5px;
   line-height: 1.6;
-  color: #5b6573;
+  color: var(--nds-grey-600);
   max-width: 72ch;
 }
 
@@ -777,8 +777,8 @@
    kind label (2.39:1). Part 11 fixed the first under `.as-page`, which does
    not reach this page — the same miss, a third time, and the argument for
    measuring every state rather than the one that happens to be on screen. */
-.as-detail .acr-pg-tbl th { color: #5b6573; }
-.as-detail .as-fkind { color: #5b6573; }
+.as-detail .acr-pg-tbl th { color: var(--nds-grey-600); }
+.as-detail .as-fkind { color: var(--nds-grey-600); }
 
 /* ── detail page ──────────────────────────────────────────────────────── */
 .as-brief {
@@ -808,7 +808,7 @@
 .as-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .as-finding {
-  border-top: 1px solid #eef1f5;
+  border-top: 1px solid var(--nds-grey-100);
   padding: 11px 0;
 }
 .as-finding:first-child { border-top: none; }
@@ -903,7 +903,7 @@
 .as-emptybody {
   max-width: 54ch;
   margin: 0 auto;
-  color: #5b6573; /* was #8d97a6 — 2.73:1 */
+  color: var(--nds-grey-600); /* was #8d97a6 — 2.73:1 */
   line-height: 1.65;
 }
 /* The claims this panel makes are checkable, so they link to the page that can

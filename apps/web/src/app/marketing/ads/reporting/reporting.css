@@ -392,7 +392,7 @@ select.rpt-input { height: 32px; }
   padding: 4px 10px; font: inherit; font-size: 11.5px; color: rgb(var(--text-secondary));
 }
 .rpt-seg button + button { border-left: 1px solid rgb(var(--border-subtle)); }
-.rpt-seg button.on { background: var(--color-primary); color: #fff; }
+.rpt-seg button.on { background: var(--color-primary); color: var(--nds-white); }
 
 .rpt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 8px; }
 
@@ -533,11 +533,11 @@ select.rpt-input { height: 32px; }
 /* Fields inside the console filter panel: same label treatment as .ffield. */
 
 /* Secondary info in the toolbar — recessive beside the row count. */
-.h10-am-toolbar .rpt-meta-note { font-size: 11.5px; color: #8a93a1; }
+.h10-am-toolbar .rpt-meta-note { font-size: 11.5px; color: var(--nds-grey-500); }
 
 /* Column picker: a console menu, not a DS dropdown, so it matches Customize. */
 .rpt-colmenu { max-height: 340px; overflow-y: auto; min-width: 210px; }
-.rpt-colmenu .tick { display: inline-block; width: 12px; color: #1f6fde; font-weight: 700; }
+.rpt-colmenu .tick { display: inline-block; width: 12px; color: var(--nds-blue-600); font-weight: 700; }
 .rpt-colmenu button.on { font-weight: 650; }
 
 /* Keep the previous result readable while the next one loads. */
@@ -673,7 +673,7 @@ select.rpt-input { height: 32px; }
   padding: 5px 10px; font-size: 11.5px; font-weight: 700; color: rgb(var(--text-secondary)); cursor: pointer;
 }
 .rpt-iro-seg button:last-child { border-right: 0; }
-.rpt-iro-seg button.on { background: var(--color-primary); color: #fff; }
+.rpt-iro-seg button.on { background: var(--color-primary); color: var(--nds-white); }
 .rpt-iro-f { display: flex; flex-direction: column; gap: 3px; }
 .rpt-iro-f > span {
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
@@ -726,7 +726,7 @@ select.rpt-input { height: 32px; }
 .rpt-iro-tbl .em.b { font-weight: 700; }
 .rpt-iro-tbl .empty { text-align: center; padding: 26px 10px; color: rgb(var(--text-tertiary)); }
 .rpt-iro-b { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
-.rpt-iro-b.br { background: #ede9fe; color: #6d28d9; }
+.rpt-iro-b.br { background: #ede9fe; color: var(--nds-purple-700); }
 .rpt-iro-b.nb { background: #e0f2fe; color: #0369a1; }
 .rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: rgb(var(--text-tertiary)); line-height: 1.55; }
 

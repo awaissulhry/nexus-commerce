@@ -7,7 +7,7 @@
   width: 352px; flex-shrink: 0; align-self: flex-start;
   position: sticky; top: 14px; max-height: calc(100vh - 28px);
   display: flex; flex-direction: column;
-  border: 1px solid #dfe5ec; border-radius: 10px; background: #fff; padding: 13px 0 6px;
+  border: 1px solid #dfe5ec; border-radius: 10px; background: var(--nds-white); padding: 13px 0 6px;
 }
 .adock-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
 .adock-head h2 { font-size: 12.5px; font-weight: 700; color: #34404f; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -16,13 +16,13 @@
   margin-left: auto; display: inline-flex; align-self: center;
   color: #97a1af; background: none; border: 0; border-radius: 5px; padding: 3px; cursor: pointer;
 }
-.adock-collapse:hover { background: #f4f6f9; color: #2a5399; }
+.adock-collapse:hover { background: var(--nds-grey-50); color: #2a5399; }
 
 /* Collapsed: a slim edge rail. The flex sibling (the page) takes the reclaimed width. */
 .adock--rail { width: 34px; padding: 0; overflow: hidden; }
 .adock-rail-btn {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  width: 100%; padding: 10px 0 12px; background: #fff; border: 0; cursor: pointer; color: #5a6779;
+  width: 100%; padding: 10px 0 12px; background: var(--nds-white); border: 0; cursor: pointer; color: #5a6779;
 }
 .adock-rail-btn:hover { background: #f8fafc; color: #2a5399; }
 .adock-rail-label {
@@ -64,9 +64,9 @@
 .adock-main { min-width: 0; flex: 1; }
 .adock-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adock-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--cat, #dde3ea); flex-shrink: 0; }
-.adock-name { font-size: 12px; font-weight: 550; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.adock-name { font-size: 12px; font-weight: 550; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .adock-edit { margin-left: auto; color: #97a1af; flex-shrink: 0; display: inline-flex; }
-.adock-edit:hover { color: #1f6fde; }
+.adock-edit:hover { color: var(--nds-blue-600); }
 .adock-sub { font-size: 10.5px; color: #97a1af; margin: 2px 0 0; font-variant-numeric: tabular-nums; }
 
 .adock-scope {
@@ -80,17 +80,17 @@
 
 .adock-dial { display: inline-flex; margin-top: 5px; border: 1px solid #e0e5ec; border-radius: 5px; overflow: hidden; }
 .adock-notch {
-  font-size: 10px; font-weight: 700; color: #7a869a; background: #fff;
+  font-size: 10px; font-weight: 700; color: #7a869a; background: var(--nds-white);
   border: 0; border-right: 1px solid #edf0f4; min-width: 34px; padding: 3px 6px; cursor: pointer;
 }
 .adock-notch:last-child { border-right: 0; }
-.adock-notch:hover:not(:disabled):not(.on) { background: #f4f6f9; }
+.adock-notch:hover:not(:disabled):not(.on) { background: var(--nds-grey-50); }
 .adock-notch:disabled { color: #c3ccd7; cursor: not-allowed; }
-.adock-notch.on { color: #fff; }
+.adock-notch.on { color: var(--nds-white); }
 .adock-notch.on.off { background: #7a869a; }
 .adock-notch.on.observe { background: #4d5b6e; }
 .adock-notch.on.propose { background: #2a5399; }
 .adock-notch.on.auto { background: #14724d; }
 
 /* Drop feedback — applied by ruleDropProps to ANY registered target on any page. */
-.rule-drop-hover { outline: 2px dashed #1f6fde !important; outline-offset: -2px; background: #f2f7fe !important; }
+.rule-drop-hover { outline: 2px dashed var(--nds-blue-600) !important; outline-offset: -2px; background: #f2f7fe !important; }

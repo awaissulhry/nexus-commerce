@@ -33,7 +33,7 @@
 
 /* ── cards ─────────────────────────────────────────────────────── */
 .bulk-card {
-  background: var(--ds-surface, #fff);
+  background: var(--ds-surface, var(--nds-white));
   border: 1px solid var(--ds-border, #e2e8f0);
   border-radius: 10px;
   padding: 18px 20px;
@@ -129,11 +129,11 @@
 .bulk-step.is-active {
   color: var(--ds-text, #0f172a);
   border-color: var(--ds-border, #e2e8f0);
-  background: var(--ds-surface, #fff);
+  background: var(--ds-surface, var(--nds-white));
 }
 .bulk-step.is-active span {
   background: var(--ds-primary, #2563eb);
-  color: #fff;
+  color: var(--nds-white);
 }
 .bulk-step.is-done span {
   background: var(--ds-success-soft, #dcfce7);
@@ -148,7 +148,7 @@
 }
 
 .bulk-metric {
-  background: var(--ds-surface, #fff);
+  background: var(--ds-surface, var(--nds-white));
   border: 1px solid var(--ds-border, #e2e8f0);
   border-radius: 9px;
   padding: 12px 14px;
@@ -315,7 +315,7 @@
 .bulk-pill.is-update, .bulk-pill.is-info { background: var(--ds-info-soft, #dbeafe); color: var(--ds-info, #1d4ed8); }
 .bulk-pill.is-create, .bulk-pill.is-ok { background: var(--ds-success-soft, #dcfce7); color: var(--ds-success, #16a34a); }
 .bulk-pill.is-archive, .bulk-pill.is-bad { background: var(--ds-danger-soft, #fee2e2); color: var(--ds-danger, #dc2626); }
-.bulk-pill.is-conflict, .bulk-pill.is-warn { background: var(--ds-warning-soft, #fef3c7); color: var(--ds-warning, #b45309); }
+.bulk-pill.is-conflict, .bulk-pill.is-warn { background: var(--ds-warning-soft, var(--nds-badge-sb-bg)); color: var(--ds-warning, #b45309); }
 
 /* ── warnings ──────────────────────────────────────────────────── */
 .bulk-warnlist {
@@ -341,7 +341,7 @@
   padding: 16px 172px 16px 20px;
   border: 1px solid var(--ds-border, #e2e8f0);
   border-radius: 10px;
-  background: var(--ds-surface, #fff);
+  background: var(--ds-surface, var(--nds-white));
   position: sticky;
   bottom: 0;
   z-index: 2;

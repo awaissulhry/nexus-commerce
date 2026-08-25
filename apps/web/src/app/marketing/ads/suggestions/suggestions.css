@@ -95,11 +95,11 @@
 .h10-sug-sugval { font-weight: 700; color: var(--nds-text); font-variant-numeric: tabular-nums; }
 
 /* SG.2b — the staged verbs: the FILL is the staged state (H10's blue-boxed ✓/✕) */
-.h10-sug-iconbtn.ok.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
-.h10-sug-iconbtn.no.on { background: #8a5316; border-color: #8a5316; color: #fff; }
+.h10-sug-iconbtn.ok.on { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
+.h10-sug-iconbtn.no.on { background: #8a5316; border-color: #8a5316; color: var(--nds-white); }
 /* SG.9 — ⏸ is a MUTE now (stop suggesting), so it wears the quiet slate fill rather than the
    amber "armed, about to write" treatment its pause ancestor used. Nothing reaches Amazon. */
-.h10-sug-iconbtn.pz.on { background: var(--nds-text-2); border-color: var(--nds-text-2); color: #fff; }
+.h10-sug-iconbtn.pz.on { background: var(--nds-text-2); border-color: var(--nds-text-2); color: var(--nds-white); }
 
 /* SG.9 — the REAL pause, rehoused in the drawer. Amber because this one does write. */
 .h10-sug-pausebox { border: 1px solid #f0dcbe; border-radius: 10px; padding: 12px 14px; background: #fff6e8; }
@@ -116,7 +116,7 @@
 .h10-sug-buf .cur { color: var(--nds-text-3); font-size: 12px; }
 .h10-sug-buf input { width: 74px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--nds-text); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: 7px; padding: 4px 8px; }
 .h10-sug-buf input:read-only { background: transparent; border-color: transparent; }
-.h10-sug-buf.on input { border-color: #1f6fde; background: #f2f7ff; }
+.h10-sug-buf.on input { border-color: var(--nds-blue-600); background: #f2f7ff; }
 .h10-sug-buf.on.edited input { border-color: #c68a2e; background: #fff6e8; }
 .h10-sug-buf input:disabled { color: var(--nds-text-3); background: transparent; border-color: transparent; }
 .h10-sug-buf .rv { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--nds-text-2); cursor: pointer; }
@@ -136,11 +136,11 @@
 .h10-sug-dot.r { background: var(--nds-danger-strong); }
 
 /* SG.2b — the circular match-type badge before the term (E/B/P/A) */
-.h10-sug-mt { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: none; border-radius: 50%; font-size: 10.5px; font-weight: 800; font-style: normal; color: #fff; }
+.h10-sug-mt { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: none; border-radius: 50%; font-size: 10.5px; font-weight: 800; font-style: normal; color: var(--nds-white); }
 .h10-sug-mt.mt-e { background: #067d62; }
 .h10-sug-mt.mt-b { background: #0ea5c6; }
 .h10-sug-mt.mt-p { background: #7c5cff; }
-.h10-sug-mt.mt-a { background: #1f6fde; }
+.h10-sug-mt.mt-a { background: var(--nds-blue-600); }
 .h10-sug-mt.mt-n { background: #8a5316; }
 
 /* SG.2b — Reason (criteria) + Destinations cells */

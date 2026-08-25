@@ -75,10 +75,10 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .rd-mode.ok,    .rd-sig.ok    { color: #0a5c36; background: #dcf3e7; }
-.rd-mode.hold                 { color: #4a5560; background: #eef1f5; }
+.rd-mode.hold                 { color: #4a5560; background: var(--nds-grey-100); }
 .rd-mode.warn,  .rd-sig.warn, .rd-ceil.warn { color: #8a5a00; background: #fdf3d3; }
 .rd-mode.bad,   .rd-sig.bad,  .rd-ceil.bad  { color: #a3211a; background: #fbdedb; }
-.rd-mode.muted, .rd-sig.muted, .rd-ceil.muted { color: #6b7480; background: #f4f6f9; }
+.rd-mode.muted, .rd-sig.muted, .rd-ceil.muted { color: var(--nds-pill-neutral-fg); background: var(--nds-grey-50); }
 .rd-mode.allout { color: #6b2fb3; background: #efe6fb; }
 .rd-mode.mixed  { color: #1f4e8c; background: #e3edfb; }
 /* Mode carries the longest sentences ("Capped 0% — base €2.41 over the €2.00 ceiling"), so it gets
@@ -143,8 +143,8 @@
 }
 
 /* RD.P5 — the CPC ceiling, in aggregate */
-.rd-p5 { background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; padding: 14px 16px; }
-.rd-p5 h3 { margin: 0 0 6px; font-size: 13.5px; color: #1c2530; display: flex; align-items: center; gap: 6px; }
+.rd-p5 { background: var(--nds-white); border: 1px solid #e3e7ec; border-radius: 10px; padding: 14px 16px; }
+.rd-p5 h3 { margin: 0 0 6px; font-size: 13.5px; color: var(--nds-grey-900); display: flex; align-items: center; gap: 6px; }
 .rd-p5-line { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: #3f4754; max-width: 860px; }
 .rd-p5-line b.warn { color: #92400e; }
 .rd-p5-line b.bad { color: #b42318; }
@@ -152,7 +152,7 @@
 .rd-p5-list li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #b42318; }
 .rd-p5-list li.more { color: #6b7585; }
 .rd-p5-foot { margin: 0; font-size: 12px; color: #6b7585; }
-.rd-p5-foot a { color: #1f6fde; }
+.rd-p5-foot a { color: var(--nds-blue-600); }
 
 /* RD.P1 — the fleet-state band. Buttons, because each tile IS the filter it counts; the pressed
    state is the one visual answer to "why is the grid short" on a ?tile= deep link. */
@@ -160,17 +160,17 @@
 .rd-band-tile {
   display: inline-flex; align-items: baseline; gap: 6px;
   padding: 7px 12px; font-size: 12.5px; color: #3f4754;
-  background: #fff; border: 1px solid #e3e7ec; border-radius: 8px; cursor: pointer;
+  background: var(--nds-white); border: 1px solid #e3e7ec; border-radius: 8px; cursor: pointer;
   font-variant-numeric: tabular-nums;
 }
 .rd-band-tile b { font-size: 14px; font-weight: 700; color: #16202b; }
 .rd-band-tile:hover { border-color: #b9c4d0; }
-.rd-band-tile.on { border-color: #1f6fde; background: #eef4fd; color: #17436f; }
+.rd-band-tile.on { border-color: var(--nds-blue-600); background: #eef4fd; color: #17436f; }
 .rd-band-tile.on b { color: #123a63; }
 .rd-band-tile.zero { color: #6b7585; }
 .rd-band-tile.zero b { color: #6b7585; font-weight: 600; }
 .rd-band-note { font-size: 11.5px; color: #6b7585; margin-left: auto; }
-.rd-band-note a { color: #1f6fde; }
+.rd-band-note a { color: var(--nds-blue-600); }
 
 /* RD.P4 · the stale signal.
    Its own tone, between `ok` and `warn`: the number is real and the lane is alive, but the basis is

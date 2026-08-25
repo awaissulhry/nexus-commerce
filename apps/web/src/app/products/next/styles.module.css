@@ -272,7 +272,7 @@
 .ptitleLink {
   font-weight: 640;
   font-size: 12.8px;
-  color: #1f6fde;
+  color: var(--nds-blue-600);
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
@@ -292,8 +292,8 @@
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
-  background: #1f6fde;
+  color: var(--nds-white);
+  background: var(--nds-blue-600);
   border-radius: 6px;
   padding: 3px 8px;
   text-decoration: none;
@@ -307,7 +307,7 @@
 }
 
 .openBtn:hover {
-  background: #1a60c4;
+  background: var(--nds-blue-700);
 }
 
 .psub {

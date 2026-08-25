@@ -35,7 +35,7 @@
    full-viewport background. */
 .fleet-surface,
 .fleet-portal {
-  color: #1c2530;
+  color: var(--nds-grey-900);
   color-scheme: light;
 
   /* ── SB.W.1 — the DS light pin ────────────────────────────────────────
@@ -103,7 +103,7 @@
 .fleet-surface {
   margin: -12px;
   min-height: 100dvh;
-  background: #f4f6f9;
+  background: var(--nds-grey-50);
 }
 @media (min-width: 768px) {
   .fleet-surface { margin: -24px; }
@@ -133,7 +133,7 @@
   padding: 0 10px;
   font-size: 12.5px;
   color: #34404f;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #dfe5ec;
   border-radius: 7px;
 }
@@ -151,7 +151,7 @@
   font-size: 12px;
   font-weight: 600;
   color: #5a6675;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #dfe5ec;
   border-radius: 999px;
   cursor: pointer;
@@ -161,7 +161,7 @@
 }
 .acr-pg-chip:hover { border-color: #c3ccd8; color: #34404f; }
 .acr-pg-chip.on {
-  color: #fff;
+  color: var(--nds-white);
   background: #3f6fb5;
   border-color: #3f6fb5;
 }
@@ -179,7 +179,7 @@
   margin-bottom: 14px;
 }
 .acr-pg-stat {
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 10px;
   padding: 11px 13px;
@@ -230,7 +230,7 @@
 .acr-pg-tbl th.num, .acr-pg-tbl td.num { text-align: right; padding-right: 18px; }
 .acr-pg-tbl td {
   padding: 9px 12px 9px 0;
-  border-bottom: 1px solid #eef1f5;
+  border-bottom: 1px solid var(--nds-grey-100);
   color: #34404f;
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
@@ -392,7 +392,7 @@
   border: 1px solid #e6ebf1;
   border-radius: 10px;
   padding: 12px 13px;
-  background: #fff;
+  background: var(--nds-white);
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -416,7 +416,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #6b7a8d;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #dfe5ec;
   cursor: pointer;
   display: inline-flex;
@@ -427,7 +427,7 @@
 .acr-pg-rung:last-child { border-radius: 0 7px 7px 0; }
 .acr-pg-rung + .acr-pg-rung { border-left: 0; }
 .acr-pg-rung:hover:not(:disabled) { background: #f2f6fb; color: #34404f; }
-.acr-pg-rung.on { background: #3f6fb5; border-color: #3f6fb5; color: #fff; }
+.acr-pg-rung.on { background: #3f6fb5; border-color: #3f6fb5; color: var(--nds-white); }
 .acr-pg-rung.blocked {
   background: #f5f6f8;
   color: #b8c0ca;
@@ -464,7 +464,7 @@
   padding: 20px;
 }
 .acr-pg-confirm {
-  background: #fff;
+  background: var(--nds-white);
   border-radius: 12px;
   padding: 20px 22px;
   max-width: 460px;

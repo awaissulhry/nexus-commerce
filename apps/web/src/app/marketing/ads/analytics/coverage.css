@@ -11,12 +11,12 @@
 
 .cov-top {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
-  border: 1px solid #dfe5ec; border-radius: 9px; background: #fff;
+  border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white);
   padding: 16px 18px; margin: 4px 0 14px;
 }
 .cov-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #8d97a6; font-weight: 700; }
 .cov-hero-v {
-  font-size: 30px; font-weight: 650; color: #1c2530; line-height: 1.15; margin-top: 3px;
+  font-size: 30px; font-weight: 650; color: var(--nds-grey-900); line-height: 1.15; margin-top: 3px;
   display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums;
 }
 .cov-hero-sub { font-size: 12.5px; font-weight: 500; color: #7b8798; letter-spacing: 0; }
@@ -26,25 +26,25 @@
 .cov-field { display: flex; flex-direction: column; gap: 5px; }
 .cov-field span { font-size: 11.5px; font-weight: 600; color: #46536a; text-transform: uppercase; letter-spacing: 0.03em; }
 .cov-field select {
-  font-size: 12.5px; color: #1c2530; background: #fff;
+  font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white);
   border: 1px solid #d7dee7; border-radius: 6px; padding: 6px 9px; min-width: 190px;
 }
 
 /* ── headroom ────────────────────────────────────────────────────────────── */
-.cov-head-list { list-style: none; margin: 0; padding: 0; border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow: hidden; }
+.cov-head-list { list-style: none; margin: 0; padding: 0; border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white); overflow: hidden; }
 .cov-head-list li {
   display: grid; grid-template-columns: minmax(0, 1fr) 110px 78px 108px;
   align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #f0f3f6; font-size: 12.5px;
 }
 .cov-head-list li:last-child { border-bottom: 0; }
-.cov-head-term { color: #1c2530; font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cov-head-term { color: var(--nds-grey-900); font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cov-head-market, .cov-head-share { text-align: right; font-variant-numeric: tabular-nums; color: #46536a; }
 .cov-head-kw { text-align: right; font-size: 11.5px; color: #7b8798; }
 /* A big market with no keyword at all is the most actionable row on the page. */
 .cov-head-kw.none { color: #8a6320; font-weight: 650; }
 
 /* ── the table ───────────────────────────────────────────────────────────── */
-.cov-tablewrap { border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow-x: auto; }
+.cov-tablewrap { border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white); overflow-x: auto; }
 .cov-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .cov-table th {
   text-align: right; padding: 9px 12px; font-size: 10.5px; font-weight: 700;
@@ -52,25 +52,25 @@
   border-bottom: 1px solid #e3e7ec; white-space: nowrap; background: #fbfcfd;
 }
 .cov-table th.l, .cov-table td.l { text-align: left; }
-.cov-table td { padding: 7px 12px; text-align: right; border-bottom: 1px solid #f4f6f9; color: #34404f; font-variant-numeric: tabular-nums; }
+.cov-table td { padding: 7px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-50); color: #34404f; font-variant-numeric: tabular-nums; }
 .cov-table tbody tr:last-child td { border-bottom: 0; }
 .cov-table tbody tr:hover td { background: #f9fbfd; }
-.cov-table td.l { color: #1c2530; font-weight: 500; }
+.cov-table td.l { color: var(--nds-grey-900); font-weight: 500; }
 
 /* Share is the point of the page, so it gets the width and the only chart ink. */
 .cov-table th.share, .cov-table td.share { width: 200px; }
 .cov-table td.share { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
-.cov-bar { flex: 1; height: 6px; border-radius: 3px; background: #eef1f5; overflow: hidden; min-width: 60px; }
-.cov-bar-fill { display: block; height: 100%; background: #1f6fde; border-radius: 3px; }
-.cov-bar-v { min-width: 52px; text-align: right; font-weight: 600; color: #1c2530; }
+.cov-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--nds-grey-100); overflow: hidden; min-width: 60px; }
+.cov-bar-fill { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 3px; }
+.cov-bar-v { min-width: 52px; text-align: right; font-weight: 600; color: var(--nds-grey-900); }
 
 /* Two or more of ours on one page — the thing that turned out NOT to be the constraint. */
 .cov-table td.multi { color: #14724d; font-weight: 650; }
 /* No keyword at all on a real market. */
 .cov-table td.none { color: #8a6320; font-weight: 600; }
 
-.cov-search { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 1px solid #d7dee7; border-radius: 6px; padding: 4px 9px; background: #fff; }
-.cov-search input { border: 0; outline: 0; font-size: 12.5px; color: #1c2530; width: 160px; background: transparent; }
+.cov-search { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 1px solid #d7dee7; border-radius: 6px; padding: 4px 9px; background: var(--nds-white); }
+.cov-search input { border: 0; outline: 0; font-size: 12.5px; color: var(--nds-grey-900); width: 160px; background: transparent; }
 .cov-search svg { color: #8d97a6; flex-shrink: 0; }
 
 @media (max-width: 900px) {
@@ -100,10 +100,10 @@
 
 .cov-btn {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  font-size: 12px; color: #46536a; background: #fff;
+  font-size: 12px; color: #46536a; background: var(--nds-white);
   border: 1px solid #d7dee7; border-radius: 6px; padding: 7px 11px; cursor: pointer;
 }
-.cov-btn:hover:not(:disabled) { background: #f4f6f9; border-color: #c3cdd9; }
+.cov-btn:hover:not(:disabled) { background: var(--nds-grey-50); border-color: #c3cdd9; }
 .cov-btn:disabled { opacity: 0.55; cursor: default; }
 
 .cov-foot { font-size: 12px; color: #8d97a6; margin: 18px 0 0; line-height: 1.55; max-width: 92ch; }
@@ -121,13 +121,13 @@
    same ink weight as share. An unknown reads as a muted dash with a tooltip that names the
    reason — never as 0%, which on this board would assert we are absent from the top of the
    page rather than admitting we cannot see it. */
-.cov-table td.pw { font-weight: 650; color: #1c2530; }
+.cov-table td.pw { font-weight: 650; color: var(--nds-grey-900); }
 .cov-unk { color: #b3bcc8; }
 .cov-hero-pw {
   font-size: 12px; color: #46536a; margin: 7px 0 0; max-width: 74ch; line-height: 1.55;
-  border-top: 1px solid #eef1f5; padding-top: 7px;
+  border-top: 1px solid var(--nds-grey-100); padding-top: 7px;
 }
-.cov-hero-pw strong { color: #1c2530; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.cov-hero-pw strong { color: var(--nds-grey-900); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 
 /* ── ACR.2.3 · tabs ──────────────────────────────────────────────────────────
    Tabs rather than routes: §4.1 adds no sidebar entries, and both views answer one question. */
@@ -138,14 +138,14 @@
   margin-bottom: -1px;
 }
 .cov-tabs button:hover { color: #46536a; }
-.cov-tabs button.on { color: #1f6fde; border-bottom-color: #1f6fde; }
+.cov-tabs button.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
 
 /* ── ACR.2.3 · conflicts ─────────────────────────────────────────────────────
    One card per contest. Dormant contenders are hidden by default: `giacca moto uomo` is claimed
    by 19 campaigns and four of them have ever served, so an undifferentiated list of nineteen
    would bury the collision it exists to show. */
 .cvf-list { margin: 0 24px; display: flex; flex-direction: column; gap: 10px; }
-.cvf-card { border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; overflow: hidden; }
+.cvf-card { border: 1px solid #dfe5ec; border-radius: 9px; background: var(--nds-white); overflow: hidden; }
 .cvf-head {
   display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
   padding: 10px 14px 9px; border-bottom: 1px solid #f0f3f6; background: #fbfcfd;
@@ -153,25 +153,25 @@
 .cvf-disc {
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; padding: 0; flex-shrink: 0;
-  border: 1px solid #dfe5ec; border-radius: 5px; background: #fff; color: #7b8798; cursor: pointer;
+  border: 1px solid #dfe5ec; border-radius: 5px; background: var(--nds-white); color: #7b8798; cursor: pointer;
 }
-.cvf-disc:hover { background: #f4f6f9; color: #46536a; }
-.cvf-term { font-size: 13px; font-weight: 650; color: #1c2530; }
+.cvf-disc:hover { background: var(--nds-grey-50); color: #46536a; }
+.cvf-term { font-size: 13px; font-weight: 650; color: var(--nds-grey-900); }
 .cvf-match {
   font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: #7b8798;
-  background: #eef1f5; border-radius: 4px; padding: 2px 6px;
+  background: var(--nds-grey-100); border-radius: 4px; padding: 2px 6px;
 }
 .cvf-tag { font-size: 10.5px; font-weight: 650; border-radius: 4px; padding: 2px 7px; }
 /* The contest no existing surface could show. */
 .cvf-tag.cross { background: #eaf2fd; color: #1a5cb8; border: 1px solid #cfe0f7; }
 .cvf-tag.top { background: #fdf0e8; color: #94501c; border: 1px solid #f2d5c2; }
 /* No evidence at all — the champion is a coin toss and the card says so. */
-.cvf-tag.blind { background: #f4f6f9; color: #7b8798; border: 1px solid #e3e7ec; }
+.cvf-tag.blind { background: var(--nds-grey-50); color: #7b8798; border: 1px solid #e3e7ec; }
 .cvf-counts { font-size: 11.5px; color: #8d97a6; }
 .cvf-money { margin-left: auto; font-size: 12px; color: #46536a; font-variant-numeric: tabular-nums; }
 
-.cvf-champ { font-size: 12.5px; color: #46536a; margin: 0; padding: 9px 14px; line-height: 1.55; border-bottom: 1px solid #f4f6f9; }
-.cvf-champ strong { color: #1c2530; font-weight: 650; }
+.cvf-champ { font-size: 12.5px; color: #46536a; margin: 0; padding: 9px 14px; line-height: 1.55; border-bottom: 1px solid var(--nds-grey-50); }
+.cvf-champ strong { color: var(--nds-grey-900); font-weight: 650; }
 .cvf-pf { color: #8d97a6; }
 
 .cvf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -181,7 +181,7 @@
   border-bottom: 1px solid #f0f3f6; white-space: nowrap;
 }
 .cvf-table th.l, .cvf-table td.l { text-align: left; }
-.cvf-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid #f7f9fb; color: #34404f; font-variant-numeric: tabular-nums; }
+.cvf-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-25); color: #34404f; font-variant-numeric: tabular-nums; }
 .cvf-table tbody tr:last-child td { border-bottom: 0; }
 .cvf-table tr.champ td { background: #f5faf7; }
 .cvf-table tr.dormant td { color: #a6b0bd; }
@@ -196,10 +196,10 @@
   font-size: 11.5px; color: #7b8798; background: #fbfcfd;
   border: 0; border-top: 1px solid #f0f3f6; padding: 7px 14px; cursor: pointer;
 }
-.cvf-more:hover { background: #f4f6f9; color: #46536a; }
+.cvf-more:hover { background: var(--nds-grey-50); color: #46536a; }
 
 .cvf-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #46536a; cursor: pointer; }
-.cvf-check input { accent-color: #1f6fde; }
+.cvf-check input { accent-color: var(--nds-blue-600); }
 
 .cov > .cvf-list { margin-left: 24px; margin-right: 24px; }
 
@@ -207,6 +207,6 @@
    next word ("pickChampionthe") — the space after </code> collapses against the monospace run,
    so the separation has to come from the box, not from the whitespace. */
 .cov-foot code {
-  font-size: 11.5px; background: #f1f4f8; color: #46536a;
+  font-size: 11.5px; background: var(--nds-grey-75); color: #46536a;
   border-radius: 3px; padding: 1px 5px; margin: 0 2px;
 }

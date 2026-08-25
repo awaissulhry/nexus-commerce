@@ -68,7 +68,7 @@
   font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 /* S2R — was #667485 = 4.41:1 on this page's #f4f6f9. Section 1 measured it and
    handed it here with the as-of stamp; both are the header's, not the band's. */
@@ -106,12 +106,12 @@
   cursor: pointer;
 }
 .sbm-modetabs button.on {
-  color: #1c2530;
+  color: var(--nds-grey-900);
   font-weight: 680;
   border-bottom-color: #1f4f8b;
 }
 .sbm-modetabs button:hover {
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 .sbm-modetabs button:focus-visible {
   outline: 2px solid #1f4f8b;
@@ -138,7 +138,7 @@
   margin: 0;
   padding: 4px 9px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #78838f;
   font-size: 10.5px;
   color: #45505f;
@@ -146,7 +146,7 @@
 }
 .sbm-offscreen b {
   font-weight: 700;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 
 .sbm-head-right {
@@ -185,7 +185,7 @@
   border: 1px solid #78838f; /* was #d7dee7 = 1.25:1 */
   border-radius: 7px;
   overflow: hidden;
-  background: #fff;
+  background: var(--nds-white);
 }
 .sbm-seg button {
   border: 0;
@@ -196,11 +196,11 @@
   cursor: pointer;
 }
 .sbm-seg button + button {
-  border-left: 1px solid #cdd5df;
+  border-left: 1px solid var(--nds-imgup-spin-track);
 }
 .sbm-seg button.on {
   background: #1f4f8b;
-  color: #fff;
+  color: var(--nds-white);
   font-weight: 650;
 }
 .sbm-seg button:focus-visible {
@@ -215,7 +215,7 @@
  * White on #1f4f8b is 8.24:1.
  */
 .sbm-seg button.on:focus-visible {
-  outline-color: #ffffff;
+  outline-color: var(--nds-white);
 }
 
 /*
@@ -285,7 +285,7 @@
   column-gap: 20px;
   row-gap: 8px;
   padding: 9px 12px;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 9px;
 }
@@ -303,7 +303,7 @@
   font-size: 13.5px;
   font-weight: 650;
   line-height: 1.25;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 /* Reserved whether or not a filter is on. The old strip inserted its filter
    summary as a new block BELOW the card, which moved the canvas 29.3px and the
@@ -321,7 +321,7 @@
   color: #b3261e;
 }
 .sbm-band.tone-running .sbm-verdict-head svg {
-  color: #1f6fde;
+  color: var(--nds-blue-600);
 }
 .sbm-band.tone-mixed .sbm-verdict-head svg {
   color: #15804f;
@@ -360,7 +360,7 @@
   gap: 2px;
   height: 14px;
   border-radius: 4px;
-  background: #eef1f5;
+  background: var(--nds-grey-100);
   overflow: hidden;
 }
 /* `sbm-mseg`, not `sbm-seg`. The short name was already this page's segmented
@@ -383,7 +383,7 @@
    legend and the bar cannot become two sources — the same rule M.4's overlay
    legend is built on. */
 .seg-running {
-  background: #1f6fde;
+  background: var(--nds-blue-600);
 }
 .seg-working {
   background: #15804f;
@@ -431,7 +431,7 @@
 .sbm-bfact .v {
   font-size: 13px;
   font-weight: 650;
-  color: #1c2530;
+  color: var(--nds-grey-900);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -483,7 +483,7 @@
      #dde4ec = 1.28:1 — the control had no perceptible edge at all. */
   border: 1px solid #78838f;
   border-radius: 999px;
-  background: #fff;
+  background: var(--nds-white);
   color: #37414f;
   font-size: 11.5px;
   cursor: pointer;
@@ -514,7 +514,7 @@
      and not in this row. */
   min-width: 2ch;
   text-align: right;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 .sbm-lens:hover {
   background: #f2f6fb;
@@ -528,10 +528,10 @@
   background: #1f4f8b;
   border-color: #1f4f8b;
   border-style: solid;
-  color: #fff;
+  color: var(--nds-white);
 }
 .sbm-lens.on .n {
-  color: #fff;
+  color: var(--nds-white);
 }
 .sbm-lens:focus-visible {
   outline: 2px solid #2b6cb0;
@@ -581,11 +581,11 @@
    Approvals" as fact while its own request was in flight, with those zeros as
    live buttons — measured on prod 2026-08-08. */
 .sbm-band.is-loading .sbm-meter {
-  background: #eef1f5;
+  background: var(--nds-grey-100);
 }
 .sbm-skel {
   display: block;
-  background: #eef1f5;
+  background: var(--nds-grey-100);
   border-radius: 4px;
 }
 .sbm-skel.sk-head {
@@ -615,7 +615,7 @@
 .sbm-defs dt {
   font-size: 12px;
   font-weight: 650;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 .sbm-defs dd {
   margin: 1px 0 0;
@@ -648,7 +648,7 @@
   padding: 4px 9px;
   border: 1px solid #dde4ec;
   border-radius: 999px;
-  background: #fff;
+  background: var(--nds-white);
   font-size: 11.5px;
   color: #4a5666;
   cursor: pointer;
@@ -656,7 +656,7 @@
 .sbm-chip .n {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 .sbm-chip:hover {
   border-color: #b9c6d6;
@@ -848,7 +848,7 @@
   height: auto !important;
 }
 .sbm-skeleton {
-  background: linear-gradient(90deg, #f4f6f9 25%, #eef1f5 37%, #f4f6f9 63%);
+  background: linear-gradient(90deg, var(--nds-grey-50) 25%, var(--nds-grey-100) 37%, var(--nds-grey-50) 63%);
   background-size: 400% 100%;
   animation: sbm-shimmer 1.4s ease infinite;
 }
@@ -881,14 +881,14 @@
   fill: #45505f;
 }
 .sbm-canvas .react-flow__edge-textbg {
-  fill: #ffffff;
+  fill: var(--nds-white);
 }
 
 /* nodes */
 .sbm-node {
   width: 252px;
   padding: 9px 11px;
-  background: #fff;
+  background: var(--nds-white);
   /* was #dde4ec = 1.28:1; 1.4.11 wants 3:1 for a control's own boundary.
      ⚠ #aab4c0 was my first try and it measured 2.05:1 — because I checked it
      against WHITE and the card sits on the canvas's #fbfcfe. A boundary is
@@ -920,7 +920,7 @@
  */
 .sbm-node.is-dimmed {
   opacity: 1;
-  background: #f7f9fb;
+  background: var(--nds-grey-25);
   border-color: #e6ebf1;
   box-shadow: none;
 }
@@ -955,7 +955,7 @@
 .sbm-node-name {
   font-size: 12.5px;
   font-weight: 620;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 /* was #7d879a on #f1f4f8 = 3.28:1 */
 .sbm-tag-diag {
@@ -964,7 +964,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #4a5666;
-  background: #eef1f5;
+  background: var(--nds-grey-100);
   border-radius: 3px;
   padding: 1px 4px;
 }
@@ -1036,7 +1036,7 @@
 .sbm-fact b {
   font-size: 11.5px;
   font-weight: 680;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 .sbm-fact i {
   font-style: normal;
@@ -1081,7 +1081,7 @@
 }
 .sbm-glyph.g-off { border-radius: 2px; background: #6b7684; }             /* square, grey  4.83:1 */
 .sbm-glyph.g-working { border-radius: 50%; background: #15804f; }         /* circle, green 4.96:1 */
-.sbm-glyph.g-running { border-radius: 50%; background: #1f6fde; }         /* circle, blue  4.35:1 */
+.sbm-glyph.g-running { border-radius: 50%; background: var(--nds-blue-600); }         /* circle, blue  4.35:1 */
 .sbm-glyph.g-paused {                                                     /* bar, amber    4.79:1 */
   border-radius: 1px;
   background: #8a5a1a;
@@ -1156,7 +1156,7 @@
   gap: 2px;
   padding: 8px 14px;
   background: #f2f5f9;
-  border: 1px solid #cdd5df;
+  border: 1px solid var(--nds-imgup-spin-track);
   border-radius: 10px;
 }
 .sbm-lane-title {
@@ -1214,7 +1214,7 @@
   align-items: center;
   gap: 6px;
   border: 1px solid #dde4ec;
-  background: #fff;
+  background: var(--nds-white);
   border-radius: 7px;
   padding: 5px 10px;
   font-size: 11.5px;
@@ -1242,7 +1242,7 @@
 .sbm-how-body {
   margin-top: 8px;
   padding: 14px 16px;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 9px;
 }
@@ -1303,7 +1303,7 @@
   width: 288px;
   padding: 8px 10px;
   border-radius: 7px;
-  background: #1c2530;
+  background: var(--nds-grey-900);
   color: #eef2f6;
   font-size: 11.5px;
   line-height: 1.5;
@@ -1401,7 +1401,7 @@
   width: 210px;
   height: 62px;
   padding: 8px 10px;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #dde4ec;
   border-radius: 7px;
   display: flex;
@@ -1439,7 +1439,7 @@
 .sbm-ent-label {
   font-size: 12px;
   font-weight: 600;
-  color: #1c2530;
+  color: var(--nds-grey-900);
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1524,7 +1524,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 9px;
   padding: 4px;
@@ -1593,7 +1593,7 @@
   text-decoration: underline;
 }
 .sbm-listname.on .nm {
-  color: #1c2530;
+  color: var(--nds-grey-900);
   text-decoration: underline;
 }
 .sbm-liststatus {
@@ -1652,7 +1652,7 @@
   box-shadow: inset 3px 0 0 #2b6cb0;
 }
 .sbm-listgrid tbody tr.is-dimmed {
-  background: #f7f9fb;
+  background: var(--nds-grey-25);
 }
 .sbm-listgrid tbody tr.is-dimmed td,
 .sbm-listgrid tbody tr.is-dimmed .sbm-listname .nm {
@@ -1726,7 +1726,7 @@
    * C-S3.4 and S3.h are for.
    */
   overflow-y: auto;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 9px;
   padding: 10px;
@@ -2035,15 +2035,15 @@
     45deg,
     rgb(var(--ov-hatch-rgb)),
     rgb(var(--ov-hatch-rgb)) 3px,
-    #ffffff 3px,
-    #ffffff 6px
+    var(--nds-white) 3px,
+    var(--nds-white) 6px
   );
   --ov-hatch-soft: repeating-linear-gradient(
     45deg,
     rgb(var(--ov-hatch-rgb) / 0.16),
     rgb(var(--ov-hatch-rgb) / 0.16) 4px,
-    #ffffff 4px,
-    #ffffff 8px
+    var(--nds-white) 4px,
+    var(--nds-white) 8px
   );
 }
 .ov-off { --ov: #8a9199; }
@@ -2110,7 +2110,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 9px;
   overflow: hidden;
@@ -2141,7 +2141,7 @@
   border-radius: 4px;
 }
 .sbm-rail-close:hover {
-  background: #f1f4f8;
+  background: var(--nds-grey-75);
   color: #4a5666;
 }
 .sbm-rail-headbtns {
@@ -2242,7 +2242,7 @@
 .sbm-rail-id .nm {
   font-size: 13.5px;
   font-weight: 650;
-  color: #1c2530;
+  color: var(--nds-grey-900);
   line-height: 1.3;
 }
 .sbm-rail-id .ky {
@@ -2256,7 +2256,7 @@
   gap: 10px;
   padding: 4px 0;
   font-size: 11.5px;
-  border-bottom: 1px solid #f4f6f9;
+  border-bottom: 1px solid var(--nds-grey-50);
 }
 .sbm-row .k {
   flex: none;
@@ -2305,7 +2305,7 @@
   padding: 7px 6px;
   border-radius: 6px;
   cursor: pointer;
-  border-bottom: 1px solid #f4f6f9;
+  border-bottom: 1px solid var(--nds-grey-50);
 }
 .sbm-rail-listbtn:hover {
   background: #f7f9fc;
@@ -2313,7 +2313,7 @@
 .sbm-rail-listbtn .nm {
   font-size: 12px;
   font-weight: 600;
-  color: #1c2530;
+  color: var(--nds-grey-900);
 }
 .sbm-rail-listbtn .st {
   font-size: 10.5px;
@@ -2361,7 +2361,7 @@
   font-size: 11.5px;
   color: #4a5666;
   padding: 4px 0;
-  border-bottom: 1px solid #f4f6f9;
+  border-bottom: 1px solid var(--nds-grey-50);
 }
 .sbm-samples .sev {
   font-size: 9.5px;
@@ -2418,7 +2418,7 @@
   gap: 6px;
   margin: 14px -12px 0;
   padding: 10px 12px 12px;
-  background: #fff;
+  background: var(--nds-white);
   border-top: 1px solid #eef2f6;
 }
 .sbm-rail-exits a {

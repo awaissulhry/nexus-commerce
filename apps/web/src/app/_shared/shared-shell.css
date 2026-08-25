@@ -23,23 +23,23 @@
    sidebar + scrolling content = the H10 behavior). min-height here would overflow
    the clipped parent and kill all scrolling. */
 .h10-shell {
-  display: flex; height: 100dvh; overflow: hidden; background: #f4f6f9; color: #1c2530;
+  display: flex; height: 100dvh; overflow: hidden; background: var(--nds-grey-50); color: var(--nds-grey-900);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   /* Pin the rail palette light so this deliberately-light shell (ads cockpit +
      /products/next) never inherits dark-mode rail colours. Only the app-wide
      rail (rendered outside .h10-shell) follows the app theme. */
   --nds-rail-bg: #f1f3f5; --nds-rail-border: #e3e7ec;
-  --nds-rail-text: #4a5462; --nds-rail-text-2: #5b6573; --nds-rail-text-strong: #1c2530;
-  --nds-rail-icon: #8a93a1; --nds-rail-chev: #98a2b3;
-  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: #f1f4f8;
-  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: #1f6fde;
-  --nds-rail-ft: #aeb6c2;
+  --nds-rail-text: #4a5462; --nds-rail-text-2: var(--nds-grey-600); --nds-rail-text-strong: var(--nds-grey-900);
+  --nds-rail-icon: var(--nds-grey-500); --nds-rail-chev: var(--nds-grey-450);
+  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: var(--nds-grey-75);
+  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
+  --nds-rail-ft: var(--nds-grey-400);
   /* The rail rules also consume these (tokenized in the P1 rail refactor): the
      active item background (--nds-primary), the nav count badge (--nds-danger),
      and the hover-expand shadow (--nds-shadow-rail). Pin them here too — values
      identical to .app-rail-host — so this standalone light shell never depends on
      tokens.css being loaded or on the app-wide .app-rail-host scope. */
-  --nds-primary: #1f6fde; --nds-danger: #e5484d; --nds-warning: #b87503;
+  --nds-primary: var(--nds-blue-600); --nds-danger: var(--nds-red-500); --nds-warning: var(--nds-amber-600);
   --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
   color-scheme: light;
 }
@@ -53,20 +53,20 @@
    them. TODO(P7): de-duplicate these values against tokens.css via a shared file. */
 .app-rail-host {
   --nds-rail-bg: #f1f3f5; --nds-rail-border: #e3e7ec;
-  --nds-rail-text: #4a5462; --nds-rail-text-2: #5b6573; --nds-rail-text-strong: #1c2530;
-  --nds-rail-icon: #8a93a1; --nds-rail-chev: #98a2b3;
-  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: #f1f4f8;
-  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: #1f6fde;
-  --nds-rail-ft: #aeb6c2;
-  --nds-primary: #1f6fde; --nds-danger: #e5484d; --nds-warning: #b87503;
+  --nds-rail-text: #4a5462; --nds-rail-text-2: var(--nds-grey-600); --nds-rail-text-strong: var(--nds-grey-900);
+  --nds-rail-icon: var(--nds-grey-500); --nds-rail-chev: var(--nds-grey-450);
+  --nds-rail-item-hover: #e6eaf0; --nds-rail-item-hover-2: var(--nds-grey-75);
+  --nds-rail-chip-bg: #e8ebf0; --nds-rail-chip-active-bg: #dce8fb; --nds-rail-chip-active-fg: var(--nds-blue-600);
+  --nds-rail-ft: var(--nds-grey-400);
+  --nds-primary: var(--nds-blue-600); --nds-danger: var(--nds-red-500); --nds-warning: var(--nds-amber-600);
   --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
 }
 .dark .app-rail-host {
   --nds-rail-bg: #18263b; --nds-rail-border: #26323f;
-  --nds-rail-text: #aab6c2; --nds-rail-text-2: #97a3b1; --nds-rail-text-strong: #e7ebf1;
-  --nds-rail-icon: #8a94a6; --nds-rail-chev: #6f7b8b;
-  --nds-rail-item-hover: #223247; --nds-rail-item-hover-2: #1d2a3c;
-  --nds-rail-chip-bg: #243345; --nds-rail-chip-active-bg: #1d3a5f; --nds-rail-chip-active-fg: #cfe1fb;
+  --nds-rail-text: var(--nds-rail-text); --nds-rail-text-2: var(--nds-rail-text-2); --nds-rail-text-strong: var(--nds-rail-text-strong);
+  --nds-rail-icon: var(--nds-rail-icon); --nds-rail-chev: #6f7b8b;
+  --nds-rail-item-hover: var(--nds-rail-item-hover); --nds-rail-item-hover-2: var(--nds-rail-item-hover-2);
+  --nds-rail-chip-bg: var(--nds-rail-chip-bg); --nds-rail-chip-active-bg: var(--nds-rail-chip-active-bg); --nds-rail-chip-active-fg: var(--nds-rail-chip-active-fg);
   --nds-rail-ft: #6f7b8b;
   --nds-warning: #e0a82e;
   --nds-shadow-rail: 8px 0 30px rgba(0, 0, 0, 0.35);
@@ -184,7 +184,7 @@
 /* brand: compact "N" mark when collapsed, full "Nexus Ads" wordmark on hover */
 .h10-brand { display: flex; align-items: center; gap: 12px; height: 66px; padding-left: 19px; flex-shrink: 0; }
 .h10-brandmark { position: relative; display: flex; flex-shrink: 0; }
-.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--nds-primary); color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h10-brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--nds-primary); color: var(--nds-white); font-weight: 800; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .h10-brand .word { white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; opacity: 0; transition: opacity .14s ease; }
 .h10-brand .word .mk { color: var(--nds-rail-text-strong); }
 .h10-brand .word b { color: var(--nds-primary); font-weight: 800; }
@@ -249,7 +249,7 @@
 /* Positioned over the icon's top-right corner. left:29 + max width ("99+",
    ~25px) + 2px ring lands at ~64px — inside the 66px collapsed rail, so the
    full count is always visible. */
-.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--nds-danger); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--nds-rail-bg); z-index: 1; }
+.h10-nav-badge { position: absolute; left: 29px; top: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--nds-danger); color: var(--nds-white); font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--nds-rail-bg); z-index: 1; }
 .h10-item.on .h10-nav-badge { box-shadow: 0 0 0 2px var(--nds-primary); }
 .h10-item .ico { flex: 0 0 50px; display: flex; align-items: center; justify-content: center; }
 .h10-item .ico svg { color: var(--nds-rail-icon); transition: color .12s; }
@@ -257,8 +257,8 @@
 .h10-rail:hover .h10-item .lbl { opacity: 1; }
 .h10-item:hover { background: var(--nds-rail-item-hover); color: var(--nds-rail-text-strong); }
 .h10-item:hover .ico svg { color: var(--nds-rail-text-2); }
-.h10-item.on { background: var(--nds-primary); color: #fff; }
-.h10-item.on .ico svg { color: #fff; }
+.h10-item.on { background: var(--nds-primary); color: var(--nds-white); }
+.h10-item.on .ico svg { color: var(--nds-white); }
 /* Section-active: you're on a child of this parent. A subtle blue wash + blue
    icon/label (distinct from the solid-fill exact-active), so the collapsed icon
    still signals which section you're in. */
@@ -282,7 +282,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-item .ext { margin-left: 8px; flex-shrink: 0; color: var(--nds-rail-chev); opacity: 0; transition: opacity .14s ease; }
 .h10-rail:hover .h10-item .chev, .h10-rail:hover .h10-item .ext { opacity: 1; }
 .h10-item:hover .chev, .h10-item:hover .ext { color: var(--nds-rail-text-2); }
-.h10-item.on .chev { color: #fff; }
+.h10-item.on .chev { color: var(--nds-white); }
 .h10-item .chev.open { transform: rotate(180deg); }
 
 /* Two-target parent row: the .h10-item wrapper carries the active fill + hover;

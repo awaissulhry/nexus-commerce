@@ -32,7 +32,7 @@
 
 .wf-card {
   display: block;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e0e6ee;
   border-radius: 12px;
   padding: 15px 18px 16px;
@@ -244,7 +244,7 @@
    four numbers, and their 19px value nearly outsized the 20px page title. */
 .wf-factbar {
   display: flex;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e0e6ee;
   border-radius: 12px;
   overflow: hidden;
@@ -461,7 +461,7 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e0e6ee;
   border-radius: 12px;
   padding: 11px 16px;
@@ -519,7 +519,7 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: #fff;
+  background: var(--nds-white);
   border: 1px solid #e6ebf1;
   border-radius: 10px;
   padding: 13px 15px;
@@ -680,7 +680,7 @@
   border: 1px solid #e0e6ee;
   border-left: 3px solid #c3ccd8;
   border-radius: 10px;
-  background: #fff;
+  background: var(--nds-white);
   padding: 9px 12px;
   display: flex;
   flex-direction: column;
@@ -758,7 +758,7 @@
   gap: 3px;
   border: 1px solid #e0e6ee;
   border-radius: 10px;
-  background: #fff;
+  background: var(--nds-white);
   padding: 11px 13px;
   text-decoration: none;
 }
@@ -853,7 +853,7 @@
 
 /* The explanation gets its own line, so a three-line sentence stops setting
    the width of a column twelve rows deep. */
-.wf-whyrow td { border-bottom: 1px solid #eef1f5; padding-top: 0; }
+.wf-whyrow td { border-bottom: 1px solid var(--nds-grey-100); padding-top: 0; }
 /* px, not ch: `92ch` computed to 336px here — about 3.65px per character — so
    the honesty sentence rendered on three lines inside a 1442px cell, at 23% of
    the width available to it. A `ch` is the advance of "0" in the *resolved*
@@ -909,7 +909,7 @@
    to the one above was a background step of roughly 1% luminance. */
 .wf-subrow td {
   background: #fbfcfe;
-  border-bottom: 1px solid #eef1f5;
+  border-bottom: 1px solid var(--nds-grey-100);
   font-size: 12px;
   color: #5a6675;
 }
@@ -1046,7 +1046,7 @@
 /* ── WF.3b: the editor ───────────────────────────────────────────────── */
 .wf-editactions { display: flex; gap: 8px; align-items: center; }
 .wf-editactions .primary,
-.acr-pg-confirmbtns .primary { background: #3f6fb5; border-color: #3f6fb5; color: #fff; }
+.acr-pg-confirmbtns .primary { background: #3f6fb5; border-color: #3f6fb5; color: var(--nds-white); }
 .wf-editactions .primary:disabled { opacity: 0.55; }
 
 .wf-editgrid {
@@ -1066,7 +1066,7 @@
 .wf-stepcard {
   border: 1px solid #e6ebf1;
   border-radius: 10px;
-  background: #fff;
+  background: var(--nds-white);
   padding: 11px 12px;
   display: flex;
   flex-direction: column;
@@ -1166,7 +1166,7 @@
 /* The gate ladder tightens and never loosens, and three identical rungs said
    nothing about that. The lock marks the loosest rung; the label states the
    direction once per card, where the control is. */
-.wf-gatedir { font-weight: 650; letter-spacing: 0; text-transform: none; color: #6b7480; }
+.wf-gatedir { font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--nds-pill-neutral-fg); }
 .acr-pg-rung.has-floor { display: inline-flex; align-items: center; gap: 5px; }
 .acr-pg-rung.has-floor svg { flex: none; opacity: 0.75; }
 
@@ -1220,7 +1220,7 @@
   border: 1px solid #e0e6ee;
   border-left: 3px solid #c3ccd8;
   border-radius: 10px;
-  background: #fff;
+  background: var(--nds-white);
   font-size: 12.5px;
 }
 .wf-teststep .nm { font-weight: 650; color: #26313f; }
