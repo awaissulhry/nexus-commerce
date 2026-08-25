@@ -137,14 +137,24 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
     const v = a.params[p.k] ?? ''
     if (p.kind === 'sel') return <Listbox key={p.k} ariaLabel={p.label} width={170} value={v} onChange={(nv) => setActParam(ai, p.k, nv)} options={(p.options ?? []).map((o) => ({ value: o.v, label: o.l }))} />
     if (p.kind === 'text') return <Input key={p.k} type="text" aria-label={p.label} placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} style={{ minWidth: 160 }} />
-    return <span key={p.k} className="az-bld-num"><Input type="number" step="any" aria-label={p.label} placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} title={p.label} style={{ width: 74 }} /><i>{paramSuffix(p.kind)}</i></span>
+    return <span key={p.k} style={numWrap}><Input type="number" step="any" aria-label={p.label} placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} title={p.label} style={{ width: 74 }} /><i style={unitStyle}>{paramSuffix(p.kind)}</i></span>
   })
+
+  // Layout re-homed inline for the four wrappers whose `<descendant> input` rules in amazon.css
+  // tie `.nds-field > input` at (0,1,1) and win on load order — measured on the live page as a
+  // second 1px border inside the DS field. amazon.css is outside this session's scope, and
+  // `.az-fp-row` is shared with campaigns/FilterPanel, so the class is dropped here only.
+  const rowStyle: React.CSSProperties = { display: 'flex', gap: 6, alignItems: 'center', marginTop: 8 }
+  const capsStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginTop: 8 }
+  const capLabel: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: 'var(--ink2)' }
+  const numWrap: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5 }
+  const unitStyle: React.CSSProperties = { fontStyle: 'normal', color: 'var(--ink2)', fontSize: 12 }
 
   const footer = (
     <div className="az-bld-foot">
       <div className="az-bld-preview"><Sparkles size={14} /><span>{previewSentence}</span></div>
       <div className="az-bld-actions">
-        <label className="az-bld-name"><span>Rule name</span><Input placeholder="e.g. Cut bids when ACOS ≥ 45%" value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 240, fontSize: 12, color: 'var(--ink2)' }}><span>Rule name</span><Input placeholder="e.g. Cut bids when ACOS ≥ 45%" value={name} onChange={(e) => setName(e.target.value)} /></label>
         <Button disabled={!valid || saving !== false} onClick={() => void create(true)}><FlaskConical size={14} />{saving === 'test' ? 'Testing…' : 'Create & test'}</Button>
         <Button variant="primary" disabled={!valid || saving !== false} onClick={() => void create(false)}><Check size={15} />{saving === 'save' ? 'Creating…' : 'Create rule'}</Button>
       </div>
@@ -156,11 +166,11 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
   const capsRow = (
     <div className="az-fp-sec">
       <h4>Guardrails &amp; scope</h4>
-      <div className="az-bld-caps">
-        <label><span>Max runs / day</span><Input type="number" value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} /></label>
-        <label><span>Max spend / day</span><Input type="number" prefix="€" value={maxSpend} onChange={(e) => setMaxSpend(e.target.value)} /></label>
-        <label><span>Max spend per action <i>(optional)</i></span><Input type="number" prefix="€" placeholder="—" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} /></label>
-        <label><span>Marketplace</span>
+      <div style={capsStyle}>
+        <label style={capLabel}><span>Max runs / day</span><Input type="number" value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} /></label>
+        <label style={capLabel}><span>Max spend / day</span><Input type="number" prefix="€" value={maxSpend} onChange={(e) => setMaxSpend(e.target.value)} /></label>
+        <label style={capLabel}><span>Max spend per action <i style={{ fontStyle: 'normal', opacity: .7 }}>(optional)</i></span><Input type="number" prefix="€" placeholder="—" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} /></label>
+        <label style={capLabel}><span>Marketplace</span>
           <Listbox
             ariaLabel="Marketplace scope"
             value={scope}
@@ -246,7 +256,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
             <div key={gi} className="az-bld-group">
               {gi > 0 && <div className="az-bld-or">OR</div>}
               {g.map((c, ri) => (
-                <div className="az-fp-row" key={ri}>
+                <div style={rowStyle} key={ri}>
                   <Listbox ariaLabel="Condition field" width={230} value={c.field} onChange={(v) => setCond(gi, ri, { field: v })} options={suggestedFields(trigger).map((f) => ({ value: f.f, label: f.label }))} />
                   <Listbox ariaLabel="Operator" width={150} value={c.op} onChange={(v) => setCond(gi, ri, { op: v })} options={OPS.map((o) => ({ value: o.v, label: o.l }))} />
                   {c.op !== 'exists' && <Input type={['in', 'contains'].includes(c.op) ? 'text' : 'number'} step="any" aria-label="Condition value" value={c.value} onChange={(e) => setCond(gi, ri, { value: e.target.value })} placeholder={c.op === 'in' ? 'a, b, c' : 'value'} style={{ width: 84 }} />}
@@ -263,7 +273,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
         <div className="az-fp-sec">
           <h4>Then (actions)</h4>
           {acts.map((a, ai) => (
-            <div className="az-fp-row" key={ai} style={{ flexWrap: 'wrap' }}>
+            <div key={ai} style={{ ...rowStyle, flexWrap: 'wrap' }}>
               <select value={a.type} onChange={(e) => setActType(ai, e.target.value)}>
                 {ACTION_CATS.map((cat) => <optgroup key={cat} label={cat}>{ACTIONS.filter((x) => x.cat === cat).map((x) => <option key={x.t} value={x.t}>{x.label}</option>)}</optgroup>)}
               </select>

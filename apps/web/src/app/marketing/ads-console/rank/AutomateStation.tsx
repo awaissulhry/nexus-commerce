@@ -83,7 +83,10 @@ export function AutomateStation({ market, onChanged }: { market: string; onChang
           {status?.killSwitch && <div className="az-auto-halt"><AlertTriangle size={13} /> Automation kill-switch is ON — no rule will act until it&apos;s cleared.</div>}
           <div className="az-auto-card">
             <div className="az-auto-title"><ShieldCheck size={14} /> Hold Top-of-Search rank ({market})</div>
-            <div className="az-auto-row">
+            {/* Layout re-homed inline: the `.az-auto-row input[type=number]` rule in amazon.css
+                ties `.nds-field > input` at (0,1,1) and loads second, so keeping the class drew a
+                second border inside the DS field. amazon.css is outside this session's scope. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--ink2)' }}>
               Keep Top-of-Search share ≥ <Input type="number" min={1} max={100} aria-label="Target top-of-search share" suffix="%" value={targetIS} onChange={e => setTargetIS(Math.max(1, Math.min(100, Number(e.target.value))))} style={{ width: 50 }} /> while ACOS stays under <Input type="number" min={1} max={200} aria-label="Maximum ACOS" suffix="%" value={maxAcos} onChange={e => setMaxAcos(Math.max(1, Math.min(200, Number(e.target.value))))} style={{ width: 50 }} />
               <span style={{ flex: 1 }} />
               <Button variant="primary" disabled={busy === 'create'} onClick={() => void createDefend()}>{busy === 'create' ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Create rule</>}</Button>
