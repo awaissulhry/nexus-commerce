@@ -14,6 +14,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, Zap, FlaskConical, Trash2, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Copy, ChevronDown, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { checkRuleLogic } from './synthetic-test'
 import { fieldDef, actionDef, triggerDef, OPS, fieldSuffix, condFromRaw, type FieldUnit } from './vocab'
 import { AUTOMATIONS, AUTOMATION_COUNT, buildRule, type AutomationDef } from './automations'
@@ -183,17 +185,21 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
       {tab === 'active' && <div style={{ paddingTop: 4 }}>
         {rules.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-            <div className="az-search" style={{ minWidth: 220, padding: '6px 10px' }}><Search size={14} /><input placeholder="Find a rule" value={ruleQ} onChange={(e) => setRuleQ(e.target.value)} /></div>
+            <Input leadingIcon={<Search size={14} />} aria-label="Find a rule" placeholder="Find a rule" value={ruleQ} onChange={(e) => setRuleQ(e.target.value)} style={{ width: 190 }} />
             {(['all', 'live', 'dry', 'off'] as const).map((f) => <button key={f} className={`az-chip quick ${ruleFilter === f ? 'on' : ''}`} onClick={() => setRuleFilter(f)}>{f === 'all' ? `All ${rules.length}` : f === 'live' ? `Live ${liveCount}` : f === 'dry' ? `Dry-run ${activeCount - liveCount}` : `Off ${rules.length - activeCount}`}</button>)}
             <span style={{ flex: 1 }} />
-            <span className="az-rowstat" style={{ fontSize: 12, color: 'var(--ink2)' }}>Group
-              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as 'none' | 'trigger' | 'status')} style={{ marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 7px', font: 'inherit', cursor: 'pointer' }}>
-                <option value="none">None</option><option value="trigger">Trigger</option><option value="status">Status</option>
-              </select>
+            <span className="az-rowstat" style={{ fontSize: 12, color: 'var(--ink2)', gap: 8 }}>Group
+              <Listbox
+                ariaLabel="Group rules by"
+                width={120}
+                value={groupBy}
+                onChange={(v) => setGroupBy(v as 'none' | 'trigger' | 'status')}
+                options={[{ value: 'none', label: 'None' }, { value: 'trigger', label: 'Trigger' }, { value: 'status', label: 'Status' }]}
+              />
             </span>
-            <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" className="az-check" checked={allRulesSel} onChange={(e) => setSelRules(e.target.checked ? new Set(shownRules.map((r) => r.id)) : new Set())} style={{ marginRight: 6 }} />Select all</label>
+            <Checkbox checked={allRulesSel} onChange={(e) => setSelRules(e.target.checked ? new Set(shownRules.map((r) => r.id)) : new Set())} label="Select all" />
             {selRules.size > 0
-              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><b>{selRules.size} selected</b><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('enable')}><Play size={13} />Enable</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('pause')}><Pause size={13} />Pause</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('dry')}>Dry-run</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('live')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}>Set live</button><button className="az-btn" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('delete')} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}><Trash2 size={13} />Delete</button><button className="az-link" onClick={() => setSelRules(new Set())}>Clear</button></span>
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><b>{selRules.size} selected</b><Button size="sm" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('enable')}><Play size={13} />Enable</Button><Button size="sm" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('pause')}><Pause size={13} />Pause</Button><Button size="sm" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('dry')}>Dry-run</Button><Button size="sm" variant="danger" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('live')}>Set live</Button><Button size="sm" variant="danger" disabled={busy === 'bulkrules'} onClick={() => void bulkRules('delete')}><Trash2 size={13} />Delete</Button><Button variant="link" onClick={() => setSelRules(new Set())}>Clear</Button></span>
               : <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{activeCount} active · {liveCount} live · select rules for bulk actions</span>}
           </div>
         )}
@@ -223,16 +229,16 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
               return (
                 <div key={r.id} className="az-rwrap">
                   <div className={`az-rule ${selRules.has(r.id) ? 'sel' : ''} ${conf ? 'conf' : ''}`}>
-                    <input type="checkbox" className="az-check" checked={selRules.has(r.id)} onChange={() => toggleSelRule(r.id)} aria-label={`Select ${r.name}`} />
-                    <button className={`az-toggle ${r.enabled ? 'on' : ''}`} disabled={busy === r.id} onClick={() => void toggleEnabled(r)} aria-label="Enable rule" title={r.enabled ? 'Enabled' : 'Disabled'}><i /></button>
+                    <Checkbox checked={selRules.has(r.id)} onChange={() => toggleSelRule(r.id)} aria-label={`Select ${r.name}`} />
+                    <Toggle checked={r.enabled} disabled={busy === r.id} onChange={() => void toggleEnabled(r)} aria-label="Enable rule" title={r.enabled ? 'Enabled' : 'Disabled'} />
                     <div className="nm"><div className="t">{cleanName(r.name)}{conf && <span className="az-conflict" title={conf.join(' · ')}><AlertTriangle size={11} />conflict</span>}</div><div className="d2">{cleanName(r.description)}</div></div>
                     <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: 'var(--ink2)' }}>{trgLabel(r.trigger)}</span>
                     <div className="stat" title="Times this rule's conditions matched"><b>{r.matchCount ?? 0}</b>matches</div>
                     <div className="stat" title={r.lastExecutedAt ? `Last run ${new Date(r.lastExecutedAt).toLocaleString()}` : 'Never run'}><b>{r.executionCount ?? 0}</b>{r.lastExecutedAt ? relTime(r.lastExecutedAt) : 'runs'}</div>
                     <div className="stat" title="Acted = runs ÷ matches"><b>{acted == null ? '—' : `${acted}%`}</b>acted</div>
                     <button className={`az-live ${r.dryRun ? 'dry' : 'on'}`} disabled={busy === r.id} onClick={() => void toggleLive(r)} title="Toggle dry-run / live">{r.dryRun ? 'Dry run' : 'LIVE'}</button>
-                    <button className="az-btn" disabled={busy === r.id} onClick={() => void testRule(r)} title="Check logic + show details"><FlaskConical size={14} /></button>
-                    <button className="az-btn" disabled={busy === r.id} onClick={() => void cloneRule(r)} title="Duplicate this rule"><Copy size={14} /></button>
+                    <ToolbarButton variant="boxed" icon={<FlaskConical size={14} />} label="Check logic + show details" disabled={busy === r.id} onClick={() => void testRule(r)} />
+                    <ToolbarButton variant="boxed" icon={<Copy size={14} />} label="Duplicate this rule" disabled={busy === r.id} onClick={() => void cloneRule(r)} />
                     <button className="az-kebab" onClick={() => toggleExpand(r.id)} title="Show details" aria-expanded={isExp}><ChevronDown size={15} style={{ transform: isExp ? 'rotate(180deg)' : undefined, transition: 'transform .12s' }} /></button>
                     <button className="az-kebab" disabled={busy === r.id} onClick={() => void deleteRule(r)} title="Delete" style={{ color: '#cc1100' }}><Trash2 size={15} /></button>
                     {engineMsg[r.id] && <span style={{ color: 'var(--ink2)', fontSize: 11 }}>{engineMsg[r.id]}</span>}
@@ -260,17 +266,17 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             <span style={{ fontSize: 12.5, color: 'var(--ink2)' }}><b style={{ color: 'var(--green)' }}>{eur(recs.potentialMonthlyImpactCents)}</b>/mo opportunity · {(recs.recommendations ?? []).length} recommendations</span>
             {engineMsg['recs-bulk'] && <span style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{engineMsg['recs-bulk']}</span>}
             <span style={{ flex: 1 }} />
-            {selRecs.size > 0 && <button className="az-btn" disabled={busy === 'recs-bulk'} onClick={() => void applyRecs((recs.recommendations ?? []).filter((r) => selRecs.has(r.id) && r.apply))}>{busy === 'recs-bulk' ? 'Applying…' : `Apply ${selRecs.size} selected`}</button>}
-            <button className="az-btn dark" disabled={busy === 'recs-bulk'} onClick={() => void applyRecs((recs.recommendations ?? []).filter((r) => r.apply))}>{busy === 'recs-bulk' ? 'Applying…' : 'Apply all'}</button>
+            {selRecs.size > 0 && <Button disabled={busy === 'recs-bulk'} onClick={() => void applyRecs((recs.recommendations ?? []).filter((r) => selRecs.has(r.id) && r.apply))}>{busy === 'recs-bulk' ? 'Applying…' : `Apply ${selRecs.size} selected`}</Button>}
+            <Button variant="primary" disabled={busy === 'recs-bulk'} onClick={() => void applyRecs((recs.recommendations ?? []).filter((r) => r.apply))}>{busy === 'recs-bulk' ? 'Applying…' : 'Apply all'}</Button>
           </div>
         )}
         {recs && (recs.recommendations ?? []).map((rec) => { const cid = recCampaignId(rec); return (
           <div key={rec.id} className="az-rec">
-            {rec.apply && <input type="checkbox" className="az-check" checked={selRecs.has(rec.id)} onChange={() => toggleRec(rec.id)} style={{ alignSelf: 'center' }} aria-label="Select recommendation" />}
+            {rec.apply && <span style={{ alignSelf: 'center', display: 'inline-flex' }}><Checkbox checked={selRecs.has(rec.id)} onChange={() => toggleRec(rec.id)} aria-label="Select recommendation" /></span>}
             <span className={`sev ${rec.severity}`} />
             <div className="body"><div className="t">{cleanName(rec.title)}{rec.estImpactCents ? <span style={{ color: 'var(--green)', fontWeight: 700, marginLeft: 8 }}>{eur(rec.estImpactCents)}/mo</span> : null}</div><div className="d">{cleanName(rec.detail)}{cid ? <> · <a className="cn" href={campaignHref(cid)} target="_blank" rel="noopener noreferrer">view campaign</a></> : null}</div></div>
             <span className="trg" style={{ background: 'var(--bg2)', borderRadius: 5, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink2)', alignSelf: 'center' }}>{rec.category}</span>
-            {rec.apply && <button className="az-btn dark" disabled={busy === rec.id} onClick={() => void applyRec(rec)} style={{ alignSelf: 'center' }}>{busy === rec.id ? 'Applying…' : 'Apply'}</button>}
+            {rec.apply && <Button variant="primary" disabled={busy === rec.id} onClick={() => void applyRec(rec)} style={{ alignSelf: 'center' }}>{busy === rec.id ? 'Applying…' : 'Apply'}</Button>}
           </div>
         ) })}
       </div>}
@@ -285,9 +291,9 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
           <p>Engine state: <b style={{ color: state?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{state?.effectivelyStopped ? 'HALTED' : state?.autonomy ?? 'AUTO'}</b>{state?.haltReason ? ` — ${state.haltReason}` : ''}. The kill-switch instantly stops every automation from acting.</p>
           <div style={{ display: 'flex', gap: 10 }}>
             {state?.halted
-              ? <button className="az-btn dark" disabled={busy === 'halt'} onClick={() => void setHalt(false)}><Play size={14} />Resume engine</button>
-              : <button className="az-btn" disabled={busy === 'halt'} onClick={() => void setHalt(true)} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}><Pause size={14} />Halt all automation</button>}
-            <button className="az-iconbtn" onClick={() => void refetchState()} title="Refresh"><RefreshCw size={15} /></button>
+              ? <Button variant="primary" disabled={busy === 'halt'} onClick={() => void setHalt(false)}><Play size={14} />Resume engine</Button>
+              : <Button variant="danger" disabled={busy === 'halt'} onClick={() => void setHalt(true)}><Pause size={14} />Halt all automation</Button>}
+            <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={() => void refetchState()} />
           </div>
         </div>
         <div className="az-engine">
@@ -299,7 +305,7 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
             <div key={e.key} className="az-eng-card">
               <h4>{e.icon} <span style={{ marginLeft: 4 }}>{e.label}</span></h4>
               <p>{e.desc}</p>
-              <button className="az-btn dark" disabled={busy === e.key} onClick={() => void runEngine(e.key, e.path, e.label)}>{busy === e.key ? 'Running…' : 'Run now'}</button>
+              <Button variant="primary" disabled={busy === e.key} onClick={() => void runEngine(e.key, e.path, e.label)}>{busy === e.key ? 'Running…' : 'Run now'}</Button>
               {engineMsg[e.key] && <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginTop: 8 }}>{engineMsg[e.key]}</div>}
             </div>
           ))}
