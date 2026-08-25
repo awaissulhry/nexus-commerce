@@ -799,7 +799,7 @@ sites (3 DS, 1 local, 1 `./_components/FilterBar`), `Pagination` 2 across 5 (4 D
 | WG.3b | reconcile `HoverCard` — DS version has 0 users, APIs differ | small |
 | WG.3c | `H10Select` → `Listbox`, or justify keeping a second select | 370 LOC vs a DS primitive with 313 uses |
 | WG.3d | `AdsFilterBar` → `FilterBar`/`FilterPanel` | comparable size, real API diff |
-| WG.3e | THEN move the component, renaming `.h10-am-grid` → `nds-wsgrid` in one pass | 227 occurrences |
+| WG.3e | rename (254 occurrences, 16 files) THEN move — two verifiable steps, not one | ✅ 2026-08-25 |
 
 ## Appendix D — the WG.3d census: the grid is four reconciliations from the DS, not one
 
@@ -880,3 +880,43 @@ render occurrences, not files, and say which one a figure is.
 | WG.3d.2 | `MultiSelect` — 4 implementations to 1; DS one needs `searchable`/`ariaLabel` as `Listbox` did | medium |
 | WG.3d.3 | `AdsFilterBar` + `AdsDataGrid` move together, `FilterBar`/`FilterPanel` consolidation deferred with the commerce rebuild | the unit |
 | WG.3e | component move + the 227-occurrence rename, one pass | last |
+
+## Appendix E — WG.3 closed: the grid is the DS WorkspaceGrid
+
+`AdsDataGrid` + `AdsFilterBar` + `enabledRank` are `design-system/patterns/workspace-grid`;
+`workspace-grid.css` is `design-system/styles/workspace-grid.css`; the component is
+`WorkspaceGrid`. #13 said promote the ads grid and retire the DS `DataGrid` — this is that.
+
+**The move itself was almost nothing, and that was the point.** Exactly ONE import reached back
+into the app (`AdsFilterBar`'s `../InfoTip`, which resolved to a DS shim anyway). Everything else
+was already `@/design-system/*` or moved along — because HoverCard, H10Select, MultiSelect,
+FilterDropdown and the seven DOM couplings each went first. A dependency chain is cleared from the
+leaves.
+
+Done as two verifiable steps rather than one:
+
+| | | |
+|---|---|---|
+| rename | `.h10-am-grid` → `.nds-wsgrid`, 254 occurrences in 16 files | 0 diff / 0 px |
+| move | 4 files + 1 stylesheet, 3 re-export shims | 0 diff / 0 px vs the PRE-rename baseline |
+
+**Both guards earned their keep at the boundary:**
+
+- `tsc` caught a shim that was one type short. The census of what to re-export required `_grid/` in
+  the import path and so missed `filters.ts` importing `GridRangeFilter` from `'./AdsDataGrid'` —
+  same directory, no prefix. That single omission cascaded into **nine** "implicitly has an any
+  type" errors in files that never mention the type.
+- `token-guard` failed the instant the stylesheet entered `design-system/styles`: no raw hex in DS
+  CSS. The 10 colours became tier-3 `--nds-wsgrid-*` tokens at their **measured** values rather than
+  snapping to the nearest ramp entry (2.4–44.1 away in RGB — and in this codebase a colour far from
+  the palette has repeatedly turned out to be a contrast ratio somebody computed). Then the
+  *pre-push* hook caught one more the local run had not: a raw hex in an inline `style={{}}` in the
+  TSX. `#667085` → `--nds-text-muted`, 4.97 → 5.01, RGB Δ5.
+
+The stylesheet is at **zero** raw literals, from 15 that morning.
+
+### What is left of #13
+
+`DataGrid` still has 6 render sites and 13 type importers. Retiring it is WG.6 and needs those
+migrated to `WorkspaceGrid` — 5 were blocked on `sticky`, which is the operator-pinning requirement
+deferred at the top of Appendix A.
