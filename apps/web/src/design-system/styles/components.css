@@ -1838,3 +1838,21 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   margin: 4px 2px;
   background: var(--nds-border-subtle);
 }
+
+/* Leading node on a Listbox option or trigger — a flag, a channel mark, a swatch. Decorative and
+   text-free, so it is sized rather than coloured. */
+.nds-listbox-lead {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-right: 7px;
+}
+.nds-listbox-lead img,
+.nds-listbox-lead svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+.nds-combo-pop button .nds-listbox-lead {
+  vertical-align: -2px;
+}

@@ -13,9 +13,14 @@ export interface FilterChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
 }
 
 /**
- * A chip that TOGGLES a filter. Three surfaces hand-rolled it (`.h10-cl-sum .chip`, `.hl-fchip`,
- * `.esm-chip`) because `Pill` and `Tag` are static spans and `Button active` is a rectangular
- * radius-lg fill, not a tinted capsule.
+ * A chip that TOGGLES a filter. Two surfaces hand-rolled it (`.h10-cl-sum .chip`, `.hl-fchip`)
+ * because `Pill` and `Tag` are static spans and `Button active` is a rectangular radius-lg fill,
+ * not a tinted capsule.
+ *
+ * NOT `.esm-chip`, which an earlier version of this comment wrongly claimed — a session caught
+ * it. That is a two-action token (the label applies a preset, a separate button deletes it), and
+ * this component IS a `<button>`, so a remove control inside it would be a button nested in a
+ * button. Use `TokenChip`.
  *
  * The two measurable ones agree on the shape — white fill, hairline border, `--nds-radius-full`
  * — so the capsule here is unanimous, not a pick. They disagree on the engaged TEXT, and one of

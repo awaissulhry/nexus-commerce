@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { useClickAway } from './useClickAway'
@@ -24,6 +24,16 @@ export interface ListboxOption {
    * the list navigable — so that one select stayed native rather than adopt the DS.
    */
   group?: string
+  /**
+   * Node shown before the label — a flag, a channel mark, a colour swatch. Rendered in the option
+   * row AND on the trigger when this option is selected.
+   *
+   * `label` stays a `string` because it is what search ranks against; the leading node is
+   * decorative and carries no text. A native `<select>` cannot do this at all — an `<option>` may
+   * not contain markup — which is why a market picker showing a flag could not move to the DS
+   * until now, and why `Select` is not getting the same prop.
+   */
+  leading?: ReactNode
 }
 
 export interface ListboxProps {
@@ -85,6 +95,7 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
     <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
       className={[o.value === value ? 'on' : '', showSearch && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined} title={o.title ?? o.label}
       onClick={() => pick(o.value)}>
+      {o.leading != null && <span className="nds-listbox-lead">{o.leading}</span>}
       {o.label}
     </button>
   )
@@ -99,6 +110,7 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
       })()}>
       <button type="button" className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
         onClick={() => setOpen((o) => !o)}>
+        {selected?.leading != null && <span className="nds-listbox-lead">{selected.leading}</span>}
         <span className={selected == null && (emptyIsPlaceholder || emptyLabel == null) ? 'ph' : undefined}>{selected?.label ?? emptyLabel ?? placeholder}</span>
         <ChevronDown size={15} className="chev" aria-hidden />
       </button>

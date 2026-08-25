@@ -910,3 +910,74 @@
   background: var(--nds-note-error-bg);
   color: var(--nds-note-error-fg);
 }
+
+/* ── TokenChip ─────────────────────────────────────────────────────────────
+   A bordered token with TWO actions: the content does one thing, a trailing × removes it.
+   Distinct from FilterChip, which is itself a <button> and therefore cannot contain one. */
+.nds-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface);
+  max-width: 100%;
+}
+.nds-token > .t {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 9px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--nds-text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.nds-token > .t,
+.nds-token > button.t {
+  cursor: pointer;
+}
+.nds-token > button.t:hover:not(:disabled) {
+  color: var(--nds-text);
+}
+/* --nds-text-muted is 5.01:1. `.esm-chip` shipped #94a3b8 — 2.56:1, under even the 3:1 non-text
+   floor — which is the sort of thing only a measurement catches, since it looks merely quiet. */
+.nds-token > .x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px 3px 0;
+  border: none;
+  background: none;
+  color: var(--nds-text-muted);
+  cursor: pointer;
+}
+.nds-token > .x:hover:not(:disabled) {
+  color: var(--nds-danger-text);
+}
+.nds-token > .x:focus-visible,
+.nds-token > button.t:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+  border-radius: var(--nds-radius-full);
+}
+.nds-token.disabled {
+  opacity: 0.55;
+}
+.nds-token.disabled > .t,
+.nds-token.disabled > .x {
+  cursor: default;
+}
+/* A token wrapping a Listbox: the control brings its own border, which double-bordered inside
+   the chip and is why `.h10-spw-cs-token` could not adopt the DS. */
+.nds-token .nds-listbox-btn,
+.nds-token .nds-select select {
+  border: none;
+  background: none;
+  padding-right: 4px;
+}
