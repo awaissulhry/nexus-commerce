@@ -274,10 +274,8 @@
   font-size: 12px; color: #46525f; line-height: 1.5;
 }
 .ap-bulksentence svg { flex-shrink: 0; margin-top: 2px; color: #8a6320; }
-.ap-bulkbar input {
-  flex: 1 1 200px; min-width: 0; padding: 5px 8px;
-  border: 1px solid #c9d4e0; border-radius: 5px; font-size: 12px;
-}
+/* DS-ALIGN — the reason box is the DS `Input`; only its share of the bar is ours. */
+.ap-bulkreason { flex: 1 1 200px; min-width: 0; }
 
 /* ── AP.4: a parked action, counting down ──────────────────────────── */
 

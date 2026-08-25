@@ -24,7 +24,7 @@
  * an existing bid in. That last fact is the panel's warning, not its secret.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { AlertTriangle, Check, Ruler, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -168,8 +168,8 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
       <div className="h10-bud2-row">
         <Listbox width={150} options={(['MARKET', 'PORTFOLIO', 'LINE'] as const).map((g) => ({ value: g, label: GRAIN_WORD[g] }))} value={grain} onChange={(v) => { setGrain(v as BidPolicy['grain']); setScopeId('') }} ariaLabel="Bound grain" />
         <Listbox width={280} options={[{ value: '', label: 'Choose a scope…' }, ...scopeOpts]} value={scopeId} onChange={setScopeId} ariaLabel="Bound scope" searchable />
-        <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Bid floor in euros" /></span>
-        <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Bid ceiling in euros" /></span>
+        <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Bid floor in euros" />
+        <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Bid ceiling in euros" />
     <Button variant="primary" disabled={busy || !scopeId || (!minEur.trim() && !maxEur.trim())} onClick={() => void savePolicy()}>Save bound</Button>
       </div>
 
@@ -184,8 +184,8 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
         />
         {selectedCamp && (
           <>
-            <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={cMin} onChange={(e) => setCMin(e.target.value)} aria-label="Campaign bid floor" /></span>
-            <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={cMax} onChange={(e) => setCMax(e.target.value)} aria-label="Campaign bid ceiling" /></span>
+            <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Floor" value={cMin} onChange={(e) => setCMin(e.target.value)} aria-label="Campaign bid floor" />
+            <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Ceiling" value={cMax} onChange={(e) => setCMax(e.target.value)} aria-label="Campaign bid ceiling" />
       <Button variant="primary" disabled={busy} onClick={() => void saveCamp()}>Save band</Button>
       <Button onClick={() => setCampId('')}>Cancel</Button>
           </>

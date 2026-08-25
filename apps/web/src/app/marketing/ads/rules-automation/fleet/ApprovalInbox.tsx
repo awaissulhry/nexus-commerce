@@ -397,8 +397,9 @@ export function ApprovalInbox({
                     <AlertTriangle size={13} aria-hidden /> {pendingBulk.sentence}
                   </span>
                   {pendingBulk.decision === 'reject' ? (
-                    <input
+                    <Input
                       autoFocus
+                      fieldClassName="ap-bulkreason"
                       placeholder="one-line reason (required)"
                       value={bulkReason}
                       onChange={(e) => setBulkReason(e.target.value)}

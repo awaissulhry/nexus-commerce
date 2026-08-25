@@ -36,6 +36,7 @@
  */
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Check, Pencil } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { hasBidState } from './bidState'
 import { BID_STAGED_EVENT } from './BidStagedTray'
@@ -172,12 +173,12 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
           <>
             <label className="h10-bd4-field">
               {mode === 'set' ? 'New bid (€)' : mode === 'boost' ? 'Change (%, negative lowers)' : '% of each row’s going CPC'}
-              <input type="number" value={value} step={mode === 'set' ? '0.01' : '1'} onChange={(e) => setValue(e.target.value)} autoFocus />
+              <Input type="number" value={value} step={mode === 'set' ? '0.01' : '1'} onChange={(e) => setValue(e.target.value)} autoFocus />
             </label>
             {mode === 'win' && <p className="h10-bd4-sub">110% bids just above what a click has been costing on that keyword — its own trailing CPC, not an account average.</p>}
             <label className="h10-bd4-field">
               Note for the change log (optional)
-              <input type="text" value={note} maxLength={140} placeholder="why this move" onChange={(e) => setNote(e.target.value)} />
+              <Input type="text" value={note} maxLength={140} placeholder="why this move" onChange={(e) => setNote(e.target.value)} />
             </label>
 
             {plan != null && (

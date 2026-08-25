@@ -34,7 +34,7 @@
  * rather than quietly stopping to pass it — the read-only property was stated, and its end is too.
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { AlertTriangle, Anchor, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -158,9 +158,9 @@ export function BudGuardrails({ campaigns, loading, reload }: BudSlotProps) {
         />
         {selected && (
           <>
-            <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Budget floor in euros" /></span>
-            <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Budget ceiling in euros" /></span>
-            <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Baseline" value={baseEur} onChange={(e) => setBaseEur(e.target.value)} aria-label="Budget baseline in euros" /></span>
+            <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Budget floor in euros" />
+            <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Budget ceiling in euros" />
+            <Input fieldClassName="h10-au-limitcap" prefix="€" inputMode="decimal" placeholder="Baseline" value={baseEur} onChange={(e) => setBaseEur(e.target.value)} aria-label="Budget baseline in euros" />
       <Button variant="primary" disabled={busy} onClick={() => void saveOne()}>Save</Button>
       <Button onClick={() => setEditId('')}>Cancel</Button>
           </>

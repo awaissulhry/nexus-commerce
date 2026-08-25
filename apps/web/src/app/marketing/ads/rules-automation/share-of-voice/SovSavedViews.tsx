@@ -32,7 +32,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { AlertTriangle, Bookmark, Check, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -109,7 +109,8 @@ export function SovSavedViews({ currentQs, onApply }: { currentQs: string; onApp
       {open && (
         <div className="h10-sov-savedpop">
           <div className="h10-sov-savedrow">
-            <input
+            <Input
+              size="xs" fieldClassName="h10-sov-savedin"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void save() }}

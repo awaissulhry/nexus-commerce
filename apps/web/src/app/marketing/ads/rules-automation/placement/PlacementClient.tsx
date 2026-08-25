@@ -1053,7 +1053,8 @@ function LaneEditor({ row, busy, onSave, onCancel }: {
 
   return (
     <span className="h10-plc3-edit">
-      <input
+      <Input
+        size="xs" fieldClassName="h10-plc3-editin" className="h10-plc3-editfig"
         autoFocus inputMode="numeric" value={draft} disabled={busy}
         onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
         onKeyDown={(e) => {

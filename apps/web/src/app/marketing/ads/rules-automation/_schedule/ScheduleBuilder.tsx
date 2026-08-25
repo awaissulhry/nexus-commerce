@@ -481,7 +481,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                         constant the request uses, and the field says out loud that it is fixed —
                         a readOnly input that looks editable is a smaller lie of the same kind. */}
                     <div className="f"><label>Period <HoverCard text={`The window of hourly performance data shown in the chart: the last ${CHART_WINDOW_DAYS} days. Fixed — this chart is a read of your own history, not a report you configure.`} placement="above"><span className="h10-sb-i" aria-hidden="true">ⓘ</span></HoverCard></label>
-                      <span className="h10-sb-date wide"><Calendar size={15} /><input value={periodLabel} readOnly aria-readonly="true" title={`Fixed at the last ${CHART_WINDOW_DAYS} days`} aria-label="Period" /></span></div>
+                      <Input fieldClassName="h10-sb-date wide" leadingIcon={<Calendar size={15} />} value={periodLabel} readOnly aria-readonly="true" title={`Fixed at the last ${CHART_WINDOW_DAYS} days`} aria-label="Period" /></div>
                     {chartMode === 'line' && <>
                     <div className="f"><label>Group By <HoverCard text="Bucket the chart by hour of day or by day of week." placement="above"><span className="h10-sb-i" aria-hidden="true">ⓘ</span></HoverCard></label>
                       <Listbox width={170} options={GROUP_BY} value={groupBy} onChange={setGroupBy} ariaLabel="Group by" /></div>
@@ -584,7 +584,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     </span>
                     <span className="adj">
                       <Listbox width={200} options={[{ value: '', label: 'Select adjustment type' }, ...adjustments]} value={w.adj} onChange={(v) => setWin(w.id, { adj: v })} ariaLabel="Adjustment type" />
-                      {w.adj && adjNeedsValue(w.adj) && <span className="h10-sb-adjval"><input inputMode="decimal" value={w.value} onChange={(e) => setWin(w.id, { value: e.target.value })} placeholder={adjustments.find((a) => a.value === w.adj)?.unit === 'mult' ? '1.5' : adjustments.find((a) => a.value === w.adj)?.unit === 'eur' ? '€' : '%'} aria-label="Adjustment value" /></span>}
+                      {w.adj && adjNeedsValue(w.adj) && <Input size="sm" fieldClassName="h10-sb-adjval" inputMode="decimal" value={w.value} onChange={(e) => setWin(w.id, { value: e.target.value })} placeholder={adjustments.find((a) => a.value === w.adj)?.unit === 'mult' ? '1.5' : adjustments.find((a) => a.value === w.adj)?.unit === 'eur' ? '€' : '%'} aria-label="Adjustment value" />}
                     </span>
                     <span className="act">
                       <button type="button" aria-label="Add time period" onClick={() => addWin(w.day)}><Plus size={15} /></button>
@@ -626,9 +626,9 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                 <div className="hd"><b>Schedule Start &amp; End Date</b><span>Set the start and end date for this schedule.</span></div>
                 <div className="h10-sb-dates">
                   <div className="f"><label>Start Date <i>*</i></label>
-                    <span className="h10-sb-date"><Calendar size={15} /><input value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="MM/DD/YYYY" aria-label="Start date" /></span></div>
+                    <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="MM/DD/YYYY" aria-label="Start date" /></div>
                   <div className="f"><label>End Date</label>
-                    <span className={`h10-sb-date ${neverExpire ? 'disabled' : ''}`}><Calendar size={15} /><input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="Enter a Date" disabled={neverExpire} aria-label="End date" /></span></div>
+                    <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="Enter a Date" disabled={neverExpire} aria-label="End date" /></div>
                   <label className="h10-sb-toggle"><button type="button" className={`h10-bktoggle ${neverExpire ? 'on' : ''}`} role="switch" aria-checked={neverExpire} aria-label="Never expire" onClick={() => setNeverExpire((v) => !v)}><span /></button> Never Expire</label>
                   {/* W4 — dayparting keeps its boolean toggle (its store is a different shape);
                       budget gets the REAL control, because the executor reads date ranges. */}
@@ -645,9 +645,9 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     {excludeRanges.map((r) => (
                       <div className="h10-sb-dates exrow" key={r.id}>
                         <div className="f"><label>Exclude Start</label>
-                          <span className="h10-sb-date"><Calendar size={15} /><input value={r.start} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, start: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude start date" /></span></div>
+                          <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={r.start} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, start: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude start date" /></div>
                         <div className="f"><label>Exclude End</label>
-                          <span className="h10-sb-date"><Calendar size={15} /><input value={r.end} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, end: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude end date" /></span></div>
+                          <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={r.end} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, end: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude end date" /></div>
                         <button type="button" className="h10-sb-exdel" aria-label="Remove this exclude range" onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))}><X size={14} /></button>
                       </div>
                     ))}

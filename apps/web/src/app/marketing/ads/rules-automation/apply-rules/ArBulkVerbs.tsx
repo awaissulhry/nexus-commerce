@@ -40,7 +40,7 @@
  * are counted and named rather than swallowed.
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange } from '../_shared/adsBus'
 
@@ -202,14 +202,14 @@ export function ArBulkVerbs({ ids, names, onDone, onAssignRule }: {
 
               {v === 'acos' && (
                 <label className="fld">Target ACoS
-                  <span className="in"><input inputMode="decimal" value={acos} onChange={(e) => setAcos(e.target.value)} aria-label="Target ACoS percent" /><i>%</i></span>
+                  <Input size="sm" fieldClassName="in" suffix="%" className="ar-fig" inputMode="decimal" value={acos} onChange={(e) => setAcos(e.target.value)} aria-label="Target ACoS percent" />
                 </label>
               )}
 
               {v === 'bounds' && (
                 <>
-                  <label className="fld">Min bid <span className="in"><i>€</i><input inputMode="decimal" value={minB} onChange={(e) => setMinB(e.target.value)} aria-label="Minimum bid" /></span></label>
-                  <label className="fld">Max bid <span className="in"><i>€</i><input inputMode="decimal" value={maxB} onChange={(e) => setMaxB(e.target.value)} aria-label="Maximum bid" /></span></label>
+                  <label className="fld">Min bid <Input size="sm" fieldClassName="in" prefix="€" className="ar-fig" inputMode="decimal" value={minB} onChange={(e) => setMinB(e.target.value)} aria-label="Minimum bid" /></label>
+                  <label className="fld">Max bid <Input size="sm" fieldClassName="in" prefix="€" className="ar-fig" inputMode="decimal" value={maxB} onChange={(e) => setMaxB(e.target.value)} aria-label="Maximum bid" /></label>
                   <p className="sub">Leave one blank to leave it as it is — a blank is not a clear.</p>
                 </>
               )}

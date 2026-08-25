@@ -46,7 +46,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -357,7 +357,7 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
 
                 <label className="h10-ngr-reason">
                   <span>Why (optional, but it is the only record of the reason)</span>
-                  <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. the funnel moved; this ad group should compete for it now" maxLength={500} />
+                  <Input size="sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. the funnel moved; this ad group should compete for it now" maxLength={500} />
                 </label>
 
                 <div className="h10-ngr-acts">

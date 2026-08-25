@@ -39,6 +39,7 @@
 
 import { useMemo, useState } from 'react'
 import { Plus, Trash2, AlertTriangle } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 import { calendarTotal, materialiseCalendar, type CalendarDay } from './planMath'
 
 const pctFmt = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)}%`
@@ -109,9 +110,9 @@ export function CalendarEditor({
       )}
 
       <div className="h10-bsp-caladd">
-        <input type="number" min={1} max={daysInMonth} value={day} disabled={disabled}
+        <Input size="sm" fieldClassName="h10-bsp-calin" type="number" min={1} max={daysInMonth} value={day} disabled={disabled}
           onChange={(e) => setDay(e.target.value)} placeholder="Day" aria-label="Day of month" />
-        <input type="number" min={0} max={100} step="0.5" value={pct} disabled={disabled}
+        <Input size="sm" fieldClassName="h10-bsp-calin" type="number" min={0} max={100} step="0.5" value={pct} disabled={disabled}
           onChange={(e) => setPct(e.target.value)} placeholder="%" aria-label="Percentage of the monthly cap" />
         <button type="button" className="h10-bsp-btn sm" onClick={add} disabled={disabled || !day || !pct}>
           <Plus size={12} /> Weight

@@ -381,7 +381,7 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
           {preview && writable.length > 0 && needsTyped && !outcomes ? (
             <label className="h10-plc3-confirm">
               <span>This touches <b>{writable.length}</b> campaigns. Type <b>{writable.length}</b> to confirm:</span>
-              <input value={typed} onChange={(e) => setTyped(e.target.value)} disabled={running} aria-label={`Type ${writable.length} to confirm`} />
+              <Input size="sm" fieldClassName="h10-plc3-confirmin" value={typed} onChange={(e) => setTyped(e.target.value)} disabled={running} aria-label={`Type ${writable.length} to confirm`} />
             </label>
           ) : <span />}
           <div className="h10-plc3-actions">

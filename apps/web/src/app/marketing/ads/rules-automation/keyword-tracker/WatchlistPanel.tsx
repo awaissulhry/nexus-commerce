@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Textarea } from '@/design-system/primitives'
+import { Button, Input, Textarea } from '@/design-system/primitives'
 import { AlertTriangle, Check, Download, Plus, Star, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -268,7 +268,8 @@ export function WatchlistPanel({
             ))}
           </div>
           <div className="h10-kt-wlnew">
-            <input
+            <Input
+              size="sm" fieldClassName="h10-kt-wlnewin"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder={`New ${market} list name`}

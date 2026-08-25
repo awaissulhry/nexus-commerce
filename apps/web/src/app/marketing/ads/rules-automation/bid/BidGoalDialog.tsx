@@ -32,6 +32,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Check, ExternalLink, Target } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { BIDDER_LABEL, type BidCampaignRow } from './types'
 
@@ -99,7 +100,7 @@ export function BidGoalDialog({ campaign, onClose, onDone }: {
               <div className="h10-bd6-goalrow">
                 <label className="h10-bd4-field">
                   Target ACoS (%)
-                  <input type="number" value={pct} min={1} max={100} step="1" placeholder="e.g. 30" onChange={(e) => setPct(e.target.value)} />
+                  <Input type="number" value={pct} min={1} max={100} step="1" placeholder="e.g. 30" onChange={(e) => setPct(e.target.value)} />
                 </label>
                 <button type="button" className="h10-bd4-primary" disabled={busy || !valid} onClick={() => void save(false)}>
                   {busy ? 'Saving…' : 'Declare goal'}

@@ -1001,7 +1001,7 @@ export function BudgetClient() {
                 <p className="h10-bud-xferto">→ “{to.name}” (€{(to.dailyBudgetCents / 100).toFixed(2)}/day)</p>
                 <label className="h10-bud-xferrow">
                   <span>Amount</span>
-                  <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="0.00" value={transferEur} onChange={(e) => setTransferEur(e.target.value)} aria-label="Amount in euros per day" autoFocus /><span className="sf">/day</span></span>
+                  <Input fieldClassName="h10-au-limitcap" prefix="€" suffix="/day" inputMode="decimal" placeholder="0.00" value={transferEur} onChange={(e) => setTransferEur(e.target.value)} aria-label="Amount in euros per day" autoFocus />
                 </label>
                 {Number(transferEur) > 0 && (from.dailyBudgetCents - Math.round(Number(transferEur) * 100)) < 100 && (
                   <p className="h10-au-limiterr"><AlertTriangle size={13} aria-hidden /> That would take “{from.name}” below Amazon&rsquo;s €1 floor — the server will refuse it.</p>
