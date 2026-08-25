@@ -399,7 +399,11 @@
 .h10-rules b { color: #2b3440; font-weight: 600; }
 .h10-rules svg, .h10-gear { color: #8a93a1; cursor: pointer; }
 .h10-gear:hover { color: #5b6573; }
-.h10-util { display: inline-block; width: 64px; height: 7px; background: #eef1f5; border-radius: 999px; overflow: hidden; vertical-align: middle; }
+.h10-util { display: inline-block; width: 48px; height: 7px; background: #eef1f5; border-radius: 999px; overflow: hidden; vertical-align: middle; flex: 0 0 auto; }
+.h10-plc { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.h10-plc .v { color: #2b3440; font-weight: 600; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.h10-plc .hourly { font-style: normal; color: #8a5a00; font-size: 11px; line-height: 1; }
+.h10-rc-bidrule.unset { color: #6b7383; font-weight: 500; }
 .h10-util .uf { display: block; height: 100%; background: #1f6fde; border-radius: 999px; }
 /* ADM-H P2 — the bar now travels with its number. It used to be the whole cell, aria-hidden and
    pinned at 0% width on every row: a gauge with no reading. `nowrap` matters more than it looks —
@@ -3059,6 +3063,10 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
 .h10-am-grid tbody tr:hover td.fzr { background: #f7faff; }
 .h10-am-grid tbody tr.on td.fzr { background: #eef5ff; }
 .h10-am-grid tr.h10-am-total td.fzr { background: #f7f9fb; }
+
+/* WG.1 — `align: 'center'`. `.num` (right, line 46) and `.ed` (left, line 396) already existed;
+   the DS column type offers three alignments and this was the missing one. */
+.h10-am-grid th.ctr, .h10-am-grid td.ctr { text-align: center; }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    SG.5 — the Bid Settings gear modal (shared: _shared/AdsBidSettingsModal.tsx). Three sections,

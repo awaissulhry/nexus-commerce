@@ -72,6 +72,13 @@ export interface GridColumn<T> {
    * pinned set, so hiding one via Customize re-packs the rest. Additive: columns that don't
    * pass it render byte-identically.
    */
+  /**
+   * WG.1 — supersedes `metric` and is the DS `Column.align` under its real name. `metric` was a
+   * boolean spelling of the same idea ("right-aligned numeric look, or the left settings cell"),
+   * which could not say `center`. Both are honoured: `align` wins where it is set, so no existing
+   * call site changes behaviour.
+   */
+  align?: 'left' | 'right' | 'center'
   freezeRight?: boolean
   /** fixed width in px — required with freezeRight (also applied as the column's width) */
   width?: number
@@ -424,6 +431,12 @@ export function AdsDataGrid<T>({
     }
     return { offsets, first: list[0]?.key }
   }, [visibleCols, prefs.stickyLast])
+  /** WG.1 — `align` first, `metric` as the legacy spelling. Six call sites read this; before it
+   *  existed each of them wrote `c.metric === false ? 'ed' : 'num'` inline, which is six places
+   *  to miss when a third alignment arrives. */
+  const alignClass = (c: GridColumn<T>): string =>
+    c.align === 'center' ? 'ctr' : c.align === 'left' ? 'ed' : c.align === 'right' ? 'num' : c.metric === false ? 'ed' : 'num'
+
   const fzrClass = (c: GridColumn<T>): string =>
     fzRight.offsets.has(c.key) ? (c.key === fzRight.first ? ' fzr fzr0' : ' fzr') : ''
   const fzrStyle = (c: GridColumn<T>): CSSProperties | undefined =>
@@ -867,7 +880,7 @@ export function AdsDataGrid<T>({
               {selectable && <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>}
               <th className={`nm${fzFirst}${sort?.key === '__first' ? ' sorted' : ''}`}><button type="button" className="sortable" onClick={() => onSort('__first')}>{firstColLabel} {firstSortValue && sortIcon('__first')}</button></th>
               {visibleCols.map((c) => (
-                <th key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${sort?.key === c.key ? ' sorted' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>
+                <th key={c.key} className={`${alignClass(c)}${sort?.key === c.key ? ' sorted' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>
                   {c.sortable === false
                     ? <span className="hl">{c.tip ? <HoverCard text={c.tip} placement="above" delay={600}><span>{c.label}</span></HoverCard> : c.label}</span>
                     : <button type="button" className="sortable" onClick={() => onSort(c.key)}>
@@ -885,7 +898,7 @@ export function AdsDataGrid<T>({
                 <tr key={`sk${i}`} className="sk">
                   {selectable && <td className="ck"><span className="skb" style={{ width: 15 }} /></td>}
                   <td className={`nm${fzFirst}`}><span className="skb" style={{ width: 170 }} /></td>
-                  {visibleCols.map((c) => <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${fzrClass(c)}`} style={fzrStyle(c)}><span className="skb" style={{ width: 52 }} /></td>)}
+                  {visibleCols.map((c) => <td key={c.key} className={`${alignClass(c)}${fzrClass(c)}`} style={fzrStyle(c)}><span className="skb" style={{ width: 52 }} /></td>)}
                 </tr>
               ))
             ) : paged.length === 0 ? (
@@ -896,7 +909,7 @@ export function AdsDataGrid<T>({
                   <tr className="h10-am-total">
                     {selectable && <td className="ck" />}
                     <td className={`nm${fzFirst}`}><b>{totalFirst}</b></td>
-                    {visibleCols.map((c) => <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${fzrClass(c)}`} style={fzrStyle(c)}>{(typeof c.total === 'function' ? (c.total as (r: T[]) => ReactNode)(sorted) : c.total) ?? ''}</td>)}
+                    {visibleCols.map((c) => <td key={c.key} className={`${alignClass(c)}${fzrClass(c)}`} style={fzrStyle(c)}>{(typeof c.total === 'function' ? (c.total as (r: T[]) => ReactNode)(sorted) : c.total) ?? ''}</td>)}
                   </tr>
                 )}
                 {paged.map((row, idx) => {
@@ -917,7 +930,7 @@ export function AdsDataGrid<T>({
                         <td className={`nm${fzFirst}${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
                         {visibleCols.map((c) => {
                           const cf = editing ? editByKey.get(c.key) : undefined
-                          return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
+                          return <td key={c.key} className={`${alignClass(c)}${cf ? ' editing' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
                         })}
                       </tr>
                     </Fragment>
