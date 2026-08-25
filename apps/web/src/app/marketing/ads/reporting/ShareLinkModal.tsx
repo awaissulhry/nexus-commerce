@@ -18,6 +18,8 @@ import { AlertTriangle, Check, Copy, Link2, Trash2 } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
+import { Input } from '@/design-system/primitives/Input'
+import { Select } from '@/design-system/primitives/Select'
 import {
   createShareLink, listShareLinks, revokeShareLink, shareUrl, type ShareLink,
 } from './shares-api'
@@ -124,6 +126,9 @@ export function ShareLinkModal({
               is stored, so it cannot be shown again.
             </div>
             <div className="rpt-share-copyrow">
+              {/* Stays a raw <input>: the DS `Input` is a plain function component, so a `ref`
+                  passed to it is dropped on React 18 and `tokenRef.current` would be null —
+                  the "shown once" token would silently stop selecting itself. See DS-GAPS.md. */}
               <input ref={tokenRef} readOnly value={minted} onFocus={(e) => e.currentTarget.select()} aria-label="Share link" />
               <Button variant="primary" size="sm" onClick={copy}>
                 <Copy size={13} /> {copied ? 'Copied' : 'Copy'}
@@ -134,15 +139,15 @@ export function ShareLinkModal({
           <div className="rpt-share-form">
             <label>
               <span>Label <em>(optional — for your own list)</em></span>
-              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Weekly figures for the agency" maxLength={60} />
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Weekly figures for the agency" maxLength={60} />
             </label>
             <label>
               <span>Expires after</span>
-              <select value={ttlDays} onChange={(e) => setTtlDays(Number(e.target.value))}>
+              <Select value={ttlDays} onChange={(e) => setTtlDays(Number(e.target.value))}>
                 {TTL_CHOICES.map((d) => (
                   <option key={d} value={d}>{d} day{d === 1 ? '' : 's'}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <Button variant="primary" onClick={create} disabled={busy}>
               <Link2 size={13} /> Create link

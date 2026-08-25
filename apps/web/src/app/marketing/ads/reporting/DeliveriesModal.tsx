@@ -26,6 +26,9 @@ import { Modal } from '@/design-system/components/Modal'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
 import type { Tone } from '@/design-system/primitives/tone'
+import { Input } from '@/design-system/primitives/Input'
+import { Select } from '@/design-system/primitives/Select'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import {
   createSchedule, deleteSchedule, listDeliveries, listSchedules, runScheduleNow,
   WINDOW_MODES, type Delivery, type Schedule,
@@ -181,19 +184,18 @@ export function DeliveriesModal({
                 )}
               </div>
               <div className="acts">
-                <button type="button" className="rpt-restore" disabled={busy} onClick={() => sendNow(s)}>
-                  <Play size={11} aria-hidden /> Run now
-                </button>
-                <button type="button" className="rpt-restore" disabled={busy} onClick={() => showLog(s)}>
+                <Button size="sm" disabled={busy} onClick={() => sendNow(s)}>
+                  <Play size={12} aria-hidden /> Run now
+                </Button>
+                <Button size="sm" disabled={busy} onClick={() => showLog(s)}>
                   Log
-                </button>
-                <button
-                  type="button" className="rpt-restore danger" disabled={busy}
+                </Button>
+                <ToolbarButton
+                  icon={<Trash2 size={13} />}
+                  label={`Delete the schedule for ${s.savedReportName}`}
+                  disabled={busy}
                   onClick={() => guard(async () => { await deleteSchedule(s.id); reload() })}
-                  aria-label={`Delete the schedule for ${s.savedReportName}`}
-                >
-                  <Trash2 size={11} aria-hidden />
-                </button>
+                />
               </div>
             </div>
           ))}
@@ -235,12 +237,12 @@ export function DeliveriesModal({
               </div>
               <div className="acts">
                 {s.isActive && (
-                  <button
-                    type="button" className="rpt-restore danger" disabled={busy}
+                  <Button
+                    size="sm" variant="danger" disabled={busy}
                     onClick={() => guard(async () => { await revokeShareLink(s.id); reload() })}
                   >
                     Revoke
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -257,66 +259,66 @@ export function DeliveriesModal({
           <div className="rpt-form">
             <label className="rpt-field">
               <span>Saved report</span>
-              <select className="rpt-input" value={form.savedReportId}
+              <Select value={form.savedReportId}
                 onChange={(e) => setForm((f) => ({ ...f, savedReportId: e.target.value }))}>
                 {saved.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="rpt-field">
               <span>Recipients</span>
-              <input className="rpt-input" placeholder="you@example.com, ops@example.com"
+              <Input placeholder="you@example.com, ops@example.com"
                 value={form.recipients}
                 onChange={(e) => setForm((f) => ({ ...f, recipients: e.target.value }))} />
             </label>
             <label className="rpt-field">
               <span>Window</span>
-              <select className="rpt-input" value={form.windowMode}
+              <Select value={form.windowMode}
                 onChange={(e) => setForm((f) => ({ ...f, windowMode: e.target.value }))}>
                 {WINDOW_MODES.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="rpt-field">
               <span>Format</span>
-              <select className="rpt-input" value={form.format}
+              <Select value={form.format}
                 onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))}>
                 <option value="xlsx">Excel — formatted, with manifest</option>
                 <option value="csv">CSV — raw numbers</option>
-              </select>
+              </Select>
             </label>
             <label className="rpt-field">
               <span>Frequency</span>
-              <select className="rpt-input" value={form.frequency}
+              <Select value={form.frequency}
                 onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
-              </select>
+              </Select>
             </label>
             <label className="rpt-field">
               <span>Hour (Rome)</span>
-              <select className="rpt-input" value={form.hourLocal}
+              <Select value={form.hourLocal}
                 onChange={(e) => setForm((f) => ({ ...f, hourLocal: Number(e.target.value) }))}>
                 {Array.from({ length: 24 }, (_, h) => (
                   <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
                 ))}
-              </select>
+              </Select>
             </label>
             {form.frequency === 'weekly' && (
               <label className="rpt-field">
                 <span>Day</span>
-                <select className="rpt-input" value={form.dayOfWeek}
+                <Select value={form.dayOfWeek}
                   onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: Number(e.target.value) }))}>
                   {DAYS.map((d, i) => <option key={d} value={i + 1}>{d}</option>)}
-                </select>
+                </Select>
               </label>
             )}
             {form.frequency === 'monthly' && (
               <label className="rpt-field">
                 <span>Day of month</span>
-                <select className="rpt-input" value={form.dayOfMonth}
+                <Select value={form.dayOfMonth}
                   onChange={(e) => setForm((f) => ({ ...f, dayOfMonth: Number(e.target.value) }))}>
                   {Array.from({ length: 28 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
-                </select>
+                </Select>
               </label>
             )}
           </div>
@@ -325,9 +327,9 @@ export function DeliveriesModal({
 
       {view === 'log' && (
         <>
-          <button type="button" className="rpt-back" onClick={() => setView('list')}>
+          <Button variant="link" onClick={() => setView('list')}>
             <ArrowLeft size={14} aria-hidden /> All deliveries
-          </button>
+          </Button>
           {log.length === 0 && <p className="rpt-modal-p">Nothing sent yet.</p>}
           <ol className="rpt-versions">
             {log.map((d) => (

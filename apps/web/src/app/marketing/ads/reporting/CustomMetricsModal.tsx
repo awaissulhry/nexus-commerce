@@ -12,6 +12,9 @@ import { AlertTriangle, Check, Trash2 } from 'lucide-react'
 import { Modal } from '@/design-system/components/Modal'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
+import { Input } from '@/design-system/primitives/Input'
+import { Select } from '@/design-system/primitives/Select'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import {
   createCustomMetric, deleteCustomMetric, listCustomMetrics, previewFormula,
   type CustomMetric,
@@ -89,9 +92,13 @@ export function CustomMetricsModal({
                 {m.brokenReason
                   ? <Pill tone="danger">Broken</Pill>
                   : <Pill tone="neutral">{m.format}</Pill>}
-                <button type="button" className="rpt-restore danger" disabled={busy} onClick={() => remove(m.id)}>
-                  <Trash2 size={11} aria-hidden />
-                </button>
+                <ToolbarButton
+                  icon={<Trash2 size={13} />}
+                  label={`Delete ${m.name}`}
+                  disabled={busy}
+                  onClick={() => remove(m.id)}
+                  className="rpt-row-act"
+                />
               </div>
               {m.brokenReason && <div className="broken">{m.brokenReason}</div>}
             </li>
@@ -102,31 +109,31 @@ export function CustomMetricsModal({
       <div className="rpt-form">
         <label className="rpt-field">
           <span>Name</span>
-          <input className="rpt-input" value={name} placeholder="e.g. Contribution after ads"
+          <Input value={name} placeholder="e.g. Contribution after ads"
             onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="rpt-field">
           <span>Formula</span>
-          <input className="rpt-input" value={formula} placeholder="sales - cost"
+          <Input value={formula} placeholder="sales - cost"
             onChange={(e) => setFormula(e.target.value)} spellCheck={false} />
         </label>
         <label className="rpt-field">
           <span>Format</span>
-          <select className="rpt-input" value={format} onChange={(e) => setFormat(e.target.value)}>
+          <Select value={format} onChange={(e) => setFormat(e.target.value)}>
             <option value="money">Money</option>
             <option value="pct">Percentage</option>
             <option value="ratio">Ratio</option>
             <option value="int">Whole number</option>
-          </select>
+          </Select>
         </label>
         <label className="rpt-field">
           <span>Better when</span>
-          <select className="rpt-input" value={betterWhen}
+          <Select value={betterWhen}
             onChange={(e) => setBetterWhen(e.target.value as 'higher' | 'lower' | '')}>
             <option value="higher">Higher</option>
             <option value="lower">Lower</option>
             <option value="">Neither</option>
-          </select>
+          </Select>
         </label>
       </div>
 

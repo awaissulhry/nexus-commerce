@@ -37,6 +37,7 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../campaigns/FilterDropdown'
 import { Pill } from '@/design-system/primitives/Pill'
+import { Button } from '@/design-system/primitives/Button'
 import {
   REPORT_CATALOGUE,
   REPORT_GROUPS,
@@ -273,9 +274,9 @@ export function ReportingClient() {
           <span>
             <b>Live coverage unavailable.</b> {error}. Every report is still listed, but the
             volumes and freshness are missing.{' '}
-            <button type="button" className="rpt-retry" onClick={reload}>
+            <Button size="sm" onClick={reload}>
               <RefreshCw size={12} aria-hidden /> Retry
-            </button>
+            </Button>
           </span>
         </div>
       )}
@@ -287,9 +288,9 @@ export function ReportingClient() {
             <b>{ailing.length === 1 ? 'A scheduled report needs attention.' : `${ailing.length} scheduled reports need attention.`}</b>{' '}
             {ailing.map((s) => s.savedReportName).join(', ')} —{' '}
             {ailing[0].lastDelivery?.error ?? ailing[0].lastDelivery?.staleNote}{' '}
-            <button type="button" className="rpt-retry" onClick={() => setDeliveriesOpen(true)}>
+            <Button size="sm" onClick={() => setDeliveriesOpen(true)}>
               Manage deliveries
-            </button>
+            </Button>
           </span>
         </div>
       )}

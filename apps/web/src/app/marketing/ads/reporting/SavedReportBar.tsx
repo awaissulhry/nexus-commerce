@@ -13,6 +13,7 @@ import { Bookmark, BookmarkPlus, History, RotateCcw, Trash2, X } from 'lucide-re
 import { Modal } from '@/design-system/components/Modal'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
+import { Input } from '@/design-system/primitives/Input'
 import {
   archiveSaved,
   createSaved,
@@ -198,8 +199,7 @@ export function SavedReportBar({
         </p>
         <label className="rpt-field">
           <span>Name</span>
-          <input
-            className="rpt-input"
+          <Input
             value={draftName}
             autoFocus
             placeholder="e.g. Italy · high-ACOS search terms"
@@ -244,9 +244,9 @@ export function SavedReportBar({
                   {new Date(v.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
                 </span>
                 {!v.isCurrent && (
-                  <button type="button" className="rpt-restore" disabled={busy} onClick={() => doRestore(v.version)}>
-                    <RotateCcw size={11} aria-hidden /> Restore
-                  </button>
+                  <Button size="sm" className="rpt-row-act" disabled={busy} onClick={() => doRestore(v.version)}>
+                    <RotateCcw size={12} aria-hidden /> Restore
+                  </Button>
                 )}
               </div>
               <div className="note">{v.changeNote ?? '—'}</div>

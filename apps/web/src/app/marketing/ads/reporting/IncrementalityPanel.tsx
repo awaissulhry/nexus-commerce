@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, Download, FlaskConical } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input } from '@/design-system/primitives'
 
 interface Row {
   campaignId: string; name: string; marketplace: string | null; branded: boolean
@@ -99,7 +100,7 @@ export function IncrementalityPanel() {
             </span>
             <label className="rpt-iro-f">
               <span>Brand terms</span>
-              <input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} placeholder="comma-separated" aria-label="Brand terms" />
+              <Input value={brandTerms} onChange={(e) => setBrandTerms(e.target.value)} placeholder="comma-separated" aria-label="Brand terms" fieldClassName="rpt-iro-text" />
             </label>
             <label className="rpt-iro-f">
               <span>Branded lift · assumed {Math.round(brandedFactor * 100)}%</span>
@@ -109,7 +110,7 @@ export function IncrementalityPanel() {
               <span>Non-branded lift · assumed {Math.round(nonBrandedFactor * 100)}%</span>
               <input type="range" min="0" max="1" step="0.05" value={nonBrandedFactor} onChange={(e) => setNonBrandedFactor(Number(e.target.value))} aria-label="Assumed non-branded incrementality" />
             </label>
-            <button type="button" className="rpt-iro-csv" onClick={csv} disabled={!data?.rows.length}><Download size={13} aria-hidden /> CSV</button>
+            <Button size="sm" className="rpt-iro-csv" onClick={csv} disabled={!data?.rows.length}><Download size={13} aria-hidden /> CSV</Button>
           </div>
 
           {t && (

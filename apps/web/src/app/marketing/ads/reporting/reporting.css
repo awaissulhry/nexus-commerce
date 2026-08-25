@@ -61,14 +61,6 @@
 .rpt-lede.is-error > svg { color: var(--status-danger-strong); }
 .rpt-lede.is-warn { border-left-color: var(--status-warning-strong); }
 .rpt-lede.is-warn > svg { color: var(--status-warning-strong); }
-.rpt-retry {
-  display: inline-flex; align-items: center; gap: 4px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm);
-  background: transparent; cursor: pointer;
-  padding: 2px 8px; margin-left: 2px;
-  font: inherit; font-size: 12px; color: rgb(var(--text-primary));
-}
-.rpt-retry:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .rpt-group { display: flex; flex-direction: column; gap: 10px; }
 .rpt-group-hd {
@@ -217,13 +209,6 @@
 /* Filter bar. Wraps rather than scrolls — a hidden filter is a filter you forget
    is applied, and a wrong number you cannot explain. */
 
-.rpt-back {
-  display: inline-flex; align-items: center; gap: 5px;
-  align-self: center; margin-right: 4px;
-  font-size: 12.5px; font-weight: 600; text-decoration: none;
-  color: rgb(var(--text-secondary));
-}
-.rpt-back:hover { color: var(--color-primary); }
 
 .rpt-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .rpt-field > span {
@@ -283,11 +268,6 @@
 .rpt-saved-err button { border: 0; background: transparent; cursor: pointer; color: inherit; padding: 0; }
 
 .rpt-modal-p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: rgb(var(--text-secondary)); }
-.rpt-input {
-  width: 100%; height: 32px; padding: 0 9px;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm);
-  background: transparent; color: rgb(var(--text-primary)); font: inherit; font-size: 13px;
-}
 
 .rpt-versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rpt-versions li {
@@ -298,12 +278,9 @@
 .rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(var(--text-primary)); }
 .rpt-versions .when { color: rgb(var(--text-tertiary)); font-size: 11.5px; }
 .rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: rgb(var(--text-secondary)); }
-.rpt-restore {
-  display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: 5px; background: transparent;
-  cursor: pointer; padding: 2px 7px; font: inherit; font-size: 11.5px; color: rgb(var(--text-secondary));
-}
-.rpt-restore:hover { border-color: var(--color-primary); color: var(--color-primary); }
+/* The DS `Button` / `ToolbarButton` own these actions now; the only thing left to say is
+   where they sit — hard right, at the end of the row they belong to. */
+.rpt-row-act { margin-left: auto; }
 
 /* ── RPT.6 · R6 · deliveries ─────────────────────────────────────────────────
    One modal holds scheduled email and share links, so the rows below are shared by both:
@@ -357,11 +334,9 @@
 }
 .rpt-sched-row .err { color: var(--status-danger-strong); }
 .rpt-sched-row .acts { display: inline-flex; gap: 6px; flex-shrink: 0; }
-.rpt-restore.danger:hover { border-color: var(--status-danger-strong); color: var(--status-danger-strong); }
 
 .rpt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
 .rpt-form .rpt-field:first-child, .rpt-form .rpt-field:nth-child(2) { grid-column: 1 / -1; }
-select.rpt-input { height: 32px; }
 
 /* ── RPT.10 · KPI tiles, comparison and trend ───────────────────────────── */
 
@@ -524,8 +499,13 @@ select.rpt-input { height: 32px; }
    The console owns .h10-am-fpanel / .h10-am-toolbar / .h10-am-card / .h10-am-pager;
    these are only the few report-specific fields that sit inside them. */
 
+/* One block, not two. `.rpt-back` was declared twice in this file: the later block won on
+   `align-self` while the earlier one still supplied `margin-right`, so the rendered result was
+   neither of them as written. Merged here with both winning values, which is what the page has
+   been showing all along. */
 .rpt-back {
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  margin-right: 4px;
   font-size: 12.5px; font-weight: 600; text-decoration: none; color: rgb(var(--text-secondary));
 }
 .rpt-back:hover { color: var(--color-primary); }
@@ -610,12 +590,6 @@ select.rpt-input { height: 32px; }
 .rpt-share-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
 .rpt-share-form label > span { color: rgb(var(--text-secondary)); font-weight: 550; }
 .rpt-share-form label em { font-style: normal; color: rgb(var(--text-tertiary)); font-weight: 400; }
-.rpt-share-form input,
-.rpt-share-form select {
-  padding: 7px 10px; font-size: 13px; border-radius: var(--nds-radius-sm);
-  border: 1px solid rgb(var(--border-default));
-  background: rgb(var(--surface-raised)); color: rgb(var(--text-primary));
-}
 
 /* Shown once and unrecoverable — it has to read as a warning, not a receipt. */
 .rpt-share-minted { display: flex; flex-direction: column; gap: 8px; }
@@ -679,17 +653,11 @@ select.rpt-input { height: 32px; }
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
   text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
-.rpt-iro-f input[type='text'], .rpt-iro-f input:not([type]) {
-  border: 1px solid rgb(var(--border-default)); border-radius: var(--nds-radius-md);
-  padding: 5px 9px; font-size: 12.5px; color: rgb(var(--text-primary)); background: rgb(var(--surface-card)); width: 180px;
-}
+/* Only the width: the DS `Input` owns the border, radius, padding and ink. */
+.rpt-iro-text { width: 180px; }
 .rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--color-primary); }
-.rpt-iro-csv {
-  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
-  border: 1px solid rgb(var(--border-default)); border-radius: var(--nds-radius-md); background: rgb(var(--surface-card));
-  padding: 5px 10px; font-size: 12px; font-weight: 700; color: rgb(var(--text-secondary)); cursor: pointer;
-}
-.rpt-iro-csv:disabled { opacity: .45; cursor: default; }
+/* Only its place in the control row: the DS `Button` owns the rest. */
+.rpt-iro-csv { margin-left: auto; }
 
 .rpt-iro-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .rpt-iro-k { display: flex; flex-direction: column; gap: 2px; }

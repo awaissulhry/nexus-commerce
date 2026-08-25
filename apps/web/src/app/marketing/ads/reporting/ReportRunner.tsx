@@ -30,6 +30,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Menu } from '@/design-system/components/Menu'
 import Link from 'next/link'
 import { ArrowLeft, RefreshCw, Settings2, Share2, Sigma, AlertTriangle } from 'lucide-react'
 import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
@@ -148,7 +149,6 @@ export function ReportRunner({ reportId }: { reportId: string }) {
   // with", resolved in ReportSummary against the metrics that report actually has.
   const [plotted, setPlotted] = useState<string[]>([])
   const [colsOpen, setColsOpen] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
   const [metricsOpen, setMetricsOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   // null = closed; otherwise which view of the one delivery surface to open on.
@@ -210,7 +210,7 @@ export function ReportRunner({ reportId }: { reportId: string }) {
 
 
   const runExport = useCallback(async (format: 'csv' | 'xlsx') => {
-    setExportOpen(false)
+    // The DS `Menu` closes itself on select, so there is no popover state to clear here.
     setExportError(null)
     setExporting(format)
     try {
@@ -425,9 +425,9 @@ export function ReportRunner({ reportId }: { reportId: string }) {
           <AlertTriangle size={16} aria-hidden />
           <span>
             <b>Could not run this report.</b> {error}{' '}
-            <button type="button" className="rpt-retry" onClick={() => setParams((p) => ({ ...p }))}>
+            <Button size="sm" onClick={() => setParams((p) => ({ ...p }))}>
               <RefreshCw size={12} aria-hidden /> Retry
-            </button>
+            </Button>
           </span>
         </div>
       )}
@@ -437,9 +437,9 @@ export function ReportRunner({ reportId }: { reportId: string }) {
           <AlertTriangle size={16} aria-hidden />
           <span>
             <b>The export did not download.</b> {exportError}{' '}
-            <button type="button" className="rpt-retry" onClick={() => setExportError(null)}>
+            <Button size="sm" onClick={() => setExportError(null)}>
               Dismiss
-            </button>
+            </Button>
           </span>
         </div>
       )}
@@ -544,44 +544,23 @@ export function ReportRunner({ reportId }: { reportId: string }) {
             <Sigma size={13} /> Metrics
           </Button>
 
-          <div className="h10-custwrap">
-            {/* R6 — one control for every way this report leaves the console. Download, share
-                and schedule were three affordances in two places, and scheduling was on the
-                LIBRARY page: to schedule the report in front of you meant saving it, leaving,
-                scrolling and finding it again in a dropdown. They answer one question, so they
-                are one menu, on the report. */}
-            <Button
- active={exportOpen}
- onClick={() => setExportOpen((v) => !v)}
- aria-haspopup="dialog"
- aria-expanded={exportOpen}
- disabled={exporting !== null}
- >
-              <Share2 size={13} /> {exporting ? 'Preparing…' : 'Deliver'}
-            </Button>
-            {exportOpen && (
-              <>
-                <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setExportOpen(false)} />
-                <div className="h10-menu right" role="dialog" aria-label="Deliver this report">
-                  <button type="button" onClick={() => { void runExport('csv') }}>
-                    Download CSV · {(result?.total ?? 0).toLocaleString('en-GB')} rows
-                  </button>
-                  <button type="button" onClick={() => { void runExport('xlsx') }}>
-                    Download Excel · {(result?.total ?? 0).toLocaleString('en-GB')} rows
-                  </button>
-                  <button type="button" onClick={() => { setExportOpen(false); setShareOpen(true) }}>
-                    Share a link…
-                  </button>
-                  <button type="button" onClick={() => { setExportOpen(false); setDeliveries('new') }}>
-                    Schedule by email…
-                  </button>
-                  <button type="button" onClick={() => { setExportOpen(false); setDeliveries('list') }}>
-                    Manage deliveries…
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {/* R6 — one control for every way this report leaves the console. Download, share
+              and schedule were three affordances in two places, and scheduling was on the
+              LIBRARY page: to schedule the report in front of you meant saving it, leaving,
+              scrolling and finding it again in a dropdown. They answer one question, so they
+              are one menu, on the report. */}
+          <Menu
+            align="right"
+            label={<><Share2 size={13} /> {exporting ? 'Preparing…' : 'Deliver'}</>}
+            triggerProps={{ disabled: exporting !== null, 'aria-label': 'Deliver this report' }}
+            items={[
+              { id: 'csv', label: `Download CSV · ${(result?.total ?? 0).toLocaleString('en-GB')} rows`, onSelect: () => { void runExport('csv') } },
+              { id: 'xlsx', label: `Download Excel · ${(result?.total ?? 0).toLocaleString('en-GB')} rows`, onSelect: () => { void runExport('xlsx') } },
+              { id: 'share', label: 'Share a link…', onSelect: () => setShareOpen(true) },
+              { id: 'schedule', label: 'Schedule by email…', onSelect: () => setDeliveries('new') },
+              { id: 'manage', label: 'Manage deliveries…', onSelect: () => setDeliveries('list') },
+            ]}
+          />
         </>}
         showTotal={!!result?.totals && (result?.rows.length ?? 0) > 0}
         totalFirst={
