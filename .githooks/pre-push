@@ -100,6 +100,14 @@ node scripts/check-ds-fork-drift.mjs --check || {
   exit 1
 }
 
+# Every border-radius that names no DS scale step. Frozen, not banned: the scale starts at 6px
+# with nothing between 8 and 10, so small elements genuinely have nowhere to land. This stops the
+# number growing while the scale question is open.
+node scripts/check-css-radius-ratchet.mjs --check || {
+  echo "❌ radius ratchet FAILED — see message above (rule + why: scripts/check-css-radius-ratchet.mjs header)"
+  exit 1
+}
+
 # TECH_DEBT #62 (2026-08-06) — tokens.css is generated from
 # tokens/css-vars.ts; a hand-edit to the output silently dies on the next
 # regen (the rail vars lived that way for five weeks). Fail the push when
