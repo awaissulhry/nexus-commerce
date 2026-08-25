@@ -810,7 +810,7 @@ export function AdsDataGrid<T>({
       )}
 
       {/* one card: toolbar + grid + pager share the grid rectangle (H10 — toolbar sits inside it) */}
-      <div className="h10-am-card">
+      <div className="nds-card h10-cardstack">
       {/* toolbar */}
       <div className="h10-am-toolbar">
         <span className="cnt">{selectable && sel.size > 0

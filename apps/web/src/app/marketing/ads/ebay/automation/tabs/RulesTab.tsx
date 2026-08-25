@@ -49,11 +49,11 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
   }, [])
   useEffect(() => { void reload() }, [reload, bump])
 
-  if (error) return <div className="h10-am-card" style={{ padding: 24 }}><p className="eb-be-hint">Rules failed to load: {error}</p></div>
-  if (rules == null) return <div className="h10-am-card" style={{ padding: 24 }}><p className="eb-be-hint">Loading rules…</p></div>
+  if (error) return <div className="nds-card h10-cardstack" style={{ padding: 24 }}><p className="eb-be-hint">Rules failed to load: {error}</p></div>
+  if (rules == null) return <div className="nds-card h10-cardstack" style={{ padding: 24 }}><p className="eb-be-hint">Loading rules…</p></div>
 
   return (
-    <div className="h10-am-card" style={{ padding: '6px 0' }}>
+    <div className="nds-card h10-cardstack" style={{ padding: '6px 0' }}>
       <div className="eb-rules-toolbar">
         <span className="eb-be-hint">{rules.length} rule{rules.length === 1 ? '' : 's'} · conditions AND together — for OR, duplicate the rule</span>
         <span style={{ flex: 1 }} />

@@ -24,7 +24,7 @@ export function DriftTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
   useEffect(() => { reload().catch(() => {}) }, [reload, bump])
 
   return (
-    <div className="h10-am-card eb-rowlist">
+    <div className="nds-card h10-cardstack eb-rowlist">
       <p className="hd plain">
         Values eBay changed under us — "easy boost" rate overwrites, Seller Hub edits, removed ads — vs what Nexus last set (from the audit trail). <b>Re-apply</b> pushes the Nexus value back through the guarded write layer; <b>Accept</b> makes eBay's value the new baseline (audited).
       </p>

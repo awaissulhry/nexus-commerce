@@ -219,7 +219,7 @@ export function HvActors({ scope, push }: HvSlotProps) {
   }
 
   return (
-    <section className="h10-am-card h10-hva-wrap">
+    <section className="nds-card h10-cardstack h10-hva-wrap">
       <header className="h10-hva-head">
         <div>
           <button type="button" className="h10-hva-toggle on" onClick={() => push({ actors: '', actor: '' })}>

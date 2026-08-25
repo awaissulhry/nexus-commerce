@@ -34,12 +34,16 @@
 /* CBN.3 — unify toolbar + grid + pager into ONE card (H10: the toolbar lives inside the grid
    rectangle, just above the header). Scoped to .h10-am-card so the standalone .h10-am-grid /
    .h10-am-toolbar used by CampaignsGrid stay exactly as they are. */
-.h10-am-card { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; margin-top: 16px; }
-.h10-am-card .h10-am-toolbar { padding: 14px 16px; }
-.h10-am-card .h10-am-grid,
-.h10-am-card .eb-tablebox { border: none; border-radius: 0; background: transparent; }
-.h10-am-card .h10-am-pager { padding: 12px 16px 14px; }
-.h10-am-card + .h10-am-latest { margin-top: 12px; }
+/* Cards are the DS `.nds-card` now. What the DS Card deliberately does NOT carry is a top
+   margin — its consumers space with gap. Four AutomationTab cards stack directly, so the
+   spacing is kept as an explicit class at the call site rather than a scoped rule that
+   would silently re-style every future DS Card in this console. */
+.h10-cardstack { margin-top: 16px; }
+.nds-card .h10-am-toolbar { padding: 14px 16px; }
+.nds-card .h10-am-grid,
+.nds-card .eb-tablebox { border: none; border-radius: 0; background: transparent; }
+.nds-card .h10-am-pager { padding: 12px 16px 14px; }
+.nds-card + .h10-am-latest { margin-top: 12px; }
 .h10-am-grid table,
 .eb-tablebox table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .h10-am-grid thead th,

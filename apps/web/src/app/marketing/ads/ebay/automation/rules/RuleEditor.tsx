@@ -155,7 +155,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
     } catch (e) { setError((e as Error).message); setBusy(false) }
   }
 
-  if (!loaded) return <div className="h10-rules-page"><div className="h10-am-card" style={{ padding: 24 }}><p className="eb-be-hint">Loading rule…</p></div></div>
+  if (!loaded) return <div className="h10-rules-page"><div className="nds-card h10-cardstack" style={{ padding: 24 }}><p className="eb-be-hint">Loading rule…</p></div></div>
 
   return (
     <div className="h10-rules-page eb-rule-editor eb-root">

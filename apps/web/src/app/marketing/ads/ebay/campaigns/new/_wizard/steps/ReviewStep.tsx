@@ -226,7 +226,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
 
       {/* rates summary (GEN key-based FIXED, editable in place) */}
       {isGen && !isRules && !dynKey && included.length > 0 && (
-        <div className="h10-am-card">
+        <div className="nds-card h10-cardstack">
           <div className="h10-am-toolbar"><span className="cnt"><b>{included.length}</b> listing(s) · projected ≈ <b>{money(included.reduce((a, l) => { const r = effRate(plan, l); return a + (r != null ? Math.round(l.trailingSales30dCents * (r / 100)) : 0) }, 0))}</b>/month</span></div>
           <div className="eb-tablebox" style={{ maxHeight: 260 }}>
             <table>

@@ -37,7 +37,7 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
   })
 
   return (
-    <div className="h10-am-card eb-rowlist" style={{ maxWidth: 1080 }}>
+    <div className="nds-card h10-cardstack eb-rowlist" style={{ maxWidth: 1080 }}>
       <div className="eb-rowlist-bar">
         <p>Every write Nexus made to this campaign — immutable. Drift repairs and accepted eBay-side changes appear here too.</p>
         <span className="eb-dd dense"><H10Select ariaLabel="Action type" width={180} value={typeFilter} onChange={setTypeFilter}

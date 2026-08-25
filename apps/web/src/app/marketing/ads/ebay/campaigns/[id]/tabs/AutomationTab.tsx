@@ -103,7 +103,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       </div>
 
       {/* Rules that apply here */}
-      <div className="h10-am-card eb-rowlist">
+      <div className="nds-card h10-cardstack eb-rowlist">
         <p className="hd plain">Rules that apply to this campaign — <Link className="nds-btn link" href="/marketing/ads/ebay/automation">manage in Rules &amp; Automation</Link></p>
         {data.rules.length === 0 ? (
           <div className="empty">No rules apply here.</div>
@@ -120,7 +120,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       </div>
 
       {/* Pending proposals */}
-      <div className="h10-am-card eb-rowlist">
+      <div className="nds-card h10-cardstack eb-rowlist">
         <p className="hd">Awaiting your decision ({data.proposals.length})</p>
         {data.proposals.length === 0 ? (
           <div className="empty">Nothing pending for this campaign.</div>
@@ -138,7 +138,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       </div>
 
       {/* Applied */}
-      <div className="h10-am-card eb-rowlist">
+      <div className="nds-card h10-cardstack eb-rowlist">
         <p className="hd">Applied here (rollback available)</p>
         {data.applied.length === 0 ? (
           <div className="empty">Nothing applied yet.</div>
@@ -187,7 +187,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
       })()}
 
       {/* Drift */}
-      <div className="h10-am-card eb-rowlist">
+      <div className="nds-card h10-cardstack eb-rowlist">
         <p className="hd">Drift — values eBay changed under us</p>
         {campaignStatus === 'ENDED' ? (
           <div className="empty">Ended campaigns are not reconciled.</div>
