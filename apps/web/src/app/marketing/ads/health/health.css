@@ -16,6 +16,10 @@
 .hl-good { color: #067d62; } .hl-good.bg { background: #e7f5ee; }
 .hl-fair { color: var(--nds-amber-600); } .hl-fair.bg { background: #fff4e0; }
 .hl-poor { color: var(--nds-red-500); } .hl-poor.bg { background: #fdeaea; }
+/* The fourth band: no reading. Deliberately colourless — a grey dash cannot be mistaken for a
+   verdict the way a green 100 could. Without it the em dash inherited body ink and rendered as a
+   52px black bar that read like a redaction. */
+.hl-none { color: var(--nds-grey-400); } .hl-none.bg { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .hl-factors { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .hl-factors-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
 .hl-factor { display: flex; align-items: center; gap: 10px; font-size: 12px; }

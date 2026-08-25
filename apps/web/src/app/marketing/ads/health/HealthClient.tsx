@@ -47,7 +47,28 @@ function computeHealth(a: AlertsResult | null, r: Retail | null, au: Automation 
   if (aged) factors.push({ text: `${aged} aged-inventory SKU${aged > 1 ? 's' : ''} flagged`, pts: clamp(aged * 2, 10), dot: '#b87503' })
   const penalty = factors.reduce((sum, f) => sum + f.pts, 0)
   const score = Math.max(0, 100 - penalty)
-  return { score, factors, high, med, pause, suppressing }
+  // A score of 100 has to MEAN something. It is computed by subtracting penalties from the four
+  // signal sources, so when none of them answered there are no penalties and the arithmetic says
+  // 100 — "Healthy" for an account nothing is known about. `scored` is what separates "we looked
+  // and found nothing wrong" from "we could not look".
+  const scored = a != null || r != null || au != null || b != null
+  return { score, scored, factors, high, med, pause, suppressing }
+}
+
+/**
+ * An error RESPONSE is not data. Every one of these five endpoints answers a 401 or a 500 with a
+ * perfectly valid JSON body — `{ error: 'Access denied', code: 'unauthenticated' }` — so
+ * `r.json()` resolves and the old `.catch(() => null)` never fired: the error object was stored
+ * as if it were the payload. `!au` then read as truthy and `au.rules.live` threw, taking the
+ * whole page to the error boundary ("Cannot read properties of undefined (reading 'live')").
+ *
+ * Checking `r.ok` first is what makes every `?? null` guard on this page true again: a refused or
+ * broken endpoint now renders its own empty state and the other four still draw.
+ */
+function readJson<T>(url: string): Promise<T | null> {
+  return fetch(url, { cache: 'no-store' })
+    .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
+    .catch(() => null)
 }
 
 const band = (score: number) => (score >= 80 ? 'good' : score >= 50 ? 'fair' : 'poor')
@@ -76,18 +97,18 @@ export function HealthClient() {
     const mp = mk === 'all' ? '' : `&marketplace=${mk}`
     setLoading(true)
     Promise.all([
-      fetch(`${base}/api/advertising/alerts?windowDays=${win}${mp}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-      fetch(`${base}/api/advertising/retail-readiness`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-      fetch(`${base}/api/advertising/automation-health`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-      fetch(`${base}/api/advertising/budget-manager/enforcement`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-      fetch(`${base}/api/advertising/summary`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+      readJson<AlertsResult>(`${base}/api/advertising/alerts?windowDays=${win}${mp}`),
+      readJson<Retail>(`${base}/api/advertising/retail-readiness`),
+      readJson<Automation>(`${base}/api/advertising/automation-health`),
+      readJson<Budget>(`${base}/api/advertising/budget-manager/enforcement`),
+      readJson<Summary>(`${base}/api/advertising/summary`),
     ]).then(([a, r, au, b, s]) => {
-      setAlerts(a ?? null); setRetail(r ?? null); setAutomation(au ?? null); setBudget(b ?? null); setSummary(s ?? null); setLoading(false)
+      setAlerts(a); setRetail(r); setAutomation(au); setBudget(b); setSummary(s); setLoading(false)
     })
   }, [])
   useEffect(() => { load(market, windowDays) }, [load, market, windowDays])
 
-  const { score, factors } = computeHealth(alerts, retail, automation, budget, summary)
+  const { score, scored, factors } = computeHealth(alerts, retail, automation, budget, summary)
   // Retail is account-wide from the endpoint → filter to the chosen market client-side.
   const retailRows = (retail?.campaigns ?? []).filter((c) => c.verdict !== 'ok').filter((c) => market === 'all' || c.marketplace === market)
     .sort((a, b) => (a.verdict === 'pause' ? -1 : 1) - (b.verdict === 'pause' ? -1 : 1))
@@ -118,12 +139,13 @@ export function HealthClient() {
       {/* Hero — health score + transparent factors */}
       <div className="hl-hero">
         <div className="hl-score">
-          <div className={`hl-score-num hl-${band(score)}`}>{loading ? '—' : score}<small>/100</small></div>
-          <div className={`hl-score-lbl bg hl-${band(score)}`}>{bandLabel(score)}</div>
+          <div className={`hl-score-num hl-${loading || !scored ? 'none' : band(score)}`}>{loading || !scored ? '—' : score}<small>/100</small></div>
+          <div className={`hl-score-lbl bg hl-${loading || !scored ? 'none' : band(score)}`}>{loading ? 'Loading' : scored ? bandLabel(score) : 'No data'}</div>
         </div>
         <div className="hl-factors">
           <div className="hl-factors-h">What’s affecting the score</div>
           {loading ? <span className="hl-tile-sub muted">Loading…</span>
+            : !scored ? <span className="hl-tile-sub muted">None of the health endpoints answered — this is not a clean bill of health, it is no reading at all.</span>
             : factors.length === 0 ? <span className="hl-allclear"><ShieldCheck size={14} style={{ verticalAlign: 'middle' }} /> All clear — no active health issues.</span>
               : factors.map((f, i) => (
                 <div className="hl-factor" key={i}>
@@ -139,29 +161,29 @@ export function HealthClient() {
       <div className="hl-tiles">
         <Card className="hl-tile" onClick={() => document.getElementById('hl-alerts')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Active alerts</div>
-          <div className="hl-tile-v">{loading ? '…' : totalAlerts}</div>
-          <div className={`hl-tile-sub ${(alerts?.alerts ?? []).some((a) => a.severity === 'high') ? 'danger' : totalAlerts ? 'warn' : 'ok'}`}>{(alerts?.alerts ?? []).filter((a) => a.severity === 'high').length} high · {(alerts?.alerts ?? []).filter((a) => a.severity === 'medium').length} medium</div>
+          <div className="hl-tile-v">{loading ? '…' : alerts == null ? '—' : totalAlerts}</div>
+          <div className={`hl-tile-sub ${alerts == null ? 'muted' : (alerts.alerts ?? []).some((a) => a.severity === 'high') ? 'danger' : totalAlerts ? 'warn' : 'ok'}`}>{alerts == null ? 'not loaded' : `${alerts.alerts.filter((a) => a.severity === 'high').length} high · ${alerts.alerts.filter((a) => a.severity === 'medium').length} medium`}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-retail')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Wasted spend (retail)</div>
-          <div className="hl-tile-v">{loading ? '…' : retail?.summary?.pause ?? 0}</div>
-          <div className={`hl-tile-sub ${(retail?.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail?.summary?.pause ?? 0} pause · {retail?.summary?.watch ?? 0} watch</div>
+          <div className="hl-tile-v">{loading ? '…' : retail == null ? '—' : retail.summary?.pause ?? 0}</div>
+          <div className={`hl-tile-sub ${retail == null ? 'muted' : (retail.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail == null ? 'not loaded' : `${retail.summary?.pause ?? 0} pause · ${retail.summary?.watch ?? 0} watch`}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Automation</div>
-          <div className="hl-tile-v">{loading ? '…' : `${au?.rules?.live ?? 0}/${au?.rules?.total ?? 0}`}</div>
-          <div className={`hl-tile-sub ${au?.risks?.noManaging ? 'warn' : 'ok'}`}>{au?.risks?.noManaging ? 'no live rules managing' : 'live rules active'}</div>
+          <div className="hl-tile-v">{loading ? '…' : au == null ? '—' : `${au.rules.live}/${au.rules.total}`}</div>
+          <div className={`hl-tile-sub ${au == null ? 'muted' : au.risks.noManaging ? 'warn' : 'ok'}`}>{au == null ? 'not loaded' : au.risks.noManaging ? 'no live rules managing' : 'live rules active'}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Budget-suppressed</div>
-          <div className="hl-tile-v">{loading ? '…' : budget?.totals?.suppressing ?? 0}</div>
-          <div className={`hl-tile-sub ${(budget?.totals?.suppressing ?? 0) ? 'warn' : 'ok'}`}>{(budget?.totals?.suppressing ?? 0) ? 'delivery capped' : 'none capped'}</div>
+          <div className="hl-tile-v">{loading ? '…' : budget == null ? '—' : budget.totals?.suppressing ?? 0}</div>
+          <div className={`hl-tile-sub ${budget == null ? 'muted' : (budget.totals?.suppressing ?? 0) ? 'warn' : 'ok'}`}>{budget == null ? 'not loaded' : (budget.totals?.suppressing ?? 0) ? 'delivery capped' : 'none capped'}</div>
         </Card>
       </div>
 
       {/* Alerts */}
       <div className="hl-section" id="hl-alerts">
-        <div className="hl-sec-h"><AlertTriangle size={15} /> Active alerts <span className="hl-chip">{totalAlerts}</span><span className="grow" />
+        <div className="hl-sec-h"><AlertTriangle size={15} /> Active alerts <span className="hl-chip">{alerts == null ? '—' : totalAlerts}</span><span className="grow" />
           <span className="hl-filters">
             {(['all', 'high', 'medium'] as const).map((s) => (
               <FilterChip key={s} pressed={sevFilter === s} onClick={() => setSevFilter(s)}>{s === 'all' ? 'All' : s}</FilterChip>
@@ -178,7 +200,9 @@ export function HealthClient() {
           </span>
         </div>
         {alertRows.length === 0 ? (
-          <div className="hl-empty">{loading ? 'Loading…' : totalAlerts === 0 ? 'No active alerts — all clear.' : 'No alerts match this filter.'}</div>
+          <div className="hl-empty">{loading ? 'Loading…'
+            : alerts == null ? 'The alerts endpoint did not answer — no alerts could be read, which is not the same as none existing.'
+            : totalAlerts === 0 ? 'No active alerts — all clear.' : 'No alerts match this filter.'}</div>
         ) : (
           <div className="hl-rows">
             {alertRows.map((a) => (
@@ -205,11 +229,13 @@ export function HealthClient() {
 
       {/* Retail-readiness */}
       <div className="hl-section" id="hl-retail">
-        <div className="hl-sec-h"><Package size={15} /> Retail-readiness <span className="hl-chip">{retailRows.length}</span><span className="grow" />
+        <div className="hl-sec-h"><Package size={15} /> Retail-readiness <span className="hl-chip">{retail == null ? '—' : retailRows.length}</span><span className="grow" />
           {retail?.summary?.atRiskSpendNote && <span className="hl-tile-sub danger">{retail.summary.atRiskSpendNote}</span>}
         </div>
         {retailRows.length === 0 ? (
-          <div className="hl-empty">{loading ? 'Loading…' : 'Every advertised product is sellable — no wasted spend.'}</div>
+          <div className="hl-empty">{loading ? 'Loading…'
+            : retail == null ? 'The retail-readiness endpoint did not answer — stock and Buy Box could not be checked.'
+            : 'Every advertised product is sellable — no wasted spend.'}</div>
         ) : (
           <div className="hl-rows">
             {retailRows.map((c) => (
