@@ -19,7 +19,7 @@
  * weeks early is the mistake the feature exists to prevent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Input, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill, ToolbarButton } from '@/design-system/primitives'
 import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
@@ -189,7 +189,7 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
                   {e.enabled ? 'Disarm' : 'Arm'}
                 </Button>
               )}
-              <button type="button" className="del" aria-label={`Delete ${e.name}`} disabled={busy} onClick={() => void remove(e)}><Trash2 size={13} /></button>
+              <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} />} label={`Delete ${e.name}`} tooltip={false} disabled={busy} onClick={() => void remove(e)} />
             </div>
           ))}
       </div>

@@ -138,6 +138,9 @@ export function TemplateLibrary({ groupIds, groupNames, palette, onClose, onAppl
                 nameOf={palette.name}
                 baselineName={t.defaultTargetKey ? palette.name(t.defaultTargetKey) : 'Baseline'}
               />
+              {/* 🔴 NOT `ToolbarButton`: this sits inside the row's `<label>`, so the click must
+                  `preventDefault()` or deleting a template also SELECTS it. `ToolbarButton.onClick`
+                  is `() => void` and hands the call site no event. Filed in .claude/DS-GAPS.md. */}
               <button type="button" className="del" aria-label={`Delete ${t.name}`} title="Delete this template" onClick={(e) => { e.preventDefault(); void remove(t) }}>
                 <Trash2 size={13} />
               </button>

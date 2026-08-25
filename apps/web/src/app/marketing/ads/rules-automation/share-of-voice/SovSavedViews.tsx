@@ -32,7 +32,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Bookmark, Check, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -148,9 +148,11 @@ export function SovSavedViews({ currentQs, onApply }: { currentQs: string; onApp
                             </span>
                           )}
                         </button>
-                        <button type="button" className="del" onClick={() => void remove(v.id)} aria-label={`Delete ${v.name}`} disabled={busy}>
-                          <Trash2 size={12} />
-                        </button>
+                        <ToolbarButton
+                          tone="danger" size="sm" className="del"
+                          icon={<Trash2 size={12} />} label={`Delete ${v.name}`} tooltip={false}
+                          disabled={busy} onClick={() => void remove(v.id)}
+                        />
                       </li>
                     )
                   })}

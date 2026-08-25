@@ -1567,7 +1567,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                             inputMode="decimal" value={c.value} onChange={(e) => setCond(g.id, i, { value: e.target.value })} aria-label="Value"
                           />
                         ) })()}
-                        <button type="button" className="rm" aria-label="Remove condition" onClick={() => removeCondition(g.id, i)}><X size={16} /></button>
+                        <ToolbarButton tone="danger" size="sm" icon={<X size={16} />} label="Remove condition" tooltip={false} onClick={() => removeCondition(g.id, i)} />
                       </div>
                     ))}
                     {/* PLC-P7 — a lane-scoped condition is measured from Amazon's placement report,
@@ -1712,7 +1712,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       <div className="strowdata" key={`${st.op}-${st.term}-${i}`}>
                         <span className="term" title={st.term}>{st.term}</span>
                         <span className="op">{st.op === 'contains' ? 'Contains' : 'Does Not Contain'}</span>
-                        <button type="button" className="strm" onClick={() => setSearchTerms((cur) => cur.filter((_, j) => j !== i))} aria-label={`Remove ${st.term}`}><X size={14} /></button>
+                        <ToolbarButton tone="danger" size="sm" className="strm" icon={<X size={14} />} label={`Remove ${st.term}`} tooltip={false} onClick={() => setSearchTerms((cur) => cur.filter((_, j) => j !== i))} />
                       </div>
                     ))}
                   </div>
@@ -2197,7 +2197,7 @@ function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onCl
           <Button variant="primary" onClick={onTogglePop}><Plus size={14} /> Add Group</Button>
           {popOpen && <AddGroupPopover selectedIds={new Set(groups.map((g) => g.id))} onAdd={onAdd} onClose={onClosePop} />}
         </div>
-        {isMulti && <button type="button" className="mbrm" onClick={onRemoveBlock} aria-label={`Remove mapping ${index + 1}`}><Trash2 size={16} /></button>}
+        {isMulti && <ToolbarButton tone="danger" size="sm" className="mbrm" icon={<Trash2 size={16} />} label={`Remove mapping ${index + 1}`} tooltip={false} onClick={onRemoveBlock} />}
       </div>
       <div className="h10-rb-twocol">
         <div className="col">

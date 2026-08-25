@@ -15,7 +15,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
-import { Button, Select } from '@/design-system/primitives'
+import { Button, Select, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { SchedCampaign } from '../_schedule/CampaignSection'
@@ -251,7 +251,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
                 <span className="arrow">→</span>
                 <Select size="sm" value={w.targetKey ?? ''} onChange={e => setWin(i, { targetKey: e.target.value })} aria-label="Rank target">{targets.map(t => <option key={t.key} value={t.key}>{t.name}</option>)}</Select>
                 <span className="grow" />
-                <button type="button" className="rm" onClick={() => removeWin(i)} aria-label="Remove window"><Trash2 size={13} /></button>
+                <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} />} label="Remove window" tooltip={false} onClick={() => removeWin(i)} />
               </div>
             ))}
           </>)}
