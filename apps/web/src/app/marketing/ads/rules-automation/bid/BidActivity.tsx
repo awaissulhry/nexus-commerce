@@ -34,6 +34,7 @@
  * `campaignId` param cannot express market/portfolio/line), and the count line names the window.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import Link from 'next/link'
 import { Activity, AlertTriangle, ExternalLink, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -153,27 +154,32 @@ export function BidActivity({ scope, campaigns, loading }: BidSlotProps) {
             {feed != null && feed.length >= 80 && <span className="h10-bd8-cap">showing the latest 80 — older writes are in the change log</span>}
           </div>
           <div className="h10-bd8-scroll">
-            <table className="h10-bd8-tbl">
-              <thead><tr><th>When</th><th>Target</th><th>Campaign</th><th>Change</th><th>Who</th><th>Delivered</th></tr></thead>
-              <tbody>
-                {visible.slice(0, 25).map((r) => (
-                  <tr key={r.id} className={r.delivery?.state === 'FAILED' ? 'failed' : ''}>
-                    <td className="nw">{when(r.at)}</td>
-                    {/* A null name is a product/audience target with no text expression — a raw
-                        cuid tells the operator nothing, so say what it IS and keep the id in the
-                        title for correlation. */}
-                    <td><span className={r.entity.name ? 't' : 't unnamed'} title={r.entity.id}>{r.entity.name ?? 'unnamed target'}</span></td>
-                    <td><span className="t">{r.campaign?.name ?? campName.get(r.campaign?.id ?? '') ?? '—'}</span></td>
-                    <td className="nw">{eurFromCents(r.oldValue)} → <b>{eurFromCents(r.newValue)}</b></td>
-                    <td><span className="t" title={r.reason ?? undefined}>{r.origin?.name ?? (r.source === 'external' ? 'outside Nexus' : r.source)}</span></td>
-                    <td className="nw">{r.delivery == null ? '—'
-                      : isApplied(r.delivery.state) ? 'yes'
-                        : r.delivery.state === 'FAILED' ? <b title={r.delivery.lastError ?? 'Never accepted by Amazon — the bid did not move.'}>no</b>
-                          : r.delivery.state.toLowerCase()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataGrid
+              className="h10-bd8-tbl"
+              rows={visible.slice(0, 25)}
+              rowKey={(r) => r.id}
+              rowClassName={(r) => (r.delivery?.state === 'FAILED' ? 'failed' : undefined)}
+              columns={[
+                { key: 'when', label: 'When', render: (r) => <>{when(r.at)}</> },
+                {
+                  // A null name is a product/audience target with no text expression — a raw
+                  // cuid tells the operator nothing, so say what it IS and keep the id in the
+                  // title for correlation.
+                  key: 'target', label: 'Target',
+                  render: (r) => <span className={r.entity.name ? 't' : 't unnamed'} title={r.entity.id}>{r.entity.name ?? 'unnamed target'}</span>,
+                },
+                { key: 'campaign', label: 'Campaign', render: (r) => <span className="t">{r.campaign?.name ?? campName.get(r.campaign?.id ?? '') ?? '—'}</span> },
+                { key: 'change', label: 'Change', render: (r) => <>{eurFromCents(r.oldValue)} → <b>{eurFromCents(r.newValue)}</b></> },
+                { key: 'who', label: 'Who', render: (r) => <span className="t" title={r.reason ?? undefined}>{r.origin?.name ?? (r.source === 'external' ? 'outside Nexus' : r.source)}</span> },
+                {
+                  key: 'delivered', label: 'Delivered',
+                  render: (r) => (r.delivery == null ? <>—</>
+                    : isApplied(r.delivery.state) ? <>yes</>
+                      : r.delivery.state === 'FAILED' ? <b title={r.delivery.lastError ?? 'Never accepted by Amazon — the bid did not move.'}>no</b>
+                        : <>{r.delivery.state.toLowerCase()}</>),
+                },
+              ]}
+            />
           </div>
           {visible.length > 25 && <p className="h10-bd8-muted">…and {visible.length - 25} more in this window — the full feed is on the change log.</p>}
         </>

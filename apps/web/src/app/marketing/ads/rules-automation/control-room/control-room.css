@@ -493,12 +493,8 @@
 /* Wide content scrolls inside its own box; the drawer body never scrolls sideways. */
 .acr-dw-scroll { overflow-x: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); }
 .acr-dw-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
-.acr-dw-tbl th {
-  text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--nds-grey-500); font-weight: 600; padding: 8px 11px;
-  background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-150); white-space: nowrap;
-}
-.acr-dw-tbl td { padding: 8px 11px; border-bottom: 1px solid var(--nds-grey-75); color: var(--nds-grey-700); vertical-align: top; }
+
+
 .acr-dw-tbl tr:last-child td { border-bottom: none; }
 .acr-dw-tbl tr.bad td { background: #fdf7f7; }
 .acr-dw-tbl td.nowrap { white-space: nowrap; color: #46536a; }
@@ -661,12 +657,9 @@
 .acr-week-grad.unseen { color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb; }
 
 .acr-week-table { width: 100%; border-collapse: collapse; margin: 14px 0 0; font-size: 12.5px; }
-.acr-week-table th {
-  text-align: left; font-size: 11px; font-weight: 600; color: var(--nds-grey-500);
-  text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 6px 0; border-bottom: 1px solid var(--nds-grey-150);
-}
+
 .acr-week-table th.n, .acr-week-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
-.acr-week-table td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--nds-grey-75); color: var(--nds-grey-700); }
+
 .acr-week-table td:last-child, .acr-week-table th:last-child { padding-right: 0; }
 .acr-week-table td.bad { color: #a3342b; font-weight: 600; }
 .acr-week-table .acr-mode { font-size: 10px; padding: 1px 5px; }
@@ -1255,3 +1248,10 @@
 .acr-cs-revhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .acr-cs-revnote { font-size: 12.5px; color: var(--nds-grey-700); }
 .acr-cs-revactions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* The two tables here are the DS `DataGrid` now, and `.nds-grid tbody td` (0,1,2) outranks
+   `.acr-dw-tbl td` (0,1,1) — padding, colour and borders come from the DS. `vertical-align` is
+   the one cell property it does not decide, and both of these stack a second line inside a cell.
+   Stated here rather than in `rules-automation.css`: this stylesheet does not borrow. */
+.acr-dw-tbl td,
+.acr-week-table td { vertical-align: top; }

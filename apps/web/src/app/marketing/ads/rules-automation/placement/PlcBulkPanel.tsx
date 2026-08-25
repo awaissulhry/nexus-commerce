@@ -42,6 +42,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, ShieldAlert, X } from 'lucide-react'
 import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'
@@ -325,40 +326,24 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                 </p>
               )}
 
-              <div className="h10-plc3-rows">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Campaign</th>
-                      <th>Steered by</th>
-                      <th>{LANE_LABEL[laneSel]}</th>
-                      <th>Effective bid</th>
-                      <th>Verdict</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.rows.map((r) => (
-                      <tr key={r.campaignId}>
-                        <td>{r.name}<br /><span style={{ color: '#667080', fontSize: 10.5 }}>{r.marketplace ?? '—'} · {r.status.toLowerCase()}</span></td>
-                        <td>{r.owner === 'none' ? <span style={{ color: '#7a4812' }}>nobody</span> : (r.ownerLabel ?? r.owner)}</td>
-                        <td className="num">{r.current[laneSel]}% → <b>{r.proposed[laneSel]}%</b></td>
-                        <td className="num">
-                          {r.effectiveBidBefore == null
-                            ? <span style={{ color: '#667080' }}>no base bid</span>
-                            : <>{eur(r.effectiveBidBefore)} → {eur(r.effectiveBidAfter!)}</>}
-                        </td>
-                        <td>
-                          {r.skip
-                            ? <span className="skip" title={SKIP_WHY[r.skip]}>{SKIP_WORD[r.skip]}</span>
-                            : r.revertedByEngine
-                              ? <span className="rev" title={`${r.ownerLabel ?? 'A rank schedule'} holds this campaign — the engine snaps the multiplier back to its target's value within ~15 minutes.`}>writes, then reverts</span>
-                              : <span className="go">writes</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataGrid
+                className="h10-plc3-rows"
+                rows={preview.rows}
+                rowKey={(r) => r.campaignId}
+                columns={[
+                  { key: 'campaign', label: 'Campaign', render: (r) => (<>{r.name}<br /><span className="h10-plc3-sub">{r.marketplace ?? '—'} · {r.status.toLowerCase()}</span></>) },
+                  { key: 'owner', label: 'Steered by', render: (r) => (r.owner === 'none' ? <span className="h10-plc3-nobody">nobody</span> : <>{r.ownerLabel ?? r.owner}</>) },
+                  { key: 'lane', label: LANE_LABEL[laneSel], align: 'right', render: (r) => (<>{r.current[laneSel]}% → <b>{r.proposed[laneSel]}%</b></>) },
+                  { key: 'eff', label: 'Effective bid', align: 'right', render: (r) => (r.effectiveBidBefore == null
+                    ? <span className="h10-plc3-nobase">no base bid</span>
+                    : <>{eur(r.effectiveBidBefore)} → {eur(r.effectiveBidAfter!)}</>) },
+                  { key: 'verdict', label: 'Verdict', render: (r) => (r.skip
+                    ? <span className="skip" title={SKIP_WHY[r.skip]}>{SKIP_WORD[r.skip]}</span>
+                    : r.revertedByEngine
+                      ? <span className="rev" title={`${r.ownerLabel ?? 'A rank schedule'} holds this campaign — the engine snaps the multiplier back to its target's value within ~15 minutes.`}>writes, then reverts</span>
+                      : <span className="go">writes</span>) },
+                ]}
+              />
             </>
           )}
 

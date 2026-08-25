@@ -1021,37 +1021,39 @@
 .h10-n24-legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--nds-grey-300); flex: none; }
 .h10-n24-legend em { font-style: normal; color: var(--nds-grey-500); }
 
-.h10-n24-t { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
-.h10-n24-t th { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-grey-500); padding: 9px 8px; border-bottom: 1px solid var(--nds-grey-100); position: sticky; top: 0; background: var(--nds-white); z-index: 1; }
+/* The DataGrid puts `className` on the WRAPPER div, so `table-layout` has to name the
+   table itself; the three column widths this block used to set are `Column.width` now,
+   and the four `td.hr`/`.tg`/`.bd`/`.gd` cell classes — which only ever named a column
+   POSITION — are `:nth-child()`. `Column` carries no per-cell className (DS-GAPS). */
+.h10-n24-t { font-size: 12px; }
+.h10-n24-t table { table-layout: fixed; }
+
 .h10-n24-t th:first-child, .h10-n24-t td:first-child { padding-left: 20px; }
 .h10-n24-t th:last-child, .h10-n24-t td:last-child { padding-right: 20px; }
-.h10-n24-t th:nth-child(1) { width: 84px; }
-.h10-n24-t th:nth-child(3) { width: 118px; }
-.h10-n24-t th:nth-child(4) { width: 108px; }
-.h10-n24-t td { padding: 7px 8px; border-bottom: 1px solid var(--nds-grey-50); vertical-align: top; color: var(--nds-grey-700); }
+
 /* A change of governing target is a bid write — the rule marks where each one falls. */
 .h10-n24-t tr.chg td { border-top: 1px solid var(--nds-grey-150); }
-.h10-n24-t td.hr { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
-.h10-n24-t td.hr b { color: var(--nds-grey-900); font-weight: 800; }
-.h10-n24-t td.hr em { display: block; font-style: normal; font-size: 10.5px; color: #9aa2ae; }
-.h10-n24-t td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
-.h10-n24-t td.tg em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
-.h10-n24-t td.tg em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
-.h10-n24-t td.tg .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
+.h10-n24-t td:nth-child(1) { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
+.h10-n24-t td:nth-child(1) b { color: var(--nds-grey-900); font-weight: 800; }
+.h10-n24-t td:nth-child(1) em { display: block; font-style: normal; font-size: 10.5px; color: #9aa2ae; }
+.h10-n24-t td:nth-child(2) i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
+.h10-n24-t td:nth-child(2) em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
+.h10-n24-t td:nth-child(2) em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
+.h10-n24-t td:nth-child(2) .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
 .h10-n24-t .none { color: var(--nds-grey-400); }
-.h10-n24-t td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
-.h10-n24-t td.bd .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
-.h10-n24-t td.bd .hold, .h10-n24-t td.bd .sup { white-space: nowrap; }
-.h10-n24-t td.bd .chase b { font-weight: 700; }
-.h10-n24-t td.bd .chase.risk { color: var(--nds-note-error-fg); }
+.h10-n24-t td:nth-child(3) .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
+.h10-n24-t td:nth-child(3) .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
+.h10-n24-t td:nth-child(3) .hold, .h10-n24-t td:nth-child(3) .sup { white-space: nowrap; }
+.h10-n24-t td:nth-child(3) .chase b { font-weight: 700; }
+.h10-n24-t td:nth-child(3) .chase.risk { color: var(--nds-note-error-fg); }
 /* MB.6 — this hour's climb stops at the CPC ceiling, not at the target's own Ceiling. Its own
    line: inside the nowrap .chase span it pushed the cell over its column. */
-.h10-n24-t td.bd .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
-.h10-n24-t td.bd .sup { color: var(--nds-grey-500); }
-.h10-n24-t td.gd { color: var(--nds-pill-neutral-fg); }
-.h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }
-.h10-n24-t td.gd .ao { color: var(--nds-note-error-fg); font-weight: 700; }
-.h10-n24-t td.gd .bad { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t td:nth-child(3) .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
+.h10-n24-t td:nth-child(3) .sup { color: var(--nds-grey-500); }
+.h10-n24-t td:nth-child(4) { color: var(--nds-pill-neutral-fg); }
+.h10-n24-t td:nth-child(4) span { display: block; font-size: 11px; white-space: nowrap; }
+.h10-n24-t td:nth-child(4) .ao { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t td:nth-child(4) .bad { color: var(--nds-note-error-fg); font-weight: 700; }
 
 /* RDX/E2 — the fit block when there is not enough evidence to state a share. No big number,
    because the whole point is that there is no number worth showing. */
@@ -3178,9 +3180,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* the ASIN table — dense and quiet, it is read-only */
 .h10-kt-drtable { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.h10-kt-drtable th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--nds-grey-150); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-muted); }
+
 .h10-kt-drtable th.n, .h10-kt-drtable td.n { text-align: right; font-variant-numeric: tabular-nums; }
-.h10-kt-drtable td { padding: 6px 8px; border-bottom: 1px solid var(--nds-grey-75); color: var(--nds-grey-900); }
+
 .h10-kt-drtable td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-grey-600); }
 .h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-success-text); background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
 .h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-warning-text); background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
@@ -3992,8 +3994,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt6-det { margin: 0 0 10px; }
 .h10-kt6-det summary { font-size: 11px; font-weight: 700; color: #1a5fbe; cursor: pointer; }
 .h10-kt6-tbl { width: 100%; border-collapse: collapse; margin-top: 7px; font-size: 10.5px; }
-.h10-kt6-tbl th { text-align: left; padding: 4px 6px; font-weight: 700; color: var(--nds-grey-600); border-bottom: 1px solid #dde4ec; white-space: nowrap; }
-.h10-kt6-tbl td { padding: 4px 6px; color: var(--nds-grey-900); border-bottom: 1px solid var(--nds-grey-100); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.h10-kt6-tbl td { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
 .h10-kt6-tbl th.n, .h10-kt6-tbl td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .h10-kt6-trunc { margin: 6px 0 0; font-size: 10.5px; color: var(--nds-grey-600); }
 
@@ -4422,8 +4424,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-limiterr { display: flex; align-items: center; gap: 6px; color: #b42318; font-size: 12.5px; }
 .h10-au-limitempty { margin: 0 0 10px; font-size: 12.5px; color: var(--nds-text-muted); }
 .h10-au-limittbl { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
-.h10-au-limittbl th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); padding: 4px 10px 6px 0; border-bottom: 1px solid var(--nds-grey-150); }
-.h10-au-limittbl td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--nds-grey-100); color: var(--nds-grey-900); }
+
+
 .h10-au-limittbl tr.off td { color: var(--nds-grey-450); }
 .h10-au-limittbl td i { font-style: normal; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
 /* DS-ALIGN — `ToolbarButton tone="danger"`, whose red hover is the cue. */
@@ -4443,8 +4445,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-evchip em { font-style: normal; color: var(--nds-text-muted); }
 .h10-au-evchip em.bad { color: #b42318; font-weight: 700; }
 .h10-au-ledgertbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.h10-au-ledgertbl th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); padding: 4px 10px 6px 0; border-bottom: 1px solid var(--nds-grey-150); }
-.h10-au-ledgertbl td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--nds-grey-100); color: var(--nds-grey-900); vertical-align: top; }
+
+
 .h10-au-ledgertbl tr.undone td { color: var(--nds-grey-450); }
 .h10-au-ledgertbl td.noactor { color: #b42318; font-weight: 600; }
 .h10-au-ledgertbl .undonetag { font-style: normal; color: var(--nds-text-muted); }
@@ -4509,8 +4511,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd3-spark { margin: 0 0 10px; transform-origin: left top; }
 .h10-bd3-spark svg { width: 100%; height: 44px; }
 .h10-bd3-writes { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.h10-bd3-writes th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); padding: 3px 10px 5px 0; border-bottom: 1px solid var(--nds-grey-150); }
-.h10-bd3-writes td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--nds-grey-100); color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
+
+.h10-bd3-writes td { font-variant-numeric: tabular-nums; }
 .h10-bd3-writes tr.failed td { color: #b42318; }
 
 /* BID.S1 — the bidder band */
@@ -4545,9 +4547,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd8-cap { font-size: 11.5px; color: var(--nds-text-muted); margin-left: auto; }
 .h10-bd8-scroll { overflow-x: auto; }
 .h10-bd8-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.h10-bd8-tbl th { text-align: left; font-weight: 600; color: var(--nds-text-muted); font-size: 11.5px; padding: 4px 10px 6px 0; border-bottom: 1px solid var(--nds-grey-100); }
-.h10-bd8-tbl td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--nds-grey-50); color: #32404f; vertical-align: top; }
-.h10-bd8-tbl td.nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+
+.h10-bd8-tbl td:nth-child(1), .h10-bd8-tbl td:nth-child(4), .h10-bd8-tbl td:nth-child(6) { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .h10-bd8-tbl .t { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .h10-bd8-tbl tr.failed td { color: #b42318; }
 .h10-bd8-ref { margin-top: 14px; border-top: 1px solid var(--nds-grey-100); padding-top: 10px; }
@@ -4849,8 +4851,8 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* the per-campaign preview table */
 .h10-plc3-rows { max-height: 320px; overflow: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); }
 .h10-plc3-rows table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.h10-plc3-rows th { position: sticky; top: 0; z-index: 1; background: var(--nds-grey-25); text-align: left; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-600); padding: 7px 10px; border-bottom: 1px solid var(--nds-grey-150); }
-.h10-plc3-rows td { padding: 6px 10px; border-bottom: 1px solid var(--nds-grey-100); color: var(--nds-grey-900); vertical-align: top; }
+
+
 .h10-plc3-rows tr:last-child td { border-bottom: 0; }
 .h10-plc3-rows td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-plc3-rows .skip { padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; white-space: nowrap; }
@@ -5618,3 +5620,31 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    radius and padding as an inline `style` — the one place in this section a control was styled
    from JSX. It is the DS `Input` now; all that is left is its share of the row. */
 .h10-rtm-namefield { flex: 1; }
+
+/* ── PLC.3 — the bulk preview's three inline styles, named ────────────────────────────────────
+   The preview table is the DS `DataGrid` now, and a `Column.render` returning a `style={{…}}`
+   is how a hard-coded hex survives a token sweep. These three carry the same values the inline
+   styles did: #667080 is 5.01:1 on white and #7a4812 is 7.60:1, both already above the floor. */
+.h10-plc3-sub { color: var(--nds-text-muted); font-size: 10.5px; }
+.h10-plc3-nobody { color: #7a4812; }
+.h10-plc3-nobase { color: var(--nds-text-muted); }
+
+/* ── The ten tables that became the DS `DataGrid` ─────────────────────────────────────────────
+   Converting a `<table>` hands cell presentation to the DS, and quietly: `.h10-n24-t td` is
+   (0,1,1) and `.nds-grid tbody td` is (0,1,2), so the DS outranks every one of these wrappers
+   on padding, colour, borders, weight and white-space — 96 declarations across twenty blocks
+   were still written here and none of them reached the page. They are gone rather than
+   out-specified: one cell treatment across all ten tables is the point of the exercise, and the
+   DS header (11.5px/700, --nds-text-strong) replaces eight hand-rolled uppercase variants.
+   Only `vertical-align` had no DS stance — it split five tables top and five to the browser's
+   `middle`, which floats a sub-label away from the line it belongs to. Named once, for all ten;
+   logged in DS-GAPS as the one cell property `DataGrid` does not decide. */
+.h10-au-ledgertbl td,
+.h10-au-limittbl td,
+.h10-bd3-writes td,
+.h10-bd8-tbl td,
+.h10-hv-cmp td,
+.h10-kt-drtable td,
+.h10-kt6-tbl td,
+.h10-n24-t td,
+.h10-plc3-rows td { vertical-align: top; }

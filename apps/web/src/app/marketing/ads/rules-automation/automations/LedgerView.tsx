@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Listbox } from '@/design-system/components'
+import { DataGrid, Listbox } from '@/design-system/components'
 import { Checkbox } from '@/design-system/primitives'
 
 interface LedgerRow {
@@ -113,22 +113,21 @@ export function LedgerView() {
               </span>
             ))}
           </div>
-          <table className="h10-au-ledgertbl">
-            <thead><tr><th>When</th><th>Who</th><th>What</th><th>Entity</th><th>Change</th><th>Why</th><th>Status</th></tr></thead>
-            <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.id} className={r.rolledBackAt ? 'undone' : ''}>
-                  <td>{ago(r.createdAt)}</td>
-                  <td className={r.userId == null ? 'noactor' : ''}>{r.actorLabel}</td>
-                  <td>{r.actionType}</td>
-                  <td title={r.entityId}>{r.entityType.toLowerCase()}</td>
-                  <td>{changeText(r)}{r.rolledBackAt && <i className="undonetag"> undone</i>}</td>
-                  <td>{r.evidence ? <span title={JSON.stringify(r.evidence).slice(0, 300)}>recorded</span> : <i className="noev">no reason recorded</i>}</td>
-                  <td>{r.amazonResponseStatus ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataGrid
+            className="h10-au-ledgertbl"
+            rows={data.rows}
+            rowKey={(r) => r.id}
+            rowClassName={(r) => (r.rolledBackAt ? 'undone' : undefined)}
+            columns={[
+              { key: 'when', label: 'When', render: (r) => <>{ago(r.createdAt)}</> },
+              { key: 'who', label: 'Who', render: (r) => <span className={r.userId == null ? 'noactor' : undefined}>{r.actorLabel}</span> },
+              { key: 'what', label: 'What', render: (r) => <>{r.actionType}</> },
+              { key: 'entity', label: 'Entity', render: (r) => <span title={r.entityId}>{r.entityType.toLowerCase()}</span> },
+              { key: 'change', label: 'Change', render: (r) => <>{changeText(r)}{r.rolledBackAt && <i className="undonetag"> undone</i>}</> },
+              { key: 'why', label: 'Why', render: (r) => (r.evidence ? <span title={JSON.stringify(r.evidence).slice(0, 300)}>recorded</span> : <i className="noev">no reason recorded</i>) },
+              { key: 'status', label: 'Status', render: (r) => <>{r.amazonResponseStatus ?? '—'}</> },
+            ]}
+          />
           {data.rows.length === 0 && <p className="h10-au-limitempty">No writes match this filter in the window.</p>}
           <p className="h10-au-ledgerfoot">
             Undo lives beside each page&rsquo;s own change control (the Keyword Tracker drawer, a rule&rsquo;s history

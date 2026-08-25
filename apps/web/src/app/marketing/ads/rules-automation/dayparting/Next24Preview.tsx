@@ -17,6 +17,7 @@
  * a preview that paraphrased the engine would be free to drift from it.
  */
 import { useEffect, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { AlertTriangle, TrendingUp, CalendarClock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -60,6 +61,8 @@ interface Payload {
     events: Array<{ name: string; hours: number }>
   }
 }
+
+type PreviewRow = Row & { isNow: boolean; changed: boolean }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
@@ -164,76 +167,76 @@ export function Next24Preview({ groupId }: { groupId: string }) {
         )}
       </div>
 
-      <table className="h10-n24-t">
-        <thead>
-          <tr>
-            <th scope="col">Hour</th>
-            <th scope="col">Target</th>
-            <th scope="col">Bid</th>
-            <th scope="col">Guardrails</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.hours.map((h, i) => {
-            const changed = i > 0 && h.targetKey !== data.hours[i - 1].targetKey
-            return (
-              <tr key={h.at} className={changed ? 'chg' : undefined}>
-                <td className="hr">
-                  {/* Row 0 is the hour running right now, so the preview can be checked against
-                      live behaviour instead of having to be trusted. */}
-                  {i === 0 ? <b>now</b> : <span>{DAYS[h.dow]} {hh(h.hour)}</span>}
-                  {i === 0 && <em>{DAYS[h.dow]} {hh(h.hour)}</em>}
-                </td>
-                <td className="tg">
-                  {h.missingTarget ? (
-                    <span className="miss"><AlertTriangle size={12} /> {h.targetKey} — deleted</span>
-                  ) : h.targetName ? (
-                    <>
-                      <i style={h.color ? { background: h.color } : undefined} />
-                      <span>{h.targetName}</span>
-                      {h.source === 'baseline' && <em title="Not painted — this is the schedule’s baseline for the rest of the week">baseline</em>}
-                      {/* Per-row too, not just in the summary: with a hand-over mid-window the
-                          only way to see WHERE the plan changes is on the hour it changes. */}
-                      {h.eventName && <em className="evt" title={`The dated event “${h.eventName}” governs this hour instead of the weekly plan`}>{h.eventName}</em>}
-                    </>
-                  ) : (
-                    <span className="none">no target</span>
-                  )}
-                </td>
-                <td className="bd">
-                  {h.suppressed ? (
-                    <span className="sup">bids at ~2¢ floor</span>
-                  ) : h.floorPct == null ? (
-                    <span className="none">—</span>
-                  ) : h.canChase ? (
-                    /* "300% → 900%" rather than "300% → up to 900%": the arrow already carries
-                       "up to", and the longer phrasing wrapped across three lines in the column,
-                       which broke the vertical alignment the whole table depends on. */
-                    /* Green reads as "fine", which a climb WITHOUT a ceiling is not — an
-                       unbounded row would otherwise show a reassuring colour beside its own red
-                       "no ceiling" guardrail. A bounded climb stays green: that one IS fine. */
-                    <span className={h.unbounded ? 'chase risk' : 'chase'}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b></span>
-                  ) : (
-                    <span className="hold">hold {h.floorPct}%</span>
-                  )}
-                  {/* MB.6 — on its OWN line. Inside .chase (white-space: nowrap) it widened the
-                      cell past its column and overprinted the guardrail beside it. */}
-                  {h.cpcCapPct != null && !h.suppressed && (
-                    <span className="capd" title={`The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling stops this hour at ${h.cpcCapPct}% — the target itself would allow more`}>CPC-capped</span>
-                  )}
-                </td>
-                <td className="gd">
-                  {h.allOut && <span className="ao">all-out</span>}
-                  {h.maxCpcCents != null && <span>max {eur(h.maxCpcCents)}</span>}
-                  {h.acosCapPct != null && <span>ACoS ≤ {h.acosCapPct}%</span>}
-                  {h.unbounded && <span className="bad">no ceiling</span>}
-                  {!h.allOut && h.maxCpcCents == null && h.acosCapPct == null && !h.suppressed && h.floorPct != null && <span className="none">—</span>}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {/* `Column.render` is handed the row and nothing else, so the two facts that depend on
+          POSITION — row 0 is the hour running right now, and a row whose target differs from the
+          one above it starts a new stretch — are derived here and carried on the row. */}
+      <DataGrid<PreviewRow>
+        className="h10-n24-t"
+        rows={data.hours.map((h, i) => ({ ...h, isNow: i === 0, changed: i > 0 && h.targetKey !== data.hours[i - 1].targetKey }))}
+        rowKey={(h) => h.at}
+        rowClassName={(h) => (h.changed ? 'chg' : undefined)}
+        columns={[
+          {
+            key: 'hr', label: 'Hour', width: 84,
+            render: (h) => (<>
+              {h.isNow ? <b>now</b> : <span>{DAYS[h.dow]} {hh(h.hour)}</span>}
+              {h.isNow && <em>{DAYS[h.dow]} {hh(h.hour)}</em>}
+            </>),
+          },
+          {
+            key: 'tg', label: 'Target',
+            render: (h) => (h.missingTarget ? (
+              <span className="miss"><AlertTriangle size={12} /> {h.targetKey} — deleted</span>
+            ) : h.targetName ? (
+              <>
+                <i style={h.color ? { background: h.color } : undefined} />
+                <span>{h.targetName}</span>
+                {h.source === 'baseline' && <em title="Not painted — this is the schedule’s baseline for the rest of the week">baseline</em>}
+                {/* Per-row too, not just in the summary: with a hand-over mid-window the
+                    only way to see WHERE the plan changes is on the hour it changes. */}
+                {h.eventName && <em className="evt" title={`The dated event “${h.eventName}” governs this hour instead of the weekly plan`}>{h.eventName}</em>}
+              </>
+            ) : (
+              <span className="none">no target</span>
+            )),
+          },
+          {
+            key: 'bd', label: 'Bid', width: 118,
+            render: (h) => (<>
+              {h.suppressed ? (
+                <span className="sup">bids at ~2¢ floor</span>
+              ) : h.floorPct == null ? (
+                <span className="none">—</span>
+              ) : h.canChase ? (
+                /* "300% → 900%" rather than "300% → up to 900%": the arrow already carries
+                   "up to", and the longer phrasing wrapped across three lines in the column,
+                   which broke the vertical alignment the whole table depends on. */
+                /* Green reads as "fine", which a climb WITHOUT a ceiling is not — an
+                   unbounded row would otherwise show a reassuring colour beside its own red
+                   "no ceiling" guardrail. A bounded climb stays green: that one IS fine. */
+                <span className={h.unbounded ? 'chase risk' : 'chase'}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b></span>
+              ) : (
+                <span className="hold">hold {h.floorPct}%</span>
+              )}
+              {/* MB.6 — on its OWN line. Inside .chase (white-space: nowrap) it widened the
+                  cell past its column and overprinted the guardrail beside it. */}
+              {h.cpcCapPct != null && !h.suppressed && (
+                <span className="capd" title={`The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling stops this hour at ${h.cpcCapPct}% — the target itself would allow more`}>CPC-capped</span>
+              )}
+            </>),
+          },
+          {
+            key: 'gd', label: 'Guardrails', width: 108,
+            render: (h) => (<>
+              {h.allOut && <span className="ao">all-out</span>}
+              {h.maxCpcCents != null && <span>max {eur(h.maxCpcCents)}</span>}
+              {h.acosCapPct != null && <span>ACoS ≤ {h.acosCapPct}%</span>}
+              {h.unbounded && <span className="bad">no ceiling</span>}
+              {!h.allOut && h.maxCpcCents == null && h.acosCapPct == null && !h.suppressed && h.floorPct != null && <span className="none">—</span>}
+            </>),
+          },
+        ]}
+      />
     </div>
   )
 }

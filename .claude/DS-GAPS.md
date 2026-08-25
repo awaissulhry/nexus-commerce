@@ -161,3 +161,33 @@
 - `DateField` formats dd/mm/yyyy (en-GB, hard-coded) and the ads console renders m/d/yyyy. Adopting it on the campaign's start/end dates would silently reinterpret every date on the page — 08/09 means two different days in the two formats — so the hand-rolled calendar stays until the component takes a format. — apps/web/src/design-system/components/DateField.tsx:25
 - 🔴 `Stepper`'s new `onSelect` changes a step's AXIS. `.nds-step` is `flex-direction: column`, and a selectable step wraps its badge and label in `.nds-step-hit`, which is `flex-direction: row` — so inside ONE bar a completed (clickable) step reads badge-beside-label and an upcoming (inert) one reads badge-above-label. Measured on /marketing/ads/campaign-builder/quick with the four-step bar converted: step 0 badge y=105 label y=110 (row), step 1 badge y=105 label y=138 (stacked), and the bar grew 47px → 68px. The three builders the `onSelect` note names still cannot adopt it; the conversion is written and reverted, waiting on this. — apps/web/src/design-system/components/Stepper.tsx:50, styles/components.css `.nds-step`
 - `StepperStep.label` is `string`, so a step cannot carry sub-steps. Two of the five builders nest a `.h10-scb-substeps` list inside the active step's label (Guided step 2, Single step 1) and would lose it. — apps/web/src/design-system/components/Stepper.tsx:20
+
+## `DataGrid` — `Column` carries no per-cell `className`, and `td` has no `vertical-align`
+*Session 1 · ROUND 2 · 2026-08-26 · found converting ten `<table>`s in `rules-automation/`*
+
+Two things surfaced together while converting this half's tables, both about the cell.
+
+**1. `Column` has no `className`.** `Column<T>` is `{ key, label, render, align, sortable,
+sortValue, sticky, stickyRight, width, total }`. A hand-rolled table routinely puts a class on the
+`<td>` — `td.nw` for `white-space: nowrap; font-variant-numeric: tabular-nums`, `td.hr` for a
+column's own colour — and there is nowhere for it to land. `align` and `width` cover two of the
+common cases; the rest has to become `:nth-child(n)` in app CSS, which is the same fact written
+less legibly. Two tables here needed it (`h10-n24-t`, `h10-bd8-tbl`, 7 cells between them).
+Suggested: `className?: string` on `Column`, joined onto the `<td>` beside `alignClass`/`stickyCls`.
+
+**2. `.nds-grid tbody td` sets no `vertical-align`, so it falls to `middle`.** The DS td block
+sets background, border-bottom, padding, color, font-weight and white-space — a complete cell
+treatment except this one property. It matters because a converted table often stacks a second
+line inside a cell (a sub-label under a campaign name, an evidence line under a reason), and
+`middle` floats the first line away from the row it belongs to. Measured on the ten tables
+converted here: five had asked for `vertical-align: top` and five had not, so after conversion the
+same console rendered both. Suggested: `vertical-align: top` on `.nds-grid tbody td` — the only
+value that is stable when any one cell in a row wraps.
+
+**Worth stating alongside these:** the conversion is *silently* a handover. `.h10-n24-t td` is
+(0,1,1) and `.nds-grid tbody td` is (0,1,2), so the DS outranks the app wrapper on every property
+it sets, even though app CSS loads later. Across these ten tables **96 declarations in twenty
+`.X th` / `.X td` blocks** were still written and none of them reached the page — including eight
+separate hand-rolled uppercase header treatments. That is the alignment working, but nothing in
+the DataGrid docblock says it will happen, and a stylesheet left un-swept afterwards reads as
+though those rules are still live.

@@ -57,6 +57,7 @@
  * prevent.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -363,51 +364,44 @@ export function BidTargetDrawer({ targetId, row, loading = false, onClose }: {
                   />
                 )}
 
-                <table className="h10-bd3-writes">
-                  <thead>
-                    <tr><th>When</th><th>Change</th><th>Who</th><th>Why</th><th>Landed</th></tr>
-                  </thead>
-                  <tbody>
-                    {[...shown].reverse().map((w) => (
-                      <tr key={w.id} className={w.delivery?.state === 'FAILED' ? 'failed' : ''}>
-                        <td>{when(w.at)}</td>
-                        <td className="num">
-                          {w.oldValue != null && Number.isFinite(Number(w.oldValue)) ? `${eur(Number(w.oldValue))} → ` : ''}
-                          {eur(Number(w.newValue))}
-                        </td>
-                        <td title={`${w.origin.kind} · ${w.source}`}>{w.origin.name}</td>
-                        <td>
-                          {w.reason ?? <em className="h10-bd3-mut">not recorded</em>}
-                          {/* Evidence sits on 81 of 23,705 rows account-wide. Absent is NORMAL and
-                              must not render as an error; present, sampleSize matters most —
-                              a decision resting on 1 day of data where the account has 56 should
-                              say so on its face. */}
-                          {w.evidence && (
-                            <i className="h10-bd3-ev" title={JSON.stringify(w.evidence)}>
-                              {Object.entries(w.evidence).slice(0, 3).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}
-                            </i>
-                          )}
-                        </td>
-                        <td>
-                          {w.delivery == null
-                            ? <span className="h10-bd3-mut" title="No delivery row was recorded for this change. That is not the same as success.">no record</span>
-                            : w.delivery.state === 'APPLIED' ? 'yes'
-                              : w.delivery.state === 'FAILED'
-                                ? <b className="bad" title={w.delivery.lastError ?? 'Recorded here and never accepted by Amazon — the bid did not move.'}>no</b>
-                                : w.delivery.state.toLowerCase()}
-                          {/* §7 — the STATE, not a button. S4 wires the write, alongside the grace
-                              window, so every write on this page arrives through one reviewed path.
-                              A disabled control would be its own kind of lie. */}
-                          {w.undoable
-                            ? <i className="h10-bd3-undo ok" title="This change can still be reversed. The control arrives with the staged tray in S4.">undoable</i>
-                            : w.undoBlockedReason
-                              ? <i className="h10-bd3-undo" title={w.undoBlockedReason}>not undoable</i>
-                              : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataGrid
+                  className="h10-bd3-writes"
+                  rows={[...shown].reverse()}
+                  rowKey={(w) => w.id}
+                  rowClassName={(w) => (w.delivery?.state === 'FAILED' ? 'failed' : undefined)}
+                  columns={[
+                    { key: 'when', label: 'When', render: (w) => <>{when(w.at)}</> },
+                    { key: 'change', label: 'Change', align: 'right', render: (w) => (<>
+                      {w.oldValue != null && Number.isFinite(Number(w.oldValue)) ? `${eur(Number(w.oldValue))} → ` : ''}
+                      {eur(Number(w.newValue))}
+                    </>) },
+                    { key: 'who', label: 'Who', render: (w) => <span title={`${w.origin.kind} · ${w.source}`}>{w.origin.name}</span> },
+                    { key: 'why', label: 'Why', render: (w) => (<>
+                      {w.reason ?? <em className="h10-bd3-mut">not recorded</em>}
+                      {/* Evidence sits on 81 of 23,705 rows account-wide. Absent is NORMAL and must
+                          not render as an error; present, sampleSize matters most. */}
+                      {w.evidence && (
+                        <i className="h10-bd3-ev" title={JSON.stringify(w.evidence)}>
+                          {Object.entries(w.evidence).slice(0, 3).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}
+                        </i>
+                      )}
+                    </>) },
+                    { key: 'landed', label: 'Landed', render: (w) => (<>
+                      {w.delivery == null
+                        ? <span className="h10-bd3-mut" title="No delivery row was recorded for this change. That is not the same as success.">no record</span>
+                        : w.delivery.state === 'APPLIED' ? 'yes'
+                          : w.delivery.state === 'FAILED'
+                            ? <b className="bad" title={w.delivery.lastError ?? 'Recorded here and never accepted by Amazon — the bid did not move.'}>no</b>
+                            : w.delivery.state.toLowerCase()}
+                      {/* §7 — the STATE, not a button. A disabled control would be its own kind of lie. */}
+                      {w.undoable
+                        ? <i className="h10-bd3-undo ok" title="This change can still be reversed. The control arrives with the staged tray in S4.">undoable</i>
+                        : w.undoBlockedReason
+                          ? <i className="h10-bd3-undo" title={w.undoBlockedReason}>not undoable</i>
+                          : null}
+                    </>) },
+                  ]}
+                />
               </>
             )}
           </section>
