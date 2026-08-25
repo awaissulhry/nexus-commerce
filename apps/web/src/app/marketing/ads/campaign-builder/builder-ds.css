@@ -44,3 +44,32 @@
    failure. Dropping the class lets the DS paint it at 5.91:1; all the class was
    really carrying is this margin. */
 .spw-tabs { margin-bottom: 14px; }
+
+/* ── replicate review toolbar ──────────────────────────────────────────────
+   The four controls below moved to the DS. Their old paint lives in ads.css as
+   DESCENDANT rules (`.h10-rep-toolbar .views button`, `.h10-rep-chips button`,
+   `.h10-rep-tblbar button`) — (0,1,1), which outranks `.nds-btn` (0,1,0) and would
+   repaint every one of them. ads.css is another session's file, so the containers
+   are renamed here instead: the old selectors then match nothing at all. */
+.rep-views { flex: none; }
+.rep-views .n { font-size: 11px; opacity: 0.85; }
+.rep-chg { flex: none; }
+.rep-chips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 9px 12px; border-bottom: 1px solid var(--nds-grey-100); }
+.rep-tblbar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 12px; color: var(--nds-text-2); border-bottom: 1px solid var(--nds-grey-100); }
+.rep-tblbar .grow { flex: 1; }
+
+/* ── replicate: the three toggle groups and the step-1 subnav ──────────────
+   Same escape as the toolbar above — `.h10-rep-policy .modes button`,
+   `.h10-rep-market button` and `.h10-spw-subnav button` are ads.css descendant
+   rules that would repaint a DS control, so the containers are renamed and only
+   their LAYOUT is restated here. Each engaged state rises: the three groups were
+   blue-600 on blue-50 (4.42:1), the subnav the same; the segmented track's raised
+   segment is --nds-text (15.48:1) and `tonal` is 7.41:1. */
+.rep-modes { align-self: flex-start; }
+.rep-policyval { max-width: 150px; }
+.rep-market { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+.rep-market .lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-600); margin-right: 4px; }
+/* `quiet` INHERITS its colour by design, so the resting tone belongs on the container —
+   without this the rail takes the page's near-black and every item reads as selected. */
+.rep-subnav { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 2px; color: var(--nds-text-2); }
+.rep-subnav .nds-btn { font-size: 13.5px; }

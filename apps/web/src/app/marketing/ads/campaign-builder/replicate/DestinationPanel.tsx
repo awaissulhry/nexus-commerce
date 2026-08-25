@@ -9,7 +9,7 @@
  * because it is deliberately suppressed. Copying that verbatim would replicate
  * the suppression. So "copy verbatim" is a choice here, not the only behaviour.
  */
-import { Input } from '@/design-system/primitives'
+import { Input, SegmentedControl } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -31,20 +31,24 @@ function PolicyControl({ label, hint, unit, policy, setPolicy }: {
   return (
     <div className="h10-rep-policy">
       <span className="lbl">{label}</span>
-      <div className="modes" role="group" aria-label={label}>
-        {modes.map((m) => (
-          <button key={m.k} type="button" className={policy.mode === m.k ? 'on' : ''} aria-pressed={policy.mode === m.k}
-            onClick={() => setPolicy({ mode: m.k, value: m.k === 'scale' ? (policy.value || '100') : m.k === 'fixed' ? policy.value : '' })}>
-            {m.l}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="rep-modes"
+        size="sm"
+        ariaLabel={label}
+        value={policy.mode}
+        onChange={(k) => setPolicy({ mode: k as PolicyMode, value: k === 'scale' ? (policy.value || '100') : k === 'fixed' ? policy.value : '' })}
+        options={modes.map((m) => ({ value: m.k, label: m.l }))}
+      />
       {policy.mode !== 'copy' && (
-        <label className="val">
-          <input inputMode="decimal" value={policy.value} onChange={(e) => setPolicy({ ...policy, value: e.target.value })}
-            placeholder={policy.mode === 'scale' ? '100' : '0.00'} aria-label={`${label} value`} />
-          <span className="u">{policy.mode === 'scale' ? '%' : unit}</span>
-        </label>
+        <Input
+          fieldClassName="rep-policyval"
+          inputMode="decimal"
+          value={policy.value}
+          onChange={(e) => setPolicy({ ...policy, value: e.target.value })}
+          placeholder={policy.mode === 'scale' ? '100' : '0.00'}
+          aria-label={`${label} value`}
+          suffix={policy.mode === 'scale' ? '%' : unit}
+        />
       )}
       <span className="hint">{hint}</span>
     </div>
@@ -68,11 +72,14 @@ export function DestinationPanel({
       <div className="h10-rep-destrow">
         <div className="h10-rep-policy">
           <span className="lbl">Create in</span>
-          <div className="modes" role="group" aria-label="Destination marketplace">
-            {MARKETS.map((m) => (
-              <button key={m} type="button" className={market === m ? 'on' : ''} aria-pressed={market === m} onClick={() => setMarket(m)}>{m}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            className="rep-modes"
+            size="sm"
+            ariaLabel="Destination marketplace"
+            value={market}
+            onChange={setMarket}
+            options={MARKETS.map((m) => ({ value: m, label: m }))}
+          />
           <span className="hint">The self-competition check runs against the campaigns already live in this market.</span>
         </div>
         <div className="h10-rep-policy">

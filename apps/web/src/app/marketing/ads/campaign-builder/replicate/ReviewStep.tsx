@@ -27,7 +27,7 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Layers, Trash2, RotateCcw,
   Search, SlidersHorizontal, Check, X,
 } from 'lucide-react'
-import { Button, ToolbarButton } from '@/design-system/primitives'
+import { Button, FilterChip, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid } from '@/design-system/components'
 import { InfoTip } from '../../campaigns/InfoTip'
 import {
@@ -271,30 +271,31 @@ export function ReviewStep({
         {/* ── working pane ─────────────────────────────────────────────── */}
         <div className="h10-rep-pane">
           <div className="h10-rep-toolbar">
-            <div className="views">
-              <InfoTip tip="Walk the plan campaign by campaign, and edit each one's budget, bidding and placements.">
-                <button type="button" className={!flat ? 'on' : ''} onClick={() => setFlat(false)}>Structure</button>
-              </InfoTip>
-              <InfoTip tip="Every target in the whole plan in one table, ignoring the structure — the only way to see all of something (all the conflicts, all the negatives) at once.">
-                <button type="button" className={flat ? 'on' : ''} onClick={() => setFlat(true)}>
-                  All targets <span className="n">{view.targets.length}</span>
-                </button>
-              </InfoTip>
-            </div>
+            <SegmentedControl
+              className="rep-views"
+              size="sm"
+              ariaLabel="Plan view"
+              value={flat ? 'flat' : 'structure'}
+              onChange={(v) => setFlat(v === 'flat')}
+              options={[
+                { value: 'structure', label: 'Structure', title: "Walk the plan campaign by campaign, and edit each one's budget, bidding and placements." },
+                { value: 'flat', label: <>All targets <span className="n">{view.targets.length}</span></>, title: 'Every target in the whole plan in one table, ignoring the structure — the only way to see all of something (all the conflicts, all the negatives) at once.' },
+              ]}
+            />
             <div className="h10-rep-search">
               <Search size={15} aria-hidden />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a keyword, ad group or campaign" aria-label="Filter the plan" />
               {q && <ToolbarButton size="sm" tooltip={false} icon={<X size={13} />} label="Clear search" title="Clear the search" style={{ position: 'absolute', right: 8 }} onClick={() => setQ('')} />}
             </div>
             <InfoTip tip="Everything you have changed from the source structure, each item individually reversible. Nothing here has reached Amazon.">
-              <button type="button" className={`h10-rep-chg ${changes.length ? 'on' : ''}`} onClick={() => setChangesOpen(true)}>
+              <Button variant={changes.length ? 'tonal' : 'secondary'} size="sm" className="rep-chg" onClick={() => setChangesOpen(true)}>
                 <SlidersHorizontal size={13} aria-hidden /> {countEdits(edits) || 'No'} change{countEdits(edits) === 1 ? '' : 's'}
-              </button>
+              </Button>
             </InfoTip>
           </div>
 
           {(flat || scope.kind !== 'all') && (
-            <div className="h10-rep-chips">
+            <div className="rep-chips">
               {FILTERS.map((f) => {
                 const n = f.key === 'conflicts' ? scopedRows.filter((r) => r.conflict).length
                   : f.key === 'dropped' ? scopedRows.filter((r) => r.removed).length
@@ -302,9 +303,7 @@ export function ReviewStep({
                 if ((f.key === 'conflicts' || f.key === 'dropped' || f.key === 'edited') && !n) return null
                 return (
                   <InfoTip key={f.key} tip={f.tip}>
-                    <button type="button" className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>
-                      {f.label}{n != null && <span className="n">{n}</span>}
-                    </button>
+                    <FilterChip pressed={filter === f.key} count={n ?? undefined} onClick={() => setFilter(f.key)}>{f.label}</FilterChip>
                   </InfoTip>
                 )
               })}
@@ -334,7 +333,7 @@ export function ReviewStep({
                 </InfoTip>
               )}
               <span className="grow" />
-              <button type="button" className="clr" onClick={() => setSel(new Set())}>Clear selection</button>
+              <Button variant="link" size="sm" onClick={() => setSel(new Set())}>Clear selection</Button>
             </div>
           )}
 
@@ -495,14 +494,14 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
   const total = campaigns.filter((c) => !c.removed).reduce((s, c) => s + c.dailyBudget, 0)
   return (
     <div className="h10-rep-tblwrap">
-      <div className="h10-rep-tblbar">
+      <div className="rep-tblbar">
         <span>Click a campaign to edit its bidding, placements and targets.</span>
         <span className="grow" />
         <InfoTip tip="Give every ad group default and every keyword in the plan the same bid. Floored at Amazon's €0.02 minimum.">
-          <button type="button" onClick={onBulkBid}>Set all bids</button>
+          <Button size="sm" onClick={onBulkBid}>Set all bids</Button>
         </InfoTip>
         <InfoTip tip="Give every campaign in the plan the same daily budget. The total at the bottom is what the replication commits per day.">
-          <button type="button" onClick={onBulkBudget}>Set all budgets</button>
+          <Button size="sm" onClick={onBulkBudget}>Set all budgets</Button>
         </InfoTip>
       </div>
       <DataGrid<CampaignView>

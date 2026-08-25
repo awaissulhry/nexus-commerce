@@ -20,7 +20,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Info, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button, SegmentedControl } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -430,9 +430,9 @@ export function ReplicateBuilder() {
       <div className="h10-spw-body">
         {step === 1 && (
           <div className="h10-spw-s1">
-            <aside className="h10-spw-subnav" aria-label="Source and product sections">
+            <aside className="rep-subnav" aria-label="Source and product sections">
               {S1_SECTIONS.map((s) => (
-                <button key={s.id} type="button" className={activeSec === s.id ? 'on' : ''} onClick={() => gotoSec(s.id)}>{s.label}</button>
+                <Button key={s.id} variant={activeSec === s.id ? 'tonal' : 'quiet'} block onClick={() => gotoSec(s.id)}>{s.label}</Button>
               ))}
             </aside>
             <div className="h10-spw-s1main">
@@ -442,11 +442,15 @@ export function ReplicateBuilder() {
                   Choose what to copy. Tick a whole portfolio, individual campaigns, or single ad groups —
                   an ad group brings its campaign with it, because Amazon has no ad group without one.
                 </p>
-                <div className="h10-rep-market" role="group" aria-label="Source marketplace">
+                <div className="rep-market">
                   <span className="lbl"><Info size={13} aria-hidden /> Reading from</span>
-                  {MARKETS.map((m) => (
-                    <button key={m} type="button" className={sourceMarket === m ? 'on' : ''} onClick={() => setSourceMarket(m)} aria-pressed={sourceMarket === m}>{m}</button>
-                  ))}
+                  <SegmentedControl
+                    size="sm"
+                    ariaLabel="Source marketplace"
+                    value={sourceMarket}
+                    onChange={setSourceMarket}
+                    options={MARKETS.map((m) => ({ value: m, label: m }))}
+                  />
                 </div>
                 <SourcePicker
                   market={sourceMarket} selected={selectedAdGroups} setSelected={setSelectedAdGroups} onChange={onSource}
