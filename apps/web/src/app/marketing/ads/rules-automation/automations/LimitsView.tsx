@@ -16,7 +16,7 @@ import { AlertTriangle, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { ScopeOptions } from './ScopeForm'
-import { Listbox } from '@/design-system/components'
+import { DataGrid, Listbox } from '@/design-system/components'
 
 interface Ceiling {
   id: string
@@ -147,26 +147,21 @@ export function LimitsView({ scopeOptions, global }: {
           <p className="h10-au-limitempty">No ceilings exist yet — nothing is refused on spend at any scope. Add the first one below.</p>
         )}
         {ceilings && ceilings.length > 0 && (
-          <table className="h10-au-limittbl">
-            <thead><tr><th>Scope</th><th>Grain</th><th>Daily cap</th><th>On</th><th aria-label="actions" /></tr></thead>
-            <tbody>
-              {ceilings.map((c) => (
-                <tr key={c.id} className={c.enabled ? '' : 'off'}>
-                  <td>{c.label}</td>
-                  <td>{GRAIN_WORD[c.grain]}</td>
-                  <td>{c.dailyCapCents == null
-                    ? <i title="Opened but not set — resolves to NO_CEILING; it does NOT mean unlimited.">not set</i>
-                    : eur(c.dailyCapCents)}</td>
-                  <td>
-                    <Toggle checked={c.enabled} aria-label={`Ceiling for ${c.label}`} disabled={busy} onClick={() => void toggle(c)} />
-                  </td>
-                  <td>
-                    <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} aria-hidden />} label={`Delete ceiling for ${c.label}`} tooltip={false} disabled={busy} onClick={() => void remove(c)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataGrid<Ceiling>
+            className="h10-au-limittbl"
+            rows={ceilings}
+            rowKey={(c) => c.id}
+            rowClassName={(c) => (c.enabled ? undefined : 'off')}
+            columns={[
+              { key: 'scope', label: 'Scope', render: (c) => <>{c.label}</> },
+              { key: 'grain', label: 'Grain', render: (c) => <>{GRAIN_WORD[c.grain]}</> },
+              { key: 'cap', label: 'Daily cap', align: 'right', render: (c) => (c.dailyCapCents == null
+                ? <i title="Opened but not set — resolves to NO_CEILING; it does NOT mean unlimited.">not set</i>
+                : <>{eur(c.dailyCapCents)}</>) },
+              { key: 'on', label: 'On', render: (c) => <Toggle checked={c.enabled} aria-label={`Ceiling for ${c.label}`} disabled={busy} onClick={() => void toggle(c)} /> },
+              { key: 'actions', label: '', render: (c) => <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} aria-hidden />} label={`Delete ceiling for ${c.label}`} tooltip={false} disabled={busy} onClick={() => void remove(c)} /> },
+            ]}
+          />
         )}
         <div className="h10-au-limitadd">
           <Listbox width={150} options={(['MARKET', 'PORTFOLIO', 'LINE', 'CAMPAIGN'] as const).map((g) => ({ value: g, label: GRAIN_WORD[g] }))} value={grain} onChange={(v) => { setGrain(v as Ceiling['grain']); setScopeId('') }} ariaLabel="Ceiling grain" />

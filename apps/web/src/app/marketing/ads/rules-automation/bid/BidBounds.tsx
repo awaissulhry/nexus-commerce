@@ -30,7 +30,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 import type { BidSlotProps } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
-import { Listbox } from '@/design-system/components'
+import { DataGrid, Listbox } from '@/design-system/components'
 
 interface BidPolicy {
   id: string
@@ -146,20 +146,19 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
       {note && <p className="h10-bud2-ok" role="status"><Check size={13} aria-hidden /> {note}</p>}
 
       {policies && policies.length > 0 && (
-        <table className="h10-au-limittbl">
-          <thead><tr><th>Scope</th><th>Grain</th><th>Floor</th><th>Ceiling</th><th aria-label="actions" /></tr></thead>
-          <tbody>
-            {policies.map((p) => (
-              <tr key={p.id} className={p.enabled ? '' : 'off'}>
-                <td>{p.label}</td>
-                <td>{GRAIN_WORD[p.grain]}</td>
-                <td>{p.minBidCents != null ? eur(p.minBidCents) : '—'}</td>
-                <td>{p.maxBidCents != null ? eur(p.maxBidCents) : '—'}</td>
-                <td><ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} aria-hidden />} label={`Delete the bound for ${p.label}`} tooltip={false} disabled={busy} onClick={() => void removePolicy(p)} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataGrid<BidPolicy>
+          className="h10-au-limittbl"
+          rows={policies}
+          rowKey={(p) => p.id}
+          rowClassName={(p) => (p.enabled ? undefined : 'off')}
+          columns={[
+            { key: 'scope', label: 'Scope', render: (p) => <>{p.label}</> },
+            { key: 'grain', label: 'Grain', render: (p) => <>{GRAIN_WORD[p.grain]}</> },
+            { key: 'floor', label: 'Floor', align: 'right', render: (p) => <>{p.minBidCents != null ? eur(p.minBidCents) : '—'}</> },
+            { key: 'ceiling', label: 'Ceiling', align: 'right', render: (p) => <>{p.maxBidCents != null ? eur(p.maxBidCents) : '—'}</> },
+            { key: 'actions', label: '', render: (p) => <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} aria-hidden />} label={`Delete the bound for ${p.label}`} tooltip={false} disabled={busy} onClick={() => void removePolicy(p)} /> },
+          ]}
+        />
       )}
       {policies && policies.length === 0 && (
         <p className="h10-au-limitempty">No broad-grain bounds exist yet — only per-campaign bands (set below) bind.</p>

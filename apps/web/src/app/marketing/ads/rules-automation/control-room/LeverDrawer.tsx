@@ -34,6 +34,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, ToolbarButton } from '@/design-system/primitives'
 import { X, Play, AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DataGrid, type Column } from '@/design-system/components'
 
 interface EngineRun {
   id: string
@@ -76,6 +77,34 @@ const dur = (ms: number | null) => {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
   return `${Math.round(ms / 60_000)}m`
 }
+
+/** The engine's run log and its evidence, as DS `DataGrid` columns. */
+const RUN_COLUMNS: Array<Column<EngineRun>> = [
+  { key: 'when', label: 'When', render: (r) => (<>{when(r.startedAt)}{r.triggeredBy === 'manual' && <span className="acr-dw-manual">by hand</span>}</>) },
+  { key: 'status', label: 'Status', render: (r) => <span className={`acr-dw-st ${r.status.toLowerCase()}`}>{r.status}</span> },
+  { key: 'took', label: 'Took', align: 'right', render: (r) => <>{dur(r.durationMs)}</> },
+  { key: 'output', label: 'Output', render: (r) => <span className="acr-dw-sum">{r.summary ?? '—'}</span> },
+]
+
+const EVIDENCE_COLUMNS: Array<Column<EvidenceRow>> = [
+  { key: 'when', label: 'When', render: (e) => <>{when(e.at)}</> },
+  { key: 'action', label: 'Action', render: (e) => <span className="acr-dw-act">{e.actionType}</span> },
+  {
+    key: 'campaign', label: 'Campaign',
+    render: (e) => (
+      <span className="acr-dw-ent" title={e.campaignName ?? e.entityId ?? undefined}>
+        {e.campaignName ?? e.entityId ?? '—'}
+        {e.reason && <span className="acr-dw-why">{e.reason}</span>}
+      </span>
+    ),
+  },
+  {
+    key: 'result', label: 'Result',
+    render: (e) => (
+      <span className={`acr-dw-st ${e.status === 'SUCCESS' ? 'success' : e.status === 'FAILED' ? 'failed' : ''}`}>{e.status ?? '—'}</span>
+    ),
+  },
+]
 
 export function LeverDrawer({ engine, onClose, onRan }: {
   engine: { key: string; name: string; what: string; cron: string | null; mode: string }
@@ -195,26 +224,13 @@ export function LeverDrawer({ engine, onClose, onRan }: {
                   : 'It is not off, which is worth a look.'}
               </div>
             ) : (
-              <div className="acr-dw-scroll">
-                <table className="acr-dw-tbl">
-                  <thead>
-                    <tr><th>When</th><th>Status</th><th>Took</th><th>Output</th></tr>
-                  </thead>
-                  <tbody>
-                    {d.runs.map((r) => (
-                      <tr key={r.id} className={r.status === 'FAILED' ? 'bad' : undefined}>
-                        <td className="nowrap">
-                          {when(r.startedAt)}
-                          {r.triggeredBy === 'manual' && <span className="acr-dw-manual">by hand</span>}
-                        </td>
-                        <td><span className={`acr-dw-st ${r.status.toLowerCase()}`}>{r.status}</span></td>
-                        <td className="nowrap">{dur(r.durationMs)}</td>
-                        <td className="acr-dw-sum">{r.summary ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataGrid<EngineRun>
+                className="acr-dw-tbl"
+                rows={d.runs}
+                rowKey={(r) => r.id}
+                rowClassName={(r) => (r.status === 'FAILED' ? 'bad' : undefined)}
+                columns={RUN_COLUMNS}
+              />
             )}
 
             {/* ── evidence ── */}
@@ -227,30 +243,12 @@ export function LeverDrawer({ engine, onClose, onRan }: {
               // is not an engine that failed to write any.
               <div className="acr-dw-none">{d.evidenceNote ?? 'Nothing recorded.'}</div>
             ) : (
-              <div className="acr-dw-scroll">
-                <table className="acr-dw-tbl">
-                  <thead>
-                    <tr><th>When</th><th>Action</th><th>Campaign</th><th>Result</th></tr>
-                  </thead>
-                  <tbody>
-                    {d.evidence.map((e) => (
-                      <tr key={e.id}>
-                        <td className="nowrap">{when(e.at)}</td>
-                        <td className="acr-dw-act">{e.actionType}</td>
-                        <td className="acr-dw-ent" title={e.campaignName ?? e.entityId ?? undefined}>
-                          {e.campaignName ?? e.entityId ?? '—'}
-                          {e.reason && <span className="acr-dw-why">{e.reason}</span>}
-                        </td>
-                        <td>
-                          <span className={`acr-dw-st ${e.status === 'SUCCESS' ? 'success' : e.status === 'FAILED' ? 'failed' : ''}`}>
-                            {e.status ?? '—'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataGrid<EvidenceRow>
+                className="acr-dw-tbl"
+                rows={d.evidence}
+                rowKey={(e) => e.id}
+                columns={EVIDENCE_COLUMNS}
+              />
             )}
           </>}
         </div>

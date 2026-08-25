@@ -51,6 +51,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
@@ -324,20 +325,18 @@ export function BidAction({
               <summary>
                 Show the {p.changing.targets} target{p.changing.targets === 1 ? '' : 's'} that would change
               </summary>
-              <table className="h10-kt6-tbl">
-                <thead><tr><th>Campaign</th><th>Match</th><th className="n">Now</th><th className="n">Proposed</th><th className="n">Cap</th></tr></thead>
-                <tbody>
-                  {p.sampleTargets.map((t) => (
-                    <tr key={t.id}>
-                      <td title={t.campaignName}>{t.campaignName}</td>
-                      <td>{t.matchType.toLowerCase()}</td>
-                      <td className="n">{eur(t.fromCents)}</td>
-                      <td className="n"><b>{eur(t.toCents)}</b></td>
-                      <td className="n">{eur(t.maxBidCents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataGrid
+                className="h10-kt6-tbl"
+                rows={p.sampleTargets}
+                rowKey={(t) => t.id}
+                columns={[
+                  { key: 'campaign', label: 'Campaign', render: (t) => <span title={t.campaignName}>{t.campaignName}</span> },
+                  { key: 'match', label: 'Match', render: (t) => <>{t.matchType.toLowerCase()}</> },
+                  { key: 'now', label: 'Now', align: 'right', render: (t) => <>{eur(t.fromCents)}</> },
+                  { key: 'proposed', label: 'Proposed', align: 'right', render: (t) => <b>{eur(t.toCents)}</b> },
+                  { key: 'cap', label: 'Cap', align: 'right', render: (t) => <>{eur(t.maxBidCents)}</> },
+                ]}
+              />
               {p.sampleTargetsTruncated && (
                 <p className="h10-kt6-trunc">
                   The first 25 are listed; all {p.changing.targets} are recorded on the proposal itself.

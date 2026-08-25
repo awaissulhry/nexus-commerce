@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { AlertTriangle, ExternalLink, Mail, Eye, Send, CheckCircle2, Undo2, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -227,28 +228,13 @@ function ThisWeek({ d, onSend, sending, sent }: {
       )}
 
       {d.rules.length > 0 && (
-        <table className="acr-week-table">
-          <thead>
-            <tr>
-              <th>Rule</th><th>Mode</th>
-              <th className="n">Acted</th><th className="n">Proposed</th>
-              <th className="n">You applied</th><th className="n">You declined</th><th className="n">Failed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {d.rules.slice(0, 12).map((r) => (
-              <tr key={r.ruleId}>
-                <td>{r.name}</td>
-                <td><span className={`acr-mode ${r.level.toLowerCase()}`}>{r.level}</span></td>
-                <td className="n">{r.acted || '—'}</td>
-                <td className="n">{r.proposed || '—'}</td>
-                <td className="n">{r.applied || '—'}</td>
-                <td className="n">{r.denied || '—'}</td>
-                <td className={`n${r.failed > 0 ? ' bad' : ''}`}>{r.failed || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataGrid<DigestRule>
+          className="acr-week-table"
+          rows={d.rules.slice(0, 12)}
+          rowKey={(r) => r.ruleId}
+          rowClassName={(r) => (r.failed > 0 ? 'failed' : undefined)}
+          columns={WEEK_COLUMNS}
+        />
       )}
       {d.rules.length > 12 && (
         <p className="acr-week-note">{d.rules.length - 12} more rules ran this week; the twelve busiest are shown.</p>
@@ -297,6 +283,18 @@ function ThisWeek({ d, onSend, sending, sent }: {
     </section>
   )
 }
+
+/** The week rollup, as DS `DataGrid` columns. The failure count moves to a ROW class, because
+ *  `Column` styles a cell by `align` only — see the note in .claude/DS-GAPS.md. */
+const WEEK_COLUMNS: Array<Column<DigestRule>> = [
+  { key: 'rule', label: 'Rule', render: (r) => <>{r.name}</> },
+  { key: 'mode', label: 'Mode', render: (r) => <span className={`acr-mode ${r.level.toLowerCase()}`}>{r.level}</span> },
+  { key: 'acted', label: 'Acted', align: 'right', render: (r) => <>{r.acted || '—'}</> },
+  { key: 'proposed', label: 'Proposed', align: 'right', render: (r) => <>{r.proposed || '—'}</> },
+  { key: 'applied', label: 'You applied', align: 'right', render: (r) => <>{r.applied || '—'}</> },
+  { key: 'denied', label: 'You declined', align: 'right', render: (r) => <>{r.denied || '—'}</> },
+  { key: 'failed', label: 'Failed', align: 'right', render: (r) => <>{r.failed || '—'}</> },
+]
 
 export function ActivityTab() {
   const [rows, setRows] = useState<Change[] | null>(null)

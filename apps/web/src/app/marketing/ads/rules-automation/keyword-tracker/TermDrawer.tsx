@@ -31,6 +31,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { DataGrid } from '@/design-system/components'
 import { ToolbarButton } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
@@ -187,22 +188,20 @@ export function TermDrawer({
                   {h?.shareBound != null && <> · combined <b>≤{pct(h.shareBound)}</b> (an upper bound, not a total)</>}.
                   {data.asins.length > 1 && <> They are splitting one query’s impressions.</>}
                 </p>
-                <table className="h10-kt-drtable">
-                  <thead><tr><th>ASIN</th><th>Product</th><th className="n">Share</th><th className="n">Click share</th><th>On this term</th></tr></thead>
-                  <tbody>
-                    {data.asins.map((a) => (
-                      <tr key={a.asin}>
-                        <td className="mono">{a.asin}</td>
-                        <td>{a.name ? <span title={a.name}>{a.sku ? `${a.sku} — ` : ''}{a.name}</span> : <span className="h10-kt-nd">not in the PIM</span>}</td>
-                        <td className="n"><b>{pct(a.share)}</b></td>
-                        <td className="n">{a.clickShare > 0 ? pct(a.clickShare) : <span className="h10-kt-nd">—</span>}</td>
-                        <td>{a.advertisedOnTerm
-                          ? <span className="h10-kt-drok">advertised</span>
-                          : <span className="h10-kt-drno" title="This ASIN holds the query organically or via another campaign, but it is not in any ad group bidding this term.">not advertised on it</span>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataGrid
+                  className="h10-kt-drtable"
+                  rows={data.asins}
+                  rowKey={(a) => a.asin}
+                  columns={[
+                    { key: 'asin', label: 'ASIN', render: (a) => <span className="mono">{a.asin}</span> },
+                    { key: 'product', label: 'Product', render: (a) => (a.name ? <span title={a.name}>{a.sku ? `${a.sku} — ` : ''}{a.name}</span> : <span className="h10-kt-nd">not in the PIM</span>) },
+                    { key: 'share', label: 'Share', align: 'right', render: (a) => <b>{pct(a.share)}</b> },
+                    { key: 'clickshare', label: 'Click share', align: 'right', render: (a) => (a.clickShare > 0 ? <>{pct(a.clickShare)}</> : <span className="h10-kt-nd">—</span>) },
+                    { key: 'onterm', label: 'On this term', render: (a) => (a.advertisedOnTerm
+                      ? <span className="h10-kt-drok">advertised</span>
+                      : <span className="h10-kt-drno" title="This ASIN holds the query organically or via another campaign, but it is not in any ad group bidding this term.">not advertised on it</span>) },
+                  ]}
+                />
               </>
             )}
           </section>
