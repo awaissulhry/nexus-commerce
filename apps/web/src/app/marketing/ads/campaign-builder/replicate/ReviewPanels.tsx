@@ -37,7 +37,7 @@ export function CampaignSettings({ c, onBudget, onStrategy, onPlacement, onRenam
       <div className="hd">
         <div className="ttl">
           <InfoTip tip="Click to rename. Amazon refuses two campaigns with the same name — the preflight checks this before anything is created.">
-            <button type="button" className="nm" onClick={onRename}>{c.name}</button>
+            <Button variant="quiet" className="rep-nm" onClick={onRename}>{c.name}</Button>
           </InfoTip>
           <InfoTip tip={c.targetingType === 'AUTO'
             ? 'Amazon chooses what this campaign targets. It comes from the source structure and cannot be changed by a copy.'
@@ -107,7 +107,7 @@ export function AdGroupSettings({ g, allAsins, onBid, onAsins, onRename, onRemov
       <div className="hd">
         <div className="ttl">
           <Layers size={14} aria-hidden />
-          <InfoTip tip="Click to rename this ad group."><button type="button" className="nm" onClick={onRename}>{g.name}</button></InfoTip>
+          <InfoTip tip="Click to rename this ad group."><Button variant="quiet" className="rep-nm ag" onClick={onRename}>{g.name}</Button></InfoTip>
         </div>
         <div className="acts">
           <InfoTip tip="Add keywords or negatives of your own to this ad group. Anything you add goes through the same self-competition check as a copied keyword.">
@@ -132,18 +132,18 @@ export function AdGroupSettings({ g, allAsins, onBid, onAsins, onRename, onRemov
         <div className="fld">
           <span className="l">Products advertised here <InfoTip tip="One product ad per product. Narrow this when an ad group should not carry the whole selection." /></span>
           <InfoTip tip="Choose which of the products you picked in step 1 this ad group advertises. One product ad per product. An ad group with none is created with nothing to advertise.">
-            <button type="button" className="prodbtn" onClick={() => setProdOpen((o) => !o)}>
+            <Button variant="tonal" size="sm" className="rep-prodbtn" onClick={() => setProdOpen((o) => !o)} aria-expanded={prodOpen}>
               {g.asins.length} of {allAsins.length} selected products
-            </button>
+            </Button>
           </InfoTip>
         </div>
       </div>
 
       {prodOpen && (
         <div className="prodlist">
-          <div className="top">
-            <button type="button" title="Advertise every product you picked in step 1 in this ad group" onClick={() => onAsins([...allAsins])}>All</button>
-            <button type="button" title="Advertise none of them here — the ad group is created with nothing to advertise" onClick={() => onAsins([])}>None</button>
+          <div className="rep-prodacts">
+            <Button variant="link" size="xs" title="Advertise every product you picked in step 1 in this ad group" onClick={() => onAsins([...allAsins])}>All</Button>
+            <Button variant="link" size="xs" title="Advertise none of them here — the ad group is created with nothing to advertise" onClick={() => onAsins([])}>None</Button>
           </div>
           <div className="items">
             {allAsins.map((a) => (

@@ -13,7 +13,7 @@
  */
 import { type Dispatch, type SetStateAction, Fragment, useEffect, useState } from 'react'
 import { Info, Plus, X } from 'lucide-react'
-import { Button, Checkbox, TokenChip, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea, TokenChip, ToolbarButton } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import { Listbox } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'
@@ -66,7 +66,7 @@ function KeywordPopup({ initial, onApply, onClose }: { initial: string[]; onAppl
   const apply = () => { onApply(Array.from(new Set(text.split('\n').map((s) => s.trim()).filter(Boolean)))); onClose() }
   return (
     <div className="h10-spw-cs-pop" role="dialog" aria-label="Edit keywords" onClick={(e) => e.stopPropagation()}>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Please Enter one keyword per line" autoFocus />
+      <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Please Enter one keyword per line" autoFocus aria-label="Keywords, one per line" />
       <div className="ft">
         <Button size="sm" onClick={onClose}>Cancel</Button>
         <Button variant="primary" size="sm" onClick={apply}>Apply</Button>
@@ -124,7 +124,7 @@ export function CustomScheme({ keywordTypes, setKeywordTypes, targetingTypes, se
           <div className="h10-spw-cs-ktrows">
             {keywordTypes.map((kt, idx) => (
               <div className={`h10-spw-cs-ktrow ${kt.matchTypes.length === 0 ? 'warn' : ''}`} key={idx}>
-                <input className="chipname" value={kt.name} onChange={(e) => renameKw(idx, e.target.value)} aria-label="Keyword type name" />
+                <Input size="sm" fieldClassName="spw-chipname" value={kt.name} onChange={(e) => renameKw(idx, e.target.value)} aria-label="Keyword type name" />
                 <span className="mtlbl">Match Types</span>
                 <span className="mts">{MATCHES.map((m) => <Checkbox key={m.k} label={m.label} checked={kt.matchTypes.includes(m.k)} onChange={() => toggleMatch(idx, m.k)} />)}</span>
                 {kt.matchTypes.length === 0 && <span className="h10-spw-cs-warn" role="alert">Pick a match type</span>}

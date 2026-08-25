@@ -114,7 +114,7 @@ export function LaunchReceipt({ v, onRecheck, onContinue, rechecking }: {
 
       {failed.length > 0 && (
         <div className="h10-vt-receipt-body">
-          <button type="button" className="h10-vt-receipt-toggle" onClick={() => setOpen((o) => !o)}>
+          <Button variant="quiet" size="sm" block className="h10-vt-receipt-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             {open ? 'Hide' : 'Show'} details
             <span className="h10-vt-receipt-counts">
@@ -123,7 +123,7 @@ export function LaunchReceipt({ v, onRecheck, onContinue, rechecking }: {
               {v.missingOnAmazon > 0 && <Pill tone="danger">{v.missingOnAmazon} missing</Pill>}
               {v.notPushed > 0 && <Pill tone="danger">{v.notPushed} not sent</Pill>}
             </span>
-          </button>
+          </Button>
 
           {open && (
             <DataGrid<LaunchEntityResult>

@@ -430,7 +430,7 @@ export function ReplicateBuilder() {
       <div className="h10-spw-body">
         {step === 1 && (
           <div className="h10-spw-s1">
-            <aside className="rep-subnav" aria-label="Source and product sections">
+            <aside className="cb-subnav" aria-label="Source and product sections">
               {S1_SECTIONS.map((s) => (
                 <Button key={s.id} variant={activeSec === s.id ? 'tonal' : 'quiet'} block onClick={() => gotoSec(s.id)}>{s.label}</Button>
               ))}

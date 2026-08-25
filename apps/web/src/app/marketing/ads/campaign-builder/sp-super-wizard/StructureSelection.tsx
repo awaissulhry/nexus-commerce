@@ -9,7 +9,7 @@
  */
 import { type Dispatch, type SetStateAction, Fragment } from 'react'
 import { Atom } from 'lucide-react'
-import { Toggle } from '@/design-system/primitives'
+import { Button, Toggle } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { CustomScheme, type CustomKeywordType, type TargetingKind } from './CustomScheme'
@@ -129,9 +129,9 @@ export function StructureSelection({ mode, setMode, automationMode, setAutomatio
   ]
   return (
     <div className="h10-spw-card h10-spw-st-card">
-      <div className="h10-spw-st-tabs" role="tablist" aria-label="Structure mode">
+      <div className="spw-st-tabs" role="tablist" aria-label="Structure mode">
         {TABS.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={mode === t.key} className={mode === t.key ? 'on' : ''} onClick={() => setMode(t.key)}>{t.label}</button>
+          <Button key={t.key} role="tab" aria-selected={mode === t.key} variant={mode === t.key ? 'ghost' : 'secondary'} size="lg" onClick={() => setMode(t.key)}>{t.label}</Button>
         ))}
       </div>
       {mode === 'custom' ? (

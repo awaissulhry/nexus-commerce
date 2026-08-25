@@ -71,5 +71,35 @@
 .rep-market .lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-600); margin-right: 4px; }
 /* `quiet` INHERITS its colour by design, so the resting tone belongs on the container —
    without this the rail takes the page's near-black and every item reads as selected. */
-.rep-subnav { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 2px; color: var(--nds-text-2); }
-.rep-subnav .nds-btn { font-size: 13.5px; }
+.cb-subnav { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 2px; color: var(--nds-text-2); }
+.cb-subnav .nds-btn { font-size: 13.5px; }
+
+/* ── replicate review panels ───────────────────────────────────────────────
+   `.nm`, `.prodbtn` and `.prodlist .top button` are ads.css descendant rules at
+   (0,3,0)/(0,2,0) — they beat the DS outright, so these carry their own names.
+   The title keeps its 14px/700 because `quiet` inherits everything else. */
+/* 🔴 `quiet` inherits, and `.h10-rep-settings .ttl` is #9aa4b1 — 2.6:1. Without an
+   explicit colour the campaign title inherits THAT, at 14px bold. Set, not inherited. */
+.h10-rep-settings .rep-nm { font-size: 14px; font-weight: 700; color: var(--nds-text); padding: 2px 4px; margin-left: -4px; max-width: 100%; }
+.h10-rep-settings .rep-nm > span, .h10-rep-settings .rep-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-rep-settings .rep-nm.ag { font-size: 13.5px; }
+.h10-rep-settings .rep-prodbtn { justify-content: flex-start; text-align: left; }
+.h10-rep-settings .rep-prodacts { display: flex; gap: 10px; margin-bottom: 9px; }
+
+/* ── sp-super-wizard ───────────────────────────────────────────────────────
+   Structure mode: three big outlined buttons. `.h10-spw-st-tabs button` (0,1,1)
+   is ads.css, so the row carries its own name and the DS owns the buttons —
+   `ghost` for the selected one, which is what "blue outline" is called here. */
+.spw-st-tabs { display: flex; gap: 12px; }
+.spw-st-tabs .nds-btn { padding: 11px 26px; }
+/* The keyword-type name is a DARK chip that happens to be editable. The DS field owns
+   the box and the focus ring; the fill and its white text are this surface's own. */
+.h10-spw-cs-ktrow .spw-chipname { width: 116px; flex-shrink: 0; background: var(--nds-grey-800); border-color: var(--nds-grey-800); }
+.h10-spw-cs-ktrow .spw-chipname > input { color: var(--nds-white); font-weight: 500; }
+.h10-spw-cs-ktrow .spw-chipname > input::placeholder { color: var(--nds-grey-300); }
+/* `.h10-spw-cset-row .ag .agb input` (0,3,1) in ads.css would have drawn a SECOND border
+   inside the DS field's own — the row is renamed so it cannot. */
+.h10-spw-cset-row .ag .spw-agb { flex: 1; min-width: 0; }
+.h10-spw-cset-row .ag .spw-agb .spw-agbfield { width: 100%; }
+.h10-spw-cset-row .ag .spw-agb .sub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); margin-top: 7px; }
+.h10-spw-cset-row .ag .spw-agb .sub svg { color: var(--nds-grey-500); flex-shrink: 0; }

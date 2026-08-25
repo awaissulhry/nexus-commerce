@@ -349,8 +349,8 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
             <div className="ck"><Checkbox checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></div>
             <div className="ag">
               <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={16} />} label={`Remove ${c.name}`} onClick={() => del(c.id)} />
-              <div className="agb">
-                <input value={c.name} onChange={(e) => upd(c.id, { name: e.target.value })} aria-label="Campaign name" />
+              <div className="spw-agb">
+                <Input fieldClassName="spw-agbfield" value={c.name} onChange={(e) => upd(c.id, { name: e.target.value })} aria-label="Campaign name" />
                 <div className="sub"><Layers size={13} /> {c.adGroupName}</div>
               </div>
             </div>

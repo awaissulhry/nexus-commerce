@@ -34,23 +34,17 @@
   overflow: hidden;
 }
 
-.h10-vt-receipt-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  background: transparent;
-  color: rgb(var(--text-primary));
-  font: inherit;
+/* The disclosure is `Button variant="quiet" block` — borderless until hover, full width,
+   content left-aligned. All that is left is the 12px this row uses and the tone `quiet`
+   inherits rather than declares. `block` sets no border, so the body still owns the frame. */
+/* 🔴 Scoped to the body on purpose: `.nds-btn.sm` and `.nds-btn.quiet` are both (0,2,0),
+   and a bare `.h10-vt-receipt-toggle` (0,1,0) loses to both — measured, the row came back
+   12.5px and, because `quiet` inherits, BLACK. */
+.h10-vt-receipt-body .h10-vt-receipt-toggle {
+  color: var(--nds-text);
   font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
+  padding: 8px 10px;
 }
-
-.h10-vt-receipt-toggle:hover { background: var(--nds-surface-hover); }
 
 .h10-vt-receipt-counts {
   display: flex;
