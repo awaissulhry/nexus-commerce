@@ -211,14 +211,14 @@
 .h10-nt-freq span { font-size: 11px; color: var(--nds-grey-500); }
 .h10-nt-namew { display: inline-flex; align-items: center; gap: 12px; }
 .h10-nt-open { opacity: 0; display: inline-flex; align-items: center; gap: 5px; background: var(--nds-blue-600); color: var(--nds-white); font-size: 11.5px; font-weight: 700; border-radius: 7px; padding: 4px 9px; text-decoration: none; transition: opacity .1s; white-space: nowrap; }
-.h10-am-grid tbody tr:hover .h10-nt-open, .h10-nt-open:focus-visible { opacity: 1; }
+.nds-wsgrid tbody tr:hover .h10-nt-open, .h10-nt-open:focus-visible { opacity: 1; }
 .h10-nt-edit { height: 30px; border: 1px solid var(--nds-blue-600); border-radius: 7px; padding: 0 9px; font: inherit; font-size: 12.5px; color: var(--nds-grey-900); outline: 0; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 .h10-nt-freqedit { display: inline-flex; gap: 8px; }
 /* F3 — Open + History affordances + execution-history drawer */
 .h10-nt-acts { display: inline-flex; align-items: center; gap: 7px; }
 .h10-nt-open.hist { background: var(--nds-white); color: var(--nds-grey-700); border: 1px solid var(--nds-grey-200); cursor: pointer; }
 .h10-nt-open.hist:hover { background: var(--nds-grey-75); color: var(--nds-blue-600); border-color: var(--nds-blue-600); }
-.h10-am-grid tbody tr:hover .h10-nt-open.hist, .h10-nt-open.hist:focus-visible { opacity: 1; }
+.nds-wsgrid tbody tr:hover .h10-nt-open.hist, .h10-nt-open.hist:focus-visible { opacity: 1; }
 .h10-hist-back { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 200; display: flex; justify-content: flex-end; }
 .h10-hist { width: 460px; max-width: calc(100vw - 32px); height: 100%; background: var(--nds-white); box-shadow: -16px 0 48px rgba(20,28,38,.22); display: flex; flex-direction: column; }
 .h10-hist-h { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--nds-grey-100); }
@@ -763,12 +763,12 @@
    name wrapper caps the column so a long name truncates (ellipsis) and the hover Manage button
    stays inside the column instead of spilling into the next one. (Table is table-layout:auto, so
    the cap must live on the content, not the cell's ignored max-width.) */
-.h10-am-grid td.nm .rg-namecell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 340px; }
-.h10-am-grid td.nm .rg-namew { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
-.h10-am-grid td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-am-grid td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
+.nds-wsgrid td.nm .rg-namecell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 340px; }
+.nds-wsgrid td.nm .rg-namew { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.nds-wsgrid td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
 /* Phase 5 — portfolio-scoped schedules get a sublabel under the name. */
-.h10-am-grid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-600); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-600); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
 .h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 999px; padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
@@ -838,7 +838,7 @@
    (a destructive action you can accidentally hide is worse than no action). Visible on hover
    and on keyboard focus, matching the Manage/Activity buttons beside it. */
 .h10-rowmenu-btn { opacity: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-grey-200); background: var(--nds-white); color: var(--nds-pill-neutral-fg); border-radius: 7px; padding: 3px 5px; cursor: pointer; transition: opacity .1s; flex-shrink: 0; }
-.h10-am-grid tbody tr:hover .h10-rowmenu-btn, .h10-rowmenu-btn:focus-visible, .h10-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
+.nds-wsgrid tbody tr:hover .h10-rowmenu-btn, .h10-rowmenu-btn:focus-visible, .h10-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
 .h10-rowmenu-btn:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); border-color: var(--nds-blue-600); }
 /* Fixed, not absolute: the grid card clips overflow, which would cut the last item off. */
 /* Portalled to document.body, so these z-indexes finally compete at the top level instead of
@@ -1432,12 +1432,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    fact only SQP can produce, because the search-term report has no ASIN column. */
 .h10-kt-kw { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-kt-kw .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-/* 🔴 The shared grid paints its first column blue — `.h10-am-grid td.nm .t` (0,3,1) beats
+/* 🔴 The shared grid paints its first column blue — `.nds-wsgrid td.nm .t` (0,3,1) beats
    `.h10-kt-kw .t` (0,2,0), so a plain `color:` here loses. Measured blue on prod. Every other
    grid in this console makes that column a LINK; a keyword here is not one until KT.4 adds the
    history drawer, and blue text that does nothing when clicked is a promise the page cannot keep.
    Matched on specificity rather than !important so KT.4 can simply delete this rule. */
-.h10-am-grid td.nm .h10-kt-kw .t { color: var(--nds-grey-900); }
+.nds-wsgrid td.nm .h10-kt-kw .t { color: var(--nds-grey-900); }
 .h10-kt-kw .bd, .h10-kt-kw .ac { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-kt-kw .bd { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-kt-kw .ac { background: #fff6e8; color: var(--nds-warning-text); }
@@ -1509,11 +1509,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ng-cell.live.on b, .h10-ng-cell.live.on span { color: #0f5b3d; }
 
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
-/* `.h10-am-grid td.nm .t` sets #1f6fde at (0,3,1) because every other consumer of this grid makes
+/* `.nds-wsgrid td.nm .t` sets #1f6fde at (0,3,1) because every other consumer of this grid makes
    the first column a link. This one is not a link until NEG.2 opens the term drawer from it, and
    blue non-interactive text promises a click that does nothing. Matched at (0,4,1) — no
    !important, which would only make the override harder to delete later. */
-.h10-am-grid td.nm .h10-ng-term .t { color: var(--nds-grey-900); font-weight: 700; }
+.nds-wsgrid td.nm .h10-ng-term .t { color: var(--nds-grey-900); font-weight: 700; }
 .h10-ng-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-ng-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ng-term .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
@@ -1574,8 +1574,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    the pointer arrives before you click and the underline confirms the promise. Same selector
    shape, same specificity (0-4-1 beats 0-3-1), so KT.4 deletes these two rules when the keyword
    becomes a real link into the history drawer. */
-.h10-am-grid td.nm .h10-kt-kw .t { cursor: default; }
-.h10-am-grid td.nm .h10-kt-kw .t:hover { text-decoration: none; }
+.nds-wsgrid td.nm .h10-kt-kw .t { cursor: default; }
+.nds-wsgrid td.nm .h10-kt-kw .t:hover { text-decoration: none; }
 
 /* The view's single period, in the toolbar. Amber when the gate could not find a whole week —
    the same amber the truncated-week sentence above the grid uses, so the two read as one fact. */
@@ -1705,7 +1705,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-prov h2 i { font-style: normal; font-size: 11.5px; font-weight: 600; line-height: 1.55; color: var(--nds-text-muted); }
 
 /* ── 🔴 the first column, LAST so it wins ──────────────────────────────────────────────────────
-   `ads.css:695` paints `.h10-am-grid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and
+   `ads.css:695` paints `.nds-wsgrid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and
    `:696` underlines on hover — because every other consumer makes that column a link. In the
    TARGETS view it is not a link yet (S3 makes it open the bid curve), so all three halves of the
    promise are undone here at (0,3,2), matched on `span.t` so the CAMPAIGNS view — where the cell
@@ -1785,7 +1785,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-cell.live.on b, .h10-hv-cell.live.on span { color: #0f5b3d; }
 
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
-/* `.h10-am-grid td.nm .t` sets #1f6fde at (0,3,1) because every other consumer of this grid makes
+/* `.nds-wsgrid td.nm .t` sets #1f6fde at (0,3,1) because every other consumer of this grid makes
    the first column a link. This one is not a link until HV.3 opens a detail panel from it, and
    blue non-interactive text promises a click that does nothing. Matched at (0,4,1) — no
    !important, which would only make the override harder to delete later.
@@ -1794,8 +1794,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    and underlines on hover, so a term with the colour fixed still BEHAVES like a link — the pointer
    arrives before the click and the underline confirms the promise. KT.1 shipped the colour alone
    and KT.1b had to come back for the other two. */
-.h10-am-grid td.nm .h10-hv-term .t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
-.h10-am-grid td.nm .h10-hv-term .t:hover { text-decoration: none; }
+.nds-wsgrid td.nm .h10-hv-term .t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid td.nm .h10-hv-term .t:hover { text-decoration: none; }
 .h10-hv-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-hv-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-hv-term .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
@@ -1980,12 +1980,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 
 /* ── 🔴 the first column, LAST so it wins ──────────────────────────────────────────────────────
-   `ads.css:695` paints `.h10-am-grid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
+   `ads.css:695` paints `.nds-wsgrid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
    underlines on hover — because every other consumer of this grid makes that column a link. Here
    it is not one (P1 gives the row an inspector), so all three halves of that promise are undone at
    (0,3,2). `!important` is not needed and would make this harder to delete when P1 lands. */
-.h10-am-grid td.nm .h10-plc-camp span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
-.h10-am-grid td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
+.nds-wsgrid td.nm .h10-plc-camp span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
 
 @media (max-width: 1200px) {
   .h10-plc-search input { width: 150px; }
@@ -2005,7 +2005,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    (a string Amazon stores). Italic + a lighter weight, never a different colour: colour in this
    column already means "is a link". */
 /* S3 — `.t` is an <a> now; derived keeps its italic marker but inherits the link colour. */
-.h10-am-grid td.nm .h10-bd-target .t.derived { font-style: italic; font-weight: 600; }
+.nds-wsgrid td.nm .h10-bd-target .t.derived { font-style: italic; font-weight: 600; }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    BSP.0 — Budget Pacing & Schedules
@@ -2151,9 +2151,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The first column is interactive now that NEG.2 exists. NEG.1 stripped the shared grid's blue
    because the cell promised a click it could not honour; the promise is real now, so the
    affordance comes back as an underline on hover rather than as a colour that reads as a link at
-   rest. Matched at (0,4,1) to beat `.h10-am-grid td.nm .t` at (0,3,1). */
-.h10-am-grid td.nm .h10-ng-term .t.as-btn { color: var(--nds-grey-900); font-weight: 700; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
-.h10-am-grid td.nm .h10-ng-term .t.as-btn:hover { color: var(--nds-blue-600); text-decoration: underline; }
+   rest. Matched at (0,4,1) to beat `.nds-wsgrid td.nm .t` at (0,3,1). */
+.nds-wsgrid td.nm .h10-ng-term .t.as-btn { color: var(--nds-grey-900); font-weight: 700; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
+.nds-wsgrid td.nm .h10-ng-term .t.as-btn:hover { color: var(--nds-blue-600); text-decoration: underline; }
 
 /* ── the shell ──────────────────────────────────────────────────────────────────────────────── */
 .h10-ngd-back { position: fixed; inset: 0; z-index: 1200; background: rgba(28, 37, 48, .34); border: 0; padding: 0; cursor: pointer; }
@@ -2334,7 +2334,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
 .h10-sov-q { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-sov-q .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-/* 🔴 `.h10-am-grid td.nm .t` sets #1f6fde at specificity (0,3,1), so a page-level `.h10-sov-q .t`
+/* 🔴 `.nds-wsgrid td.nm .t` sets #1f6fde at specificity (0,3,1), so a page-level `.h10-sov-q .t`
    (0,2,0) silently LOSES and the query renders blue, promising a click that does nothing. Every
    other consumer of this grid makes column one a link, so it reads correctly there. Matched on
    specificity rather than `!important`, so SOV.5 deletes one rule when the drawer makes it real. */
@@ -2536,14 +2536,14 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-prov h2 i { font-style: normal; font-size: 11.5px; font-weight: 600; line-height: 1.55; color: var(--nds-text-muted); }
 
 /* ── 🔴 the RULES view's first column, LAST so it wins ──────────────────────────────────────────
-   `ads.css:695` paints `.h10-am-grid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
+   `ads.css:695` paints `.nds-wsgrid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
    underlines on hover, because every other consumer makes that column a link. In the CAMPAIGNS
    view it really is an `<a>` and keeps the blue it has earned. In the RULES view it is not a link
    yet — BUD.3 makes it open the rule record — so all three halves of the promise are undone here
    at (0,3,2), scoped to `.h10-bud-rule span.t` so the campaign view is untouched. A blue name that
    does nothing when clicked is a promise the page cannot keep. */
-.h10-am-grid td.nm .h10-bud-rule span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
-.h10-am-grid td.nm .h10-bud-rule span.t:hover { text-decoration: none; }
+.nds-wsgrid td.nm .h10-bud-rule span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid td.nm .h10-bud-rule span.t:hover { text-decoration: none; }
 
 /* 🔴 1180, not 1400. Measured on prod: at 1280 the content box is 1154px, so six cells are 186px
    each and every label fits on one line — the 1400 breakpoint I first wrote sent them to two rows
@@ -2591,7 +2591,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
          copied from, so it is zeroed under `.h10-ar-tools` below. Nothing here sets a horizontal
          margin.
 
-   🔴 2. `.h10-am-grid td.nm .t` (ads.css:695) paints the first column #1f6fde at (0,3,1) with a
+   🔴 2. `.nds-wsgrid td.nm .t` (ads.css:695) paints the first column #1f6fde at (0,3,1) with a
          pointer cursor and a hover underline, because every other consumer makes that column a
          link. This page's name cell is NOT a link — S7 makes it open the row drawer — so it does
          not use `.t` at all and carries `.h10-ar-nm` instead. No specificity fight, no
@@ -4783,7 +4783,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-pill.mg-off { background: #fff6e8; color: #7a4512; }
 /* U11c — `.h10-ar-bounds` / `.h10-ar-edit` DELETED. The Min·Max bid and Target ACoS cells use the
    Ad Manager's own `.h10-edcell` + `.h10-editpen` (ads.css:1137-1140), which reveal the pencil on
-   row hover; `AdsDataGrid` renders `.h10-am-grid` on both pages, so that hover selector already
+   row hover; `AdsDataGrid` renders `.nds-wsgrid` on both pages, so that hover selector already
    matched here. Two pencils that behaved differently on one field is exactly what U11c removed. */
 
 /* HV.7 — the harvest slice of the one inbox. */
@@ -5035,7 +5035,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 
 /* The campaign name opens the rail. A button, because the rail is a view of THIS page, not a
    destination — but it must still read and behave as the primary cell affordance.
-   🔴 The shared grid paints its first column blue at (0,3,1) via `.h10-am-grid td.nm .t`; this
+   🔴 The shared grid paints its first column blue at (0,3,1) via `.nds-wsgrid td.nm .t`; this
    matches that specificity rather than reaching for !important. */
 .h10-bsp-open { padding: 0; background: none; border: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-blue-600); text-align: left; cursor: pointer; }
 .h10-bsp-open:hover { text-decoration: underline; }
@@ -5089,7 +5089,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 
    U2 (which this replaces) capped the CONTENT rather than the cell, because `td.nm`'s own
    max-width is ignored under `table-layout: auto`. That half was right. The NUMBER was not:
-   `.h10-am-grid td.nm` is capped at 360px in ads.css, so a 480px cap on the content is a cap wider
+   `.nds-wsgrid td.nm` is capped at 360px in ads.css, so a 480px cap on the content is a cap wider
    than the box holding it — it can only ever license a 120px overflow. Measured: a 439px wrapper
    in a 360px cell, 93px of it outside.
 
@@ -5108,17 +5108,17 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    Verified on prod, all 18 rows, idle and hovered: the wrapper's right edge sits 14px INSIDE the
    cell's (that is the cell's padding) — worst spill −14px, was +134px — and the History button
    hit-tests to itself via `elementFromPoint`, not to the Automation column behind it. */
-.h10-am-grid td.nm .h10-nt-namew,
-.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew,
-.h10-am-grid td.nm .rg-namecell { min-width: 0; max-width: 100%; }
-.h10-am-grid td.nm .h10-nt-namew .h10-nt-name,
-.h10-am-grid td.nm .rg-namecell .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid td.nm .h10-nt-namew,
+.nds-wsgrid td.nm .h10-nt-namew.h10-rg-namew,
+.nds-wsgrid td.nm .rg-namecell { min-width: 0; max-width: 100%; }
+.nds-wsgrid td.nm .h10-nt-namew .h10-nt-name,
+.nds-wsgrid td.nm .rg-namecell .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Only the name gives way. The "off" chip and the actions keep their size. */
-.h10-am-grid td.nm .h10-nt-namew .h10-bd7-posture,
-.h10-am-grid td.nm .h10-nt-namew .h10-nt-acts { flex-shrink: 0; }
-.h10-am-grid td.nm .h10-nt-acts { width: 0; overflow: hidden; }
-.h10-am-grid tbody tr:hover td.nm .h10-nt-acts,
-.h10-am-grid td.nm .h10-nt-acts:focus-within { width: auto; }
+.nds-wsgrid td.nm .h10-nt-namew .h10-bd7-posture,
+.nds-wsgrid td.nm .h10-nt-namew .h10-nt-acts { flex-shrink: 0; }
+.nds-wsgrid td.nm .h10-nt-acts { width: 0; overflow: hidden; }
+.nds-wsgrid tbody tr:hover td.nm .h10-nt-acts,
+.nds-wsgrid td.nm .h10-nt-acts:focus-within { width: auto; }
 
 /* ── U7 — the Ad Group View's match-type badges ────────────────────────────────────────────────
    The mapping table says what a harvest rule CREATES in a destination ad group (Phrase · Exact ·
@@ -5143,14 +5143,14 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 
 /* ── U7 — an empty-state sentence inside the grid must be allowed to WRAP ──────────────────────
    Measured on prod: the Ad Group View's explanation rendered as a single 1,311px line inside its
-   own 420px box, running off the card. `.h10-am-grid td` sets `white-space: nowrap` (right for a
+   own 420px box, running off the card. `.nds-wsgrid td` sets `white-space: nowrap` (right for a
    data cell, wrong for a paragraph), and the empty state is rendered INSIDE a td — so the box was
    capped and the text simply painted outside it. `.sub` already had the max-width; it needed the
    wrap. Scoped to the empty state so real cells keep their nowrap. */
-.h10-am-grid td .h10-rr-empty,
-.h10-am-grid td .h10-rr-empty .sub,
-.h10-am-grid td .h10-rr-empty b { white-space: normal; }
-.h10-am-grid td .h10-rr-empty .sub { text-wrap: pretty; }
+.nds-wsgrid td .h10-rr-empty,
+.nds-wsgrid td .h10-rr-empty .sub,
+.nds-wsgrid td .h10-rr-empty b { white-space: normal; }
+.nds-wsgrid td .h10-rr-empty .sub { text-wrap: pretty; }
 
 /* ── U8 — the hourly-performance chart, replacing a hard-coded "not available" sentence ────────
    24 hourly buckets: Metric 1 as bars (navy, the H10 dot colour), Metric 2 as a line (blue). Drawn
@@ -5358,7 +5358,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    out of flow. The buttons stay in the tab order (`display: none` would remove them), and the
    gradient keeps them readable where they overlay the end of a long rule name — matched to the
    ground they actually sit on: the row-hover blue when hovered, white when reached by keyboard. */
-.h10-am-grid td.nm .h10-nt-acts {
+.nds-wsgrid td.nm .h10-nt-acts {
   position: absolute;
   right: 14px; /* the cell's own padding-right — measured, not guessed */
   top: 50%;
@@ -5373,10 +5373,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 }
 /* The container decides visibility now, so the children stop hiding themselves — otherwise a
    keyboard focus reveals the box and only the focused button inside it. */
-.h10-am-grid td.nm .h10-nt-acts .h10-nt-open { opacity: 1; }
-.h10-am-grid td.nm .h10-nt-acts:focus-within { opacity: 1; pointer-events: auto; }
+.nds-wsgrid td.nm .h10-nt-acts .h10-nt-open { opacity: 1; }
+.nds-wsgrid td.nm .h10-nt-acts:focus-within { opacity: 1; pointer-events: auto; }
 /* Hover last: when a row is both hovered and focused, the ground is the hover blue. */
-.h10-am-grid tbody tr:hover td.nm .h10-nt-acts {
+.nds-wsgrid tbody tr:hover td.nm .h10-nt-acts {
   opacity: 1;
   pointer-events: auto;
   background: linear-gradient(to right, rgba(247, 250, 255, 0) 0, var(--nds-imgup-surface) 26px);

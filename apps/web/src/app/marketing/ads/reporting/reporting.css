@@ -541,12 +541,12 @@ select.rpt-input { height: 32px; }
 .rpt-colmenu button.on { font-weight: 650; }
 
 /* Keep the previous result readable while the next one loads. */
-.h10-am-grid.is-loading { opacity: .55; transition: opacity .12s; }
+.nds-wsgrid.is-loading { opacity: .55; transition: opacity .12s; }
 
 
 /* ── The totals row ─────────────────────────────────────────────────────
    R3 — the weight, the rule above it and the sunken fill all come from the shared grid now
-   (`ads.css` → `.h10-am-grid tr.h10-am-total td`), so the private block that used to do it
+   (`ads.css` → `.nds-wsgrid tr.h10-am-total td`), so the private block that used to do it
    here is gone. It was scoped to `.nds-grid tr.totals`, the design-system grid's markup,
    which this page no longer renders — a rule that would simply have stopped applying with
    nothing to say so. All that is left is the label, which is this report's own wording:

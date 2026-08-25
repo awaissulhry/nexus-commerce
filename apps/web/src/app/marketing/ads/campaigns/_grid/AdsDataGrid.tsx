@@ -596,7 +596,7 @@ export function AdsDataGrid<T>({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [keyboardNav, onRowClick, onRowKey])
-  // WG.2b — scope to THIS grid. `document.querySelector('.h10-am-grid …')` took the first match on
+  // WG.2b — scope to THIS grid. `document.querySelector('.nds-wsgrid …')` took the first match on
   // the page, so with two grids mounted the keyboard focus scrolled the wrong one.
   const rootRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -879,7 +879,7 @@ export function AdsDataGrid<T>({
       </div>
 
       {/* grid */}
-      <div ref={rootRef} className={`h10-am-grid${selectable ? '' : ' nosel'}`}>
+      <div ref={rootRef} className={`nds-wsgrid${selectable ? '' : ' nosel'}`}>
         <table>
           <thead>
             <tr>

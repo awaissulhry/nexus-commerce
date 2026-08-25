@@ -950,7 +950,7 @@ export function CampaignsGrid() {
   /** U13 — campaigns whose bid-automation PATCH is in flight. Transient, so the switch may go `disabled`. */
   const [busyAuto, setBusyAuto] = useState<Set<string>>(new Set())
   // WG.2b — this page hand-rolls its grid, and every DOM interaction below used to reach it with
-  // `document.querySelector('.h10-am-grid')`, which returns the FIRST match on the page and ties
+  // `document.querySelector('.nds-wsgrid')`, which returns the FIRST match on the page and ties
   // the behaviour to a class name the WorkspaceGrid extraction has to rename.
   // Two ⛔ placeholder filters: they were uncontrolled <FilterDropdown>s that remembered their own
   // selection and told nobody. Listbox is controlled, so the state is explicit now — the surfaces
@@ -1932,7 +1932,7 @@ export function CampaignsGrid() {
       </div>
 
       {/* grid */}
-      <div className="h10-am-grid" ref={gridElRef}>
+      <div className="nds-wsgrid" ref={gridElRef}>
         <table>
           <thead>
             <tr>

@@ -21,10 +21,10 @@
    1. The page gutter is ZERO, not 24px. Measured on prod at innerWidth 1728: `.h10-hdr`,
       `.h10-rules-tabs` and `.h10-am-card` all sit at 96→1698. `h10-main`'s 30px padding is the
       gutter. Anything here with a horizontal margin is inset past everything else on the page.
-   2. `.h10-am-grid td.nm .t` sets #1f6fde at specificity (0,3,1), so a page-level `.rd-x .t
+   2. `.nds-wsgrid td.nm .t` sets #1f6fde at specificity (0,3,1), so a page-level `.rd-x .t
       { color }` (0,2,0) loses and the first column renders BLUE. Every current consumer makes
       that column a link so it reads correctly — a first column that is NOT a link must match the
-      specificity (`.h10-am-grid td.nm .rd-x .t`). `!important` is not needed and makes the
+      specificity (`.nds-wsgrid td.nm .rd-x .t`). `!important` is not needed and makes the
       override harder to delete later.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 

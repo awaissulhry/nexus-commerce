@@ -39,7 +39,7 @@
    The breadcrumb never wraps; ancestors ellipsize FIRST (shrink 999) so the leaf — the term
    the decision is about — stays readable longest. Cap is 100% of the cell, never px; the
    full path lives in the link title and the hover facts. */
-.h10-sug .h10-am-grid td.nm.fz { overflow: hidden; }
+.h10-sug .nds-wsgrid td.nm.fz { overflow: hidden; }
 .h10-sug-src { display: flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; }
 .h10-sug-src .nds-tag { flex: none; }
 /* The hover anchor is a flex ITEM between the cell and the link — without min-width:0 it

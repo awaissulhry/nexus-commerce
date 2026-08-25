@@ -9,254 +9,254 @@
  * That check is the whole point — this codebase resolves conflicts by source order, so a
  * relocation is a cascade change even when every byte is unchanged.
  *
- * `.h10-am-grid` is still the class name. It stays until WG.3 moves the component itself, because
+ * `.nds-wsgrid` is still the class name. It stays until WG.3 moves the component itself, because
  * two files render it (AdsDataGrid and CampaignsGrid, which hand-rolls the same markup) and one
  * is the implementation that BECOMES WorkspaceGrid.
  */
 
-.h10-am-grid,
+.nds-wsgrid,
 .eb-tablebox { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; overflow: auto; }
 
-.h10-am-grid table,
+.nds-wsgrid table,
 .eb-tablebox table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
-.h10-am-grid thead th,
+.nds-wsgrid thead th,
 .eb-tablebox thead th { position: sticky; top: 0; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-200); font-size: 11.5px; font-weight: 700; color: #475467; text-align: left; padding: 10px 14px; white-space: nowrap; }
 
-.h10-am-grid th.num, .h10-am-grid td.num,
+.nds-wsgrid th.num, .nds-wsgrid td.num,
 .eb-tablebox th.num, .eb-tablebox td.num { text-align: right; }
 
-.h10-am-grid th.ck, .h10-am-grid td.ck { width: 40px; text-align: center; }
+.nds-wsgrid th.ck, .nds-wsgrid td.ck { width: 40px; text-align: center; }
 
-.h10-am-grid tbody td,
+.nds-wsgrid tbody td,
 .eb-tablebox tbody td { border-bottom: 1px solid var(--nds-grey-150); padding: 11px 14px; color: var(--nds-grey-800); font-weight: 500; white-space: nowrap; }
 
-.h10-am-grid tbody tr:hover { background: var(--nds-imgup-surface); }
+.nds-wsgrid tbody tr:hover { background: var(--nds-imgup-surface); }
 
-.h10-am-grid tbody tr.on { background: var(--nds-blue-50); }
+.nds-wsgrid tbody tr.on { background: var(--nds-blue-50); }
 
-.h10-am-grid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
+.nds-wsgrid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
 
-.h10-am-grid td.nm .dot { width: 7px; height: 7px; border-radius: 999px; background: #cbd2db; flex-shrink: 0; }
+.nds-wsgrid td.nm .dot { width: 7px; height: 7px; border-radius: 999px; background: #cbd2db; flex-shrink: 0; }
 
-.h10-am-grid td.nm .dot.live { background: var(--nds-green-500); }
+.nds-wsgrid td.nm .dot.live { background: var(--nds-green-500); }
 
-.h10-am-grid td.nm .badge { font-size: 9px; font-weight: 800; color: var(--nds-purple-700); background: var(--nds-purple-bg); border-radius: 4px; padding: 2px 5px; }
+.nds-wsgrid td.nm .badge { font-size: 9px; font-weight: 800; color: var(--nds-purple-700); background: var(--nds-purple-bg); border-radius: 4px; padding: 2px 5px; }
 
-.h10-am-grid td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.nds-wsgrid td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
-.h10-am-grid td.nm .mk { font-size: 10px; color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 1px 5px; }
+.nds-wsgrid td.nm .mk { font-size: 10px; color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 1px 5px; }
 
-.h10-am-grid td.empty { text-align: center; color: var(--nds-grey-500); padding: 28px; }
+.nds-wsgrid td.empty { text-align: center; color: var(--nds-grey-500); padding: 28px; }
 
 /**
  * 🔴 SGX — an empty state's sentence was being CLIPPED, unreadable, on every wide grid.
  *
- * `.h10-am-grid tbody td` sets `white-space: nowrap` (above), and the empty cell is a `td`. So
+ * `.nds-wsgrid tbody td` sets `white-space: nowrap` (above), and the empty cell is a `td`. So
  * `EmptyState`'s description inherited it, its own `max-width: 320px` could not wrap the text,
  * and the line painted straight out of that box across the row until the right-frozen column
  * covered it. Measured on prod (Suggestions → New Keywords → Status: Muted): the copy ended
  * mid-word at "…let the engine speak up|". Short empty states hid the bug; long ones could not
  * be read at all. Re-enabling wrapping inside the empty cell fixes every AdsDataGrid consumer.
  */
-.h10-am-grid td.empty, .h10-am-grid td.empty * { white-space: normal; }
+.nds-wsgrid td.empty, .nds-wsgrid td.empty * { white-space: normal; }
 
-.h10-am-grid td.num .h10-stratsel, .h10-am-grid td.num .h10-bud { float: right; }
+.nds-wsgrid td.num .h10-stratsel, .nds-wsgrid td.num .h10-bud { float: right; }
 
 /* CBN.2e.1 — grid row anatomy (status pill, targeting/product badges, blue link) +
    pagination + Latest Report footer + loading skeleton (Helium 10 match) */
-.h10-am-grid td.nm { gap: 7px; }
+.nds-wsgrid td.nm { gap: 7px; }
 
-.h10-am-grid td.nm .pin { color: #b6bdc8; flex-shrink: 0; }
+.nds-wsgrid td.nm .pin { color: #b6bdc8; flex-shrink: 0; }
 
-.h10-am-grid td.nm .tg { font-size: 10px; font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .tg { font-size: 10px; font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
 
-.h10-am-grid td.nm .pb { font-size: 9px; font-weight: 800; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .pb { font-size: 9px; font-weight: 800; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
 
-.h10-am-grid td.nm .pb[data-p="SP"] { color: var(--nds-purple-700); background: var(--nds-purple-bg); }
+.nds-wsgrid td.nm .pb[data-p="SP"] { color: var(--nds-purple-700); background: var(--nds-purple-bg); }
 
-.h10-am-grid td.nm .pb[data-p="SD"] { color: var(--nds-cyan-700); background: var(--nds-cyan-bg); }
+.nds-wsgrid td.nm .pb[data-p="SD"] { color: var(--nds-cyan-700); background: var(--nds-cyan-bg); }
 
-.h10-am-grid td.nm .pb[data-p="SB"] { color: #b45309; background: var(--nds-badge-sb-bg); }
+.nds-wsgrid td.nm .pb[data-p="SB"] { color: #b45309; background: var(--nds-badge-sb-bg); }
 
-.h10-am-grid td.nm .t { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; }
+.nds-wsgrid td.nm .t { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; }
 
-.h10-am-grid td.nm .t:hover { text-decoration: underline; }
+.nds-wsgrid td.nm .t:hover { text-decoration: underline; }
 
-.h10-am-grid th.st, .h10-am-grid td.st { text-align: left; white-space: nowrap; }
+.nds-wsgrid th.st, .nds-wsgrid td.st { text-align: left; white-space: nowrap; }
 
-.h10-am-grid tr.sk td { border-bottom: 1px solid var(--nds-grey-75); }
+.nds-wsgrid tr.sk td { border-bottom: 1px solid var(--nds-grey-75); }
 
-.h10-am-grid .skb { display: inline-block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--nds-grey-100) 25%, var(--nds-grey-150) 37%, var(--nds-grey-100) 63%); background-size: 400% 100%; animation: h10sh 1.3s ease infinite; }
+.nds-wsgrid .skb { display: inline-block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--nds-grey-100) 25%, var(--nds-grey-150) 37%, var(--nds-grey-100) 63%); background-size: 400% 100%; animation: h10sh 1.3s ease infinite; }
 
 /* CBN.2e.3 — edit-mode columns (left-aligned controls + cell chrome, H10 match) */
-.h10-am-grid th.ed, .h10-am-grid td.ed,
+.nds-wsgrid th.ed, .nds-wsgrid td.ed,
 .eb-tablebox th.ed, .eb-tablebox td.ed { text-align: left; }
 
 /* CBN.2e.2 — sortable column headers (⇅ / ↑ / ↓) */
-.h10-am-grid th .sortable { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
+.nds-wsgrid th .sortable { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
 
-.h10-am-grid th .sortable i { font-style: normal; color: var(--nds-grey-300); font-size: 10px; line-height: 1; }
+.nds-wsgrid th .sortable i { font-style: normal; color: var(--nds-grey-300); font-size: 10px; line-height: 1; }
 
-.h10-am-grid th .sortable:hover { color: var(--nds-grey-700); }
+.nds-wsgrid th .sortable:hover { color: var(--nds-grey-700); }
 
-.h10-am-grid th .sortable:hover i { color: var(--nds-grey-500); }
+.nds-wsgrid th .sortable:hover i { color: var(--nds-grey-500); }
 
 /* CBN.3 G2 — lucide sort chevron (AdsDataGrid): muted by default, blue when active; the
    active-sort header label goes blue (H10). Scoped to .sa so CampaignsGrid's <i> is untouched. */
-.h10-am-grid th .sortable .sa { color: var(--nds-grey-300); flex-shrink: 0; }
+.nds-wsgrid th .sortable .sa { color: var(--nds-grey-300); flex-shrink: 0; }
 
-.h10-am-grid th .sortable:hover .sa { color: var(--nds-grey-500); }
+.nds-wsgrid th .sortable:hover .sa { color: var(--nds-grey-500); }
 
-.h10-am-grid th.sorted .sortable, .h10-am-grid th.sorted .hl { color: var(--nds-blue-600); }
+.nds-wsgrid th.sorted .sortable, .nds-wsgrid th.sorted .hl { color: var(--nds-blue-600); }
 
-.h10-am-grid th.sorted .sortable .sa, .h10-am-grid th.sorted .sa.on { color: var(--nds-blue-600); }
+.nds-wsgrid th.sorted .sortable .sa, .nds-wsgrid th.sorted .sa.on { color: var(--nds-blue-600); }
 
 /* Total row: right-align the "Total" label in the sticky first column (H10) */
-.h10-am-grid tr.h10-am-total td.nm.fz { text-align: right; }
+.nds-wsgrid tr.h10-am-total td.nm.fz { text-align: right; }
 
 /* CBN.2h.1 — first column: lightbulb + A/M (blue/purple) + SP/SD (navy) badges,
    frozen on horizontal scroll (checkbox + Campaign stay pinned left) */
-.h10-am-grid td.nm { display: table-cell; }
+.nds-wsgrid td.nm { display: table-cell; }
 
-.h10-am-grid td.nm .nmw { display: flex; align-items: center; gap: 7px; max-width: 300px; }
+.nds-wsgrid td.nm .nmw { display: flex; align-items: center; gap: 7px; max-width: 300px; }
 
-.h10-am-grid td.nm .nmw .bulb { color: #b6bdc8; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .bulb { color: #b6bdc8; flex-shrink: 0; }
 
-.h10-am-grid td.nm .nmw .tg { font-size: 10px; font-weight: 800; color: var(--nds-white); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.25; }
+.nds-wsgrid td.nm .nmw .tg { font-size: 10px; font-weight: 800; color: var(--nds-white); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.25; }
 
-.h10-am-grid td.nm .nmw .tg[data-t="A"] { background: #4f46e5; }
+.nds-wsgrid td.nm .nmw .tg[data-t="A"] { background: #4f46e5; }
 
-.h10-am-grid td.nm .nmw .tg[data-t="M"] { background: #7c3aed; }
+.nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: #7c3aed; }
 
-.h10-am-grid td.nm .nmw .pb { font-size: 9px; font-weight: 800; color: var(--nds-white); background: var(--nds-grey-700); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.35; }
+.nds-wsgrid td.nm .nmw .pb { font-size: 9px; font-weight: 800; color: var(--nds-white); background: var(--nds-grey-700); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; line-height: 1.35; }
 
-.h10-am-grid td.nm .nmw .t { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid td.nm .nmw .t { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.h10-am-grid td.nm .nmw .t:hover { text-decoration: underline; }
+.nds-wsgrid td.nm .nmw .t:hover { text-decoration: underline; }
 
-.h10-am-grid td.nm .nmw a.t { text-decoration: none; }
+.nds-wsgrid td.nm .nmw a.t { text-decoration: none; }
 
-.h10-am-grid td.nm .nmw .mk { font-size: 10px; color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .mk { font-size: 10px; color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
 
 /* CBN.3 G3 — Ad Groups cell affordances (H10): blue layers icon before the name, Target
    count + open-icon, ACoS value + health dot. Scoped to AdGroups' own classes. */
-.h10-am-grid td.nm .nmw .agi { color: var(--nds-blue-600); flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .agi { color: var(--nds-blue-600); flex-shrink: 0; }
 
-.h10-am-grid td.num .h10-tgt { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.nds-wsgrid td.num .h10-tgt { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
 
-.h10-am-grid td.num .h10-tgt .og { color: var(--nds-grey-700); flex-shrink: 0; cursor: pointer; }
+.nds-wsgrid td.num .h10-tgt .og { color: var(--nds-grey-700); flex-shrink: 0; cursor: pointer; }
 
-.h10-am-grid td.num .h10-tgt .og:hover { color: var(--nds-blue-600); }
+.nds-wsgrid td.num .h10-tgt .og:hover { color: var(--nds-blue-600); }
 
-.h10-am-grid td.num .h10-acos { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.nds-wsgrid td.num .h10-acos { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
 
-.h10-am-grid td.num .h10-acos .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nds-grey-450); flex-shrink: 0; }
+.nds-wsgrid td.num .h10-acos .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nds-grey-450); flex-shrink: 0; }
 
-.h10-am-grid td.editing { text-align: left; padding-top: 7px; padding-bottom: 7px; }
+.nds-wsgrid td.editing { text-align: left; padding-top: 7px; padding-bottom: 7px; }
 
 /* per-cell hover-edit: value + ".h10-editpen" pencil (shown on row hover); popover reuses .h10-editpop */
-.h10-am-grid td .h10-ec { display: inline-flex; align-items: center; gap: 6px; }
+.nds-wsgrid td .h10-ec { display: inline-flex; align-items: center; gap: 6px; }
 
-.h10-am-grid td.nm .h10-ec { display: flex; }
+.nds-wsgrid td.nm .h10-ec { display: flex; }
 
-.h10-am-grid td.nm .h10-ec .nmw { flex: 1; min-width: 0; }
+.nds-wsgrid td.nm .h10-ec .nmw { flex: 1; min-width: 0; }
 
-.h10-am-grid th.ck, .h10-am-grid td.ck { position: sticky; left: 0; background: var(--nds-white); }
+.nds-wsgrid th.ck, .nds-wsgrid td.ck { position: sticky; left: 0; background: var(--nds-white); }
 
-.h10-am-grid th.nm, .h10-am-grid td.nm { position: sticky; left: 40px; background: var(--nds-white); width: 300px; min-width: 300px; box-shadow: 1px 0 0 var(--nds-grey-150); }
+.nds-wsgrid th.nm, .nds-wsgrid td.nm { position: sticky; left: 40px; background: var(--nds-white); width: 300px; min-width: 300px; box-shadow: 1px 0 0 var(--nds-grey-150); }
 
-.h10-am-grid tbody td.ck, .h10-am-grid tbody td.nm { z-index: 3; }
+.nds-wsgrid tbody td.ck, .nds-wsgrid tbody td.nm { z-index: 3; }
 
-.h10-am-grid thead th,
+.nds-wsgrid thead th,
 .eb-tablebox thead th { z-index: 4; }
 
-.h10-am-grid thead th.ck, .h10-am-grid thead th.nm { z-index: 6; background: var(--nds-grey-25); }
+.nds-wsgrid thead th.ck, .nds-wsgrid thead th.nm { z-index: 6; background: var(--nds-grey-25); }
 
-.h10-am-grid tbody tr:hover td.ck, .h10-am-grid tbody tr:hover td.nm { background: var(--nds-imgup-surface); }
+.nds-wsgrid tbody tr:hover td.ck, .nds-wsgrid tbody tr:hover td.nm { background: var(--nds-imgup-surface); }
 
-.h10-am-grid tbody tr.on td.ck, .h10-am-grid tbody tr.on td.nm { background: var(--nds-blue-50); }
+.nds-wsgrid tbody tr.on td.ck, .nds-wsgrid tbody tr.on td.nm { background: var(--nds-blue-50); }
 
 /* CBN.2h.3 — H10-faithful sizing (taller rows, bigger checkbox + badges/icon, all
    consistent) + distinct A/M colours sampled from H10 (A #134DA3 blue, M #7400BC purple) */
-.h10-am-grid table,
+.nds-wsgrid table,
 .eb-tablebox table { font-size: 13px; }
 
-.h10-am-grid thead th,
+.nds-wsgrid thead th,
 .eb-tablebox thead th { padding: 12px 14px; font-size: 11.5px; }
 
-.h10-am-grid tbody td,
+.nds-wsgrid tbody td,
 .eb-tablebox tbody td { padding: 12px 14px; }
 
-.h10-am-grid input[type="checkbox"],
+.nds-wsgrid input[type="checkbox"],
 .eb-tablebox input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--nds-blue-600); cursor: pointer; }
 
-.h10-am-grid th.ck, .h10-am-grid td.ck { width: 46px; }
+.nds-wsgrid th.ck, .nds-wsgrid td.ck { width: 46px; }
 
-.h10-am-grid th.nm, .h10-am-grid td.nm { left: 46px; }
+.nds-wsgrid th.nm, .nds-wsgrid td.nm { left: 46px; }
 
-.h10-am-grid td.nm .nmw { gap: 8px; }
+.nds-wsgrid td.nm .nmw { gap: 8px; }
 
-.h10-am-grid td.nm .nmw .bulb { width: 17px; height: 17px; }
+.nds-wsgrid td.nm .nmw .bulb { width: 17px; height: 17px; }
 
-.h10-am-grid td.nm .nmw .tg { font-size: 11px; font-weight: 800; padding: 3px 6px; line-height: 1.3; min-width: 20px; text-align: center; border-radius: 5px; }
+.nds-wsgrid td.nm .nmw .tg { font-size: 11px; font-weight: 800; padding: 3px 6px; line-height: 1.3; min-width: 20px; text-align: center; border-radius: 5px; }
 
-.h10-am-grid td.nm .nmw .tg[data-t="A"] { background: var(--nds-blue-800); }
+.nds-wsgrid td.nm .nmw .tg[data-t="A"] { background: var(--nds-blue-800); }
 
-.h10-am-grid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
+.nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
 
-.h10-am-grid td.nm .nmw .pb { font-size: 10px; font-weight: 800; padding: 3px 6px; line-height: 1.45; border-radius: 5px; background: #2f3a4a; }
+.nds-wsgrid td.nm .nmw .pb { font-size: 10px; font-weight: 800; padding: 3px 6px; line-height: 1.45; border-radius: 5px; background: #2f3a4a; }
 
-.h10-am-grid td.nm .nmw .t { font-size: 13px; }
+.nds-wsgrid td.nm .nmw .t { font-size: 13px; }
 
-.h10-am-grid td.nm .nmw .mk { font-size: 10.5px; padding: 2px 6px; }
+.nds-wsgrid td.nm .nmw .mk { font-size: 10.5px; padding: 2px 6px; }
 
 /* CBN.2h.4 — first-column balance: centered checkbox, uniform tight gap, SQUARE
    A/M badges (flex-centered) + consistent-height SP/SD, all the same visual size */
-.h10-am-grid th.ck, .h10-am-grid td.ck { text-align: center; vertical-align: middle; }
+.nds-wsgrid th.ck, .nds-wsgrid td.ck { text-align: center; vertical-align: middle; }
 
-.h10-am-grid input[type="checkbox"],
+.nds-wsgrid input[type="checkbox"],
 .eb-tablebox input[type="checkbox"] { width: 17px; height: 17px; margin: 0; vertical-align: middle; accent-color: var(--nds-blue-600); cursor: pointer; }
 
-.h10-am-grid td.nm { vertical-align: middle; }
+.nds-wsgrid td.nm { vertical-align: middle; }
 
-.h10-am-grid td.nm .nmw { gap: 6px; align-items: center; }
+.nds-wsgrid td.nm .nmw { gap: 6px; align-items: center; }
 
-.h10-am-grid td.nm .nmw .bulb { width: 16px; height: 16px; }
+.nds-wsgrid td.nm .nmw .bulb { width: 16px; height: 16px; }
 
-.h10-am-grid td.nm .nmw .tg { width: 19px; height: 19px; min-width: 19px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; border-radius: 5px; }
+.nds-wsgrid td.nm .nmw .tg { width: 19px; height: 19px; min-width: 19px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; border-radius: 5px; }
 
-.h10-am-grid td.nm .nmw .pb { height: 19px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; line-height: 1; border-radius: 5px; }
+.nds-wsgrid td.nm .nmw .pb { height: 19px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; line-height: 1; border-radius: 5px; }
 
-.h10-am-grid td.nm .nmw .mk { height: 19px; display: inline-flex; align-items: center; }
+.nds-wsgrid td.nm .nmw .mk { height: 19px; display: inline-flex; align-items: center; }
 
 /* CBN.2h.5 — "Open in new tab" button revealed on row hover (H10) */
-.h10-am-grid td.nm .nmw .t { min-width: 0; }
+.nds-wsgrid td.nm .nmw .t { min-width: 0; }
 
-.h10-am-grid td.nm .nmw .h10-open { display: none; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--nds-white); background: var(--nds-blue-600); border-radius: 6px; padding: 3px 8px; text-decoration: none; margin-left: 2px; flex-shrink: 0; white-space: nowrap; }
+.nds-wsgrid td.nm .nmw .h10-open { display: none; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--nds-white); background: var(--nds-blue-600); border-radius: 6px; padding: 3px 8px; text-decoration: none; margin-left: 2px; flex-shrink: 0; white-space: nowrap; }
 
-.h10-am-grid tbody tr:hover .nmw .h10-open { display: inline-flex; }
+.nds-wsgrid tbody tr:hover .nmw .h10-open { display: inline-flex; }
 
-.h10-am-grid td.nm .nmw .h10-open:hover { background: var(--nds-blue-700); }
+.nds-wsgrid td.nm .nmw .h10-open:hover { background: var(--nds-blue-700); }
 
-.h10-am-grid td.nm .nmw { gap: 7px; align-items: center; }
+.nds-wsgrid td.nm .nmw { gap: 7px; align-items: center; }
 
-.h10-am-grid td.nm .nmw .h10-hc-anchor { gap: 7px; }
+.nds-wsgrid td.nm .nmw .h10-hc-anchor { gap: 7px; }
 
-.h10-am-grid td.nm .nmw .bulb { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; background: var(--nds-rail-text); border-radius: 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .bulb { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; background: var(--nds-rail-text); border-radius: 5px; flex-shrink: 0; }
 
-.h10-am-grid td.nm .nmw .bulb svg { color: var(--nds-white); width: 12px; height: 12px; }
+.nds-wsgrid td.nm .nmw .bulb svg { color: var(--nds-white); width: 12px; height: 12px; }
 
-.h10-am-grid td.nm .nmw .tg { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-white); border-radius: 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .tg { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; min-width: 20px; padding: 0; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-white); border-radius: 5px; flex-shrink: 0; }
 
-.h10-am-grid td.nm .nmw .tg[data-t="A"] { background: var(--nds-blue-800); }
+.nds-wsgrid td.nm .nmw .tg[data-t="A"] { background: var(--nds-blue-800); }
 
-.h10-am-grid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
+.nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
 
-.h10-am-grid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-white); border: 1px solid #cfd6de; border-radius: 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-white); border: 1px solid #cfd6de; border-radius: 5px; flex-shrink: 0; }
 
 /* ── CBN.2h.9 — custom rounded checkboxes (H10), ~19px, grid + bulk modal ── */
-.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
+.nds-wsgrid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
 .eb-tablebox input[type="checkbox"] {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   width: 19px; height: 19px; min-width: 19px; margin: 0; padding: 0;
@@ -264,96 +264,96 @@
   cursor: pointer; position: relative; box-sizing: border-box; vertical-align: middle;
 }
 
-.h10-am-grid input[type="checkbox"]:hover, .h10-bulk-row .ck input:hover, .h10-bulk-hd .ck input:hover,
+.nds-wsgrid input[type="checkbox"]:hover, .h10-bulk-row .ck input:hover, .h10-bulk-hd .ck input:hover,
 .eb-tablebox input[type="checkbox"]:hover { border-color: var(--nds-blue-600); }
 
 /* BALANCE RULE: the tick is a CENTRED SVG (background-position:center), not a
    rotated-border ::after with hand-tuned left/top offsets. Those offsets were cut
    for a 19px box, broke when it grew to 20px, and never truly centred anyway. A
    centred background glyph is exact and size-independent — never hand-place a tick. */
-.h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
-.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate,
+.nds-wsgrid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
+.nds-wsgrid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate,
 .eb-tablebox input[type="checkbox"]:checked, .eb-tablebox input[type="checkbox"]:indeterminate {
   background-color: var(--nds-blue-600); border-color: var(--nds-blue-600);
   background-repeat: no-repeat; background-position: center; background-size: 13px 13px;
 }
 
-.h10-am-grid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
+.nds-wsgrid input[type="checkbox"]:checked, .h10-bulk-row .ck input:checked, .h10-bulk-hd .ck input:checked,
 .eb-tablebox input[type="checkbox"]:checked {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 7'/></svg>");
 }
 
-.h10-am-grid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate,
+.nds-wsgrid input[type="checkbox"]:indeterminate, .h10-bulk-hd .ck input:indeterminate,
 .eb-tablebox input[type="checkbox"]:indeterminate {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'><path d='M6 12h12'/></svg>");
 }
 
 /* ── CBN.2h.10 — uniform square badges = checkbox size (lightbulb · A/M · SP/SD all 20px squares) ── */
-.h10-am-grid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
+.nds-wsgrid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
 .eb-tablebox input[type="checkbox"] { width: 20px; height: 20px; min-width: 20px; }
 
-.h10-am-grid td.nm .nmw .bulb,
-.h10-am-grid td.nm .nmw .tg,
-.h10-am-grid td.nm .nmw .pb {
+.nds-wsgrid td.nm .nmw .bulb,
+.nds-wsgrid td.nm .nmw .tg,
+.nds-wsgrid td.nm .nmw .pb {
   width: 20px; height: 20px; min-width: 20px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 5px; line-height: 1; flex-shrink: 0; box-sizing: border-box;
 }
 
-.h10-am-grid td.nm .nmw .tg { font-size: 11px; font-weight: 800; }
+.nds-wsgrid td.nm .nmw .tg { font-size: 11px; font-weight: 800; }
 
-.h10-am-grid td.nm .nmw .pb { font-size: 9px; font-weight: 800; letter-spacing: -0.3px; }
+.nds-wsgrid td.nm .nmw .pb { font-size: 9px; font-weight: 800; letter-spacing: -0.3px; }
 
-.h10-am-grid td.nm .nmw .bulb svg { width: 12px; height: 12px; }
+.nds-wsgrid td.nm .nmw .bulb svg { width: 12px; height: 12px; }
 
 /* ── CBN.2c.P1P2 — unified 44-col grid + H10 Table-Customization popover ─────── */
 /* Frozen left columns (checkbox + Campaign) during the horizontal scroll. */
-.h10-am-grid th.ck, .h10-am-grid td.ck { position: sticky; left: 0; z-index: 3; background: var(--nds-white); }
+.nds-wsgrid th.ck, .nds-wsgrid td.ck { position: sticky; left: 0; z-index: 3; background: var(--nds-white); }
 
-.h10-am-grid thead th.ck { z-index: 6; background: var(--nds-grey-25); }
+.nds-wsgrid thead th.ck { z-index: 6; background: var(--nds-grey-25); }
 
 /* FB.3e (2026-08-21) — 40px → 46px: the checkbox column was widened to 46px (see the th.ck rule
    above at 46px and .nm at left:46px), but this HIGHER-specificity .nm.fz rule kept the old 40px,
    so every selectable grid's frozen name column pinned 6px short and overlapped the checkbox
    column on horizontal scroll. One winning rule, one value, matching td.ck's width. */
-.h10-am-grid th.nm.fz, .h10-am-grid td.nm.fz { position: sticky; left: 46px; z-index: 3; background: var(--nds-white); border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-wsgrid th.nm.fz, .nds-wsgrid td.nm.fz { position: sticky; left: 46px; z-index: 3; background: var(--nds-white); border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 
-.h10-am-grid thead th.nm.fz { z-index: 6; background: var(--nds-grey-25); }
+.nds-wsgrid thead th.nm.fz { z-index: 6; background: var(--nds-grey-25); }
 
 /* ER4 F1 — selectable={false} grids have no 40px checkbox column; without this
    the sticky first column pins 40px right of its slot and overlays column 2
    whenever the table overflows (root-caused in ER3.4). */
-.h10-am-grid.nosel th.nm.fz, .h10-am-grid.nosel td.nm.fz { left: 0; }
+.nds-wsgrid.nosel th.nm.fz, .nds-wsgrid.nosel td.nm.fz { left: 0; }
 
-.h10-am-grid tbody tr:hover td.ck, .h10-am-grid tbody tr:hover td.nm.fz { background: var(--nds-imgup-surface); }
+.nds-wsgrid tbody tr:hover td.ck, .nds-wsgrid tbody tr:hover td.nm.fz { background: var(--nds-imgup-surface); }
 
-.h10-am-grid tbody tr.on td.ck, .h10-am-grid tbody tr.on td.nm.fz { background: var(--nds-blue-50); }
+.nds-wsgrid tbody tr.on td.ck, .nds-wsgrid tbody tr.on td.nm.fz { background: var(--nds-blue-50); }
 
-.h10-am-grid tbody tr:hover .h10-editpen, .h10-editpen:focus-visible { opacity: 1; }
+.nds-wsgrid tbody tr:hover .h10-editpen, .h10-editpen:focus-visible { opacity: 1; }
 
-.h10-am-grid tbody tr:hover .h10-statuscell .ch, .h10-statuscell .ch:focus-visible { opacity: 1; }
+.nds-wsgrid tbody tr:hover .h10-statuscell .ch, .h10-statuscell .ch:focus-visible { opacity: 1; }
 
 /* sort arrows — H10 stacked-chevron icon (grey default, dark when sorted) */
-.h10-am-grid th .sortable .sa { color: var(--nds-grey-300); flex-shrink: 0; }
+.nds-wsgrid th .sortable .sa { color: var(--nds-grey-300); flex-shrink: 0; }
 
-.h10-am-grid th .sortable .sa.on { color: var(--nds-grey-600); }
+.nds-wsgrid th .sortable .sa.on { color: var(--nds-grey-600); }
 
-.h10-am-grid th .sortable:hover .sa { color: var(--nds-grey-500); }
+.nds-wsgrid th .sortable:hover .sa { color: var(--nds-grey-500); }
 
-.h10-am-grid th .sortable .hl { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.nds-wsgrid th .sortable .hl { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 
 /* column hover highlight (hover a header → whole column shades) */
-.h10-am-grid td.colhi { background: var(--nds-grey-50); }
+.nds-wsgrid td.colhi { background: var(--nds-grey-50); }
 
-.h10-am-grid thead th.colhi { background: var(--nds-grey-150); }
+.nds-wsgrid thead th.colhi { background: var(--nds-grey-150); }
 
-.h10-am-grid thead th[data-item] { cursor: grab; }
+.nds-wsgrid thead th[data-item] { cursor: grab; }
 
-.h10-am-grid thead th[data-item]:active { cursor: grabbing; }
+.nds-wsgrid thead th[data-item]:active { cursor: grabbing; }
 
-.h10-am-grid thead th.dragging, .h10-am-grid td.dragging { opacity: 0.4; }
+.nds-wsgrid thead th.dragging, .nds-wsgrid td.dragging { opacity: 0.4; }
 
-.h10-am-grid thead th.dragging { box-shadow: inset 0 0 0 2px #2f6bff; }
+.nds-wsgrid thead th.dragging { box-shadow: inset 0 0 0 2px #2f6bff; }
 
 /* ════════════════════════════════════════════════════════════════════════════
    CBN.3.2 — AdsDataGrid shared-grid additions. Only the pinned Total row is new;
@@ -361,26 +361,26 @@
    detail-tab grids are pixel-identical to the Ad Manager. Migrating Ad Manager onto
    AdsDataGrid (CBN.3.7) needs no further CSS.
    ════════════════════════════════════════════════════════════════════════════ */
-.h10-am-grid tr.h10-am-total td { background: var(--nds-grey-25); font-weight: 700; color: var(--nds-grey-900); border-bottom: 1px solid var(--nds-grey-150); }
+.nds-wsgrid tr.h10-am-total td { background: var(--nds-grey-25); font-weight: 700; color: var(--nds-grey-900); border-bottom: 1px solid var(--nds-grey-150); }
 
-.h10-am-grid tr.h10-am-total td.nm.fz { background: var(--nds-grey-25); }
+.nds-wsgrid tr.h10-am-total td.nm.fz { background: var(--nds-grey-25); }
 
-.h10-am-grid tr.h10-am-total td.num { color: var(--nds-grey-900); }
+.nds-wsgrid tr.h10-am-total td.num { color: var(--nds-grey-900); }
 
 /* group-header row (AdsDataGrid groupBy) — a thin band that introduces each cluster. */
-.h10-am-grid tr.h10-am-grp td { background: var(--nds-grey-100); padding: 7px 16px; border-top: 1px solid var(--nds-grey-150); border-bottom: 1px solid var(--nds-grey-150); }
+.nds-wsgrid tr.h10-am-grp td { background: var(--nds-grey-100); padding: 7px 16px; border-top: 1px solid var(--nds-grey-150); border-bottom: 1px solid var(--nds-grey-150); }
 
-.h10-am-grid tr.h10-am-grp .gl { font-size: 12px; font-weight: 700; color: var(--nds-grey-700); }
+.nds-wsgrid tr.h10-am-grp .gl { font-size: 12px; font-weight: 700; color: var(--nds-grey-700); }
 
-.h10-am-grid tr.h10-am-grp .gc { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-500); }
+.nds-wsgrid tr.h10-am-grp .gc { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-500); }
 
 /* row click-to-detail (AdsDataGrid onRowClick) */
-.h10-am-grid tbody tr.clickable { cursor: pointer; }
+.nds-wsgrid tbody tr.clickable { cursor: pointer; }
 
 /* keyboard-focused row (AdsDataGrid keyboardNav: j/k) */
-.h10-am-grid tbody tr.kbd-focus td { background: var(--nds-blue-50); }
+.nds-wsgrid tbody tr.kbd-focus td { background: var(--nds-blue-50); }
 
-.h10-am-grid tbody tr.kbd-focus td.nm.fz { background: var(--nds-blue-50); box-shadow: inset 3px 0 0 var(--nds-blue-600), 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-wsgrid tbody tr.kbd-focus td.nm.fz { background: var(--nds-blue-50); box-shadow: inset 3px 0 0 var(--nds-blue-600), 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    SG.2 — right-pinned columns (`GridColumn.freezeRight` on AdsDataGrid). The mirror of the
@@ -389,21 +389,21 @@
    `right` offset + the fixed width (computed per VISIBLE pinned column); this block carries
    the paint. `fzr0` is the LEFTMOST pinned column and owns the separator shadow.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
-.h10-am-grid th.fzr, .h10-am-grid td.fzr { position: sticky; z-index: 3; background: var(--nds-white); }
+.nds-wsgrid th.fzr, .nds-wsgrid td.fzr { position: sticky; z-index: 3; background: var(--nds-white); }
 
-.h10-am-grid th.fzr0, .h10-am-grid td.fzr0 { border-left: 1px solid #d0d5dd; box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-wsgrid th.fzr0, .nds-wsgrid td.fzr0 { border-left: 1px solid #d0d5dd; box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 
-.h10-am-grid thead th.fzr { z-index: 6; background: var(--nds-grey-25); }
+.nds-wsgrid thead th.fzr { z-index: 6; background: var(--nds-grey-25); }
 
-.h10-am-grid tbody tr:hover td.fzr { background: var(--nds-imgup-surface); }
+.nds-wsgrid tbody tr:hover td.fzr { background: var(--nds-imgup-surface); }
 
-.h10-am-grid tbody tr.on td.fzr { background: var(--nds-blue-50); }
+.nds-wsgrid tbody tr.on td.fzr { background: var(--nds-blue-50); }
 
-.h10-am-grid tr.h10-am-total td.fzr { background: var(--nds-grey-25); }
+.nds-wsgrid tr.h10-am-total td.fzr { background: var(--nds-grey-25); }
 
 /* WG.1 — `align: 'center'`. `.num` (right, line 46) and `.ed` (left, line 396) already existed;
    the DS column type offers three alignments and this was the missing one. */
-.h10-am-grid th.ctr, .h10-am-grid td.ctr { text-align: center; }
+.nds-wsgrid th.ctr, .nds-wsgrid td.ctr { text-align: center; }
 
 
 /* ── the grid's own satellites: pager, search box, hover card ──────────────────────────

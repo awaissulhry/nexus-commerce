@@ -315,9 +315,9 @@
    Amazon's (#475467, not link-blue), and the totals row (an AdsDataGrid
    feature Amazon's manager doesn't render) uses the grid body register —
    12.5px, and no 700→bolder→900 on the Total label. */
-.eb-root .h10-am-grid th.sorted .hl, .eb-root .h10-am-grid th.sorted .sortable { color: #475467; }
-.eb-root .h10-am-grid tr.h10-am-total td { font-size: 12.5px; }
-.eb-root .h10-am-grid tr.h10-am-total b { font-weight: 700; }
+.eb-root .nds-wsgrid th.sorted .hl, .eb-root .nds-wsgrid th.sorted .sortable { color: #475467; }
+.eb-root .nds-wsgrid tr.h10-am-total td { font-size: 12.5px; }
+.eb-root .nds-wsgrid tr.h10-am-total b { font-weight: 700; }
 
 /* EV4h.2 — dashboard type-register parity with the Amazon console (measured
    on prod 2026-07-04): the eBay dashboard consumes Amazon's dashboard.css
@@ -325,7 +325,7 @@
    10.5px/800 registers exist nowhere in ads.css. Re-pin the four classes to
    the nearest registers ads.css actually carries — caps 11/700 #8a93a1
    (.h10-cd-products li.hd), value 19/700 (.h10-aiad-ov .kpi .vl), card head
-   12/700 (.h10-am-grid tr.h10-am-grp .gl), delta 10.5/700 (.h10-neg-mtag).
+   12/700 (.nds-wsgrid tr.h10-am-grp .gl), delta 10.5/700 (.h10-neg-mtag).
    .eb-root-scoped so Amazon's own dashboard is unaffected. */
 .eb-root .dash-kpi-k { font-size: 11px; font-weight: 700; letter-spacing: 0.03em; }
 .eb-root .dash-kpi-v { font-weight: 700; }

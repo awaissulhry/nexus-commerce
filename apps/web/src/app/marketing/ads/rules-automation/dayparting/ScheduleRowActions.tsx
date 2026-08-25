@@ -88,7 +88,7 @@ export function ScheduleRowActions({ row, onRenamed, onDeleted }: {
 
       {/*
         PORTALLED TO document.body — not a styling nicety, a correctness requirement.
-        The trigger lives in the grid's sticky first column, and `.h10-am-grid td.nm` carries
+        The trigger lives in the grid's sticky first column, and `.nds-wsgrid td.nm` carries
         `position: sticky; z-index: 3`, which opens a STACKING CONTEXT. Any z-index on a descendant
         is resolved inside that context, so the menu composited beneath the app sidebar no matter
         how high the number went. Rendering at body level is the only way out of it.

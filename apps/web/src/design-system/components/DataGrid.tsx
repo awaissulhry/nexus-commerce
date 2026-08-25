@@ -114,7 +114,7 @@ export interface DataGridProps<T> {
 }
 
 /**
- * The universal data grid (H10 `.h10-am-grid`): sortable headers, row selection
+ * The universal data grid (`.nds-grid`; the richer `.nds-wsgrid` is the ads console's): sortable headers, row selection
  * with select-all, sticky header, pinned left columns, an optional sticky totals
  * row, and an empty state. Generic over the row type.
  */

@@ -74,7 +74,7 @@ say(`stored: ${JSON.stringify(stored)}`)
 
 // ── 5 · Ad Group View: assign · pause · detach ──────────────────────────────
 await page.goto(`${BASE}/keyword-harvest?view=ad-groups`, { waitUntil: 'networkidle' })
-await page.waitForSelector('.h10-am-grid tbody tr', { timeout: 30_000 })
+await page.waitForSelector('.nds-wsgrid tbody tr', { timeout: 30_000 })
 const assignBtn = page.locator('button[aria-label^="Assign a harvest rule"]').first()
 await assignBtn.click()
 await page.waitForTimeout(300)

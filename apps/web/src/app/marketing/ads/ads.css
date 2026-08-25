@@ -30,7 +30,7 @@
 .h10-am-toolbar .grow { flex: 1; }
 
 /* CBN.3 — unify toolbar + grid + pager into ONE card (H10: the toolbar lives inside the grid
-   rectangle, just above the header). Scoped to .h10-am-card so the standalone .h10-am-grid /
+   rectangle, just above the header). Scoped to .h10-am-card so the standalone .nds-wsgrid /
    .h10-am-toolbar used by CampaignsGrid stay exactly as they are. */
 /* Cards are the DS `.nds-card` now. What the DS Card deliberately does NOT carry is a top
    margin — its consumers space with gap. Four AutomationTab cards stack directly, so the
@@ -38,7 +38,7 @@
    would silently re-style every future DS Card in this console. */
 .h10-cardstack { margin-top: 16px; }
 .nds-card .h10-am-toolbar { padding: 14px 16px; }
-.nds-card .h10-am-grid,
+.nds-card .nds-wsgrid,
 .nds-card .eb-tablebox { border: none; border-radius: 0; background: transparent; }
 .nds-card .h10-am-pager { padding: 12px 16px 14px; }
 .nds-card + .h10-am-latest { margin-top: 12px; }
