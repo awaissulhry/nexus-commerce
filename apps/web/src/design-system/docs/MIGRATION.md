@@ -42,13 +42,27 @@ DS across the app, **without ever forking**.
 - **Blocks 9.2 and 9.3**, which would otherwise amplify the ambiguity across ~290
   pages. Full plan, measurements and gates in the linked doc.
 
-### 9.1 — Tokenize `ads.css` (keystone — the deferred Phase 1 rewrite)
-- Rewrite `ads.css` to reference `var(--nds-*)` instead of hardcoded hex,
-  canonicalizing the 251→~70 drift per `studies/01-color-drift.md`.
-- Import `styles/tokens.css` in the ads layout.
-- **Gate:** every ads screen pixel-identical vs the 9.0 baseline (drift-collapse
-  is sub-perceptual; the diff proves it). This is *the* proof the system's values
-  equal the originals.
+### 9.1 — Tokenize the app's stylesheets ✅ MOSTLY DONE 2026-08-25
+- **Scope was wider than this section said.** It named `ads.css` (2,144 literals).
+  `rules-automation.css` had **3,674** and was never mentioned; repo-wide it was 10,343
+  across 45 stylesheets.
+- `styles/tokens.css` is already imported by the ads layout — that step was done.
+- **Done:** 10,343 → ~3,300. Two mechanical passes, both by construction safe:
+  exact token matches (value-identical), then ΔE ≤ 2.3 drift (gated on a pixel
+  diff — max channel delta 7/255 across four pages).
+- **Mapped to tier-1 RAMPS, not semantic roles.** 40 of 60 hex values carry
+  several token names (`#ffffff` is `--nds-white` AND `--nds-surface` AND
+  `--nds-text-inverse`); a blind substitution to a semantic name asserts a
+  meaning it cannot know. Promoting ramps to roles needs context and is a later,
+  per-surface pass.
+- **What is left is NOT more of the same.** ~3,300 literals that are genuinely
+  off-palette. 🔴 Read them as evidence, not drift: three separate clusters
+  turned out to be contrast ratios someone COMPUTED and documented in a comment,
+  and snapping them to the nearest token would have broken WCAG AA. That is how
+  `--nds-*-text` and `--nds-text-muted` came to exist. Anything with a ratio in
+  a comment beside it is load-bearing.
+- The legacy consoles (`ads-console/`, `advertising/`) are excluded — Wave 0
+  retires them, so converting them buys nothing.
 
 ### 9.2 — Converge `globals.css` onto H10 (the app-wide look flip)
 - Reset the existing semantic token **values** (`--text-*`, `--surface-*`,
@@ -70,6 +84,12 @@ its feature dossier (studies hub) scopes it; harness-gated + reviewed.
 
 ### 9.5 — Migrate the ads cockpit onto the DS
 - Replace the ads' bespoke components per `studies/03-ads-campaigns.md` §3
+  🔴 **STALE — the grid line is now BACKWARDS.** Concept #13 was decided 2026-08-25 the
+  other way: the ads grid is PROMOTED into `patterns/` as `WorkspaceGrid` and the DS
+  `DataGrid` is retired, because 10 of its 14 call sites already hand-roll the chrome the
+  ads grid has built in, and the port is one field plus two renames. See
+  `PHASE-9-3-DUPLICATE-CONCEPTS.md` Appendix A. Anyone following the line below migrates
+  in the wrong direction.
   (`AdsDataGrid`→`DataGrid`, `FilterDropdown`→`MultiSelect`/`Combobox`, modals→
   `Modal`/`Drawer`, charts→`PerformanceGraph`/`Heatmap`, shell/headers→patterns,
   rule builders→`Builder`). Lift `builder-icons` → `primitives/icons`. Dedupe the
