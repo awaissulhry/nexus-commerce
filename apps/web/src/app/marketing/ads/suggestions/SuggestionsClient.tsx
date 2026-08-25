@@ -1379,15 +1379,16 @@ function SuggestionsInner() {
                   key: 'unmute', label: 'Unmute', metric: false, sortable: false, freezeRight: true, width: 88,
                   tip: 'Let the plans propose for this campaign again from their next tick.',
                   render: (r: AiDecision) => (
-                    <button type="button" className="h10-sug-iconbtn" disabled={bulkBusy}
-                      aria-label="Resume A.I. suggestions for this campaign" title="Resume suggestions — the plans may propose for it again"
+                    <ToolbarButton
+                      variant="boxed" tooltip={false} icon={<Volume2 size={14} />} disabled={bulkBusy}
+                      label="Resume A.I. suggestions for this campaign"
+                      title="Resume suggestions — the plans may propose for it again"
                       onClick={() => {
                         void fetch(`${getBackendUrl()}/api/advertising/ai-decisions/mutes/${encodeURIComponent(r.campaignId ?? '')}`, { method: 'DELETE' })
                           .then(() => { toast('Unmuted — the plans may propose for this campaign again', 'success'); setReload((n) => n + 1); void refreshCounts() })
                           .catch(() => toast('Could not unmute', 'danger'))
-                      }}>
-                      <Volume2 size={14} />
-                    </button>
+                      }}
+                    />
                   ),
                 } as GridColumn<AiDecision>,
               ] : aiStatus === 'applied' ? [
