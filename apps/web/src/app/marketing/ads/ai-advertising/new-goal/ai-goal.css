@@ -80,6 +80,8 @@
    padding and focus ring are the DS `Textarea`'s. */
 .aig-adv { display: flex; flex-direction: column; gap: 22px; }
 .aig-adv-f .dl { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
-.aig-adv-f .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #37495b; }
+/* `--nds-text-strong`, not the #37495b the ads.css rule carried: the raw-hex ratchet holds new
+   CSS at zero literals, and the token is a straight improvement here — 9.27:1 → 9.87:1. */
+.aig-adv-f .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-text-strong); }
 .aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-grey-500); }
 .aig-adv-f .nds-textarea { min-height: 120px; }
