@@ -85,12 +85,12 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
             <span className="h10-blend-sig" title="The closed-loop feedback signal available for this placement">{l.signal}</span>
             {on && (
               <span className="h10-blend-fields">
-                <label className="h10-mfield" title="Placement bid multiplier 0–900%"><span>Bias %</span><input type="number" min={0} max={900} value={v.biasPct ?? ''} onChange={(e) => setLaneField(l.placement, 'biasPct', e.target.value)} /></label>
-                <label className="h10-mfield" title="Blank = hold the bias. Set above it to let this lane climb toward the ceiling."><span>Ceiling %</span><input type="number" min={0} max={900} value={v.maxBiasPct ?? ''} placeholder="hold" onChange={(e) => setLaneField(l.placement, 'maxBiasPct', e.target.value)} /></label>
+                <label className="h10-mfield" title="Placement bid multiplier 0–900%"><span>Bias %</span><Input size="xs" type="number" min={0} max={900} value={v.biasPct ?? ''} onChange={(e) => setLaneField(l.placement, 'biasPct', e.target.value)} /></label>
+                <label className="h10-mfield" title="Blank = hold the bias. Set above it to let this lane climb toward the ceiling."><span>Ceiling %</span><Input size="xs" type="number" min={0} max={900} value={v.maxBiasPct ?? ''} placeholder="hold" onChange={(e) => setLaneField(l.placement, 'maxBiasPct', e.target.value)} /></label>
                 {l.chase
-                  ? <label className="h10-mfield" title={l.placement === 'PLACEMENT_TOP' ? 'Top-of-Search impression share to chase (when a ceiling is set)' : 'SQP brand impression share to chase (approximate)'}><span>Target {l.placement === 'PLACEMENT_TOP' ? 'IS' : 'SQP'} %</span><input type="number" min={0} max={100} value={v.targetISPct ?? ''} placeholder="—" onChange={(e) => setLaneField(l.placement, 'targetISPct', e.target.value)} /></label>
+                  ? <label className="h10-mfield" title={l.placement === 'PLACEMENT_TOP' ? 'Top-of-Search impression share to chase (when a ceiling is set)' : 'SQP brand impression share to chase (approximate)'}><span>Target {l.placement === 'PLACEMENT_TOP' ? 'IS' : 'SQP'} %</span><Input size="xs" type="number" min={0} max={100} value={v.targetISPct ?? ''} placeholder="—" onChange={(e) => setLaneField(l.placement, 'targetISPct', e.target.value)} /></label>
                   : <span className="h10-mfield h10-rte-na" title="Amazon exposes no impression share for Product pages — this lane is set-and-hold (open-loop)">open-loop</span>}
-                {l.acos && <label className="h10-mfield" title="Ease off above this ACOS while climbing (Top only — Amazon exposes no ACOS for Rest/Product)"><span>ACOS cap %</span><input type="number" min={0} value={v.acosCapPct ?? ''} placeholder="—" onChange={(e) => setLaneField(l.placement, 'acosCapPct', e.target.value)} /></label>}
+                {l.acos && <label className="h10-mfield" title="Ease off above this ACOS while climbing (Top only — Amazon exposes no ACOS for Rest/Product)"><span>ACOS cap %</span><Input size="xs" type="number" min={0} value={v.acosCapPct ?? ''} placeholder="—" onChange={(e) => setLaneField(l.placement, 'acosCapPct', e.target.value)} /></label>}
                 <span className="h10-blend-eff" title="Effective bid for this placement = base bid × (1 + bias%)">eff {eff(v.biasPct)}</span>
               </span>
             )}
@@ -110,7 +110,7 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
         )}
         {bidMode === 'deltaPct' && (
           <label className="h10-blend-delta" title="Scale every keyword + ad-group bid by this % from its stable baseline (−95…+300). Reverts to baseline when the window ends — never compounds.">
-            <input type="number" step="5" min={-95} max={300} placeholder="+15" value={bidDeltaPct ?? ''} onChange={(e) => setBidDeltaPct(e.target.value === '' ? null : Math.max(-95, Math.min(300, Math.round(Number(e.target.value)))))} /> %
+            <Input size="xs" fieldClassName="h10-blend-deltain" type="number" step="5" min={-95} max={300} placeholder="+15" value={bidDeltaPct ?? ''} onChange={(e) => setBidDeltaPct(e.target.value === '' ? null : Math.max(-95, Math.min(300, Math.round(Number(e.target.value)))))} /> %
           </label>
         )}
         <span className="h10-mnote">{bidMode === 'deltaPct'

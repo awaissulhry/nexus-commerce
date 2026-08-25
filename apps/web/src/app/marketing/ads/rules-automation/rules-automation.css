@@ -103,9 +103,12 @@
 .h10-rb-conds:has(.cond.then) { position: relative; }
 .h10-rb-conds:has(.cond.then)::before { content: ''; position: absolute; left: 19px; top: 30px; bottom: 27px; border-left: 1.5px dashed var(--nds-grey-300); }
 .h10-rb-conds .cond.then { margin-top: 2px; }
-.h10-rb-val { display: inline-flex; align-items: stretch; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); overflow: hidden; width: 200px; }
-.h10-rb-val .pf { padding: 0 11px; background: var(--nds-grey-50); color: var(--nds-grey-600); font-size: 13px; display: flex; align-items: center; border-right: 1px solid var(--nds-grey-200); }
-.h10-rb-val input { border: 0; outline: 0; padding: 9px 11px; font: inherit; font-size: 13.5px; width: 100%; color: var(--nds-grey-900); }
+/* DS-ALIGN — the builder's value box was a pixel-for-pixel re-implementation of the DS `Input`
+   with its `prefix`/`suffix` slots: a bordered inline-flex wrapper, a shaded €/% adornment with a
+   divider on its inner edge, and a borderless field between them. It is the primitive now, and
+   all three of those rules are gone. Only the widths remain — they are what the LAYOUT wants,
+   not what the control is. */
+.h10-rb-val { width: 200px; }
 .h10-rb-conds .rm { border: 0; background: none; color: var(--nds-grey-400); cursor: pointer; padding: 4px; display: inline-flex; }
 .h10-rb-conds .rm:hover { color: var(--nds-red-500); }
 .h10-rb-addand { border: 0; background: none; color: var(--nds-blue-600); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; margin: 2px 0 14px 50px; }
@@ -167,8 +170,8 @@
 /* Add Ad Group popover */
 .h10-rb-agpop { position: absolute; top: calc(100% + 8px); right: 0; width: 470px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-2xl); box-shadow: 0 14px 36px rgba(20,28,38,.18); padding: 16px; z-index: 40; }
 .h10-rb-agpop .t { font-size: 14px; font-weight: 700; color: var(--nds-grey-900); margin-bottom: 11px; }
-.h10-rb-agpop .srch { display: flex; align-items: center; gap: 8px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 8px 11px; margin-bottom: 13px; color: var(--nds-grey-500); }
-.h10-rb-agpop .srch input { border: 0; outline: 0; font: inherit; font-size: 13px; width: 100%; color: var(--nds-grey-900); }
+/* DS-ALIGN — the popover's search box is the DS `Input` with a `leadingIcon`. */
+.h10-rb-agpop .srch { display: flex; margin-bottom: 13px; }
 .h10-rb-agpop .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--nds-grey-150); margin-bottom: 14px; }
 .h10-rb-agpop .tabs button { border: 0; background: none; padding: 0 0 9px; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-600); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .h10-rb-agpop .tabs button.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
@@ -258,7 +261,6 @@
 /* ── R2 video-match refinements (verifier session) ── */
 /* metric-aware condition value: % suffix box (mirrors the € prefix box) */
 .h10-rb-val.hassf { width: 200px; }
-.h10-rb-val .sf { padding: 0 11px; background: var(--nds-grey-50); color: var(--nds-grey-600); font-size: 13px; display: flex; align-items: center; border-left: 1px solid var(--nds-grey-200); }
 /* Lookback period: required asterisk + inline "Exclude <window>" */
 .h10-rb-lookback label i { color: var(--nds-red-500); font-style: normal; }
 .h10-rb-lookback .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -709,7 +711,8 @@
 .h10-rte-row .nm .desc { flex: 1 1 100%; font-size: 11px; color: var(--nds-grey-500); }
 .h10-rte-row .fld { flex: 0 0 60px; }
 .h10-rte-head .fld { font-size: 10px; font-weight: 700; color: var(--nds-grey-500); text-align: center; }
-.h10-rte-row .fld input { width: 100%; font: inherit; font-size: 12px; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 6px; }
+/* DS-ALIGN — the DS `Input` at `xs`; the cell decides the width. */
+.h10-rte-row .fld .nds-field { width: 100%; }
 .h10-rte-row .fld.h10-rte-na { font-size: 10.5px; color: var(--nds-grey-400); text-align: center; }
 .h10-rte-row .act { flex: 0 0 90px; display: inline-flex; gap: 2px; justify-content: flex-end; }
 /* DS-ALIGN — the DS `Input` at `sm`. */
@@ -721,7 +724,8 @@
 .h10-msub { font-size: 11px; color: var(--nds-pill-neutral-fg); margin: 4px 0 8px; line-height: 1.5; }
 .h10-mfields { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .h10-mfield { display: inline-flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 600; color: var(--nds-grey-600); }
-.h10-mfield input { width: 64px; font: inherit; font-size: 12px; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 6px; }
+/* DS-ALIGN — the boxes in these labelled micro-fields are the DS `Input` at `xs`. */
+.h10-mfield .nds-field { width: 64px; }
 .h10-mfield.h10-rte-na { color: var(--nds-grey-400); font-weight: 500; align-self: center; }
 /* MB.2 — Min-bid drawer: the Motion drawer's sibling, in the Min-bid swatch's own hue so
    the two are never mistaken for each other at a glance. */
@@ -750,7 +754,7 @@
 .h10-blend-num > input { width: 84px; }
 .h10-blend-baselbl { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-blend-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--nds-grey-600); }
-.h10-blend-delta input { width: 60px; }
+.h10-blend-deltain { width: 66px; }
 /* Add form + footer */
 .h10-rte-add { background: var(--nds-grey-25); }
 .h10-rte-addscope { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--nds-grey-600); flex-wrap: wrap; margin-top: 6px; }
@@ -5664,3 +5668,8 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 .h10-ntm-say + * { margin-top: 11px; }
 .h10-ntm-field { width: 100%; }
+
+/* The template-name box in the rank schedule-templates dialog. It used to carry its border,
+   radius and padding as an inline `style` — the one place in this section a control was styled
+   from JSX. It is the DS `Input` now; all that is left is its share of the row. */
+.h10-rtm-namefield { flex: 1; }

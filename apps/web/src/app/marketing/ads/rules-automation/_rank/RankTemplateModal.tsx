@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Save, Trash2, Download, Pencil } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 
 type Win = { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Tpl { id: string; name: string; windows: Win[]; defaultTargetKey: string | null; updatedAt: string }
@@ -48,7 +48,7 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
       <div className="box h10-rte" onClick={e => e.stopPropagation()} style={{ width: 'min(520px, 94vw)' }}>
         <div className="hd">Schedule templates<span className="grow" /><button type="button" className="h10-kebab" onClick={onClose} aria-label="Close">✕</button></div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '10px 15px', borderBottom: '1px solid #d8dde4' }}>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Name this schedule (e.g. Evenings push)" style={{ flex: 1, border: '1px solid #d8dde4', borderRadius: 6, padding: '6px 9px', font: 'inherit', fontSize: 12.5 }} onKeyDown={e => { if (e.key === 'Enter') void saveNew() }} />
+          <Input size="sm" fieldClassName="h10-rtm-namefield" value={name} onChange={e => setName(e.target.value)} placeholder="Name this schedule (e.g. Evenings push)" aria-label="Template name" onKeyDown={e => { if (e.key === 'Enter') void saveNew() }} />
      <Button variant="primary" size="sm" disabled={busy || !currentWindows.length} onClick={() => void saveNew()} title={currentWindows.length ? 'Save the current painted schedule as a new template' : 'Paint a schedule first'}><Save size={13} /> Save current</Button>
         </div>
         <div className="list">

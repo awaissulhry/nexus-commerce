@@ -1559,11 +1559,12 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         <Listbox width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
                         <Listbox width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
-                          <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
-                            {u === 'eur' && <span className="pf">€</span>}
-                            <input inputMode="decimal" value={c.value} onChange={(e) => setCond(g.id, i, { value: e.target.value })} aria-label="Value" />
-                            {u === 'pct' && <span className="sf">%</span>}
-                          </span>
+                          <Input
+                            fieldClassName={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}
+                            prefix={u === 'eur' ? '€' : undefined}
+                            suffix={u === 'pct' ? '%' : undefined}
+                            inputMode="decimal" value={c.value} onChange={(e) => setCond(g.id, i, { value: e.target.value })} aria-label="Value"
+                          />
                         ) })()}
                         <button type="button" className="rm" aria-label="Remove condition" onClick={() => removeCondition(g.id, i)}><X size={16} /></button>
                       </div>
@@ -1615,15 +1616,15 @@ export function RuleBuilder({ slug }: { slug: string }) {
                             not rendered rather than rendered empty or disabled. A disabled input
                             beside a chosen action reads as "you forgot something". */}
                         {u !== 'none' && (
-                        <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
-                          {u === 'eur' && <span className="pf">€</span>}
-                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} /* 🔴 `targetAcos` FIRST: it is the one bid action whose input is not a bid. Ordered after
+                        <Input
+                          fieldClassName={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}
+                          prefix={u === 'eur' ? '€' : undefined}
+                          suffix={u === 'pct' ? '%' : undefined}
+                          inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} /* 🔴 `targetAcos` FIRST: it is the one bid action whose input is not a bid. Ordered after
                               `isBidLike` — as it was on the first cut — the branch is unreachable and a screen
                               reader announces "Bid amount" over a field that takes a target ACoS percentage.
                               Measured on prod: the visible % suffix made it look right to a sighted operator. */
                           aria-label={g.budgetOp === 'targetAcos' || g.budgetOp === 'curBidTargetAcos' ? 'Target ACoS percentage' : isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : 'Budget amount'} />
-                          {u === 'pct' && <span className="sf">%</span>}
-                        </span>
                         )}
                         {isBidLike && <HoverCard text={
                           g.budgetOp === 'targetAcos'
@@ -1778,9 +1779,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <p>Hard limits so automation can never run a budget away — Amazon’s daily minimum is €1</p>
                   <div className="freqrow">
                     <span className="lbl">Min</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" value={budgetFloor} onChange={(e) => setBudgetFloor(e.target.value)} aria-label="Min daily budget" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" value={budgetFloor} onChange={(e) => setBudgetFloor(e.target.value)} aria-label="Min daily budget" />
                     <span className="lbl">Max</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={budgetCeiling} onChange={(e) => setBudgetCeiling(e.target.value)} aria-label="Max daily budget" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder="No cap" value={budgetCeiling} onChange={(e) => setBudgetCeiling(e.target.value)} aria-label="Max daily budget" />
                   </div>
                   {floorOverCeiling && <div className="h10-rb-warn">Min budget (€{budgetFloor}) is above Max (€{budgetCeiling}) — increases would be capped at the Max.</div>}
                 </div>
@@ -1796,11 +1797,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <p>Refuse further work past the ceiling; past the write cap the rule keeps proposing but stops writing. Every rule carries a €100/day spend ceiling and a 10-runs-per-day cap unless you change them here.</p>
                   <div className="freqrow">
                     <span className="lbl">Max daily ad spend</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="100 (default)" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} aria-label="Max daily ad spend" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder="100 (default)" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} aria-label="Max daily ad spend" />
                     <span className="lbl">Max writes per day</span>
-                    <span className="h10-rb-val bidv"><input inputMode="numeric" placeholder="No cap" value={maxWrites} onChange={(e) => setMaxWrites(e.target.value)} aria-label="Max writes per day" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" inputMode="numeric" placeholder="No cap" value={maxWrites} onChange={(e) => setMaxWrites(e.target.value)} aria-label="Max writes per day" />
                     <span className="lbl">Max runs per day</span>
-                    <span className="h10-rb-val bidv"><input inputMode="numeric" placeholder="10 (default)" value={maxExecs} onChange={(e) => setMaxExecs(e.target.value)} aria-label="Max rule runs per day" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" inputMode="numeric" placeholder="10 (default)" value={maxExecs} onChange={(e) => setMaxExecs(e.target.value)} aria-label="Max rule runs per day" />
                   </div>
                 </div>
                 <div className="advblock">
@@ -1814,9 +1815,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <p>Hard limits on the placement bid modifier — Amazon allows 0–900%</p>
                   <div className="freqrow">
                     <span className="lbl">Min</span>
-                    <span className="h10-rb-val bidv hassf"><input inputMode="decimal" value={placeFloor} onChange={(e) => setPlaceFloor(e.target.value)} aria-label="Min placement modifier" /><span className="sf">%</span></span>
+                    <Input fieldClassName="h10-rb-val bidv hassf" suffix="%" inputMode="decimal" value={placeFloor} onChange={(e) => setPlaceFloor(e.target.value)} aria-label="Min placement modifier" />
                     <span className="lbl">Max</span>
-                    <span className="h10-rb-val bidv hassf"><input inputMode="decimal" value={placeCeiling} onChange={(e) => setPlaceCeiling(e.target.value)} aria-label="Max placement modifier" /><span className="sf">%</span></span>
+                    <Input fieldClassName="h10-rb-val bidv hassf" suffix="%" inputMode="decimal" value={placeCeiling} onChange={(e) => setPlaceCeiling(e.target.value)} aria-label="Max placement modifier" />
                   </div>
                   {placeCeiling.trim() !== '' && (Number(placeFloor) || 0) > (Number(placeCeiling) || 0) && <div className="h10-rb-warn">Min ({placeFloor}%) is above Max ({placeCeiling}%) — increases would be capped at the Max.</div>}
                 </div>
@@ -1827,9 +1828,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <p>Hard limits on the keyword bid so automation can never run a bid away — Amazon’s minimum is €0.02</p>
                   <div className="freqrow">
                     <span className="lbl">Min</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" value={bidFloor} onChange={(e) => setBidFloor(e.target.value)} aria-label="Min bid" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" value={bidFloor} onChange={(e) => setBidFloor(e.target.value)} aria-label="Min bid" />
                     <span className="lbl">Max</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={bidCeiling} onChange={(e) => setBidCeiling(e.target.value)} aria-label="Max bid" /></span>
+                    <Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder="No cap" value={bidCeiling} onChange={(e) => setBidCeiling(e.target.value)} aria-label="Max bid" />
                   </div>
                   {bidFloorOverCeiling && <div className="h10-rb-warn">Min bid (€{bidFloor}) is above Max (€{bidCeiling}) — increases would be capped at the Max.</div>}
                 </div>
@@ -1858,8 +1859,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       { value: 'adGroupDefault', label: 'Ad group default bid' },
                       { value: 'fixed', label: 'Custom bid' },
                     ]} value={bidMode} onChange={(v) => setBidMode(v as 'cpc' | 'cpcPlus' | 'adGroupDefault' | 'fixed')} ariaLabel="New target bid mode" />
-                    {bidMode === 'fixed' && <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="0.75" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Custom bid amount" /></span>}
-                    {bidMode === 'cpcPlus' && <span className="h10-rb-val bidv hassf"><input inputMode="decimal" placeholder="10" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Percent above the term’s CPC" /><span className="sf">%</span></span>}
+                    {bidMode === 'fixed' && <Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder="0.75" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Custom bid amount" />}
+                    {bidMode === 'cpcPlus' && <Input fieldClassName="h10-rb-val bidv hassf" suffix="%" inputMode="decimal" placeholder="10" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Percent above the term’s CPC" />}
                   </div>
                 </div>
                 )}
@@ -2306,7 +2307,7 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
   return (
     <div className="h10-rb-agpop" ref={ref} role="dialog" aria-label="Add Ad Group to Rule">
       <div className="t">Add Ad Group to Rule</div>
-      <div className="srch"><Search size={14} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search'} aria-label={tab === 'Products' ? 'Search products' : 'Search ad groups'} /></div>
+      <Input fieldClassName="srch" leadingIcon={<Search size={14} />} autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search'} aria-label={tab === 'Products' ? 'Search products' : 'Search ad groups'} />
       <div className="tabs">{TABS.map((t) => <button key={t} type="button" className={t === tab ? 'on' : ''} onClick={() => setTab(t)}>{t}</button>)}</div>
       <div className="filters">
         <div className="f"><label>Campaign Status</label><Listbox width={150} options={AG_STATUS} value={campStatus} onChange={setCampStatus} ariaLabel="Campaign status" /></div>

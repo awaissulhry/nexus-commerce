@@ -63,7 +63,8 @@ function EuroInput({ dkey, cents, placeholder, disabled, draft, setDraft, onComm
   onCommit: (raw: string) => void
 }) {
   return (
-    <input
+    <Input
+      size="xs"
       type="text"
       inputMode="decimal"
       disabled={disabled}
@@ -375,12 +376,12 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                     const v = ov[t.key]?.[f.f]
                     const ph = defOf(t, f.f)
                     if (isEuro(f.f)) return <span key={f.f} className="fld"><EuroInput dkey={`s:${t.key}:${f.f}`} cents={v} placeholder={ph == null ? blank : eur(ph)} disabled={!scopeAvailable} draft={draft} setDraft={setDraft} onCommit={raw => setScope(t.key, f.f, raw)} /></span>
-                    return <span key={f.f} className="fld"><input type="number" disabled={!scopeAvailable} value={v == null ? '' : v} placeholder={ph == null ? blank : String(ph)} onChange={e => setScope(t.key, f.f, e.target.value)} step="1" /></span>
+                    return <span key={f.f} className="fld"><Input size="xs" type="number" disabled={!scopeAvailable} value={v == null ? '' : v} placeholder={ph == null ? blank : String(ph)} onChange={e => setScope(t.key, f.f, e.target.value)} step="1" /></span>
                   }
                   const lv = (lib[t.id]?.[f.f] as number | null | undefined)
                   const val = lv !== undefined ? lv : (t[f.f] as number | null)
                   if (isEuro(f.f)) return <span key={f.f} className="fld"><EuroInput dkey={`g:${t.id}:${f.f}`} cents={val} placeholder={blank} draft={draft} setDraft={setDraft} onCommit={raw => setLibField(t.id, f.f, raw)} /></span>
-                  return <span key={f.f} className="fld"><input type="number" value={val == null ? '' : val} placeholder={blank} onChange={e => setLibField(t.id, f.f, e.target.value)} step="1" /></span>
+                  return <span key={f.f} className="fld"><Input size="xs" type="number" value={val == null ? '' : val} placeholder={blank} onChange={e => setLibField(t.id, f.f, e.target.value)} step="1" /></span>
                 })}
                 <span className="act">
                   {/* MB.2 — Min bid gets the same drawer affordance as every other target; only its CONTENTS differ. */}
@@ -432,7 +433,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                       return (
                         <label key={f.f} className="h10-mfield" title={f.hint}>
                           <span>{f.label}</span>
-                          <input type="number" min={0} max={900} disabled={view === 'scope' && !scopeAvailable}
+                          <Input size="xs" type="number" min={0} max={900} disabled={view === 'scope' && !scopeAvailable}
                             value={v == null ? '' : v}
                             placeholder={view === 'scope' ? (ph == null ? '—' : String(ph)) : '—'}
                             onChange={e => view === 'scope' ? setScope(t.key, f.f, e.target.value) : setLibField(t.id, f.f, e.target.value)} />
