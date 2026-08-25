@@ -10,6 +10,7 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Video, ChevronDown } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 
@@ -59,7 +60,7 @@ export function CampaignDetailHeader({
           <h1 title={title}>{badge ? <span className="h10-cd-badge" data-t={badge}>{badge}</span> : null}<span className="nm">{title || '—'}</span>{titleBadges}</h1>
         </div>
         <div className="h10-cd-actions">
-          <button type="button" className="h10-hbtn"><Video size={15} /> Learn</button>
+          <Button><Video size={15} /> Learn</Button>
           {/* No Change Log here on purpose. What belongs on a campaign page is that CAMPAIGN's
               history, not the account-wide log — and that surface (HX.6) is not built yet. A link
               promising campaign history and delivering everything else would be worse than none. */}
@@ -86,7 +87,7 @@ export function CampaignDetailHeader({
 
           {/* Action dropdown */}
           <div className="h10-hsel">
-            <button type="button" className="h10-hbtn primary" onClick={() => setOpen(open === 'action' ? '' : 'action')}><ChevronDown size={14} /> Action</button>
+            <Button variant="primary" aria-haspopup="menu" aria-expanded={open === 'action'} onClick={() => setOpen(open === 'action' ? '' : 'action')}><ChevronDown size={14} /> Action</Button>
             {open === 'action' && <>
               <button type="button" className="h10-menu-back" aria-label="Close" onClick={close} />
               <div className="h10-menu right">
