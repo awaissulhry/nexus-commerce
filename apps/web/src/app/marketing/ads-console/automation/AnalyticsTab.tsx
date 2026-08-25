@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { BarChart3, RefreshCw, Download } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { cleanName } from './_icons'
 import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 
@@ -67,8 +68,8 @@ export function AnalyticsTab() {
         <span style={{ fontWeight: 700 }}><BarChart3 size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Automation analytics &amp; reports</span>
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <button className="az-btn" onClick={exportCsv}><Download size={14} />Export report</button>
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
+        <Button onClick={exportCsv}><Download size={14} />Export report</Button>
+        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
 
       <div className="az-hero">

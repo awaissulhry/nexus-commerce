@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Gauge, RefreshCw, ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ToolbarButton } from '@/design-system/primitives'
 import { TabControls, DEFAULT_RANGE, rangeQuery, rangeLabel, type RangeValue } from './TabControls'
 
 interface Row { date: string; clicks: number; orders: number; adSpendCents: number; adSalesCents: number }
@@ -66,7 +67,7 @@ export function EfficiencyTab() {
         <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{rangeLabel(range)} vs previous</span>
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
+        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
 
       <div className="az-hero">

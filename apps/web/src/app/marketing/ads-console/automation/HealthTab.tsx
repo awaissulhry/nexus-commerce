@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, Clock, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ToolbarButton } from '@/design-system/primitives'
 import { cleanName } from './_icons'
 
 interface Health {
@@ -58,7 +59,7 @@ export function HealthTab() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 2px 10px' }}>
         <span style={{ fontWeight: 700 }}><Activity size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Activity log</span>
         <span style={{ flex: 1 }} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
+        <ToolbarButton icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">

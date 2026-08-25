@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { ToolbarButton } from '@/design-system/primitives'
 import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 
 interface Row { date: string; impressions: number; clicks: number; orders: number; adSpendCents: number; adSalesCents: number; acos: number | null; ctr: number | null }
@@ -80,7 +81,7 @@ export function AnomalyTab() {
         <span style={{ color: 'var(--ink2)', fontSize: 12 }}>sudden moves vs the trailing baseline</span>
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
+        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
       {loading && <div className="az-empty">Analysing…</div>}
       {!loading && anomalies.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No anomalies detected — performance is steady.</div>}

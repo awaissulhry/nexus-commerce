@@ -8,6 +8,7 @@
  */
 
 import { BookOpen, PenTool, CheckSquare, Zap, ShieldCheck, TrendingUp, ChevronRight, Sparkles } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
 
 interface Rule { enabled: boolean; dryRun: boolean; trigger: string }
 interface Rec { id: string; title: string; estImpactCents?: number }
@@ -46,7 +47,7 @@ export function AutomationHome({ rules, recs, state, onTab }: { rules: Rule[]; r
             <span className="pill dry">{dry} dry-run</span>
             <span className="pill posture">Autonomy: {posture}</span>
             {state?.halted && <span className="pill halt">⚠ kill-switch on</span>}
-            <button type="button" className="az-link" onClick={() => onTab('active')}>Manage →</button>
+            <Button variant="link" onClick={() => onTab('active')}>Manage →</Button>
           </div>}
       </div>
 
@@ -55,7 +56,7 @@ export function AutomationHome({ rules, recs, state, onTab }: { rules: Rule[]; r
           <h3 className="az-ah-h"><TrendingUp size={15} /> Quick wins</h3>
           <div className="az-ah-wins">
             {topRecs.map(r => <div key={r.id} className="az-ah-win"><span className="t">{r.title}</span>{r.estImpactCents ? <span className="v">€{Math.round(r.estImpactCents / 100)}/mo</span> : null}</div>)}
-            <button type="button" className="az-link" onClick={() => onTab('recs')}>See all recommendations →</button>
+            <Button variant="link" onClick={() => onTab('recs')}>See all recommendations →</Button>
           </div>
         </div>
       )}
