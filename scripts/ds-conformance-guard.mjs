@@ -31,11 +31,33 @@ const BASELINE = join(process.cwd(), 'scripts/ds-conformance-baseline.json')
 // Never-enforced prefixes (relative to app/). Legacy consoles await Wave 0;
 // the Amazon ads tree is the deliberate H10 pixel-match world. NOTE:
 // marketing/ads/ebay is carved back IN below — it must stay at zero.
-const ALLOW = ['marketing/ads-console/', 'marketing/advertising/', 'marketing/ads/',
+// 2026-08-25 — `marketing/ads/` LEFT this list. It is the platform's largest surface (397 tsx
+// files) and it was the only one exempt from the ratchet, which meant the section most likely to
+// grow was the one nothing was counting. It is now enforced at its own baseline: today's numbers
+// are frozen, nothing is asked of the existing code, and the next file added cannot make them
+// worse. The two LEGACY consoles stay exempt — Wave 0 retires them wholesale, so ratcheting code
+// that is scheduled for deletion buys nothing.
+const ALLOW = ['marketing/ads-console/', 'marketing/advertising/',
   // /r = the RV.6 public review-funnel (customer-facing, email-linked, server-rendered
   // without app CSS — its inline styles are load-bearing, not chrome). Investigated 2026-07-04.
   'r/']
+// Kept for the record, now a no-op: with `marketing/ads/` out of ALLOW, ebay is enforced by
+// default. Its zero is protected by giving it its OWN section below, not by this list.
 const ENFORCE_ANYWAY = ['marketing/ads/ebay/']
+
+/**
+ * Which budget a file counts against. Top-level directory, with two deliberate splits:
+ *
+ *   marketing/ads       397 files — 3.3x the rest of `marketing`. Sharing one budget would let a
+ *                       regression in the smaller half hide behind an improvement in the larger.
+ *   marketing/ads/ebay  reached zero in EV4 and must STAY zero. A budget of its own is what makes
+ *                       that a guarantee rather than a hope: inside the ads budget its first
+ *                       regression would be invisible until the whole section moved.
+ */
+const sectionOf = (rel) =>
+  rel.startsWith('marketing/ads/ebay/') ? 'marketing/ads/ebay'
+  : rel.startsWith('marketing/ads/') ? 'marketing/ads'
+  : rel.split('/')[0]
 
 const METRICS = {
   select: /<select\b/g,
@@ -92,7 +114,7 @@ function scan() {
   for (const file of walk(ROOT)) {
     const rel = relative(ROOT, file)
     if (allowed(rel)) continue
-    const section = rel.split('/')[0]
+    const section = sectionOf(rel)
     const src = readFileSync(file, 'utf8')
     const lines = src.split('\n')
     for (const [name, re] of Object.entries(METRICS)) {

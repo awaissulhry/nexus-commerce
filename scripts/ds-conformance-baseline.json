@@ -1,6 +1,6 @@
 {
   "note": "DS-conformance ratchet — waves lower these, pushes may never raise them",
-  "updatedAt": "2026-08-24",
+  "updatedAt": "2026-08-25",
   "sections": {
     "403": {
       "select": 0,
@@ -209,6 +209,22 @@
       "hex": 0,
       "legacyKit": 68,
       "rawColor": 1807
+    },
+    "marketing/ads": {
+      "select": 34,
+      "date": 3,
+      "fontSize": 12,
+      "hex": 40,
+      "legacyKit": 0,
+      "rawColor": 0
+    },
+    "marketing/ads/ebay": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0
     },
     "not-found.tsx": {
       "select": 0,
