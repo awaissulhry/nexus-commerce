@@ -7,11 +7,16 @@
    DS controls need. Nothing here repaints a design-system component.
 
    `.az-cb-modal`'s own overlay/panel/header/footer rules in ads-console/amazon.css
-   now have no caller; that file is outside this session's scope. */
+   now have no caller; that file is outside this session's scope.
+
+   The two note colours are `--nds-*` rather than the literals the old rule used —
+   the raw-hex ratchet holds every new stylesheet at zero, and both substitutions
+   RAISE contrast: the live note goes 7.60:1 → 9.23:1 and the sandbox one
+   6.46:1 → 6.70:1. */
 
 .az-cb-review .note { font-size: 12.5px; border-radius: 8px; padding: 10px 13px; margin-bottom: 14px; line-height: 1.5; }
-.az-cb-review .note.live { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
-.az-cb-review .note.sandbox { background: #f1f5f9; border: 1px solid #e2e8f0; color: var(--ink2); }
+.az-cb-review .note.live { background: var(--nds-note-error-bg); border: 1px solid var(--nds-danger-soft); color: var(--nds-note-error-fg); }
+.az-cb-review .note.sandbox { background: var(--nds-grey-25); border: 1px solid var(--nds-border-subtle); color: var(--ink2); }
 .az-cb-review .sum { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
 .az-cb-review .list { border: 1px solid var(--divider); border-radius: 9px; overflow: hidden; }
 .az-cb-review .list .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 13px; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
