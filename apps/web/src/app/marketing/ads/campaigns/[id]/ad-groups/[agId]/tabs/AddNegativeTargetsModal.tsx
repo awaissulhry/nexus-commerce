@@ -10,10 +10,11 @@
  * silent live push). No search pane: a negative-target ASIN is an arbitrary competitor ASIN.
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Textarea } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import '../../../../campaigns-ds.css'
 
 export function AddNegativeTargetsModal({ adGroupId, adGroupName, campaignName, onClose, onAdded }: {
   adGroupId: string
@@ -71,13 +72,13 @@ export function AddNegativeTargetsModal({ adGroupId, adGroupName, campaignName, 
       <div className="h10-apm">
         <div className="apm-left">
           <div className="apm-enter">
-            <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste negative target ASINs here" aria-label="Negative target ASINs" />
-            <button type="button" className="apm-enterbtn" disabled={!text.trim()} onClick={stage}><PlusCircle size={14} /> Add Negative Target ASINs</button>
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste negative target ASINs here" aria-label="Negative target ASINs" />
+            <Button disabled={!text.trim()} onClick={stage}><PlusCircle size={14} /> Add Negative Target ASINs</Button>
           </div>
         </div>
 
         <div className="apm-right">
-          <div className="apm-rh"><span>{n} Negative Target ASIN{n === 1 ? '' : 's'} Added</span><button type="button" className="apm-removeall" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</button></div>
+          <div className="apm-rh"><span>{n} Negative Target ASIN{n === 1 ? '' : 's'} Added</span><Button size="sm" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</Button></div>
           <div className="apm-thead"><button type="button" className={`apm-sort ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by ASIN">ASIN <ChevronsUpDown size={12} /></button></div>
           {n === 0 ? (
             <div className="apm-rempty">No data</div>

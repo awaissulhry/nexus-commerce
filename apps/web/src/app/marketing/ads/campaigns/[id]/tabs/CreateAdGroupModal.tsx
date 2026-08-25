@@ -6,9 +6,10 @@
  * targeting choice is captured for parity; the local create service defaults it.
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, RadioCard } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
+import '../../campaigns-ds.css'
 
 const TARGETING = [
   { value: 'AUTO', title: 'Auto Targeting', desc: 'Amazon targets keywords and products that are similar to the product in your ad.' },
@@ -54,18 +55,25 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
       }
     >
       <div className="h10-cd-field"><label>Ad Group Name</label>
-        <input type="text" placeholder="Enter ad group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <Input placeholder="Enter ad group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Ad group name" fieldClassName="cd-field-full" />
       </div>
       <div className="h10-cd-field s"><label>Default Bid</label>
-        <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Default bid" /></div>
+        <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Default bid" fieldClassName="cd-money-field" />
       </div>
       <div className="h10-cd-field"><label>Targeting</label>
-        {TARGETING.map((t) => (
-          <label className={`h10-radio-card ${targeting === t.value ? 'on' : ''}`} key={t.value}>
-            <input type="radio" name="targeting" checked={targeting === t.value} onChange={() => setTargeting(t.value)} />
-            <span className="rc-b"><span className="rc-t">{t.title}</span><span className="rc-d">{t.desc}</span></span>
-          </label>
-        ))}
+        <div className="cd-radiocards">
+          {TARGETING.map((t) => (
+            <RadioCard
+              key={t.value}
+              name="targeting"
+              title={t.title}
+              description={t.desc}
+              selected={targeting === t.value}
+              checked={targeting === t.value}
+              onChange={() => setTargeting(t.value)}
+            />
+          ))}
+        </div>
       </div>
       {err && <div className="h10-cd-modalerr">{err}</div>}
     </Modal>

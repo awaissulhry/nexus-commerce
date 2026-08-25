@@ -8,8 +8,9 @@
  * equivalent. One component, two modes. Deploy-safe: web dev hits the live API.
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Listbox, Modal } from '@/design-system/components'
+import '../../campaigns-ds.css'
 
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -65,9 +66,9 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
           : `Add ${terms.length} search term${terms.length === 1 ? '' : 's'} as campaign-level negative keywords.`}
       footer={
         <>
-<Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-     <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? 'Adding…' : isKw ? 'Add Keywords' : 'Add Negatives'}</Button>
+          <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? 'Adding…' : isKw ? 'Add Keywords' : 'Add Negatives'}</Button>
         </>
       }
     >
@@ -85,7 +86,7 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
       </div>
       {isKw && (
         <div className="h10-cd-field s"><label>Bid</label>
-          <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" /></div>
+          <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" fieldClassName="cd-money-field" />
         </div>
       )}
       {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}

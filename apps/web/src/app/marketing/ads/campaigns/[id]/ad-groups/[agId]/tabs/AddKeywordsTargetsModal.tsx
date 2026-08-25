@@ -12,10 +12,11 @@
  *   product → POST /advertising/targets/create  { adGroupId, kind:'PRODUCT', value, bidEur }
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import '../../../../campaigns-ds.css'
 
 type KMatch = 'BROAD' | 'PHRASE' | 'EXACT'
 type Staged = { kind: 'keyword' | 'product'; value: string; matchType?: KMatch; bid: number }
@@ -80,7 +81,7 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
   const BidField = (
     <div className="apm-bid">
       <span className="lbl">Bid:</span>
-      <span className="apm-bidbox"><span className="cur">€</span><input inputMode="decimal" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" /></span>
+      <Input inputMode="decimal" prefix="€" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" size="sm" fieldClassName="apm-bidfield" />
     </div>
   )
 
@@ -113,29 +114,29 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
                 <div className="apm-mt">
                   <span className="lbl">Match Type:</span>
                   {(['BROAD', 'PHRASE', 'EXACT'] as KMatch[]).map((m) => (
-                    <label key={m} className={matches[m] ? 'on' : ''}><input type="checkbox" checked={matches[m]} onChange={(e) => setMatches((p) => ({ ...p, [m]: e.target.checked }))} /> {TYPE_LABEL[m]}</label>
+                    <Checkbox key={m} className={matches[m] ? 'on' : undefined} checked={matches[m]} onChange={(e) => setMatches((p) => ({ ...p, [m]: e.target.checked }))} label={TYPE_LABEL[m]} />
                   ))}
                 </div>
                 {BidField}
               </div>
               <div className="apm-enter no-pad-top">
-                <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Keywords" />
-                <button type="button" className="apm-enterbtn" disabled={!text.trim() || !checkedMatches.length} onClick={stageKeywords}><PlusCircle size={14} /> Add Keywords</button>
+                <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Keywords" />
+                <Button disabled={!text.trim() || !checkedMatches.length} onClick={stageKeywords}><PlusCircle size={14} /> Add Keywords</Button>
               </div>
             </>
           ) : (
             <>
               <div className="apm-ctrl">{BidField}</div>
               <div className="apm-enter no-pad-top">
-                <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste product ASINs (one per line)" aria-label="Product ASINs" />
-                <button type="button" className="apm-enterbtn" disabled={!text.trim()} onClick={stageProducts}><PlusCircle size={14} /> Add Products</button>
+                <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste product ASINs (one per line)" aria-label="Product ASINs" />
+                <Button disabled={!text.trim()} onClick={stageProducts}><PlusCircle size={14} /> Add Products</Button>
               </div>
             </>
           )}
         </div>
 
         <div className="apm-right">
-          <div className="apm-rh"><span>{n} Target{n === 1 ? '' : 's'} Added</span><button type="button" className="apm-removeall" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</button></div>
+          <div className="apm-rh"><span>{n} Target{n === 1 ? '' : 's'} Added</span><Button size="sm" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</Button></div>
           <div className="apm-thead tgt"><button type="button" className={`apm-sort ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by target">Target <ChevronsUpDown size={12} /></button><span>Match Type</span><span>Bid</span><span /></div>
           {n === 0 ? (
             <div className="apm-rempty">No data</div>

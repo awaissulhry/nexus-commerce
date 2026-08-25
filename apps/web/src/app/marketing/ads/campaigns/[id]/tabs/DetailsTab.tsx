@@ -20,7 +20,7 @@
  * custom End-Date calendar popover, and the Product-Selection amazon badge + ASIN copy.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, Toggle } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -28,6 +28,7 @@ import { InfoTip } from '../../InfoTip'
 import { num } from '../../_grid/format'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { PlacementBidMultiplier } from '../../../_shared/PlacementBidMultiplier'
+import '../../campaigns-ds.css'
 
 interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string }
 type StratUI = 'DOWN' | 'UPDOWN' | 'FIXED'
@@ -210,13 +211,13 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
           <h2>Campaign Details</h2>
           <div className="h10-cd-card">
             <div className="h10-cd-field"><label>Campaign Name <i>*</i></label>
-              <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} aria-label="Campaign name" />
+              <Input value={form.name} onChange={(e) => set('name', e.target.value)} aria-label="Campaign name" fieldClassName="cd-field-full" />
             </div>
             <div className="h10-cd-field"><label>Portfolio</label>
               <PortfolioSelect value={form.portfolioId} onChange={(v) => set('portfolioId', v)} marketplace={campaign?.marketplace ?? undefined} />
             </div>
             <div className="h10-cd-field s"><label>Daily Budget <i>*</i></label>
-              <div className="h10-cd-money boxed"><span className="pf">{currency}</span><input type="number" min="1" step="1" value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} aria-label="Daily budget" /></div>
+              <Input inputMode="decimal" prefix={currency} value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} aria-label="Daily budget" fieldClassName="cd-money-boxed" />
             </div>
             <div className="h10-cd-daterow">
               <div className="h10-cd-field"><label>Start Date <i>*</i></label>
@@ -225,7 +226,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
               <div className="h10-cd-field"><label>End Date {!form.neverExpire ? <i>*</i> : null}</label>
                 <EndDateCalendar value={form.endDate} disabled={form.neverExpire} onChange={(v) => set('endDate', v)} />
               </div>
-              <label className="h10-cd-switch"><input type="checkbox" checked={form.neverExpire} onChange={(e) => set('neverExpire', e.target.checked)} /><span className="tk" /> Never Expire</label>
+              <span className="h10-cd-switch"><Toggle checked={form.neverExpire} onChange={(v) => set('neverExpire', v)} aria-label="Never Expire" /> Never Expire</span>
             </div>
           </div>
         </section>
@@ -236,10 +237,14 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
           <p className="sub">Select a strategy to optimize your campaign bidding performance</p>
           <div className="h10-cd-card pad">
             {STRATEGIES.map((s) => (
-              <label key={s.key} className={`h10-cd-radio ${form.strategy === s.key ? 'on' : ''}`}>
-                <input type="radio" name="strategy" checked={form.strategy === s.key} onChange={() => set('strategy', s.key)} />
-                <span className="rc"><span className="t">{s.label}</span><span className="d">{s.desc}</span></span>
-              </label>
+              <Radio
+                key={s.key}
+                className={`h10-cd-radio ${form.strategy === s.key ? 'on' : ''}`}
+                name="strategy"
+                checked={form.strategy === s.key}
+                onChange={() => set('strategy', s.key)}
+                label={<span className="rc"><span className="t">{s.label}</span><span className="d">{s.desc}</span></span>}
+              />
             ))}
           </div>
 
@@ -248,10 +253,14 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
           <p className="sub">Sites are where your ads appear (websites or apps). Choose placements based on your campaign strategy.</p>
           <div className="h10-cd-card pad">
             {SITES.map((s) => (
-              <label key={s.key} className={`h10-cd-radio ${form.sites === s.key ? 'on' : ''}`}>
-                <input type="radio" name="sites" checked={form.sites === s.key} onChange={() => set('sites', s.key)} />
-                <span className="rc"><span className="t">{s.label}</span><span className="d">{s.desc}</span></span>
-              </label>
+              <Radio
+                key={s.key}
+                className={`h10-cd-radio ${form.sites === s.key ? 'on' : ''}`}
+                name="sites"
+                checked={form.sites === s.key}
+                onChange={() => set('sites', s.key)}
+                label={<span className="rc"><span className="t">{s.label}</span><span className="d">{s.desc}</span></span>}
+              />
             ))}
           </div>
         </section>
@@ -286,7 +295,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
 
             {form.algo === 'TARGET_ACOS' && (
               <div className="h10-cd-field s h10-cd-acosrev"><label>Target ACoS <InfoTip tip={TIPS.targetAcos} /></label>
-                <div className="h10-cd-pct"><input type="number" min="1" max="500" value={form.targetAcos} onChange={(e) => set('targetAcos', e.target.value)} aria-label="Target ACoS" /><span className="sf">%</span></div>
+                <Input inputMode="decimal" suffix="%" value={form.targetAcos} onChange={(e) => set('targetAcos', e.target.value)} aria-label="Target ACoS" fieldClassName="cd-pct-field" />
               </div>
             )}
             {form.algo === 'CUSTOM' && <BidRuleSelect />}
@@ -295,9 +304,9 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
             <h2>Min/Max Bid</h2>
             <p className="sub">Set limits to keep your bid within an acceptable range</p>
             <div className="h10-cd-minmax">
-              <label className="h10-cd-check"><input type="checkbox" checked={form.minmaxOn} onChange={(e) => set('minmaxOn', e.target.checked)} aria-label="Enable min/max bid limits" /><span className="bx"><Check size={13} /></span></label>
-              <div className={`h10-cd-money boxed ${!form.minmaxOn ? 'disabled' : ''}`}><span className="pf">{currency}</span><input type="number" min="0" step="0.01" placeholder="Min" value={form.minBid} disabled={!form.minmaxOn} onChange={(e) => set('minBid', e.target.value)} aria-label="Min bid" /></div>
-              <div className={`h10-cd-money boxed ${!form.minmaxOn ? 'disabled' : ''}`}><span className="pf">{currency}</span><input type="number" min="0" step="0.01" placeholder="Max" value={form.maxBid} disabled={!form.minmaxOn} onChange={(e) => set('maxBid', e.target.value)} aria-label="Max bid" /></div>
+              <Checkbox checked={form.minmaxOn} onChange={(e) => set('minmaxOn', e.target.checked)} aria-label="Enable min/max bid limits" />
+              <Input inputMode="decimal" prefix={currency} placeholder="Min" value={form.minBid} disabled={!form.minmaxOn} onChange={(e) => set('minBid', e.target.value)} aria-label="Min bid" fieldClassName="cd-money-boxed" />
+              <Input inputMode="decimal" prefix={currency} placeholder="Max" value={form.maxBid} disabled={!form.minmaxOn} onChange={(e) => set('maxBid', e.target.value)} aria-label="Max bid" fieldClassName="cd-money-boxed" />
             </div>
           </div>
         </section>

@@ -10,10 +10,11 @@
  * returns denied → never a silent live push).
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Radio, Textarea } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import '../../../../campaigns-ds.css'
 
 type MT = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
 type Staged = { keyword: string; matchType: MT }
@@ -82,17 +83,17 @@ export function AddNegativeKeywordsAgModal({ externalCampaignId, externalAdGroup
         <div className="apm-left">
           <div className="apm-mt">
             <span className="lbl">Match Type:</span>
-            <label className={matchType === 'NEGATIVE_EXACT' ? 'on' : ''}><input type="radio" name="agnegmt" checked={matchType === 'NEGATIVE_EXACT'} onChange={() => setMatchType('NEGATIVE_EXACT')} /> Negative Exact</label>
-            <label className={matchType === 'NEGATIVE_PHRASE' ? 'on' : ''}><input type="radio" name="agnegmt" checked={matchType === 'NEGATIVE_PHRASE'} onChange={() => setMatchType('NEGATIVE_PHRASE')} /> Negative Phrase</label>
+            <Radio name="agnegmt" className={matchType === 'NEGATIVE_EXACT' ? 'on' : undefined} checked={matchType === 'NEGATIVE_EXACT'} onChange={() => setMatchType('NEGATIVE_EXACT')} label="Negative Exact" />
+            <Radio name="agnegmt" className={matchType === 'NEGATIVE_PHRASE' ? 'on' : undefined} checked={matchType === 'NEGATIVE_PHRASE'} onChange={() => setMatchType('NEGATIVE_PHRASE')} label="Negative Phrase" />
           </div>
           <div className="apm-enter no-pad-top">
-            <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Negative keywords" />
-            <button type="button" className="apm-enterbtn" disabled={!text.trim()} onClick={stage}><PlusCircle size={14} /> Add Negative Keywords</button>
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Negative keywords" />
+            <Button disabled={!text.trim()} onClick={stage}><PlusCircle size={14} /> Add Negative Keywords</Button>
           </div>
         </div>
 
         <div className="apm-right">
-          <div className="apm-rh"><span>{n} Negative Keyword{n === 1 ? '' : 's'} Added</span><button type="button" className="apm-removeall" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</button></div>
+          <div className="apm-rh"><span>{n} Negative Keyword{n === 1 ? '' : 's'} Added</span><Button size="sm" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</Button></div>
           <div className="apm-thead"><button type="button" className={`apm-sort ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by keyword">Keyword <ChevronsUpDown size={12} /></button></div>
           {n === 0 ? (
             <div className="apm-rempty">No data</div>

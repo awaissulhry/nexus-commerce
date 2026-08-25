@@ -1,0 +1,26 @@
+/* DS-alignment glue for the Ad Manager / campaign-detail surfaces (2026-08-25).
+   WIDTH AND ALIGNMENT ONLY. Every colour, border, radius and font on these
+   controls comes from the design-system primitives.
+
+   It exists for the same reason as campaign-builder/builder-ds.css: a DS <Input>
+   takes its width through `fieldClassName`, and the console's width classes live
+   in ads.css, which this session does not own. */
+
+/* money / percent field inside a `.h10-cd-field` */
+.cd-money-field { width: 150px; }
+.cd-money-boxed { width: 120px; }
+.cd-money-boxed > input,
+.cd-pct-field > input { text-align: right; }
+.cd-pct-field { width: 120px; }
+
+/* a full-bleed text field in a `.h10-cd-field` (the field itself is capped at 430px) */
+.cd-field-full { width: 100%; }
+
+/* the three targeting RadioCards in "Create Ad Group" — `.h10-radio-card` carried
+   their 12px rhythm on each card; the DS card has no margin of its own. */
+.cd-radiocards { display: flex; flex-direction: column; gap: 12px; }
+
+/* the ad-group "Add …" modals: the bid box and the product search keep the widths
+   their hand-rolled boxes had; everything else about them is the DS Input's. */
+.apm-bidfield { width: 108px; }
+.apm-searchfield { width: 100%; }

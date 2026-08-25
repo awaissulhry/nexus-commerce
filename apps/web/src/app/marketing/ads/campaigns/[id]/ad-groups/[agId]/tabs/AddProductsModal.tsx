@@ -10,10 +10,11 @@
  * placeholder (no SV creative source yet), exactly as the campaign grids treat such fields.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Textarea } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Search, PlusCircle, Check, Trash2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import '../../../../campaigns-ds.css'
 
 interface Prod { id: string; sku?: string | null; asin?: string | null; name?: string | null; imageUrl?: string | null; amazon?: boolean }
 
@@ -137,11 +138,11 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
           {tab === 'search' ? (
             <>
               <div className="apm-srow">
-                <div className="apm-search"><Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" /></div>
+                <Input leadingIcon={<Search size={15} aria-hidden />} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" fieldClassName="apm-searchfield" />
               </div>
               <div className="apm-count">
                 <span>{loading ? 'Searching…' : `Viewing ${results.length ? `1-${results.length}` : 0} of ${results.length} Products`}</span>
-                <button type="button" className="apm-addall" disabled={!results.length} onClick={addAll}><PlusCircle size={14} /> Add All</button>
+                <Button size="sm" disabled={!results.length} onClick={addAll}><PlusCircle size={14} /> Add All</Button>
               </div>
               <div className="apm-list">
                 {results.length === 0 ? <div className="apm-none">{loading ? '' : 'No products match your search.'}</div> : results.map((p) => {
@@ -158,8 +159,8 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
             </>
           ) : (
             <div className="apm-enter">
-              <textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Paste product names, ASINs, or SKUs (one per line)" aria-label="Enter products" />
-              <button type="button" className="apm-enterbtn" disabled={!enterText.trim()} onClick={enterAdd}><PlusCircle size={14} /> Add Products</button>
+              <Textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Paste product names, ASINs, or SKUs (one per line)" aria-label="Enter products" />
+              <Button disabled={!enterText.trim()} onClick={enterAdd}><PlusCircle size={14} /> Add Products</Button>
             </div>
           )}
         </div>
