@@ -1394,7 +1394,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    segmented control) and it is used, not restyled. */
 
 /* The one sentence that states what resolved, and how old the numbers under it are. */
-.h10-kt-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
+.h10-kt-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-kt-said b { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
 .h10-kt-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
@@ -1666,7 +1666,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-camp a:hover { text-decoration: underline; }
 /* The campaign is paused or archived, so nothing on this row is bidding for anything. */
 .h10-bd-camp i.off { flex: none; font-style: normal; padding: 1px 5px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
-.h10-bd-mkt { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
+.h10-bd-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
 .h10-bd-bid { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-bd-acos { font-variant-numeric: tabular-nums; }
 .h10-bd-acos.hi { color: var(--nds-warning-text); font-weight: 800; }
@@ -1874,7 +1874,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-clear:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
 
 /* ── the sentences under it ──────────────────────────────────────────────────────────────────── */
-.h10-plc-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
+.h10-plc-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-plc-said b { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
 .h10-plc-fresh { margin: 6px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--nds-grey-600); }
@@ -2259,7 +2259,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /* ── the reach sentence ─────────────────────────────────────────────────────────────────────── */
-.h10-sov-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
+.h10-sov-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-sov-said b { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
 /* ── the band: two feeds, two ages, never one number ────────────────────────────────────────── */
@@ -2339,7 +2339,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-nm { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-sov-nm.muted { background: transparent; color: #9099a6; font-weight: 600; }
 .h10-sov-nd { color: #9099a6; }
-.h10-sov-mkt { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
+.h10-sov-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-sov-ac { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-600); }
 .h10-sov-ac.many { color: var(--nds-warning-text); }
 .h10-sov-age { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
@@ -2433,7 +2433,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* A rule that changes budgets on its own and only ever lowers them. The one flag on this page that
    is meant to stop the eye. */
 .h10-bud-rule .fl.cut { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-bud-mkt { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
+.h10-bud-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
 
 /* The budget itself, and the floor flag that explains why a trim does nothing to it. */
 .h10-bud-amt { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
@@ -2577,7 +2577,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
          pass; composite against the real ancestor background instead. */
 
 /* ── the resolution sentence, on the page ground ──────────────────────────────────────────────── */
-.h10-ar-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
+.h10-ar-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-ar-said b { font-weight: 800; color: var(--nds-grey-900); }
 /* The 300-second cache floor is furniture, not a warning — it is always true, so it never shouts. */
 .h10-ar-floor { color: var(--nds-text-muted); text-decoration: underline dotted 1px; text-underline-offset: 3px; }
@@ -4991,7 +4991,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-approx { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 800; color: var(--nds-warning-text); }
 
 /* ── grid cells ───────────────────────────────────────────────────────────────────────────── */
-.h10-bsp-mkt { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
+.h10-bsp-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
 .h10-bsp-bind { font-size: 12px; color: var(--nds-text-muted); font-variant-numeric: tabular-nums; }
 .h10-bsp-bind b { font-weight: 800; color: var(--nds-text-muted); }
 .h10-bsp-bind.on b { color: #b3261e; }
