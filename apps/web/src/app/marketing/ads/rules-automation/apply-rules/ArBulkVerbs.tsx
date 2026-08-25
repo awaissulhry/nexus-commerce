@@ -40,7 +40,7 @@
  * are counted and named rather than swallowed.
  */
 import { useState } from 'react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, Radio } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange } from '../_shared/adsBus'
 
@@ -184,15 +184,15 @@ export function ArBulkVerbs({ ids, names, onDone, onAssignRule }: {
                 <div className="rads">
                   {/* The label says what the switch IS — this page's Automations column is the
                       write gate, not the Ad Manager's bid-algorithm toggle. */}
-                  <label><input type="radio" name="arauto" checked={autoOn} onChange={() => setAutoOn(true)} /> Managed — armed automation may write here</label>
-                  <label><input type="radio" name="arauto" checked={!autoOn} onChange={() => setAutoOn(false)} /> Off-limits — every write is refused at the gate</label>
+                  <Radio name="arauto" checked={autoOn} onChange={() => setAutoOn(true)} label="Managed — armed automation may write here" />
+                  <Radio name="arauto" checked={!autoOn} onChange={() => setAutoOn(false)} label="Off-limits — every write is refused at the gate" />
                 </div>
               )}
 
               {v === 'bidauto' && (
                 <div className="rads">
-                  <label><input type="radio" name="arbidauto" checked={bidAutoOn} onChange={() => setBidAutoOn(true)} /> On — bid suggestions apply themselves here</label>
-                  <label><input type="radio" name="arbidauto" checked={!bidAutoOn} onChange={() => setBidAutoOn(false)} /> Off — bid suggestions stay proposals</label>
+                  <Radio name="arbidauto" checked={bidAutoOn} onChange={() => setBidAutoOn(true)} label="On — bid suggestions apply themselves here" />
+                  <Radio name="arbidauto" checked={!bidAutoOn} onChange={() => setBidAutoOn(false)} label="Off — bid suggestions stay proposals" />
                   {/* Said plainly, where the decision is made. The field stores durably; nothing
                       reads it yet, and an operator setting it deserves to know that now rather
                       than discover it from an absence of writes. */}

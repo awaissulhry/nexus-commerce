@@ -16,7 +16,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
-import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Radio, Select, ToolbarButton } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -472,8 +472,8 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
               {FIELDS.map(f => <span key={f.f} className="fld"><Input size="xs" type="number" placeholder={f.unit} value={(form[f.f] == null ? '' : f.f === 'maxCpcCents' ? eur(form[f.f]) : form[f.f]) as string | number} onChange={e => setForm(s => ({ ...s, [f.f]: e.target.value === '' ? undefined : f.f === 'maxCpcCents' ? Math.round(Number(e.target.value) * 100) : Math.round(Number(e.target.value)) }))} step={f.f === 'maxCpcCents' ? '0.01' : '1'} aria-label={f.label} /></span>)}
               <span className="act" />
               <div className="h10-rte-addscope">
-                Add to: <label><input type="radio" checked={form.scope === 'scope'} onChange={() => setForm(f => ({ ...f, scope: 'scope' }))} disabled={scopeKind === 'product' ? !productId : !campaignId} /> {scopeKind === 'product' ? 'This product only' : 'This campaign only'}</label>
-                <label><input type="radio" checked={form.scope === 'global'} onChange={() => setForm(f => ({ ...f, scope: 'global' }))} /> Global (everywhere)</label>
+                Add to: <Radio name="rte-addscope" checked={form.scope === 'scope'} onChange={() => setForm(f => ({ ...f, scope: 'scope' }))} disabled={scopeKind === 'product' ? !productId : !campaignId} label={scopeKind === 'product' ? 'This product only' : 'This campaign only'} />
+                <Radio name="rte-addscope" checked={form.scope === 'global'} onChange={() => setForm(f => ({ ...f, scope: 'global' }))} label="Global (everywhere)" />
                 <span className="grow" />
         <Button variant="primary" size="sm" disabled={busy} onClick={() => void addCustom()}>Add target</Button>
         <Button size="sm" onClick={() => setAdding(false)}>Cancel</Button>

@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Button, Checkbox, Input, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1698,8 +1698,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 <div className="left">
                   <div className="strow">
                     <span className="l">Only suggest if search term:</span>
-                    <label className="rad"><input type="radio" name="stmode" checked={searchMode === 'contains'} onChange={() => setSearchMode('contains')} /> Contains</label>
-                    <label className="rad"><input type="radio" name="stmode" checked={searchMode === 'not'} onChange={() => setSearchMode('not')} /> Does Not Contain</label>
+                    <Radio className="rad" name="stmode" checked={searchMode === 'contains'} onChange={() => setSearchMode('contains')} label="Contains" />
+                    <Radio className="rad" name="stmode" checked={searchMode === 'not'} onChange={() => setSearchMode('not')} label="Does Not Contain" />
                   </div>
                   <Textarea className="h10-rb-ta" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Enter or paste search terms here" aria-label="Search terms" />
                   <div className="staction"><Button disabled={!searchText.trim()} onClick={addSearchTerms}>Add Search Terms</Button></div>

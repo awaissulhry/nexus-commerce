@@ -23,7 +23,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Input, Radio } from '@/design-system/primitives'
 
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -221,7 +221,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
         <div className="cp-statusrow">
           <span className="lbl">Campaign Status:</span>
           {(['all', 'enabled', 'paused'] as const).map((s) => (
-            <label key={s} className="rad"><input type="radio" name="schedcpstatus" checked={status === s} onChange={() => { setStatus(s); setPage(1) }} /> {s[0].toUpperCase() + s.slice(1)}</label>
+            <Radio key={s} className="rad" name="schedcpstatus" checked={status === s} onChange={() => { setStatus(s); setPage(1) }} label={s[0].toUpperCase() + s.slice(1)} />
           ))}
           {/* On Products, "Add All" means every campaign of the products currently listed — the
               campaign-level `addable` would not match what the list is showing. */}

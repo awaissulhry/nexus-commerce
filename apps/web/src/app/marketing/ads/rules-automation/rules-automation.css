@@ -122,8 +122,8 @@
 .h10-rb-st { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .h10-rb-st .strow { display: flex; align-items: center; gap: 18px; margin-bottom: 10px; font-size: 13px; flex-wrap: wrap; }
 .h10-rb-st .strow .l { color: var(--nds-grey-800); font-weight: 600; }
-.h10-rb-st .rad { display: inline-flex; align-items: center; gap: 6px; color: var(--nds-grey-700); cursor: pointer; }
-.h10-rb-st .rad input { accent-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Radio`, which carries the accent, the 15px box and the row layout. */
+.h10-rb-st .rad { gap: 6px; }
 /* DS-ALIGN — the DS `Textarea` carries the border, the placeholder colour, the focus ring
    and the resize handle. Only the height these two panes need is stated here; the primitive's
    own min-height of 168px is one pixel off the 170 this pane was built around, and the brand
@@ -273,8 +273,8 @@
 .cp-statusrow { display: flex; align-items: center; gap: 14px; padding: 8px 12px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--nds-grey-100); }
 .cp-statusrow .rads { display: inline-flex; align-items: center; gap: 14px; }
 .cp-statusrow .lbl { font-size: 13px; font-weight: 600; color: var(--nds-grey-800); }
-.cp-statusrow .rad { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--nds-grey-700); cursor: pointer; }
-.cp-statusrow .rad input { accent-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Radio`. */
+.cp-statusrow .rad { gap: 5px; }
 .cp-addall { margin-left: auto; background: var(--nds-blue-600); color: var(--nds-white); border: 0; border-radius: var(--nds-radius-lg); padding: 7px 15px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .cp-addall:hover { background: var(--nds-blue-700); }
 .cp-addall:disabled { background: #b9c4d2; cursor: default; }
@@ -5147,7 +5147,9 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-pop > b { display: block; font-size: 13px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-ar-pop .sub { margin: 3px 0 9px; font-size: 11.5px; color: #7c8595; line-height: 1.45; }
 .h10-ar-pop .rads { display: flex; flex-direction: column; gap: 7px; }
-.h10-ar-pop .rads label { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--nds-grey-700); line-height: 1.4; }
+/* The two options are the DS `Radio`; this keeps them top-aligned, because each label wraps
+   to two lines and a centred box would float in the middle of the sentence. */
+.h10-ar-pop .rads .nds-radio { align-items: flex-start; gap: 7px; font-size: 12px; line-height: 1.4; }
 .h10-ar-pop .fld { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); }
 /* DS-ALIGN — the bulk-verb boxes are the DS `Input` at `sm`; the € and % that used to be loose
    `<i>` tags are its `prefix`/`suffix`. `.nds-field >` on the figure rule outranks the
