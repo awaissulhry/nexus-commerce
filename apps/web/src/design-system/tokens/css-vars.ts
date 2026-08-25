@@ -122,7 +122,12 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },
-  { name: '--nds-text-link', value: 'var(--nds-blue-600)' },
+  // NOT --nds-blue-600. Measured 2026-08-25: #1f6fde is 4.79:1 on a white card but only 4.42:1 on
+  // the ads console's own ground (.h10-shell #f4f6f9) and 4.50:1 on --nds-surface-sunken — i.e.
+  // a link that passes AA inside a card and fails it the moment the card is removed. #1a60c4 is
+  // 5.98 / 5.52 / 5.62 on those three, clearing AA on every ground a link actually appears on.
+  // It is not a new colour: .h10-ar-lnk already shipped it for exactly this reason.
+  { name: '--nds-text-link', value: '#1a60c4' },
 
   { name: '--nds-bg', value: 'var(--nds-grey-50)' },
   { name: '--nds-surface', value: 'var(--nds-white)' },

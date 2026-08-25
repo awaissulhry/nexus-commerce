@@ -1,5 +1,5 @@
 'use client'
-import { type ReactNode } from 'react'
+import { type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Tooltip } from './Tooltip'
 import { Kbd } from './Kbd'
 
@@ -12,7 +12,8 @@ function cx(...classes: (string | undefined | false | null)[]): string {
 
 // ── ToolbarButton ──────────────────────────────────────────────────────────
 
-export interface ToolbarButtonProps {
+export interface ToolbarButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'children' | 'onClick'> {
   icon: ReactNode
   /** aria-label + default tooltip heading */
   label: string
@@ -22,7 +23,14 @@ export interface ToolbarButtonProps {
   shortcut?: string
   onClick?: () => void
   disabled?: boolean
-  /** pressed / highlighted state */
+  /**
+   * Pressed / highlighted state, emitted as `aria-pressed`.
+   *
+   * SUPPRESSED when the caller passes `aria-expanded`. An icon button that opens a panel is a
+   * DISCLOSURE, not a toggle, and a control announcing both roles at once is worse than one
+   * announcing neither. This used to be hard-coded, so every expander converted to this component
+   * silently lost its disclosure semantics — pass `aria-expanded` and it does the right thing.
+   */
   active?: boolean
   /** blue count badge top-right, capped at 99+ */
   badge?: number
@@ -69,7 +77,9 @@ export function ToolbarButton({
   tooltipAlign,
   variant = 'bare',
   tooltip = true,
+  ...rest
 }: ToolbarButtonProps) {
+  const isDisclosure = rest['aria-expanded'] !== undefined
   const autoTooltip: ReactNode =
     tooltipContent ?? (
       <div className="nds-tbtn-tip">
@@ -89,8 +99,9 @@ export function ToolbarButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      aria-pressed={active}
+      {...(active !== undefined && !isDisclosure ? { 'aria-pressed': active } : {})}
       className={cx('nds-tbtn', variant === 'boxed' && 'boxed', className)}
+      {...rest}
     >
       {icon}
       {badge != null && badge > 0 && (

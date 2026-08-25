@@ -113,7 +113,7 @@
   background: none;
   border: none;
   border-radius: var(--nds-radius-sm);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   padding: 6px 8px;
 }
 .nds-btn.link:hover {
@@ -720,7 +720,8 @@
 }
 .nds-tbtn:hover:not(:disabled) { background: var(--nds-surface-hover); color: var(--nds-text); }
 /* Pressed state reads off aria-pressed, so the visual and the a11y tree cannot drift. */
-.nds-tbtn[aria-pressed='true'] { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-tbtn[aria-pressed='true'],
+.nds-tbtn[aria-expanded='true'] { background: var(--nds-surface-hover); color: var(--nds-text); }
 .nds-tbtn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
 .nds-tbtn:disabled { pointer-events: none; opacity: .4; }
 
@@ -760,7 +761,8 @@
 .nds-tbtn.boxed:hover:not(:disabled) {
   background: var(--nds-surface-hover);
 }
-.nds-tbtn.boxed[aria-pressed='true'] {
+.nds-tbtn.boxed[aria-pressed='true'],
+.nds-tbtn.boxed[aria-expanded='true'] {
   background: var(--nds-primary);
   border-color: var(--nds-primary);
   color: var(--nds-text-inverse);

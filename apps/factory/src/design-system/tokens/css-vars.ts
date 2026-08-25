@@ -78,7 +78,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },
-  { name: '--nds-text-link', value: 'var(--nds-blue-600)' },
+  // NOT --nds-blue-600: 4.42:1 on the ads console's ground, i.e. AA inside a card and failing
+  // the moment the card is removed. #1a60c4 clears AA on every ground. See apps/web's copy.
+  { name: '--nds-text-link', value: '#1a60c4' },
   { name: '--nds-tooltip-light-fg', value: 'var(--nds-grey-900)' },
   { name: '--nds-tooltip-light-fg-2', value: 'var(--nds-grey-600)' },
 
