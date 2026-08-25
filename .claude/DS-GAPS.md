@@ -1,1 +1,5 @@
 # DS gaps found during alignment (append one line per gap, never rewrite)
+- `.pf-search` (Input + inline clear ×) → `Input` has no trailing action slot; `suffix` renders a shaded adornment, not a button — apps/web/src/app/marketing/ads/portfolios/portfolios.css:71
+- `.fc-lead-select` / `.fc-budget input` → no compact "ghost" (transparent-until-hover, ~11.5px, 3px padding) Select/Input variant for inline table-cell editing; the DS `md` control is ~12px taller than a grid row — apps/web/src/app/marketing/ads/portfolios/[id]/family-cockpit.css:127
+- `.fc-switch` / `.fc-status` → no badge-sized (11px / 3px 8px) toggle-button variant; `Button size="sm"` is 12.5px / 6px 11px and doubles a dense row's height — apps/web/src/app/marketing/ads/portfolios/[id]/family-cockpit.css:65
+- `.h10-cl-sum .chip` (name + count + failure badge, pill-radius, toggles a filter) → no interactive filter-chip; `Pill`/`Tag` are non-interactive and `Button active` is a rectangular radius-lg fill, not a `radius-full` tinted chip — apps/web/src/app/marketing/ads/changelog/ChangeLogClient.tsx:367

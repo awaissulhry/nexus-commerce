@@ -27,7 +27,8 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_gri
 import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { fmtChangeValue } from '../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Checkbox, Pill, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import { pillTone } from '../_shared/pillTone'
 
 interface Origin { kind: string; id: string | null; name: string }
@@ -299,7 +300,7 @@ export function ChangeLogClient() {
       key: 'undo', label: '', metric: false, sortable: false,
       render: (r) => (
         r.id.startsWith('a:')
-          ? <button type="button" className="h10-cl-undo" title="Undo this change" onClick={(e) => { e.stopPropagation(); void openUndo(r) }}><RotateCcw size={12} /></button>
+          ? <ToolbarButton icon={<RotateCcw size={13} />} label="Undo this change" onClick={() => void openUndo(r)} />
           : null
       ),
     },
@@ -375,75 +376,78 @@ export function ChangeLogClient() {
               {o.failed > 0 && <span className="f">{o.failed} failed</span>}
             </button>
           ))}
-          {originFilter && <button type="button" className="clr" onClick={() => setOriginFilter(null)}>Clear</button>}
+          {originFilter && <Button variant="link" onClick={() => setOriginFilter(null)}>Clear</Button>}
         </div>
       )}
 
       {noteMsg && !noteOpen && <div className="h10-am-latest">{noteMsg}</div>}
-      {noteOpen && (
-        <div className="h10-ntm-back" onClick={() => { if (!noteBusy) setNoteOpen(false) }}>
-          <div className="h10-ntm" role="dialog" aria-modal="true" aria-label="Add a note" onClick={(e) => e.stopPropagation()}>
-            <div className="h10-ntm-h"><b>Add a note to the log</b></div>
-            <div className="h10-ntm-b">
-              <p className="h10-cl-noteh">
-                For the changes this system did not make — a price move, a new hero image, a stock-out, a
-                competitor launch. Notes appear in this feed and as markers on the campaign performance
-                chart, so a later &ldquo;why did that week look like that&rdquo; has an answer.
-              </p>
-              <textarea
-                className="h10-cl-notei"
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                placeholder="e.g. Raised the IT price by €4 across the GALE family"
-                aria-label="Note"
-                rows={3}
-                autoFocus
-              />
-              {noteMsg && <div className="h10-cl-notee">{noteMsg}</div>}
-            </div>
-            <div className="h10-ntm-f">
-              <button type="button" className="cancel" disabled={noteBusy} onClick={() => setNoteOpen(false)}>Cancel</button>
-              <span className="grow" />
-              <button type="button" className="apply" disabled={noteBusy || !noteText.trim()} onClick={() => void saveNote()}>
-                {noteBusy ? 'Saving…' : 'Add note'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={noteOpen}
+        onClose={() => { if (!noteBusy) setNoteOpen(false) }}
+        title="Add a note to the log"
+        footer={(
+          <>
+            <Button disabled={noteBusy} onClick={() => setNoteOpen(false)}>Cancel</Button>
+            <span className="grow" />
+            <Button variant="primary" disabled={noteBusy || !noteText.trim()} onClick={() => void saveNote()}>
+              {noteBusy ? 'Saving…' : 'Add note'}
+            </Button>
+          </>
+        )}
+      >
+        <p className="h10-cl-noteh">
+          For the changes this system did not make — a price move, a new hero image, a stock-out, a
+          competitor launch. Notes appear in this feed and as markers on the campaign performance
+          chart, so a later &ldquo;why did that week look like that&rdquo; has an answer.
+        </p>
+        <Textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder="e.g. Raised the IT price by €4 across the GALE family"
+          aria-label="Note"
+          // The DS textarea floors at 168px, right for a paste box and far too tall for a
+          // three-line note. Inline so it beats the stylesheet whatever the CSS load order.
+          style={{ minHeight: 76 }}
+          autoFocus
+        />
+        {noteMsg && <div className="h10-cl-notee">{noteMsg}</div>}
+      </Modal>
 
       {undoMsg && !undoing && <div className="h10-am-latest">{undoMsg}</div>}
       {undoing && (
-        <div className="h10-ntm-back" onClick={() => { if (!undoBusy) { setUndoing(null); setUndoMsg('') } }}>
-          <div className="h10-ntm" role="dialog" aria-modal="true" aria-label="Undo change" onClick={(e) => e.stopPropagation()}>
-            <div className="h10-ntm-h"><b>Undo this change</b></div>
-            <div className="h10-ntm-sub">
-              {!undoing.preview ? 'Checking…'
-                : !undoing.preview.eligible ? undoing.preview.reason
-                : (
-                  <>
-                    Restores what <b>{fieldLabel(undoing.row.field)}</b> was before this change, on{' '}
-                    <b>{undoing.row.entity.name ?? undoing.row.entity.type.toLowerCase()}</b>.
-                    {undoing.preview.groupedWith && undoing.preview.groupedWith > 1 && (
-                      <> This was one of <b>{undoing.preview.groupedWith}</b> changes made by a single
-                      operation, and all of them reverse together — undoing part of it would leave the
-                      entity in a state that never existed.</>
-                    )}
-                    {' '}The reversal is pushed to Amazon through the normal write path, so it honours the
-                    campaign&rsquo;s write-gate and is itself recorded here.
-                  </>
-                )}
-            </div>
-            {undoMsg && <div className="h10-ntm-b"><div className="h10-ntm-err">{undoMsg}</div></div>}
-            <div className="h10-ntm-f">
-              <button type="button" className="cancel" onClick={() => { setUndoing(null); setUndoMsg('') }} disabled={undoBusy}>Close</button>
+        <Modal
+          open
+          onClose={() => { if (!undoBusy) { setUndoing(null); setUndoMsg('') } }}
+          title="Undo this change"
+          footer={(
+            <>
+              <Button onClick={() => { setUndoing(null); setUndoMsg('') }} disabled={undoBusy}>Close</Button>
               <span className="grow" />
               {undoing.preview?.eligible && (
-                <button type="button" className="apply danger" onClick={() => void doUndo()} disabled={undoBusy}>{undoBusy ? 'Undoing…' : 'Undo'}</button>
+                <Button variant="danger" onClick={() => void doUndo()} disabled={undoBusy}>{undoBusy ? 'Undoing…' : 'Undo'}</Button>
               )}
-            </div>
-          </div>
-        </div>
+            </>
+          )}
+        >
+          <p className="h10-cl-noteh">
+            {!undoing.preview ? 'Checking…'
+              : !undoing.preview.eligible ? undoing.preview.reason
+              : (
+                <>
+                  Restores what <b>{fieldLabel(undoing.row.field)}</b> was before this change, on{' '}
+                  <b>{undoing.row.entity.name ?? undoing.row.entity.type.toLowerCase()}</b>.
+                  {undoing.preview.groupedWith && undoing.preview.groupedWith > 1 && (
+                    <> This was one of <b>{undoing.preview.groupedWith}</b> changes made by a single
+                    operation, and all of them reverse together — undoing part of it would leave the
+                    entity in a state that never existed.</>
+                  )}
+                  {' '}The reversal is pushed to Amazon through the normal write path, so it honours the
+                  campaign&rsquo;s write-gate and is itself recorded here.
+                </>
+              )}
+          </p>
+          {undoMsg && <div className="h10-cl-notee">{undoMsg}</div>}
+        </Modal>
       )}
 
       <AdsDataGrid<ChangeRow>
@@ -483,13 +487,16 @@ export function ChangeLogClient() {
         toolbarRight={(
           <span className="h10-cl-win">
             {failed > 0 && <span className="h10-cl-alert" title="Filter the Delivery column to Failed to see them">{failed} failed to reach Amazon</span>}
-            <label className="h10-cl-routine" title="Bids and placement percentages move every 15 minutes. Hidden by default so creates, negatives and operator edits are not buried under them.">
-              <input type="checkbox" checked={showRoutine} onChange={(e) => setShowRoutine(e.target.checked)} />
-              bid moves{routineCount > 0 ? ` (${routineCount})` : ''}
-            </label>
-            <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="Time window" className="h10-cl-select">
+            <span title="Bids and placement percentages move every 15 minutes. Hidden by default so creates, negatives and operator edits are not buried under them.">
+              <Checkbox
+                checked={showRoutine}
+                onChange={(e) => setShowRoutine(e.target.checked)}
+                label={`bid moves${routineCount > 0 ? ` (${routineCount})` : ''}`}
+              />
+            </span>
+            <Select value={days} onChange={(e) => setDays(e.target.value)} aria-label="Time window">
               {WINDOWS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
-            </select>
+            </Select>
           </span>
         )}
         reportLabel={all[0] ? `Newest change: ${new Date(all[0].at).toLocaleString('en-GB')}` : undefined}
