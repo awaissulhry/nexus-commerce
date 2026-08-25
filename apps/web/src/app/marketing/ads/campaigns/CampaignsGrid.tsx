@@ -9,8 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
@@ -739,77 +740,77 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
   const budgetUnit = budgetMode === 'set' ? '€' : '%'
 
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal bulk" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Bulk Actions">
-        <div className="h10-modal-h"><b>Bulk Actions</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">{step === 1 ? 'Select items and make changes' : 'Review the changes'}</div>
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Bulk Actions"
+      subtitle={step === 1 ? 'Select items and make changes' : 'Review the changes'}
+      footer={step === 1 ? (
+        <><span className="grow" /><Button variant="primary" disabled={!any} onClick={() => setStep(2)}>Apply</Button></>
+      ) : (
+        <><button type="button" className="h10-am-link back" onClick={() => setStep(1)}>Back</button><span className="grow" /><Button variant="primary" onClick={() => onSubmit(changes)}>Submit Changes</Button></>
+      )}
+    >
+      {step === 1 ? (
+          <div className="h10-bulk">
+            <div className="h10-bulk-hd"><label className="ck"><input type="checkbox" ref={(el) => { if (el) el.indeterminate = any && !allOn }} checked={allOn} onChange={() => setAll(!allOn)} aria-label="Select all items" /></label><span className="it">Item</span><span className="ac">Action</span></div>
 
-        {step === 1 ? (<>
-          <div className="h10-modal-b">
-            <div className="h10-bulk">
-              <div className="h10-bulk-hd"><label className="ck"><input type="checkbox" ref={(el) => { if (el) el.indeterminate = any && !allOn }} checked={allOn} onChange={() => setAll(!allOn)} aria-label="Select all items" /></label><span className="it">Item</span><span className="ac">Action</span></div>
+            <div className="h10-bulk-row">
+              <label className="ck"><input type="checkbox" checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change Campaign Status" /></label>
+              <span className="it">Campaign Status</span>
+              <div className="ac"><H10Select width={150} options={STATUS_ACTIONS} value={statusVal} onChange={(v) => setStatusVal(v as typeof statusVal)} ariaLabel="Campaign status action" /></div>
+            </div>
 
-              <div className="h10-bulk-row">
-                <label className="ck"><input type="checkbox" checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change Campaign Status" /></label>
-                <span className="it">Campaign Status</span>
-                <div className="ac"><H10Select width={150} options={STATUS_ACTIONS} value={statusVal} onChange={(v) => setStatusVal(v as typeof statusVal)} ariaLabel="Campaign status action" /></div>
-              </div>
-
-              <div className="h10-bulk-row">
-                <label className="ck"><input type="checkbox" checked={enBudget} onChange={() => setEnBudget((v) => !v)} aria-label="Change Campaign Budget" /></label>
-                <span className="it">Campaign Budget</span>
-                <div className="ac">
-                  <H10Select width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
-                  <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="1" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" /></span>
-                </div>
-              </div>
-
-              <div className="h10-bulk-row">
-                <label className="ck"><input type="checkbox" checked={enAuto} onChange={() => setEnAuto((v) => !v)} aria-label="Change Bid Automation" /></label>
-                <span className="it">Bid Automation</span>
-                <div className="ac"><button type="button" className={`h10-bktoggle ${autoOn ? 'on' : ''}`} onClick={() => setAutoOn((v) => !v)} role="switch" aria-checked={autoOn} aria-label="Bid Automation"><span /></button></div>
-              </div>
-
-              <div className="h10-bulk-row">
-                <label className="ck"><input type="checkbox" checked={enAcos} onChange={() => setEnAcos((v) => !v)} aria-label="Change Target ACoS" /></label>
-                <span className="it">Target ACoS</span>
-                <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="1" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} aria-label="Target ACoS value" /></span></div>
-              </div>
-
-              <div className="h10-bulk-row">
-                <label className="ck"><input type="checkbox" checked={enMult} onChange={() => setEnMult((v) => !v)} aria-label="Change Bid Multiplier" /></label>
-                <span className="it">Bid Multiplier</span>
-                <div className="ac">
-                  <H10Select width={158} options={PLACEMENT_OPTS} value={placement} onChange={setPlacement} ariaLabel="Bid multiplier placement" />
-                  <span className="set">Set</span>
-                  <span className="h10-bulk-inp sf"><input type="number" min="0" step="1" value={multVal} onChange={(e) => setMultVal(e.target.value)} aria-label="Bid multiplier value" /><span className="sfx">%</span></span>
-                </div>
-              </div>
-
-              <div className="h10-bulk-row">
-                <label className="ck"><input type="checkbox" checked={enStrat} onChange={() => setEnStrat((v) => !v)} aria-label="Change Bidding Strategy" /></label>
-                <span className="it">Bidding Strategy</span>
-                <div className="ac"><span className="set">Set</span><H10Select width={158} options={STRAT_OPTIONS} value={stratVal} onChange={setStratVal} ariaLabel="Bidding strategy" /></div>
+            <div className="h10-bulk-row">
+              <label className="ck"><input type="checkbox" checked={enBudget} onChange={() => setEnBudget((v) => !v)} aria-label="Change Campaign Budget" /></label>
+              <span className="it">Campaign Budget</span>
+              <div className="ac">
+                <H10Select width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
+                <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="1" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" /></span>
               </div>
             </div>
-          </div>
-     <div className="h10-modal-f"><span className="grow" /><Button variant="primary" disabled={!any} onClick={() => setStep(2)}>Apply</Button></div>
-        </>) : (<>
-          <div className="h10-modal-b">
-            <div className="h10-bulk-review">
-              <div className="rh">Changes</div>
-              {changes.status && <div className="rr"><span className="f">Campaign Status</span><span className="v"><span className={`h10-pill ${STATUS_RESULT[changes.status.value].cls}`}>{STATUS_RESULT[changes.status.value].label}</span></span></div>}
-              {changes.budget && <div className="rr"><span className="f">Campaign Budget</span><span className="v">{changes.budget.mode === 'set' ? eur(changes.budget.value) : `${changes.budget.mode === 'incPct' ? 'Increase' : 'Decrease'} by ${changes.budget.value}%`}</span></div>}
-              {changes.automation != null && <div className="rr"><span className="f">Bid Automation</span><span className="v"><span className="h10-rv-pill">{changes.automation ? 'On' : 'Off'}</span></span></div>}
-              {changes.acos != null && <div className="rr"><span className="f">Target ACoS</span><span className="v">{changes.acos.toFixed(2)}%</span></div>}
-              {changes.multiplier && <div className="rr"><span className="f">Bid Multiplier</span><span className="v">{changes.multiplier.placementLabel} {changes.multiplier.value}%</span></div>}
-              {changes.strategy && <div className="rr"><span className="f">Bidding Strategy</span><span className="v">{changes.strategy.label}</span></div>}
+
+            <div className="h10-bulk-row">
+              <label className="ck"><input type="checkbox" checked={enAuto} onChange={() => setEnAuto((v) => !v)} aria-label="Change Bid Automation" /></label>
+              <span className="it">Bid Automation</span>
+              <div className="ac"><button type="button" className={`h10-bktoggle ${autoOn ? 'on' : ''}`} onClick={() => setAutoOn((v) => !v)} role="switch" aria-checked={autoOn} aria-label="Bid Automation"><span /></button></div>
+            </div>
+
+            <div className="h10-bulk-row">
+              <label className="ck"><input type="checkbox" checked={enAcos} onChange={() => setEnAcos((v) => !v)} aria-label="Change Target ACoS" /></label>
+              <span className="it">Target ACoS</span>
+              <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="1" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} aria-label="Target ACoS value" /></span></div>
+            </div>
+
+            <div className="h10-bulk-row">
+              <label className="ck"><input type="checkbox" checked={enMult} onChange={() => setEnMult((v) => !v)} aria-label="Change Bid Multiplier" /></label>
+              <span className="it">Bid Multiplier</span>
+              <div className="ac">
+                <H10Select width={158} options={PLACEMENT_OPTS} value={placement} onChange={setPlacement} ariaLabel="Bid multiplier placement" />
+                <span className="set">Set</span>
+                <span className="h10-bulk-inp sf"><input type="number" min="0" step="1" value={multVal} onChange={(e) => setMultVal(e.target.value)} aria-label="Bid multiplier value" /><span className="sfx">%</span></span>
+              </div>
+            </div>
+
+            <div className="h10-bulk-row">
+              <label className="ck"><input type="checkbox" checked={enStrat} onChange={() => setEnStrat((v) => !v)} aria-label="Change Bidding Strategy" /></label>
+              <span className="it">Bidding Strategy</span>
+              <div className="ac"><span className="set">Set</span><H10Select width={158} options={STRAT_OPTIONS} value={stratVal} onChange={setStratVal} ariaLabel="Bidding strategy" /></div>
             </div>
           </div>
-          <div className="h10-modal-f"><button type="button" className="h10-am-link back" onClick={() => setStep(1)}>Back</button><span className="grow" /><Button variant="primary" onClick={() => onSubmit(changes)}>Submit Changes</Button></div>
-        </>)}
-      </div>
-    </div>
+      ) : (
+          <div className="h10-bulk-review">
+            <div className="rh">Changes</div>
+            {changes.status && <div className="rr"><span className="f">Campaign Status</span><span className="v"><span className={`h10-pill ${STATUS_RESULT[changes.status.value].cls}`}>{STATUS_RESULT[changes.status.value].label}</span></span></div>}
+            {changes.budget && <div className="rr"><span className="f">Campaign Budget</span><span className="v">{changes.budget.mode === 'set' ? eur(changes.budget.value) : `${changes.budget.mode === 'incPct' ? 'Increase' : 'Decrease'} by ${changes.budget.value}%`}</span></div>}
+            {changes.automation != null && <div className="rr"><span className="f">Bid Automation</span><span className="v"><span className="h10-rv-pill">{changes.automation ? 'On' : 'Off'}</span></span></div>}
+            {changes.acos != null && <div className="rr"><span className="f">Target ACoS</span><span className="v">{changes.acos.toFixed(2)}%</span></div>}
+            {changes.multiplier && <div className="rr"><span className="f">Bid Multiplier</span><span className="v">{changes.multiplier.placementLabel} {changes.multiplier.value}%</span></div>}
+            {changes.strategy && <div className="rr"><span className="f">Bidding Strategy</span><span className="v">{changes.strategy.label}</span></div>}
+          </div>
+      )}
+    </Modal>
   )
 }
 
@@ -836,24 +837,28 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
     </div>
   )
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal bm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Bid Multiplier">
-        <div className="h10-modal-h"><b>Bid Multiplier</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">Set how much you want to increase your bid based on the placement</div>
-        <div className="h10-modal-b">
-          <div className="h10-bm-sec">Placement</div>
-          <div className="h10-bm-pl">
-            {field('Top of Search', 'Increase your bid by a specified % when your ad competes for the top row of the first page.', tos, setTos)}
-            {field('Product Pages', 'Increase your bid by a specified % when your ad competes for placements off the top of search, primarily product detail pages.', pdp, setPdp)}
-            {field('Rest of Search', null, ros, setRos)}
-          </div>
-          {boost('Further increase bids for video ads', 'These increases apply on top of placement adjustments.', 'These increases apply on top of placement adjustments.', video, () => setVideo((v) => !v), 'Enable Video Bid Boost')}
-          {boost('Amazon Business Bid Boost', 'Further increase bids across placements on Amazon Business.', 'Further increase bids across placements on Amazon Business', business, () => setBusiness((v) => !v), 'Enable Amazon Business Bid Boost')}
-          {boost('Audience Bid Modifier', 'Increase bids on a custom audience created in Amazon Marketing cloud (AMC). The percentage value set is the percentage of the original bid including any other bid adjustments such as placement bidding. For example, a placement bidding with 50% adjustment on a $1.00 bid would increase the bid to $1.50, and a Audience Bid Modifier with 100% adjustment would further increase the bid to $3.00.', null, audience, () => setAudience((v) => !v), 'Enable Audience Bid Modifier')}
-        </div>
-        <div className="h10-modal-f"><Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" onClick={() => onConfirm({ tos: norm(tos), pdp: norm(pdp), ros: norm(ros) })}>Confirm</Button></div>
+    <Modal
+      open
+      onClose={onClose}
+      size="xl"
+      title="Bid Multiplier"
+      subtitle="Set how much you want to increase your bid based on the placement"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" onClick={() => onConfirm({ tos: norm(tos), pdp: norm(pdp), ros: norm(ros) })}>Confirm</Button>
+        </>
+      }
+    >
+      <div className="h10-bm-sec">Placement</div>
+      <div className="h10-bm-pl">
+        {field('Top of Search', 'Increase your bid by a specified % when your ad competes for the top row of the first page.', tos, setTos)}
+        {field('Product Pages', 'Increase your bid by a specified % when your ad competes for placements off the top of search, primarily product detail pages.', pdp, setPdp)}
+        {field('Rest of Search', null, ros, setRos)}
       </div>
-    </div>
+      {boost('Further increase bids for video ads', 'These increases apply on top of placement adjustments.', 'These increases apply on top of placement adjustments.', video, () => setVideo((v) => !v), 'Enable Video Bid Boost')}
+      {boost('Amazon Business Bid Boost', 'Further increase bids across placements on Amazon Business.', 'Further increase bids across placements on Amazon Business', business, () => setBusiness((v) => !v), 'Enable Amazon Business Bid Boost')}
+      {boost('Audience Bid Modifier', 'Increase bids on a custom audience created in Amazon Marketing cloud (AMC). The percentage value set is the percentage of the original bid including any other bid adjustments such as placement bidding. For example, a placement bidding with 50% adjustment on a $1.00 bid would increase the bid to $1.50, and a Audience Bid Modifier with 100% adjustment would further increase the bid to $3.00.', null, audience, () => setAudience((v) => !v), 'Enable Audience Bid Modifier')}
+    </Modal>
   )
 }
 
@@ -871,17 +876,21 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
 // so it lists none and routes "Add Rule" to the Rules & Automation builder.
 function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: () => void }) {
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal bm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Campaign Rules">
-        <div className="h10-modal-h"><b>Campaign Rules for &ldquo;{campaign.name}&rdquo;</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">Click on rules to edit or view details. Suggestions generated by rules will appear on the Suggestions Page.</div>
-        <div className="h10-modal-b">
-          <div className="h10-rules-top"><span className="cnt">0 Rules</span><Link href="/marketing/ads/rules-automation/builder" className="h10-am-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
-          <div className="h10-rules-empty">No rules are applied to this campaign yet. Create one in Rules &amp; Automation.</div>
-        </div>
-    <div className="h10-modal-f"><span className="grow" /><Button variant="primary" onClick={onClose}>Close</Button></div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="xl"
+      title={<>Campaign Rules for &ldquo;{campaign.name}&rdquo;</>}
+      subtitle="Click on rules to edit or view details. Suggestions generated by rules will appear on the Suggestions Page."
+      footer={
+        <>
+          <span className="grow" /><Button variant="primary" onClick={onClose}>Close</Button>
+        </>
+      }
+    >
+      <div className="h10-rules-top"><span className="cnt">0 Rules</span><Link href="/marketing/ads/rules-automation/builder" className="h10-am-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
+      <div className="h10-rules-empty">No rules are applied to this campaign yet. Create one in Rules &amp; Automation.</div>
+    </Modal>
   )
 }
 
@@ -1995,49 +2004,52 @@ export function CampaignsGrid() {
 
       {/* Apply confirmation — diff-then-apply (gated writes) */}
       {showApply && (
-        <div className="h10-modal-backdrop" onClick={() => !applying && setShowApply(false)}>
-          <div className="h10-modal wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Apply changes">
-            <div className="h10-modal-h"><b>Apply changes to {diffs.length} campaign{diffs.length > 1 ? 's' : ''}</b><button type="button" className="h10-modal-x" onClick={() => !applying && setShowApply(false)} aria-label="Close"><X size={16} /></button></div>
-            <div className="h10-modal-sub">Live markets push to Amazon (write-gate enforced); non-live markets update locally only.</div>
-            <div className="h10-modal-b">
-              {diffs.map((d) => (
-                <div className="h10-diffrow" key={d.c.id}>
-                  <div className="dr-nm"><span className="t" title={d.c.name}>{d.c.name}</span>{d.c.marketplace && <span className="mk">{d.c.marketplace}</span>}</div>
-                  {d.changes.map((ch, i) => (
-                    <div className="dr-ch" key={i}><span className="f">{ch.field}</span><span className="from">{ch.from}</span><span className="arr">→</span><span className="to">{ch.to}</span></div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="h10-modal-f">
+        <Modal
+          open
+          onClose={() => !applying && setShowApply(false)}
+          size="md"
+          title={<>Apply changes to {diffs.length} campaign{diffs.length > 1 ? 's' : ''}</>}
+          subtitle="Live markets push to Amazon (write-gate enforced); non-live markets update locally only."
+          footer={
+            <>
               <span className="grow" />
        <Button onClick={() => setShowApply(false)} disabled={applying}>Cancel</Button>
        <Button variant="primary" onClick={applyAll} disabled={applying}>{applying ? 'Applying…' : `Apply ${diffs.length} campaign${diffs.length > 1 ? 's' : ''}`}</Button>
+            </>
+          }
+        >
+          {diffs.map((d) => (
+            <div className="h10-diffrow" key={d.c.id}>
+              <div className="dr-nm"><span className="t" title={d.c.name}>{d.c.name}</span>{d.c.marketplace && <span className="mk">{d.c.marketplace}</span>}</div>
+              {d.changes.map((ch, i) => (
+                <div className="dr-ch" key={i}><span className="f">{ch.field}</span><span className="from">{ch.from}</span><span className="arr">→</span><span className="to">{ch.to}</span></div>
+              ))}
             </div>
-          </div>
-        </div>
+          ))}
+        </Modal>
       )}
 
       {applyMsg && <div className="h10-am-toast">{applyMsg}</div>}
 
       {/* CBN.2h.2 — bulk status (Enable / Archive / Pause) confirmation */}
       {bulkConfirm && (
-        <div className="h10-modal-backdrop" onClick={() => !applying && setBulkConfirm(null)}>
-          <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Bulk status change">
-            <div className="h10-modal-h"><b>{bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} {sel.size} campaign{sel.size > 1 ? 's' : ''}</b><button type="button" className="h10-modal-x" onClick={() => !applying && setBulkConfirm(null)} aria-label="Close"><X size={16} /></button></div>
-            <div className="h10-modal-sub">Live markets push to Amazon (write-gate enforced); non-live markets update locally only.</div>
-            <div className="h10-modal-b">
-              {rows.filter((c) => sel.has(c.id)).slice(0, 60).map((c) => (
-                <div className="h10-diffrow" key={c.id}><div className="dr-nm"><span className="t" title={c.name}>{c.name}</span>{c.marketplace && <span className="mk">{c.marketplace}</span>}<span className="to" style={{ marginLeft: 'auto' }}>→ {bulkConfirm === 'ENABLED' ? 'Enabled' : bulkConfirm === 'PAUSED' ? 'Paused' : 'Archived'}</span></div></div>
-              ))}
-            </div>
-            <div className="h10-modal-f">
+        <Modal
+          open
+          onClose={() => !applying && setBulkConfirm(null)}
+          title={<>{bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} {sel.size} campaign{sel.size > 1 ? 's' : ''}</>}
+          subtitle="Live markets push to Amazon (write-gate enforced); non-live markets update locally only."
+          footer={
+            <>
               <span className="grow" />
        <Button onClick={() => setBulkConfirm(null)} disabled={applying}>Cancel</Button>
        <Button variant="primary" onClick={() => void applyBulkStatus(bulkConfirm)} disabled={applying}>{applying ? 'Applying…' : `${bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} ${sel.size}`}</Button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          {rows.filter((c) => sel.has(c.id)).slice(0, 60).map((c) => (
+            <div className="h10-diffrow" key={c.id}><div className="dr-nm"><span className="t" title={c.name}>{c.name}</span>{c.marketplace && <span className="mk">{c.marketplace}</span>}<span className="to" style={{ marginLeft: 'auto' }}>→ {bulkConfirm === 'ENABLED' ? 'Enabled' : bulkConfirm === 'PAUSED' ? 'Paused' : 'Archived'}</span></div></div>
+          ))}
+        </Modal>
       )}
 
       {showBulk && <BulkActionsModal onSubmit={(c) => void applyBulkChanges(c)} onClose={() => setShowBulk(false)} />}

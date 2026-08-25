@@ -27,7 +27,7 @@ await p.waitForTimeout(350)
 const broadRow = p.locator('.h10-spw-cset-row').nth(1) // Auto=0, Brand-Broad=1
 await broadRow.locator('.tgt').last().locator('button.edit').click()
 await p.waitForTimeout(350)
-await p.locator('.h10-modal').screenshot({ path: '/tmp/spw/nt_drawer.png' })
+await p.locator('.nds-modal').screenshot({ path: '/tmp/spw/nt_drawer.png' })
 console.log('shot')
 await b.close()
 

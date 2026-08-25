@@ -2,7 +2,7 @@
 
 /**
  * "Add Keywords & Targets to Ad Group" modal (H10 match) — the richest of the ad-group
- * creation flows, on the shared .h10-modal-* + .h10-apm layout (context strip + staged
+ * creation flows, in a Nexus DS <Modal> (size xxl) over the .h10-apm layout (context strip + staged
  * right pane like the negatives modals). Two tabs:
  *   • Keyword Targeting — pick one or more Match Types (Broad / Phrase / Exact) + a Bid,
  *     paste keywords (one per line) → stages one row per keyword × match type.

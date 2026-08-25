@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * "Add Negative Target ASINs to Ad Group" modal (H10 match) — reuses the shared .h10-modal-*
- * shell + the .h10-apm two-pane layout from AddProductsModal. A context strip shows the
+ * "Add Negative Target ASINs to Ad Group" modal — a Nexus DS <Modal> (size xxl) over
+ * the .h10-apm two-pane layout from AddProductsModal. A context strip shows the
  * Campaign + Ad group it scopes to; LEFT is a paste-ASINs textarea + "Add Negative Target
  * ASINs"; RIGHT stages the "N Negative Target ASINs Added" list (ASIN column, sortable).
  * Submit creates one negative product target per ASIN → POST /api/advertising/negative-targets/

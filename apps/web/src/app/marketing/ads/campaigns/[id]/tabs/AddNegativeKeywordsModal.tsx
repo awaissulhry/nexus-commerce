@@ -5,7 +5,7 @@
  * pick Match Type (Negative Exact / Phrase) → type keywords (one per line) → "Add Negative
  * Keywords" stages them into the right list ("N Negative Keywords Added" + Remove All) →
  * "Add to Campaign" commits each via POST /advertising/negative-keywords (scope=CAMPAIGN).
- * Reuses the shared .h10-modal-* shell. Endpoint already on prod (frontend-only).
+ * Shell is the Nexus DS <Modal> (size xxl). Endpoint already on prod (frontend-only).
  */
 import { useState } from 'react'
 import { Button } from '@/design-system/primitives'

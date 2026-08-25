@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * "Add Products to Ad Group" modal (H10 match) — reuses the shared .h10-modal-* shell.
+ * "Add Products to Ad Group" modal — the Nexus DS <Modal> (size xxl).
  * Two panes: LEFT searches the catalog (Search for Products → GET /api/products/search;
  * Enter Products → paste names/ASINs/SKUs), RIGHT is the staged "N Products Added" list.
  * Submit creates one product ad per staged item → POST /api/advertising/product-ads/create

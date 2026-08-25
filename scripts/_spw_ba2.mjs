@@ -9,8 +9,8 @@ await p.click('.h10-spw-steps button:nth-of-type(2)'); await p.waitForTimeout(40
 // BULK SET BID — select all, set 1.50
 await p.click('.h10-spw-cset-head .ck input'); await p.waitForTimeout(150)
 await p.locator('.h10-spw-bulk-btn', { hasText: 'Set bid' }).click(); await p.waitForTimeout(150)
-await p.fill('.h10-modal.bulk.sm input', '1.50')
-await p.locator('.h10-modal.bulk .h10-am-btn.primary').click(); await p.waitForTimeout(250)
+await p.fill('.nds-modal.lg.sm input', '1.50')
+await p.locator('.nds-modal.lg .h10-am-btn.primary').click(); await p.waitForTimeout(250)
 const bids = await p.$$eval('.h10-spw-cset-row .bid input', (els) => els.filter((_, i) => i % 2 === 0).map((e) => e.value))
 await p.locator('.h10-spw-bulk-clear').click(); await p.waitForTimeout(150)
 
@@ -18,7 +18,7 @@ await p.locator('.h10-spw-bulk-clear').click(); await p.waitForTimeout(150)
 await p.click('.h10-spw-cset-select > button'); await p.waitForTimeout(150)
 await p.locator('.h10-spw-cset-select .menu button', { hasText: 'Keyword campaigns' }).click(); await p.waitForTimeout(200)
 await p.locator('.h10-spw-bulk-btn', { hasText: 'Negatives' }).click(); await p.waitForTimeout(200)
-await p.fill('.h10-spw-bulk-ta', 'junk'); await p.locator('.h10-modal.bulk .h10-am-btn.primary').click(); await p.waitForTimeout(250)
+await p.fill('.h10-spw-bulk-ta', 'junk'); await p.locator('.nds-modal.lg .h10-am-btn.primary').click(); await p.waitForTimeout(250)
 const negCounts = await p.$$eval('.h10-spw-cset-row', (rows) => rows.map((r) => `${r.querySelector('.ag .agb input')?.value}: ${[...r.querySelectorAll('.tgt')].pop()?.querySelector('.ct')?.textContent?.trim()}`))
 await p.locator('.h10-spw-bulk-clear').click(); await p.waitForTimeout(150)
 

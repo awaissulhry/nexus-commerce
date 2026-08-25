@@ -13,7 +13,6 @@
 .eb-form { display: flex; flex-direction: column; gap: 12px; padding: 10px 6px; }
 .eb-form label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #667085; margin-bottom: 4px; }
 .eb-form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-.eb-modal-f { display: flex; align-items: center; gap: 8px; padding: 12px 18px 14px; }
 
 .eb-textarea { width: 100%; background: var(--nds-white); color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: inherit; resize: vertical; }
 .eb-textarea:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }

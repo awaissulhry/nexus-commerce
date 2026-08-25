@@ -19,7 +19,7 @@
  * ── Why no CSS shipped with this ────────────────────────────────────────────────────────────────
  * `AdsDataGrid` renders `<td className="nm fz">` inside `.h10-am-grid`, the SAME markup the Ad
  * Manager's own table uses, so `ads.css`'s `td.nm .t` / `.nmw .h10-open` / `.h10-statuscell` /
- * `.h10-statusmenu` / `.h10-modal-*` rules already apply on every consumer. Apply Rules previously
+ * `.h10-statusmenu` rules already apply on every consumer. Apply Rules previously
  * fought that with `.h10-ar-nm` and `.h10-ar-open` (its own comment explains the specificity
  * dodge); adopting the shared markup makes the fight unnecessary rather than winning it.
  *

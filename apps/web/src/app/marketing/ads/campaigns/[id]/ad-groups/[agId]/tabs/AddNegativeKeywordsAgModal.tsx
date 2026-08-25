@@ -2,7 +2,7 @@
 
 /**
  * "Add Negative Keywords to Ad Group" modal (H10 match) — the ad-group-scoped sibling of the
- * campaign-level AddNegativeKeywordsModal, on the shared .h10-modal-* + .h10-apm layout (same
+ * campaign-level AddNegativeKeywordsModal, in a Nexus DS <Modal> over .h10-apm (same
  * context strip + paste flow as AddNegativeTargetsModal). Pick a Match Type (Negative Exact /
  * Negative Phrase) → paste keywords (one per line) → stage into "N Negative Keywords Added" →
  * submit one POST /api/advertising/negative-keywords per staged keyword with scope='AD_GROUP'

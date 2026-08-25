@@ -21,6 +21,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import { useRouter } from 'next/navigation'
 import { X, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -601,15 +602,19 @@ function AddProductsModal({ selected, onClose, onApply }: { selected: Prod[]; on
     onApply(picked.map((s) => spwToProd(s, prevById.get(s.id))))
   }
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal aig-add" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Products to Product Selection">
-        <div className="h10-modal-h"><b>Add Products to Product Selection</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-b">
-          <ProductSelection products={picked} setProducts={setPicked} />
-        </div>
-        <div className="h10-modal-f"><Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" disabled={!picked.length} onClick={apply}>Add Products</Button></div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="xl"
+      title="Add Products to Product Selection"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" disabled={!picked.length} onClick={apply}>Add Products</Button>
+        </>
+      }
+    >
+      <ProductSelection products={picked} setProducts={setPicked} />
+    </Modal>
   )
 }
 

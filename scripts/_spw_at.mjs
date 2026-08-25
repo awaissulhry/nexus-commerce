@@ -18,12 +18,12 @@ await p.waitForTimeout(350)
 const autoRow = p.locator('.h10-spw-cset-row').first()
 await autoRow.locator('.tgt').first().locator('button.edit').click()
 await p.waitForTimeout(350)
-await p.locator('.h10-modal').screenshot({ path: '/tmp/spw/at_editor.png' })
+await p.locator('.nds-modal').screenshot({ path: '/tmp/spw/at_editor.png' })
 
 // toggle Loose match (row 2) OFF + bump Close (row 1) bid
 await p.locator('.h10-spw-auto-ed .row').nth(1).locator('input[type=checkbox]').uncheck()
 await p.locator('.h10-spw-auto-ed .row').nth(0).locator('.bid input').fill('1.20')
-await p.click('.h10-modal-f .primary')
+await p.click('.nds-modal-f .primary')
 await p.waitForTimeout(300)
 const tgtLabel = (await autoRow.locator('.tgt').first().locator('.ct').innerText()).trim()
 

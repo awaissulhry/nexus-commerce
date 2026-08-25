@@ -30,7 +30,7 @@ try {
   await p.locator('.h10-spw-cset-row').nth(1).locator('button.edit').first().click({ timeout: 4000 })
   await p.waitForTimeout(300); await audit('targeting-modal')
   await p.keyboard.press('Escape'); await p.waitForTimeout(250)
-  console.log('esc-closes-modal:', (await p.$('.h10-modal')) === null)
+  console.log('esc-closes-modal:', (await p.$('.nds-modal')) === null)
 } catch (e) { console.log('modal step err:', e.message.split('\n')[0]) }
 try { await p.click('.h10-spw-steps button:nth-of-type(3)'); await p.waitForTimeout(400); await audit('step3') } catch (e) { console.log('step3 err', e.message) }
 await b.close()
