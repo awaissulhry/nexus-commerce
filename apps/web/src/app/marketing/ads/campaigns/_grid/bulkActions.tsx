@@ -7,7 +7,7 @@
  */
 import { useState } from 'react'
 import { Button, Input } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Field, Modal } from '@/design-system/components'
 import '../campaigns-ds.css'
 
 import { getBackendUrl } from '@/lib/backend-url'
@@ -39,9 +39,9 @@ export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€'
         </>
       }
     >
-      <div className="h10-cd-field s"><label>{bidLabel}</label>
-        <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} autoFocus aria-label={bidLabel} fieldClassName="cd-money-field" />
-      </div>
+      <Field className="cd-field s" label={bidLabel}>
+        <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} autoFocus fieldClassName="cd-money-field" />
+      </Field>
     </Modal>
   )
 }

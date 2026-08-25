@@ -26,6 +26,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Layers, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -279,10 +280,9 @@ export function GuidedBuilder() {
               <h2>Product Group Name <i className="req">*</i></h2>
               <p className="h10-spw-desc">All selected Products will be added to this product group</p>
               <div className="h10-spw-card">
-                <label className="h10-spw-field">
-                  <span className="lbl">Product Group Name <InfoTip tip="A label for the products advertised across these campaigns — used in the campaign names and reports." /></span>
-                  <input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} placeholder="Enter product group name here" aria-label="Product group name" />
-                </label>
+                <Field className="spw-field" label="Product Group Name" info={<InfoTip tip="A label for the products advertised across these campaigns — used in the campaign names and reports." />}>
+                  <Input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} placeholder="Enter product group name here" fieldClassName="spw-field-full" />
+                </Field>
               </div>
             </section>
             <section className="h10-spw-sec">

@@ -21,6 +21,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, Checkbox, Input, Radio, Toggle } from '@/design-system/primitives'
+import { Field } from '@/design-system/components'
 import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -210,22 +211,22 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
         <section id="campaign-details" ref={reg('campaign-details')} className="h10-cd-sec">
           <h2>Campaign Details</h2>
           <div className="h10-cd-card">
-            <div className="h10-cd-field"><label>Campaign Name <i>*</i></label>
-              <Input value={form.name} onChange={(e) => set('name', e.target.value)} aria-label="Campaign name" fieldClassName="cd-field-full" />
-            </div>
-            <div className="h10-cd-field"><label>Portfolio</label>
+            <Field className="cd-field" label="Campaign Name" required>
+              <Input value={form.name} onChange={(e) => set('name', e.target.value)} fieldClassName="cd-field-full" />
+            </Field>
+            <Field className="cd-field" label="Portfolio" htmlFor="cd-portfolio">
               <PortfolioSelect value={form.portfolioId} onChange={(v) => set('portfolioId', v)} marketplace={campaign?.marketplace ?? undefined} />
-            </div>
-            <div className="h10-cd-field s"><label>Daily Budget <i>*</i></label>
-              <Input inputMode="decimal" prefix={currency} value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} aria-label="Daily budget" fieldClassName="cd-money-boxed" />
-            </div>
+            </Field>
+            <Field className="cd-field s" label="Daily Budget" required>
+              <Input inputMode="decimal" prefix={currency} value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} fieldClassName="cd-money-boxed" />
+            </Field>
             <div className="h10-cd-daterow">
-              <div className="h10-cd-field"><label>Start Date <i>*</i></label>
-                <div className="h10-cd-date ro"><span className="ib"><Calendar size={15} /></span><input type="text" value={campaign?.startDate ? mdy(campaign.startDate as string) : ''} readOnly aria-readonly /></div>
-              </div>
-              <div className="h10-cd-field"><label>End Date {!form.neverExpire ? <i>*</i> : null}</label>
+              <Field className="cd-field" label="Start Date" required htmlFor="cd-startdate">
+                <div className="h10-cd-date ro"><span className="ib"><Calendar size={15} /></span><input id="cd-startdate" type="text" value={campaign?.startDate ? mdy(campaign.startDate as string) : ''} readOnly aria-readonly /></div>
+              </Field>
+              <Field className="cd-field" label="End Date" required={!form.neverExpire} htmlFor="cd-enddate">
                 <EndDateCalendar value={form.endDate} disabled={form.neverExpire} onChange={(v) => set('endDate', v)} />
-              </div>
+              </Field>
               <span className="h10-cd-switch"><Toggle checked={form.neverExpire} onChange={(v) => set('neverExpire', v)} aria-label="Never Expire" /> Never Expire</span>
             </div>
           </div>
@@ -294,9 +295,9 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
             <button type="button" className={`h10-cd-none ${form.algo === 'NONE' ? 'on' : ''}`} onClick={() => set('algo', 'NONE')}><span className="ic"><Ban size={18} /></span> None</button>
 
             {form.algo === 'TARGET_ACOS' && (
-              <div className="h10-cd-field s h10-cd-acosrev"><label>Target ACoS <InfoTip tip={TIPS.targetAcos} /></label>
-                <Input inputMode="decimal" suffix="%" value={form.targetAcos} onChange={(e) => set('targetAcos', e.target.value)} aria-label="Target ACoS" fieldClassName="cd-pct-field" />
-              </div>
+              <Field className="cd-field s h10-cd-acosrev" label="Target ACoS" info={<InfoTip tip={TIPS.targetAcos} />}>
+                <Input inputMode="decimal" suffix="%" value={form.targetAcos} onChange={(e) => set('targetAcos', e.target.value)} fieldClassName="cd-pct-field" />
+              </Field>
             )}
             {form.algo === 'CUSTOM' && <BidRuleSelect />}
 

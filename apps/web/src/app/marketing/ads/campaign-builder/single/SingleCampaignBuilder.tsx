@@ -18,6 +18,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useRouter } from 'next/navigation'
 import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button, Checkbox, Input, Radio, Toggle } from '@/design-system/primitives'
+import { Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -273,18 +274,15 @@ export function SingleCampaignBuilder() {
                 <h2>Campaign Details</h2>
                 <div className="h10-spw-card">
                   <div className="h10-scb-fields">
-                    <label className="h10-spw-field">
-                      <span className="lbl">Campaign Name <i className="req">*</i> <InfoTip tip="The name you'll use to identify this campaign in the Ad Manager and reports." /></span>
-                      <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Campaign name" />
-                    </label>
-                    <label className="h10-spw-field">
-                      <span className="lbl">Ad Group Name <i className="req">*</i> <InfoTip tip="An ad group holds the products you advertise together and the targeting that applies to them." /></span>
-                      <input value={adGroup} onChange={(e) => setAdGroup(e.target.value)} placeholder="Enter Group name" aria-label="Ad group name" />
-                    </label>
-                    <div className="h10-spw-field">
-                      <span className="lbl">Portfolio (Optional) <InfoTip tip="Group campaigns together to organize your advertising and manage budgets across them." /></span>
+                    <Field className="spw-field" label="Campaign Name" required info={<InfoTip tip="The name you'll use to identify this campaign in the Ad Manager and reports." />}>
+                      <Input value={name} onChange={(e) => setName(e.target.value)} fieldClassName="spw-field-full" />
+                    </Field>
+                    <Field className="spw-field" label="Ad Group Name" required info={<InfoTip tip="An ad group holds the products you advertise together and the targeting that applies to them." />}>
+                      <Input value={adGroup} onChange={(e) => setAdGroup(e.target.value)} placeholder="Enter Group name" fieldClassName="spw-field-full" />
+                    </Field>
+                    <Field className="spw-field" label="Portfolio (Optional)" htmlFor="scb-portfolio" info={<InfoTip tip="Group campaigns together to organize your advertising and manage budgets across them." />}>
                       <PortfolioPicker value={portfolioId} onChange={setPortfolioId} />
-                    </div>
+                    </Field>
                   </div>
                 </div>
               </section>

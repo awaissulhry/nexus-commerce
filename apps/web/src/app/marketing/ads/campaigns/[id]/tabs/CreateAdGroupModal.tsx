@@ -7,7 +7,7 @@
  */
 import { useState } from 'react'
 import { Button, Input, RadioCard } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Field, Modal } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../../campaigns-ds.css'
 
@@ -54,14 +54,14 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
         </>
       }
     >
-      <div className="h10-cd-field"><label>Ad Group Name</label>
-        <Input placeholder="Enter ad group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-label="Ad group name" fieldClassName="cd-field-full" />
-      </div>
-      <div className="h10-cd-field s"><label>Default Bid</label>
-        <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Default bid" fieldClassName="cd-money-field" />
-      </div>
-      <div className="h10-cd-field"><label>Targeting</label>
-        <div className="cd-radiocards">
+      <Field className="cd-field" label="Ad Group Name">
+        <Input placeholder="Enter ad group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus fieldClassName="cd-field-full" />
+      </Field>
+      <Field className="cd-field s" label="Default Bid">
+        <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} fieldClassName="cd-money-field" />
+      </Field>
+      <Field className="cd-field" label="Targeting" htmlFor="cag-targeting">
+        <div className="cd-radiocards" id="cag-targeting">
           {TARGETING.map((t) => (
             <RadioCard
               key={t.value}
@@ -74,7 +74,7 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
             />
           ))}
         </div>
-      </div>
+      </Field>
       {err && <div className="h10-cd-modalerr">{err}</div>}
     </Modal>
   )

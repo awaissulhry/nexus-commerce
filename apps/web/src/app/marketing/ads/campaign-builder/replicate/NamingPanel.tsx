@@ -14,9 +14,12 @@
  * once), then a prefix and suffix.
  */
 import { Plus, Trash2, AlertTriangle, Wand2 } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
+import { Field } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import { applyNamingLocal, retoken, type NamingRules } from './replicate-types'
 
 export function NamingPanel({
@@ -46,33 +49,39 @@ export function NamingPanel({
   return (
     <div className="h10-spw-card h10-rep-naming">
       <div className="h10-rep-tokens">
-        <label className="h10-spw-field">
-          <span className="lbl">Product in the source names</span>
-          <input value={sourceToken} onChange={(e) => setSourceToken(e.target.value)} placeholder="AIREON" aria-label="Source product token" />
-          {guessed && guessed !== sourceToken && (
-            <span className="h10-rep-guesswrap"><Button variant="ghost" size="sm" onClick={() => setSourceToken(guessed)}>
-              <Wand2 size={12} aria-hidden /> Use “{guessed}” — found in most of the selected names
-            </Button></span>
-          )}
-          <span className="hint">Removed from every name and keyword, then replaced below.</span>
-        </label>
+        <Field
+          className="spw-field"
+          label="Product in the source names"
+          htmlFor="np-source"
+          hint="Removed from every name and keyword, then replaced below."
+        >
+          <>
+            <Input id="np-source" value={sourceToken} onChange={(e) => setSourceToken(e.target.value)} placeholder="AIREON" fieldClassName="spw-field-full" />
+            {guessed && guessed !== sourceToken && (
+              <span className="h10-rep-guesswrap"><Button variant="ghost" size="sm" onClick={() => setSourceToken(guessed)}>
+                <Wand2 size={12} aria-hidden /> Use “{guessed}” — found in most of the selected names
+              </Button></span>
+            )}
+          </>
+        </Field>
         <span className="h10-rep-arrow" aria-hidden>→</span>
-        <label className="h10-spw-field">
-          <span className="lbl">Product it becomes <i className="req">*</i></span>
-          <input value={targetToken} onChange={(e) => setTargetToken(e.target.value)} placeholder="VENTRA" aria-label="New product token" />
-          <span className="hint">Also replaces the brand keywords, so “giacca aireon” becomes “giacca ventra”.</span>
-        </label>
+        <Field
+          className="spw-field"
+          label="Product it becomes"
+          required
+          hint="Also replaces the brand keywords, so “giacca aireon” becomes “giacca ventra”."
+        >
+          <Input value={targetToken} onChange={(e) => setTargetToken(e.target.value)} placeholder="VENTRA" fieldClassName="spw-field-full" />
+        </Field>
       </div>
 
       <div className="h10-rep-namerow">
-        <label className="h10-spw-field sm">
-          <span className="lbl">Prefix</span>
-          <input value={naming.prefix} onChange={(e) => setNaming({ ...naming, prefix: e.target.value })} placeholder="e.g. Q1-" aria-label="Name prefix" />
-        </label>
-        <label className="h10-spw-field sm">
-          <span className="lbl">Suffix</span>
-          <input value={naming.suffix} onChange={(e) => setNaming({ ...naming, suffix: e.target.value })} placeholder="e.g. -v2" aria-label="Name suffix" />
-        </label>
+        <Field className="spw-field sm" label="Prefix">
+          <Input value={naming.prefix} onChange={(e) => setNaming({ ...naming, prefix: e.target.value })} placeholder="e.g. Q1-" fieldClassName="spw-field-full" />
+        </Field>
+        <Field className="spw-field sm" label="Suffix">
+          <Input value={naming.suffix} onChange={(e) => setNaming({ ...naming, suffix: e.target.value })} placeholder="e.g. -v2" fieldClassName="spw-field-full" />
+        </Field>
       </div>
 
       <div className="h10-rep-reps">

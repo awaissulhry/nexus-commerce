@@ -24,3 +24,11 @@
    their hand-rolled boxes had; everything else about them is the DS Input's. */
 .apm-bidfield { width: 108px; }
 .apm-searchfield { width: 100%; }
+
+/* ── DS `Field` adoption (2026-08-25) ─────────────────────────────────────────
+   `.h10-cd-field`'s label/required/hint styling now comes from the DS `Field`;
+   what it kept was its rhythm and its two widths, which is all that is here. */
+.cd-field { margin-bottom: 16px; max-width: 430px; }
+.cd-field:last-child { margin-bottom: 0; }
+.cd-field.s { max-width: 220px; }
+.h10-cd-daterow .cd-field { margin-bottom: 0; }

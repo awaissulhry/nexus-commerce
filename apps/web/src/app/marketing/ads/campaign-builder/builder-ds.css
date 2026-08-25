@@ -21,3 +21,18 @@
 /* Replicate — the "use the guessed token" button sits in a column-flex field and
    must hug its text rather than stretch across it. */
 .h10-rep-guesswrap { display: inline-flex; align-self: flex-start; }
+
+/* ── DS `Field` adoption (2026-08-25) ─────────────────────────────────────────
+   The DS shipped a `Field` today — label + required marker + info slot + hint —
+   which is what `.h10-spw-field` was. Its label/required/hint colours come from
+   the DS now (and two of them were failing AA before); the widths stay here. */
+.spw-field { max-width: 520px; }
+.spw-field.sm { max-width: 260px; }
+
+/* Replicate — the two rows that stretched `.h10-spw-field` keep doing so for the
+   DS `Field`, and the cap hint's over-budget mark takes the DS danger text
+   (#c11208 6.21:1 -> --nds-danger-text 7.36:1). */
+.h10-rep-tokens .spw-field { flex: 1; max-width: none; }
+.h10-rep-namerow .spw-field { flex: 1; }
+.spw-field .over { color: var(--nds-danger-text); }
+.spw-cap-field { width: 100%; }

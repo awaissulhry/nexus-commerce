@@ -9,7 +9,7 @@
  */
 import { useState } from 'react'
 import { Button, Input } from '@/design-system/primitives'
-import { Listbox, Modal } from '@/design-system/components'
+import { Field, Listbox, Modal } from '@/design-system/components'
 import '../../campaigns-ds.css'
 
 import { getBackendUrl } from '@/lib/backend-url'
@@ -77,17 +77,17 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
         {terms.length > 24 && <span className="chip more">+{terms.length - 24} more</span>}
       </div>
       {isKw && (
-        <div className="h10-cd-field"><label>Ad Group</label>
+        <Field className="cd-field" label="Ad Group" htmlFor="stam-adgroup">
           <Listbox width="100%" value={adGroupId} onChange={setAdGroupId} options={adGroups.map((a) => ({ value: a.id, label: a.name || a.id }))} ariaLabel="Ad Group" />
-        </div>
+        </Field>
       )}
-      <div className="h10-cd-field"><label>Match Type</label>
+      <Field className="cd-field" label="Match Type" htmlFor="stam-match">
         <Listbox width="100%" value={matchType} onChange={setMatchType} options={isKw ? KW_MATCH : NEG_MATCH} ariaLabel="Match Type" />
-      </div>
+      </Field>
       {isKw && (
-        <div className="h10-cd-field s"><label>Bid</label>
-          <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" fieldClassName="cd-money-field" />
-        </div>
+        <Field className="cd-field s" label="Bid">
+          <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} fieldClassName="cd-money-field" />
+        </Field>
       )}
       {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}
       {err && <div className="h10-cd-modalerr">{err}</div>}

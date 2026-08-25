@@ -23,6 +23,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Layers, BarChart3 } from 'lucide-react'
 import { Button, Checkbox, Input, Toggle } from '@/design-system/primitives'
+import { Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -216,10 +217,9 @@ export function QuickBuilder() {
               <h2>Product Group Name <i className="req">*</i></h2>
               <p className="h10-spw-desc">All selected Products will be added to this product group</p>
               <div className="h10-spw-card">
-                <label className="h10-spw-field">
-                  <span className="lbl">Product Group Name <InfoTip tip="A label for the products advertised by this funnel — used in the campaign names and reports." /></span>
-                  <input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} placeholder="Enter product group name here" aria-label="Product group name" />
-                </label>
+                <Field className="spw-field" label="Product Group Name" info={<InfoTip tip="A label for the products advertised by this funnel — used in the campaign names and reports." />}>
+                  <Input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} placeholder="Enter product group name here" fieldClassName="spw-field-full" />
+                </Field>
               </div>
             </section>
 

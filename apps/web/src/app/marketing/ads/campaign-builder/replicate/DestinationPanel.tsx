@@ -9,6 +9,12 @@
  * because it is deliberately suppressed. Copying that verbatim would replicate
  * the suppression. So "copy verbatim" is a choice here, not the only behaviour.
  */
+import { Input } from '@/design-system/primitives'
+import { Field } from '@/design-system/components'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
 import type { PolicyMode, ValuePolicy } from './replicate-types'
 
@@ -83,20 +89,18 @@ export function DestinationPanel({
           hint="Applies to every campaign in the copy." />
       </div>
 
-      <label className="h10-spw-field sm">
-        <span className="lbl">Refuse above</span>
-        <div className="h10-rep-cap">
-          <span className="pf">€</span>
-          <input inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="150" aria-label="Daily budget cap" />
-          <span className="sf">/ day</span>
-        </div>
-        <span className="hint">
+      <Field
+        className="spw-field sm"
+        label="Refuse above"
+        hint={<>
           A hard stop, checked before anything is created.
           {plannedTotal != null && (
             <> This plan commits <b className={over ? 'over' : ''}>€{plannedTotal.toFixed(2)}/day</b>.</>
           )}
-        </span>
-      </label>
+        </>}
+      >
+        <Input inputMode="decimal" prefix="€" suffix="/ day" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="150" fieldClassName="spw-cap-field" />
+      </Field>
     </div>
   )
 }

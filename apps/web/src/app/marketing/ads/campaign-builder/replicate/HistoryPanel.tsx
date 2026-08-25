@@ -16,9 +16,13 @@ import { RotateCcw, TrendingUp, Trash2, Loader2, ChevronDown, ChevronRight, GitC
 import { getBackendUrl } from '@/lib/backend-url'
 
 import { InfoTip } from '../../campaigns/InfoTip'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill } from '@/design-system/primitives'
 import { pillTone } from '../../_shared/pillTone'
-import { Listbox } from '@/design-system/components'
+import { Field, Listbox } from '@/design-system/components'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 
 interface Run {
   id: string; productToken: string; marketplace: string; status: string
@@ -208,22 +212,19 @@ export function DriftCheck({ market }: { market: string }) {
         when someone has been tuning one product and not the others.
       </p>
       <div className="row">
-        <label className="h10-spw-field sm">
-          <span className="lbl">Structure</span>
+        <Field className="spw-field sm" label="Structure" htmlFor="hp-structure">
           <Listbox
             width={220}
             options={[{ value: '', label: 'Choose…' }, ...saved.map((b) => ({ value: b.id, label: b.name }))]}
             value={bpId} onChange={setBpId} ariaLabel="Saved structure"
           />
-        </label>
-        <label className="h10-spw-field sm">
-          <span className="lbl">Product token</span>
-          <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="GALE" aria-label="Product token to compare" />
-        </label>
-        <label className="h10-spw-field sm">
-          <span className="lbl">Its campaigns start with</span>
-          <input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="IT-GALE-SP-" aria-label="Campaign name prefix" />
-        </label>
+        </Field>
+        <Field className="spw-field sm" label="Product token">
+          <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="GALE" fieldClassName="spw-field-full" />
+        </Field>
+        <Field className="spw-field sm" label="Its campaigns start with">
+          <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="IT-GALE-SP-" fieldClassName="spw-field-full" />
+        </Field>
         <Button size="sm" disabled={busy || !bpId || !token.trim() || !prefix.trim()} onClick={() => void run()}>
           {busy ? <Loader2 size={13} className="spin" aria-hidden /> : null} Compare
         </Button>

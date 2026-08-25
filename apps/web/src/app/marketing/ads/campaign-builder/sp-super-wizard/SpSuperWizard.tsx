@@ -14,11 +14,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Info } from 'lucide-react'
-import { Modal } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { Field, Modal } from '@/design-system/components'
+import { Button, Input } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -247,10 +248,9 @@ export function SpSuperWizard() {
                 <h2>Product Group Name</h2>
                 <p className="h10-spw-desc">All selected Products will be added to this product group</p>
                 <div className="h10-spw-card">
-                  <label className="h10-spw-field">
-                    <span className="lbl">Product Group Name <i className="req">*</i> <Info size={13} className="ic" /></span>
-                    <input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} placeholder="Enter a product group name" aria-label="Product group name" />
-                  </label>
+                  <Field className="spw-field" label="Product Group Name" required info={<Info size={13} className="ic" aria-hidden />}>
+                    <Input value={productGroupName} onChange={(e) => setProductGroupName(e.target.value)} placeholder="Enter a product group name" fieldClassName="spw-field-full" />
+                  </Field>
                 </div>
               </section>
               <section id="spw-bid-multiplier" className="h10-spw-sec">
