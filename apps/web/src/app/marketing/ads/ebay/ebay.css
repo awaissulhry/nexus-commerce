@@ -87,6 +87,7 @@
    carried. The `gap` override is written at .nds-tabs.eb-tabs.hub so it outranks `.nds-tabs.lg`
    on specificity rather than on which stylesheet happens to load last. */
 .eb-tabs { margin-bottom: 20px; }
+.eb-tabs.tight { margin-bottom: 10px; }
 .nds-tabs.eb-tabs.hub { gap: 30px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
 .eb-tabs.hub::-webkit-scrollbar { display: none; }
 

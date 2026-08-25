@@ -11,6 +11,7 @@
  */
 import { useState } from 'react'
 import { Button, Pill, Textarea } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
 import { postEbayAds } from '../../../../_lib'
@@ -67,10 +68,13 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
             {plan.adGroups.length > 1 && <Button size="sm" onClick={() => set({ adGroups: plan.adGroups.filter((_, j) => j !== i) })}>Remove group</Button>}
           </div>
 
-          <nav className="h10-cd-tabs" style={{ marginBottom: 10 }}>
-            <button type="button" className={`h10-cd-tab ${(tab[i] ?? 'mined') === 'mined' ? 'on' : ''}`} onClick={() => setTab((t) => ({ ...t, [i]: 'mined' }))}>Mined seeds</button>
-            <button type="button" className={`h10-cd-tab ${tab[i] === 'enter' ? 'on' : ''}`} onClick={() => setTab((t) => ({ ...t, [i]: 'enter' }))}>Enter keywords</button>
-          </nav>
+          <Tabs
+            size="lg"
+            className="eb-tabs tight"
+            active={tab[i] ?? 'mined'}
+            onChange={(id) => setTab((t) => ({ ...t, [i]: id as 'mined' | 'enter' }))}
+            tabs={[{ id: 'mined', label: 'Mined seeds' }, { id: 'enter', label: 'Enter keywords' }]}
+          />
 
           {(tab[i] ?? 'mined') === 'mined' && (
             <div style={{ marginBottom: 10 }}>

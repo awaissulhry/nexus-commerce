@@ -2,7 +2,7 @@
 
 /**
  * ER1 — campaign detail v2 SHELL (SPEC-campaign-detail §2–§4): thin routed
- * shell in the Amazon anatomy — fetch → CampaignDetailHeader → .h10-cd-tabs
+ * shell in the Amazon anatomy — fetch → CampaignDetailHeader → the DS `Tabs`
  * (?tab= routing, default Details paramless) → .h10-cd-body → one component
  * per tab in tabs/. Strategy-aware tab set from tabs.ts; DateRangePicker
  * owns a real {start,end} range (D1) shown on grid tabs only.
