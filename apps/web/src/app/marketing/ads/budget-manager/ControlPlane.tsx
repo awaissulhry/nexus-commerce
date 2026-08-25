@@ -13,7 +13,7 @@
  * Palantir-style scenario → review → commit over the live ontology.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input, Select, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
+import { Button, FilterChip, Input, Select, SegmentedControl, TokenChip, ToolbarButton } from '@/design-system/primitives'
 import { Lock, History as HistoryIcon, X } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
@@ -389,12 +389,22 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
           )}
           <div className="cp-scenbar">
             <span className="lbl">Scenario</span>
-            <button type="button" className={`cp-scenchip ${!activeId ? 'on' : ''}`} onClick={newScenario}>Working set{!activeId && stageCount ? ` · ${stageCount}` : ''}</button>
+            {/* A `TokenChip` and not a `FilterChip`, even though this one only toggles: the
+                saved scenarios beside it MUST be tokens (label loads, × deletes), and the two
+                components are 8px apart in height, so mixing them makes a ragged bar. */}
+            <TokenChip className={!activeId ? 'on' : undefined} onSelect={newScenario}>
+              Working set{!activeId && stageCount ? ` · ${stageCount}` : ''}
+            </TokenChip>
             {saved.map((s) => (
-              <span key={s.id} className={`cp-scenchip wrap ${activeId === s.id ? 'on' : ''}`}>
-                <button type="button" onClick={() => loadScenario(s.id)}>{s.name} · {Object.keys(s.changes).length}</button>
-                <button type="button" className="x" aria-label={`Delete ${s.name}`} onClick={() => delScenario(s.id)}>×</button>
-              </span>
+              <TokenChip
+                key={s.id}
+                className={activeId === s.id ? 'on' : undefined}
+                onSelect={() => loadScenario(s.id)}
+                onRemove={() => delScenario(s.id)}
+                removeLabel={`Delete ${s.name}`}
+              >
+                {s.name} · {Object.keys(s.changes).length}
+              </TokenChip>
             ))}
             <span className="grow" />
             <span className="cp-live" title="Live automation activity"><span className={`dot ${liveOn ? 'on' : ''}`} />{liveOn ? (liveCount ? `Live · ${liveCount}` : 'Live') : 'Connecting…'}</span>
@@ -410,7 +420,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
               <div className={`cp-main ${flash ? 'flash' : ''}`}>
                 <div className="cp-tabs">
                   {enforcement.plans.map((p) => (
-                    <button type="button" key={p.marketplace} className={`cp-tab ${market === p.marketplace ? 'on' : ''}`} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); try { localStorage.setItem('cp.lastMarket', p.marketplace) } catch { /* */ } }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</button>
+                    <FilterChip key={p.marketplace} className="cp-tab" pressed={market === p.marketplace} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); try { localStorage.setItem('cp.lastMarket', p.marketplace) } catch { /* */ } }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</FilterChip>
                   ))}
                   <span className="grow" />
                   <span className="cp-hint">Click a node to inspect · ⌘-click to multi-select · campaigns &amp; ad groups drill in</span>

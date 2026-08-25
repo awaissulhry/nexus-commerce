@@ -17,14 +17,14 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Field } from '@/design-system/components/Field'
-import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
+import { Check, Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
-import { Modal, Drawer } from '@/design-system/components'
+import { Modal, Drawer, Menu } from '@/design-system/components'
 import './budget-manager.css'
 import { ControlPlane } from './ControlPlane'
 import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
@@ -88,18 +88,18 @@ function Sparkline({ data, color = '#1f6fde' }: { data: number[]; color?: string
 
 // ── inline Active / Paused control (matches H10's pill + chevron menu) ──────
 function StatusControl({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const [open, setOpen] = useState(false)
   return (
-    <span className="bm-status">
-      <button type="button" className={`bm-pill ${value ? 'on' : 'off'}`} onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>{value ? 'Active' : 'Paused'} <ChevronDown size={12} /></button>
-      {open && <>
-        <button type="button" className="bm-back" aria-label="Close" onClick={() => setOpen(false)} />
-        <div className="bm-statusmenu" role="listbox">
-          <button type="button" role="option" aria-selected={value} className={value ? 'on' : ''} onClick={() => { onChange(true); setOpen(false) }}>Active</button>
-          <button type="button" role="option" aria-selected={!value} className={!value ? 'on' : ''} onClick={() => { onChange(false); setOpen(false) }}>Paused</button>
-        </div>
-      </>}
-    </span>
+    <Menu
+      className="bm-status"
+      label={<>{value ? 'Active' : 'Paused'} <ChevronDown size={12} /></>}
+      triggerProps={{ className: `bm-pill ${value ? 'on' : 'off'}`, 'aria-label': `Status: ${value ? 'Active' : 'Paused'}` }}
+      items={[
+        // The check marks which one is current. `Menu` items carry no selected state of their
+        // own, and the pill alone cannot say it once the list is covering it.
+        { id: 'active', label: 'Active', icon: value ? <Check size={12} /> : <span className="bm-mi-gap" />, onSelect: () => onChange(true) },
+        { id: 'paused', label: 'Paused', icon: !value ? <Check size={12} /> : <span className="bm-mi-gap" />, onSelect: () => onChange(false) },
+      ]}
+    />
   )
 }
 

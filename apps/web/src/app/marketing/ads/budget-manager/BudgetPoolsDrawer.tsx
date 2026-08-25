@@ -125,12 +125,12 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
       </div>
 
       <div className="bp-controls">
-        <button type="button" className={`bp-toggle ${pool.enabled ? 'on' : ''}`} disabled={busy != null} onClick={() => patch({ enabled: !pool.enabled }, 'enabled')} role="switch" aria-checked={pool.enabled}>
+        <Button size="xs" className={`bp-toggle ${pool.enabled ? 'on' : ''}`} disabled={busy != null} onClick={() => patch({ enabled: !pool.enabled }, 'enabled')} role="switch" aria-checked={pool.enabled}>
           {busy === 'enabled' ? <Loader2 size={13} className="bp-spin" /> : null}{pool.enabled ? 'Pool active' : 'Pool disabled'}
-        </button>
-        <button type="button" className={`bp-toggle ${pool.dryRun ? 'dry' : 'live'}`} disabled={busy != null || !pool.enabled} onClick={() => patch({ dryRun: !pool.dryRun }, 'dryRun')} role="switch" aria-checked={!pool.dryRun}>
+        </Button>
+        <Button size="xs" className={`bp-toggle ${pool.dryRun ? 'dry' : 'live'}`} disabled={busy != null || !pool.enabled} onClick={() => patch({ dryRun: !pool.dryRun }, 'dryRun')} role="switch" aria-checked={!pool.dryRun}>
           {pool.dryRun ? 'Dry-run' : 'Live — writes to Amazon'}
-        </button>
+        </Button>
         <span className="bp-meta">Cooldown {pool.coolDownMinutes}m · max shift {pool.maxShiftPerRebalancePct}%</span>
       </div>
 

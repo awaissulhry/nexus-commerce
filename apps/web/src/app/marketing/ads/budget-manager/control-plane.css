@@ -2,9 +2,9 @@
 .cp-layout { display: flex; gap: 14px; align-items: stretch; }
 .cp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .cp-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
-.cp-tab { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 5px 12px; cursor: pointer; }
-.cp-tab:hover { background: var(--nds-grey-75); }
-.cp-tab.on { background: var(--nds-blue-50); color: var(--nds-blue-600); border-color: #bcd6fb; }
+/* The market tabs are the DS `FilterChip` — the same capsule, and its engaged pair is
+   blue-900 on blue-50 (7.41:1) where this file's `.on` was blue-600 (4.36:1, under AA).
+   All that is left is the staged-changes dot the chip has no notion of. */
 .cp-tab .dot { color: #7c3aed; font-style: normal; }
 .cp-tabs .grow { flex: 1; }
 .cp-hint { font-size: 11.5px; color: var(--nds-grey-400); }
@@ -74,13 +74,18 @@
 .cp-scenbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--nds-grey-100); }
 .cp-scenbar .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); }
 .cp-scenbar .grow { flex: 1; }
-.cp-scenchip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); overflow: hidden; }
-.cp-scenchip > button { border: none; background: none; font: inherit; color: inherit; padding: 5px 11px; cursor: pointer; }
-.cp-scenchip.on { background: var(--nds-blue-50); color: var(--nds-blue-600); border-color: #bcd6fb; }
-.cp-scenchip:hover { background: var(--nds-grey-75); }
-.cp-scenchip.on:hover { background: var(--nds-blue-100); }
-.cp-scenchip .x { padding: 5px 8px 5px 2px; color: var(--nds-grey-450); }
-.cp-scenchip .x:hover { color: #d9534f; }
+/* Scenario bar: the working set is a `FilterChip` (it toggles), each SAVED scenario is a
+   `TokenChip` (its label loads, its × deletes — the two-action shape that component exists
+   for). `TokenChip` models removal, not selection, so the ACTIVE one is marked here with
+   the DS's own engaged trio — the same one `FilterChip` uses, so the two chip kinds in one
+   bar agree, and 4.36:1 becomes 7.41:1. */
+/* A token WITHOUT a × is 26px and one WITH is 32 — the remove button sets the height. The
+   working set is the only chip here that cannot be deleted, so the row needs one floor. */
+.cp-scenbar .nds-token { min-height: 32px; }
+.cp-scenbar .nds-token.on { background: var(--nds-fchip-on-bg); border-color: var(--nds-fchip-on-border); }
+/* the label is its own <button> and declares --nds-text-strong, so the wrapper's colour
+   does not reach it — measured, not assumed. */
+.cp-scenbar .nds-token.on > .t { color: var(--nds-fchip-on-fg); }
 
 .cp-compare { display: flex; flex-direction: column; gap: 12px; min-height: 420px; }
 .cp-compare-pick { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--nds-grey-600); }
