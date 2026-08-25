@@ -15,6 +15,9 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useSearchParams } from 'next/navigation'
 import { Clock, Search, X, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, Toggle } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 import { useCampaignMap, type CampRef } from './useCampaignMap'
 
 type Metric = 'revenue' | 'orders' | 'units'
@@ -193,10 +196,7 @@ export function DaypartingTab() {
               <X size={13} style={{ cursor: 'pointer' }} onClick={() => setProduct(null)} aria-label="Clear product filter" />
             </span>
           ) : (
-            <div className="az-search" style={{ minWidth: 230, padding: '5px 9px' }}>
-              <Search size={14} />
-              <input placeholder="All products — filter to one SKU…" value={pq} onFocus={() => setShowHits(true)} onChange={(e) => { setPq(e.target.value); setShowHits(true) }} />
-            </div>
+            <Input leadingIcon={<Search size={14} />} aria-label="Filter to one SKU" placeholder="All products — filter to one SKU…" value={pq} onFocus={() => setShowHits(true)} onChange={(e) => { setPq(e.target.value); setShowHits(true) }} style={{ width: 210 }} />
           )}
           {showHits && hits.length > 0 && !product && (
             <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 30, background: '#fff', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 320, maxHeight: 320, overflowY: 'auto' }}>
@@ -210,14 +210,17 @@ export function DaypartingTab() {
           )}
         </div>
         {/* date range */}
-        <select value={custom ? 'custom' : String(days)} onChange={(e) => { if (e.target.value === 'custom') { const to = new Date().toISOString().slice(0, 10); const from = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10); setCustom({ from, to }) } else { setCustom(null); setDays(Number(e.target.value)) } }} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit', cursor: 'pointer' }}>
-          {PRESETS.map((d) => <option key={d} value={d}>Last {d} days</option>)}
-          <option value="custom">Custom range…</option>
-        </select>
+        <Listbox
+          ariaLabel="Date range"
+          width={165}
+          value={custom ? 'custom' : String(days)}
+          onChange={(v) => { if (v === 'custom') { const to = new Date().toISOString().slice(0, 10); const from = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10); setCustom({ from, to }) } else { setCustom(null); setDays(Number(v)) } }}
+          options={[...PRESETS.map((d) => ({ value: String(d), label: `Last ${d} days` })), { value: 'custom', label: 'Custom range…' }]}
+        />
         {custom && <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-          <input type="date" value={custom.from} max={custom.to} onChange={(e) => setCustom({ ...custom, from: e.target.value })} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px', font: 'inherit' }} />
+          <DateField ariaLabel="From date" clearable={false} value={custom.from} max={custom.to} onChange={(v) => setCustom({ ...custom, from: v })} />
           <span style={{ color: 'var(--ink3)' }}>→</span>
-          <input type="date" value={custom.to} min={custom.from} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setCustom({ ...custom, to: e.target.value })} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px', font: 'inherit' }} />
+          <DateField ariaLabel="To date" clearable={false} value={custom.to} min={custom.from} max={new Date().toISOString().slice(0, 10)} onChange={(v) => setCustom({ ...custom, to: v })} />
         </span>}
       </div>
 
@@ -330,7 +333,7 @@ export function DaypartingTab() {
           <span style={{ fontWeight: 700 }}><Zap size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5, color: 'var(--orange)' }} />Amazon bid schedules</span>
           <span style={{ color: 'var(--ink2)', fontSize: 12 }}>Bid up in your peak hours, ease off in the quiet ones — runs every 15 min in Rome time.</span>
           <span style={{ flex: 1 }} />
-          <button className="az-btn dark" onClick={openCreate}><Plus size={14} />Create from peak window</button>
+          <Button variant="primary" onClick={openCreate}><Plus size={14} />Create from peak window</Button>
         </div>
 
         {showCreate && (
@@ -338,21 +341,24 @@ export function DaypartingTab() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, alignItems: 'start' }}>
               <label style={{ display: 'block' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Campaign {market ? `(${market})` : ''}</span>
-                <select value={selCampaign} onChange={(e) => setSelCampaign(e.target.value)} style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit', cursor: 'pointer' }}>
-                  <option value="">{marketCampaigns.length ? 'Select a campaign…' : 'No campaigns in this market'}</option>
-                  {marketCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}{c.marketplace ? ` · ${c.marketplace}` : ''}</option>)}
-                </select>
+                <Listbox
+                  ariaLabel="Campaign"
+                  width="100%"
+                  value={selCampaign}
+                  onChange={setSelCampaign}
+                  options={[{ value: '', label: marketCampaigns.length ? 'Select a campaign…' : 'No campaigns in this market' }, ...marketCampaigns.map((c) => ({ value: c.id, label: `${c.name}${c.marketplace ? ` · ${c.marketplace}` : ''}` }))]}
+                />
               </label>
               <label style={{ display: 'block' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Name</span>
-                <input value={schedName} onChange={(e) => setSchedName(e.target.value)} style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit' }} />
+                <div style={{ display: 'grid' }}><Input aria-label="Schedule name" value={schedName} onChange={(e) => setSchedName(e.target.value)} /></div>
               </label>
               <div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', display: 'block', marginBottom: 4 }}>Active window (Rome)</span>
                 <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                  <select value={win.start} onChange={(e) => setWin({ ...win, start: Number(e.target.value) })} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 6px', font: 'inherit', cursor: 'pointer' }}>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{fmtHr(h)}</option>)}</select>
+                  <Listbox ariaLabel="Window start hour" width={104} value={String(win.start)} onChange={(v) => setWin({ ...win, start: Number(v) })} options={Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: fmtHr(h) }))} />
                   <span style={{ color: 'var(--ink3)' }}>→</span>
-                  <select value={win.end} onChange={(e) => setWin({ ...win, end: Number(e.target.value) })} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 6px', font: 'inherit', cursor: 'pointer' }}>{Array.from({ length: 24 }, (_, h) => h + 1).map((h) => <option key={h} value={h}>{fmtHr(h === 24 ? 0 : h)}</option>)}</select>
+                  <Listbox ariaLabel="Window end hour" width={104} value={String(win.end)} onChange={(v) => setWin({ ...win, end: Number(v) })} options={Array.from({ length: 24 }, (_, h) => h + 1).map((h) => ({ value: String(h), label: fmtHr(h === 24 ? 0 : h) }))} />
                 </div>
               </div>
               <div>
@@ -365,9 +371,9 @@ export function DaypartingTab() {
               <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{DOW_ORDER.map((dow, di) => <button key={dow} className={`az-chip quick ${win.days.includes(dow) ? 'on' : ''}`} onClick={() => toggleDay(dow)}>{DAYS[di]}</button>)}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
-              <button className="az-btn dark" disabled={busy} onClick={() => void createSchedule()}>{busy ? 'Saving…' : 'Create schedule'}</button>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" className="az-check" checked={enableNow} onChange={(e) => setEnableNow(e.target.checked)} />Enable immediately <span style={{ color: 'var(--ink3)' }}>(makes live bid/pause changes)</span></label>
-              <button className="az-btn" disabled={busy} onClick={() => { setShowCreate(false); setMsg('') }}>Cancel</button>
+              <Button variant="primary" disabled={busy} onClick={() => void createSchedule()}>{busy ? 'Saving…' : 'Create schedule'}</Button>
+              <Checkbox checked={enableNow} onChange={(e) => setEnableNow(e.target.checked)} label={<>Enable immediately <span style={{ color: 'var(--ink3)' }}>(makes live bid/pause changes)</span></>} />
+              <Button disabled={busy} onClick={() => { setShowCreate(false); setMsg('') }}>Cancel</Button>
               {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
             </div>
           </div>
@@ -380,7 +386,7 @@ export function DaypartingTab() {
             const camp = byLocalId[s.campaignId]
             return (
               <div key={s.id} className="az-rule">
-                <button className={`az-toggle ${s.enabled ? 'on' : ''}`} disabled={busy} onClick={() => void toggleSched(s)} aria-label="Enable schedule" title={s.enabled ? 'Enabled — applying' : 'Disabled'}><i /></button>
+                <Toggle checked={s.enabled} disabled={busy} onChange={() => void toggleSched(s)} aria-label="Enable schedule" title={s.enabled ? 'Enabled — applying' : 'Disabled'} />
                 <div className="nm"><div className="t">{s.name}</div><div className="d2">{camp ? `${camp.name}${camp.marketplace ? ` · ${camp.marketplace}` : ''}` : s.campaignId} · {winSummary(s.windows)}</div></div>
                 <span className={`az-live ${s.enabled ? 'on' : 'dry'}`}>{s.enabled ? 'LIVE' : 'Off'}</span>
                 {s.lastEvaluatedAt && <div className="stat" title="Last evaluated by the dayparting cron"><b>{s.lastApplied ?? '—'}</b>{new Date(s.lastEvaluatedAt).toLocaleDateString('en-IE')}</div>}
