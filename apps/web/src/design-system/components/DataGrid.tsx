@@ -21,6 +21,11 @@ export interface Column<T> {
    * digits lining up is the whole point.
    */
   numeric?: boolean
+  /**
+   * Class for this column's `<td>` AND `<th>`. Without it a per-column tweak has to be reached
+   * with `:nth-child()`, which breaks the moment a column is hidden or reordered.
+   */
+  className?: string
   sortable?: boolean
   sortValue?: (row: T) => number | string
   /** pin this column to the left (sticky); give a numeric `width` so offsets stack */
@@ -462,7 +467,7 @@ export function DataGrid<T>({
                     </td>
                   )}
                   {cols.map((c, ci) => (
-                    <td key={c.key} {...(cellProps?.(row, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
+                    <td key={c.key} {...(cellProps?.(row, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', c.className ?? '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                       {c.render(row)}
                     </td>
                   ))}
@@ -483,7 +488,7 @@ export function DataGrid<T>({
                       <tr key={kk} {...(rowProps?.(kid) ?? {})} className={['nds-grid-kid', rowClassName?.(kid) ?? ''].filter(Boolean).join(' ') || undefined}>
                         {selectable && <td className="ck sticky" style={{ left: 0 }} />}
                         {cols.map((c, ci) => (
-                          <td key={c.key} {...(cellProps?.(kid, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
+                          <td key={c.key} {...(cellProps?.(kid, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', c.className ?? '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                             {c.render(kid)}
                           </td>
                         ))}

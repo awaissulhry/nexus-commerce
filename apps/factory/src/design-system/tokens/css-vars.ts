@@ -193,6 +193,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-note-warn-bg', value: '#fdf6e3' },
   { name: '--nds-note-warn-fg', value: '#6b5514' },
   { name: '--nds-note-warn-icon', value: '#8a6d1f' },
+  // The note trios shipped no BORDER step — see apps/web.
+  { name: '--nds-note-warn-border', value: '#e0d4a8' },
+  { name: '--nds-note-error-border', value: '#eec9c4' },
   { name: '--nds-radius-round', value: '999px' },
 
   // ── Elevation + focus ────────────────────────────────────────────

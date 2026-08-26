@@ -49,6 +49,16 @@ export interface ListboxProps {
   onChange: (value: string) => void
   placeholder?: string
   ariaLabel?: string
+  /**
+   * id for the TRIGGER, so a `<label htmlFor>` reaches it.
+   *
+   * `Field` clones its single element child with a generated id and points its label at it. This
+   * component had a closed prop set and silently dropped it, leaving `<label for>` aimed at
+   * nothing — which is worse than an unlabelled control, because it looks correct in the markup
+   * and reads as unlabelled to a screen reader.
+   */
+  id?: string
+  'aria-describedby'?: string
   className?: string
   disabled?: boolean
   /** trigger width. Every one of the ads console's 97 select call sites sets one. */
@@ -78,7 +88,7 @@ const SEARCH_THRESHOLD = 7
  * Combobox popover, no typeahead. Wave 1 gap-fill (2026-07-04): pages are
  * banned from native selects; this is what they migrate to.
  */
-export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, className, disabled,
+export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
   width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false }: ListboxProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -115,7 +125,7 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
         else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
         else if (e.key === 'Enter') { const m = matches[active]; if (m) { e.preventDefault(); pick(m.value) } }
       })()}>
-      <button type="button" className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
+      <button type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
         onClick={() => setOpen((o) => !o)}>
         {selected?.leading != null && <span className="nds-listbox-lead">{selected.leading}</span>}
         <span className={selected == null && (emptyIsPlaceholder || emptyLabel == null) ? 'ph' : undefined}>{selected?.label ?? emptyLabel ?? placeholder}</span>

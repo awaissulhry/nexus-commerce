@@ -1306,7 +1306,7 @@
 .nds-listbox-btn:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: var(--nds-focus-ring); }
 .nds-listbox-btn:disabled { opacity: 0.55; cursor: default; }
 .nds-listbox-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nds-listbox-btn > span.ph { color: var(--nds-text-3); }
+.nds-listbox-btn > span.ph { color: var(--nds-text-muted); }
 .nds-listbox-btn .chev { flex-shrink: 0; color: var(--nds-text-3); }
 
 /* ── DateField (Wave 1 gap-fill) — single-date calendar popover replacing
@@ -1613,4 +1613,11 @@
 .nds-grid.xl tbody td,
 .nds-grid.xl thead th {
   padding: 19px 14px;
+}
+
+/* Cells align to the TOP, not the middle. A row whose tallest cell wraps to two lines pushed
+   every single-line neighbour to its vertical centre, so ten converted tables each carried a
+   shared `vertical-align: top` override. Top is what a data grid wants. */
+.nds-grid tbody td {
+  vertical-align: top;
 }

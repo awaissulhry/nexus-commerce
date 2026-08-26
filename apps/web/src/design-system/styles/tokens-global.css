@@ -117,6 +117,8 @@
   --nds-note-warn-bg: #fdf6e3;
   --nds-note-warn-fg: #6b5514;
   --nds-note-warn-icon: #8a6d1f;
+  --nds-note-warn-border: #e0d4a8;
+  --nds-note-error-border: #eec9c4;
   --nds-danger-text: #9c2f2a;
   --nds-info-text: #10457f;
 

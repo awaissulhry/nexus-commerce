@@ -235,6 +235,14 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-note-warn-bg', value: '#fdf6e3' },
   { name: '--nds-note-warn-fg', value: '#6b5514' },
   { name: '--nds-note-warn-icon', value: '#8a6d1f' },
+  // The note trios shipped bg/fg/icon but no BORDER, so an amber- or red-hairline control (white
+  // fill, tinted outline — the "accept this conflict" affordance) had to keep a raw literal or
+  // drop the cue. A session dropped the cue, which is the worse outcome: the affordance is the
+  // border. #e0d4a8 is `.h10-rep-tbl .mini`'s measured amber; #eec9c4 is the red at the same
+  // remove from its own fill. Hairlines are decorative, so these carry no contrast requirement —
+  // they exist so the cue does not have to be abandoned.
+  { name: '--nds-note-warn-border', value: '#e0d4a8' },
+  { name: '--nds-note-error-border', value: '#eec9c4' },
   { name: '--nds-danger-text', value: '#9c2f2a' },
   { name: '--nds-info-text', value: '#10457f' },
 

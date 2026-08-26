@@ -21,6 +21,13 @@ export interface DateFieldProps {
   format?: DateFormat
   /** BCP-47 locale for the month/year heading. Default `en-GB`. */
   locale?: string
+  /**
+   * id for the TRIGGER, so a `<label htmlFor>` reaches it. `Field` clones its single element
+   * child with a generated id; a component that drops it leaves the label pointing at nothing,
+   * which is worse than an unlabelled control because the markup looks correct.
+   */
+  id?: string
+  'aria-describedby'?: string
   onChange: (value: string) => void
   min?: string
   max?: string
@@ -64,7 +71,7 @@ function monthGrid(month: Date): Array<Date | null> {
  * single month, min/max support, optional clear row. Wave 1 gap-fill
  * (2026-07-04).
  */
-export function DateField({ value, onChange, format = 'dd/mm/yyyy', locale = 'en-GB', min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, className, disabled }: DateFieldProps) {
+export function DateField({ id, 'aria-describedby': describedBy, value, onChange, format = 'dd/mm/yyyy', locale = 'en-GB', min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, className, disabled }: DateFieldProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useClickAway(ref, () => setOpen(false), open)
@@ -85,7 +92,7 @@ export function DateField({ value, onChange, format = 'dd/mm/yyyy', locale = 'en
 
   return (
     <div className={`nds-datefield${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
-      <button type="button" className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
+      <button type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
         <span className={value ? undefined : 'ph'}>{value ? fmt(value, format) : placeholder}</span>
         <Calendar size={14} className="chev" aria-hidden />
       </button>
