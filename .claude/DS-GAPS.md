@@ -503,3 +503,4 @@ class on the wrap and **nothing styles it yet**. `.az-table.comfortable tbody td
 the control goes silently inert the moment the table converts unless a matching
 `.nds-grid-wrap.<density>` pair lands with it. Check the class against the stylesheet in both
 directions, not just one.
+- `DataGrid.size` only scales DOWN — `md` / `sm` / `xs`. The campaigns grid has a live "View: Compact / Comfortable / Spacious" density control whose two looser steps (14px and 19px vertical padding against md's 11px) have no DS equivalent, so a grid with no density above its default cannot host a density control at all. Both steps re-homed onto `.nds-grid` in amazon.css so all three settings survive; a `lg`/`xl` on the same scale would serve every consumer — apps/web/src/design-system/components/DataGrid.tsx

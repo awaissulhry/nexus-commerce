@@ -1628,3 +1628,11 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
    `.childname` and `.childmsg` are UNSCOPED and carry the indent and the tree elbow unchanged. */
 .nds-grid tbody tr.childrow td { background: var(--bg3); padding-top: 9px; padding-bottom: 9px; }
 .nds-grid tbody tr.childrow:hover td { background: var(--bg2); }
+
+/* The campaigns grid's density control ("View: Compact / Comfortable / Spacious"). `DataGrid`'s
+   `size` scale only goes DOWN from md — md/sm/xs — so compact maps onto the default and the two
+   looser settings have no DS equivalent. These are the page's own two steps, re-homed onto
+   `.nds-grid` so all three settings survive the conversion rather than two of them vanishing.
+   Filed upstream: a grid with no density above its default cannot host a density control. */
+.nds-grid.comfortable tbody td { padding-top: 14px; padding-bottom: 14px; }
+.nds-grid.spacious tbody td { padding-top: 19px; padding-bottom: 19px; }

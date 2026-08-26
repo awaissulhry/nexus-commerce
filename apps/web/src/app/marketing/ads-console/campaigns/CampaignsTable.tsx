@@ -10,10 +10,10 @@
  * multi-metric Performance chart land in Phase C.
  */
 
-import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
-import { Button, Checkbox, ToolbarButton, Toggle } from '@/design-system/primitives'
-import { Listbox } from '@/design-system/components'
+import { Button, ToolbarButton, Toggle } from '@/design-system/primitives'
+import { DataGrid, Listbox, type Column } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
@@ -34,6 +34,39 @@ interface Base {
 }
 interface V1 { impressions?: number; clicks?: number; costUnits?: number; salesCents?: number; orders?: number; acos?: number | null; roas?: number | null }
 interface AdGroup { id: string; name: string; status: string; impressions?: number; clicks?: number; spendCents?: number; salesCents?: number; ordersCount?: number }
+
+/** A campaign row, one of its ad-group rows, or a status line. One array, not a nested render,
+ *  so an ad group's metrics stay under the same column headers as its campaign's — see the
+ *  note in ProductsTable and the `renderExpanded` entry in DS-GAPS. */
+type CampRow =
+  | { kind: 'campaign'; r: Row }
+  | { kind: 'child'; parentId: string; g: AdGroup }
+  | { kind: 'note'; parentId: string; text: string }
+
+/** Built from `order`, which is the user's own column arrangement — so this is a factory over
+ *  that array as well as over the two cell renderers. `.az-stick1`/`.az-stick2` become the
+ *  grid's own `sticky`, which it offsets itself from the declared widths. */
+const campaignColumns = (ctx: {
+  order: string[]
+  cell: (key: string, r: Row) => ReactNode
+  childCell: (key: string, g: AdGroup, parentId: string) => ReactNode
+}): Array<Column<CampRow>> => ctx.order.map((k): Column<CampRow> => {
+  const m = META_BY_KEY[k]
+  return {
+    key: k,
+    label: k === 'active' ? 'Active' : m?.label ?? k,
+    align: m?.numeric ? 'right' : 'left',
+    sortable: true,
+    sticky: k === 'active' || k === 'name',
+    width: k === 'active' ? 78 : k === 'name' ? 240 : undefined,
+    render: (row) =>
+      row.kind === 'campaign' ? ctx.cell(k, row.r)
+      : row.kind === 'child' ? ctx.childCell(k, row.g, row.parentId)
+      : k === ctx.order[0] ? <span className="childmsg">{row.text}</span>
+      : null,
+  }
+})
+
 interface Row {
   b: Base; impr: number; clicks: number; spendC: number; salesC: number; orders: number
   ctr: number | null; cpc: number | null; cpm: number | null; cvr: number | null; aov: number | null
@@ -253,8 +286,6 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const lastRow = Math.min(curPage * pageSize, filtered.length)
 
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
-  const arrow = (k: string) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
-  const stickClass = (k: string) => (k === 'active' ? ' az-stick1' : k === 'name' ? ' az-stick2' : '')
   const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const toggleActive = async (b: Base) => { setBusy(b.id); try { await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); void refetch() } finally { setBusy(null) } }
   const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const n = parseFloat(v); if (!Number.isFinite(n) || n < 0) { setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); return } setBusy(b.id); try { await patch(b.id, { dailyBudget: n }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
@@ -373,7 +404,21 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); const a = document.createElement('a'); a.href = url; a.download = 'campaigns.csv'; a.click(); URL.revokeObjectURL(url)
   }
 
-  const allChecked = paged.length > 0 && paged.every((r) => sel.has(r.b.id))
+  /** Campaigns with their expanded ad groups interleaved, in display order. */
+  const campRows = useMemo<CampRow[]>(() => {
+    const out: CampRow[] = []
+    for (const r of paged) {
+      out.push({ kind: 'campaign', r })
+      if (!expanded.has(r.b.id)) continue
+      const data = groups[`${r.b.id}:${days}`]
+      if (data === undefined || data === 'loading') out.push({ kind: 'note', parentId: r.b.id, text: 'Loading ad groups…' })
+      else if (data === 'error') out.push({ kind: 'note', parentId: r.b.id, text: 'Couldn’t load ad groups.' })
+      else if (data.length === 0) out.push({ kind: 'note', parentId: r.b.id, text: 'No ad groups in this campaign.' })
+      else for (const g of data) out.push({ kind: 'child', parentId: r.b.id, g })
+    }
+    return out
+  }, [paged, expanded, groups, days])
+
 
   return (
     <div className="az-wrap">
@@ -428,48 +473,22 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         {chips.length > 0 && <span className="clear" onClick={() => setFilters(EMPTY_FILTERS)}>Clear all</span>}
       </div>
 
-      <div className="az-tablewrap">
-        <table className={`az-table ${density}`}>
-          <thead>
-            <tr>
-              <th className="l az-cellsticky"><Checkbox checked={allChecked} aria-label="Select all campaigns" onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((r) => { if (e.target.checked) n.add(r.b.id); else n.delete(r.b.id) }); return n })} /></th>
-              {order.map((k) => {
-                const m = META_BY_KEY[k]; const label = k === 'active' ? 'Active' : m?.label ?? k
-                return (
-                  <th key={k} className={`${m?.numeric ? '' : 'l '}${sortKey === k ? 'sorted' : ''}${stickClass(k)}`} onClick={() => toggleSort(k)} title={m?.desc}>
-                    {label}{m?.info && <Info className="info" size={12} />}{arrow(k)}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && <tr><td className="az-empty" colSpan={1 + order.length}>{loading ? 'Loading…' : 'No campaigns match your filters.'}</td></tr>}
-            {paged.map((r) => {
-              const b = r.b
-              const isOpen = expanded.has(b.id)
-              const data = isOpen ? groups[`${b.id}:${days}`] : undefined
-              return (
-                <Fragment key={b.id}>
-                  <tr className={sel.has(b.id) ? 'sel' : ''}>
-                    <td className="l az-cellsticky"><Checkbox checked={sel.has(b.id)} aria-label={`Select ${b.name}`} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(b.id); else n.delete(b.id); return n })} /></td>
-                    {order.map((k) => <td key={k} className={`${META_BY_KEY[k]?.numeric ? 'num' : 'l'}${stickClass(k)}`}>{cell(k, r)}</td>)}
-                  </tr>
-                  {isOpen && (data === undefined || data === 'loading') && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Loading ad groups…</span></td></tr>}
-                  {isOpen && data === 'error' && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">Couldn’t load ad groups.</span></td></tr>}
-                  {isOpen && Array.isArray(data) && data.length === 0 && <tr className="childrow"><td className="l az-cellsticky" /><td className="l" colSpan={order.length}><span className="childmsg">No ad groups in this campaign.</span></td></tr>}
-                  {isOpen && Array.isArray(data) && data.map((g) => (
-                    <tr key={g.id} className="childrow">
-                      <td className="l az-cellsticky" />
-                      {order.map((k) => <td key={k} className={`${META_BY_KEY[k]?.numeric ? 'num' : 'l'}${stickClass(k)}`}>{childCell(k, g, b.id)}</td>)}
-                    </tr>
-                  ))}
-                </Fragment>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<CampRow>
+        rows={campRows}
+        rowKey={(r) => (r.kind === 'campaign' ? r.r.b.id : r.kind === 'child' ? `g:${r.parentId}:${r.g.id}` : `n:${r.parentId}`)}
+        columns={campaignColumns({ order, cell, childCell })}
+        className={density}
+        selectable
+        selected={sel}
+        onSelectedChange={setSel}
+        rowSelectable={(r) => r.kind === 'campaign'}
+        rowSelectableHint="Ad-group rows are not selectable"
+        selectAllHint="Select every campaign on this page"
+        rowClassName={(r) => (r.kind === 'campaign' ? undefined : 'childrow')}
+        sort={null}
+        onSortChange={({ key }) => toggleSort(key)}
+        emptyState={loading ? 'Loading…' : 'No campaigns match your filters.'}
+      />
       <div className="az-pager">
         <span className="count">{filtered.length} campaigns · {order.length} columns · last {days} days{loading ? ' · updating…' : ''}</span>
         <span className="rpp">Results per page
