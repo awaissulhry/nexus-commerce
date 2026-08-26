@@ -13,16 +13,16 @@
 .bm-monthbar > b { font-size: 14px; font-weight: 700; color: var(--nds-grey-900); min-width: 124px; text-align: center; }
 .bm-mb-sum { font-size: 12.5px; color: var(--nds-grey-600); margin-left: 6px; }
 .bm-mb-sum b { color: var(--nds-grey-900); font-weight: 700; }
-.bm-mb-sum em { font-style: normal; color: var(--nds-text-2); }
+.bm-mb-sum em { font-style: normal; color: var(--nds-grey-600); }
 .bm-grow { flex: 1; }
-.bm-mb-day { font-size: 12px; color: var(--nds-text-2); }
+.bm-mb-day { font-size: 12px; color: var(--nds-grey-600); }
 
 /* pacing preview banner (BM.B3 → B4) */
 .bm-pacebar { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 14px; background: linear-gradient(90deg, var(--nds-imgup-hover), var(--nds-grey-25)); border: 1px solid var(--nds-blue-200); border-radius: var(--nds-radius-xl); }
 .bm-pacebar .ico { display: inline-flex; color: var(--nds-blue-600); }
 .bm-pacebar .txt { font-size: 12.5px; color: var(--nds-grey-800); }
 .bm-pacebar .txt b { font-weight: 700; }
-.bm-pacebar .txt em { font-style: normal; color: var(--nds-text-2); }
+.bm-pacebar .txt em { font-style: normal; color: var(--nds-grey-600); }
 
 /* allocation canvas modal — market tabs */
 .bm-canvas-head { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -34,8 +34,8 @@
 .bm-first { display: inline-flex; align-items: center; gap: 7px; }
 .bm-flag { font-size: 15px; line-height: 1; }
 .bm-mkt { font-size: 13px; font-weight: 600; color: var(--nds-grey-900); display: inline-flex; align-items: center; gap: 7px; }
-.bm-mkt em { font-style: normal; font-weight: 500; color: var(--nds-text-2); }
-.bm-lim { font-size: 10.5px; font-weight: 600; color: var(--nds-text-link); background: var(--nds-blue-50); border-radius: var(--nds-radius-full); padding: 1px 7px; }
+.bm-mkt em { font-style: normal; font-weight: 500; color: var(--nds-grey-600); }
+.bm-lim { font-size: 10.5px; font-weight: 600; color: var(--nds-blue-700); background: var(--nds-blue-50); border-radius: var(--nds-radius-full); padding: 1px 7px; }
 .bm-warn { display: inline-flex; color: #d9534f; }
 
 /* inline Active / Paused control */
@@ -58,18 +58,18 @@
 .bm-spark { display: block; }
 .bm-cell { display: inline-flex; align-items: center; gap: 10px; }
 .bm-cellv { display: inline-flex; flex-direction: column; line-height: 1.25; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
-.bm-cellv i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--nds-text-2); }
+.bm-cellv i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--nds-grey-600); }
 .bm-cellv i.st-on-track { color: #1f7a44; }
 .bm-cellv i.st-over { color: #d9534f; }
-.bm-cellv i.st-under { color: var(--nds-text-link); }
-.bm-cellv i.st-no-budget { color: var(--nds-text-muted); }
+.bm-cellv i.st-under { color: var(--nds-blue-700); }
+.bm-cellv i.st-no-budget { color: var(--nds-grey-600); }
 
 /* next month budget editable cell */
 /* an inline value-edit trigger: DS `Button variant="quiet" size="xs"` owns the
    borderless-until-hover box; these are the cell type and the two muted marks. */
 .bm-nextbtn { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
-.bm-nextbtn svg { color: var(--nds-text-3); }
-.bm-nextbtn .ph { color: var(--nds-text-muted); font-weight: 500; }
+.bm-nextbtn svg { color: var(--nds-grey-500); }
+.bm-nextbtn .ph { color: var(--nds-grey-600); font-weight: 500; }
 .bm-nextedit { width: 116px; min-width: 0; }
 
 /* Settings modal */
@@ -85,7 +85,7 @@
 .bm-swrow.tight { gap: 12px; }
 .bm-swrow span { display: flex; flex-direction: column; gap: 2px; }
 .bm-swrow b { font-size: 13px; font-weight: 600; color: var(--nds-grey-900); }
-.bm-swrow em { font-style: normal; font-size: 11.5px; color: var(--nds-text-2); }
+.bm-swrow em { font-style: normal; font-size: 11.5px; color: var(--nds-grey-600); }
 .bm-cal-tools { display: flex; align-items: center; gap: 12px; }
 .bm-cal-sum { font-size: 12px; font-weight: 600; }
 .bm-cal-sum.ok { color: #1f7a44; }
@@ -96,14 +96,14 @@
    ~20-character min-content width — the track would floor at 146px and the seven-column
    week would render 1058px wide inside a 624px modal. Measured. */
 .bm-cal-day { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
-.bm-cal-day .d { font-size: 10px; color: var(--nds-text-2); }
+.bm-cal-day .d { font-size: 10px; color: var(--nds-grey-600); }
 .bm-cal-in { width: 100%; min-width: 0; }
 .bm-cal-in > input { text-align: center; }  /* the only thing the calendar adds to the primitive */
 
 /* More drawer */
-.bm-more-foot { font-size: 12px; color: var(--nds-text-2); margin-right: auto; }
+.bm-more-foot { font-size: 12px; color: var(--nds-grey-600); margin-right: auto; }
 .bm-more-intro { font-size: 12.5px; color: var(--nds-grey-600); margin: 0 0 14px; line-height: 1.5; }
-.bm-more-loading, .bm-more-empty { padding: 28px; text-align: center; color: var(--nds-text-2); font-size: 13px; }
+.bm-more-loading, .bm-more-empty { padding: 28px; text-align: center; color: var(--nds-grey-600); font-size: 13px; }
 .bm-more-filter { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 /* `.bm-seg`, NOT the old `.bm-more-seg`. Keeping that name would have kept its `button`
    rules too — (0,1,1) against the primitive's (0,1,0) `.nds-seg-opt`, so the page would have
@@ -112,10 +112,10 @@
    identical, which is what a no-op conversion looks like. Only the flex behaviour is ours. */
 .bm-seg { flex-shrink: 0; }
 .bm-more-search { flex: 1; min-width: 0; }
-.bm-more-count { font-size: 11.5px; color: var(--nds-text-2); white-space: nowrap; }
+.bm-more-count { font-size: 11.5px; color: var(--nds-grey-600); white-space: nowrap; }
 .bm-more-list { display: flex; flex-direction: column; }
 .bm-more-head, .bm-more-row { display: grid; grid-template-columns: 1fr 76px 84px 84px; gap: 10px; align-items: center; }
-.bm-more-head { font-size: 11px; font-weight: 600; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: 0.03em; padding: 0 0 8px; border-bottom: 1px solid var(--nds-grey-100); }
+.bm-more-head { font-size: 11px; font-weight: 600; color: var(--nds-grey-600); text-transform: uppercase; letter-spacing: 0.03em; padding: 0 0 8px; border-bottom: 1px solid var(--nds-grey-100); }
 .bm-more-row { padding: 9px 0; border-bottom: 1px solid var(--nds-grey-50); }
 .bm-more-row .nm { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); display: inline-flex; align-items: center; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-cdot { width: 7px; height: 7px; border-radius: var(--nds-radius-full); flex-shrink: 0; }
@@ -132,7 +132,7 @@
    type scale and pushing the chevron to the far edge, which `block` (flex-start) does not do. */
 .bm-faq-q { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); padding: 12px 2px; }
 .bm-faq-q .chev { margin-left: auto; }
-.bm-faq-q svg { color: var(--nds-text-3); flex-shrink: 0; transition: transform 0.15s; }
+.bm-faq-q svg { color: var(--nds-grey-500); flex-shrink: 0; transition: transform 0.15s; }
 .bm-faq-item.open .bm-faq-q svg { transform: rotate(180deg); }
 .bm-faq-a { margin: 0 2px 14px; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.55; }
 
@@ -143,12 +143,12 @@
 .bm-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
 .bm-empty .ill { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: var(--nds-radius-full); background: var(--nds-blue-50); color: var(--nds-blue-600); margin-bottom: 4px; }
 .bm-empty b { font-size: 15px; color: var(--nds-grey-900); }
-.bm-empty span { font-size: 13px; color: var(--nds-text-2); max-width: 420px; }
+.bm-empty span { font-size: 13px; color: var(--nds-grey-600); max-width: 420px; }
 
 /* ── ACR.6 (R9) — Budget Pools drawer ──────────────────────────────────────── */
 .bp-intro { font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); margin: 0 0 14px; }
 .bp-intro b { color: var(--nds-grey-900); }
-.bp-loading, .bp-empty { font-size: 12.5px; color: var(--nds-text-2); padding: 12px 0; }
+.bp-loading, .bp-empty { font-size: 12.5px; color: var(--nds-grey-600); padding: 12px 0; }
 .bp-empty-lg { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 26px 12px; border: 1px dashed var(--nds-grey-150); border-radius: 11px; margin-top: 12px; }
 .bp-empty-lg .ill { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--nds-blue-50); color: var(--nds-blue-600); }
 .bp-empty-lg b { color: var(--nds-grey-900); font-size: 13.5px; }
@@ -156,7 +156,7 @@
 
 .bp-top, .bp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
 .bp-stat { background: var(--nds-grey-25); border: 1px solid var(--nds-grey-100); border-radius: 9px; padding: 7px 10px; }
-.bp-stat i { display: block; font-style: normal; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
+.bp-stat i { display: block; font-style: normal; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-600); }
 .bp-stat b { display: block; margin-top: 2px; font-size: 13.5px; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .bp-stat b.warn { color: var(--nds-amber-600); }
 
@@ -172,13 +172,13 @@
    <span>, so the loose descendant selector matched the CONTROL as well as its caption and set
    the text inside it to 9px/800 uppercase. Measured: the input came out font-weight 800 where
    it had been 400 — invisible in the diff and green under tsc. */
-.bp-new-f > label > span:first-child { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
+.bp-new-f > label > span:first-child { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-600); }
 /* DS Input `fieldClassName`s — width/placement only; the primitive owns the rest. */
 .bp-new-in { width: 100%; min-width: 0; }
 .bp-new-a { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 .bp-strat { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); overflow: hidden; margin-top: 10px; }
-.bp-strat-blurb { font-size: 11.5px; color: var(--nds-text-2); margin: 6px 0 12px; }
+.bp-strat-blurb { font-size: 11.5px; color: var(--nds-grey-600); margin: 6px 0 12px; }
 
 .bp-list { display: flex; flex-direction: column; gap: 8px; }
 .bp-item { border: 1px solid var(--nds-grey-150); border-radius: 11px; overflow: hidden; }
@@ -186,15 +186,15 @@
 .bp-item-h { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--nds-white); border: 0; cursor: pointer; text-align: left; }
 .bp-item-h:hover { background: var(--nds-grey-25); }
 .bp-item-h .nm { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.bp-item-h .bd, .bp-item-h .al { font-size: 11px; color: var(--nds-text-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.bp-item-h .bd, .bp-item-h .al { font-size: 11px; color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; }
 .bp-item-h .al { margin-left: auto; }
-.bp-item-h .chev { color: var(--nds-text-muted); transition: transform 0.15s; }
+.bp-item-h .chev { color: var(--nds-grey-600); transition: transform 0.15s; }
 .bp-item-h .chev.open { transform: rotate(180deg); }
 .tag { font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 800; padding: 2px 6px; border-radius: 5px; }
 .tag.ok { background: #e6f4ef; color: #067d62; }
 .tag.dry { background: #fff4e0; color: var(--nds-amber-600); }
-.tag.off { background: var(--nds-grey-100); color: var(--nds-text-2); }
-.tag.strat { background: var(--nds-blue-50); color: var(--nds-text-link); }
+.tag.off { background: var(--nds-grey-100); color: var(--nds-grey-600); }
+.tag.strat { background: var(--nds-blue-50); color: var(--nds-blue-700); }
 
 .bp-body { border-top: 1px solid var(--nds-grey-100); padding: 12px; background: var(--nds-white); }
 .bp-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -210,9 +210,9 @@
    grey, whatever the number suggests. `--nds-text-2` (#5b6573) is the secondary-TEXT
    token and measures 5.91:1. Both checked at :root and inside `.h10-shell`; they are the
    same in both — the value was never scope-dependent, it was simply too light. */
-.bp-meta { font-size: 11px; color: var(--nds-text-2); font-weight: 600; }
+.bp-meta { font-size: 11px; color: var(--nds-grey-600); font-weight: 600; }
 
-.bp-sec-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); margin: 14px 0 7px; display: flex; align-items: center; gap: 6px; }
+.bp-sec-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-600); margin: 14px 0 7px; display: flex; align-items: center; gap: 6px; }
 .bp-sec-h em { font-style: normal; background: var(--nds-grey-100); color: var(--nds-grey-600); border-radius: 5px; padding: 1px 5px; }
 
 .bp-allocs { display: flex; flex-direction: column; border: 1px solid var(--nds-grey-100); border-radius: 9px; overflow: hidden; }
@@ -237,13 +237,13 @@
 .bp-tbl .trunc { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .bp-tbl .pos { color: #067d62; font-weight: 700; }
 .bp-tbl .neg { color: var(--nds-red-500); font-weight: 700; }
-.bp-tbl .clamp { color: var(--nds-text-2); font-size: 10.5px; }
+.bp-tbl .clamp { color: var(--nds-grey-600); font-size: 10.5px; }
 
-.bp-hist-t { display: inline-flex; align-items: center; gap: 5px; margin-top: 14px; border: 0; background: none; padding: 0; font-size: 11.5px; font-weight: 700; color: var(--nds-text-link); cursor: pointer; }
+.bp-hist-t { display: inline-flex; align-items: center; gap: 5px; margin-top: 14px; border: 0; background: none; padding: 0; font-size: 11.5px; font-weight: 700; color: var(--nds-blue-700); cursor: pointer; }
 .bp-hist-t .open { transform: rotate(180deg); }
 .bp-hist { margin-top: 7px; display: flex; flex-direction: column; border: 1px solid var(--nds-grey-100); border-radius: 9px; overflow: hidden; }
 .bp-histrow { display: flex; align-items: center; gap: 9px; padding: 6px 10px; border-top: 1px solid var(--nds-grey-50); font-size: 11px; color: var(--nds-grey-600); background: var(--nds-white); }
 .bp-histrow:first-child { border-top: 0; }
-.bp-histrow .t { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--nds-text-2); }
+.bp-histrow .t { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--nds-grey-600); }
 .bp-histrow .by { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
 .bp-histrow .sh { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; }

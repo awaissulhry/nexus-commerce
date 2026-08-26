@@ -18,16 +18,16 @@
 /* Review — Sponsored Product Campaigns funnel table: Ad Group · Default Bid · Budget · Bid Algorithm. */
 .h10-qcb-rev { padding: 0; overflow: hidden; }
 .h10-qcb-rev-head, .h10-qcb-rev-row { display: grid; grid-template-columns: minmax(260px, 1.7fr) 200px 200px 150px; gap: 18px; align-items: center; }
-.h10-qcb-rev-head { padding: 13px 20px; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-text-2); background: var(--nds-grey-25); }
+.h10-qcb-rev-head { padding: 13px 20px; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-grey-600); background: var(--nds-grey-25); }
 .h10-qcb-rev-row { padding: 16px 20px; border-bottom: 1px solid var(--nds-grey-75); }
 .h10-qcb-rev-row:last-child { border-bottom: none; }
 .h10-qcb-rev-row .ag { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .h10-qcb-rev-row .ag .badge { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
 .h10-qcb-rev-row .ag .nm { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .h10-qcb-rev-row .ag .nm .t { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-qcb-rev-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-text-2); }
+.h10-qcb-rev-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-600); }
 .h10-qcb-rev-row .num { display: flex; flex-direction: column; gap: 5px; }
-.h10-qcb-rev-row .num .sug { font-size: 11.5px; color: var(--nds-text-2); }
+.h10-qcb-rev-row .num .sug { font-size: 11.5px; color: var(--nds-grey-600); }
 .h10-qcb-rev-row .num .sug b { color: var(--nds-grey-600); font-weight: 600; }
 .h10-qcb-rev-row .algo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-grey-700); }
 .h10-qcb-rev-row .algo svg { color: var(--nds-blue-600); }

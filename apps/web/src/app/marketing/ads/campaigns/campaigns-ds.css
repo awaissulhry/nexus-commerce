@@ -45,7 +45,7 @@
    descendant rule and outranks `.nds-btn`. `quiet` inherits its colour, so the
    resting tone lives HERE: without it the rail takes the page's near-black and
    every item reads as selected. Engaged rises blue-600 (4.42:1) → tonal (7.41). */
-.cd-subnav { position: sticky; top: 4px; flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; color: var(--nds-text-2); }
+.cd-subnav { position: sticky; top: 4px; flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; color: var(--nds-grey-600); }
 .cd-subnav .nds-btn { font-size: 13.5px; font-weight: 600; padding: 8px 12px; }
 
 /* ── the four "add" modals ─────────────────────────────────────────────────
@@ -60,10 +60,10 @@
 .h10-apm .apm-cpbtn { width: 20px; height: 20px; }
 .h10-apm .apm-addbtn { flex-shrink: 0; font-size: 12.5px; }
 .h10-apm .apm-addbtn.added:disabled { color: var(--nds-success-text); }
-.h10-apm .apm-thead .apm-sortbtn { font-size: 11px; font-weight: 700; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: 0.03em; padding: 0; }
+.h10-apm .apm-thead .apm-sortbtn { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); text-transform: uppercase; letter-spacing: 0.03em; padding: 0; }
 /* the sort caret carries the column's state, so it is meaningful non-text: 3:1 floor.
    grey-300 is ~2:1; --nds-text-3 is the icon tier at 3.10:1. */
-.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-text-3); }
+.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-grey-500); }
 .h10-apm .apm-thead .apm-sortbtn.asc svg, .h10-apm .apm-thead .apm-sortbtn.desc svg { color: var(--nds-primary); }
 
 /* ── campaign / ad-group tab bar ───────────────────────────────────────────

@@ -4,7 +4,7 @@
  * shipped unstyled on prod for exactly that mistake.
  */
 .fc { padding: 18px 24px 48px; max-width: 1400px; }
-.fc-empty { font-size: 13px; color: var(--nds-text-muted); padding: 28px 24px; }
+.fc-empty { font-size: 13px; color: var(--nds-grey-600); padding: 28px 24px; }
 
 .fc-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .fc-head-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
@@ -22,7 +22,7 @@
 .fc-vitals { display: flex; gap: 0; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); margin-bottom: 14px; overflow-x: auto; }
 .fc-vitals > div { display: flex; flex-direction: column; gap: 3px; padding: 11px 16px; border-right: 1px solid var(--nds-grey-75); min-width: 0; white-space: nowrap; }
 .fc-vitals > div:last-child { border-right: 0; }
-.fc-vitals .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--nds-text-2); }
+.fc-vitals .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--nds-grey-600); }
 .fc-vitals .v { font-size: 14px; font-weight: 650; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
 /* the tab bar is the DS `Tabs`; only its page rhythm stays here. */
@@ -30,7 +30,7 @@
 
 .fc-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 20px 0 9px; flex-wrap: wrap; }
 .fc-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.fc-sec-sub { font-size: 12px; color: var(--nds-text-2); }
+.fc-sec-sub { font-size: 12px; color: var(--nds-grey-600); }
 .fc-bulk { margin-left: auto; display: flex; gap: 6px; }
 
 .fc-banner { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; border-radius: var(--nds-radius-md); padding: 10px 13px; margin: 10px 0; line-height: 1.5; }
@@ -59,7 +59,7 @@
 /* A paused row RECEDES, it is not removed — its name, spend and ACoS are still content
    someone reads. grey-450 measured 2.58:1 at 12.5px, which is removal in every sense
    that matters to a reader. --nds-text-muted is 4.86:1 and still clearly the quieter row. */
-.fc-grid tbody tr.off td { color: var(--nds-text-muted); }
+.fc-grid tbody tr.off td { color: var(--nds-grey-600); }
 /* The campaigns grid declares all ten widths, so it can be `fixed` — which is what lets the
    name cell ellipsize. Under the grid's default `auto` a long campaign name widens the column
    instead, and the cap has to be a px guess about a width that lives in another stylesheet. */
@@ -85,22 +85,22 @@
 .fc-products { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 6px; }
 .fc-products li { display: flex; align-items: baseline; gap: 8px; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-md); background: var(--nds-white); padding: 7px 11px; font-size: 12px; min-width: 0; }
 .fc-products .sku { font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fc-products .asin { color: var(--nds-text-2); font-size: 11px; font-family: ui-monospace, monospace; }
+.fc-products .asin { color: var(--nds-grey-600); font-size: 11px; font-family: ui-monospace, monospace; }
 .fc-products .ads { margin-left: auto; color: #667485; font-size: 11px; white-space: nowrap; }
-.fc-products .more { color: var(--nds-text-2); border-style: dashed; }
+.fc-products .more { color: var(--nds-grey-600); border-style: dashed; }
 
 .fc-contests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .fc-contests > li { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); padding: 11px 14px; }
 .fc-contest-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; }
 .fc-contest-head strong { font-size: 13px; color: var(--nds-grey-900); }
 .fc-contest-head .mt { font-size: 10.5px; font-weight: 700; color: #4d5b6e; background: var(--nds-grey-75); border-radius: 4px; padding: 1px 6px; }
-.fc-contest-head .n { font-size: 11.5px; color: var(--nds-text-2); margin-left: auto; }
+.fc-contest-head .n { font-size: 11.5px; color: var(--nds-grey-600); margin-left: auto; }
 .fc-contenders { display: flex; flex-direction: column; gap: 3px; }
 .fc-contender { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: #56637a; padding: 3px 8px; border-radius: 5px; }
 .fc-contender.champ { background: #f6fbf8; color: var(--nds-success-text); }
 .fc-contender.champ svg { color: #b8860b; align-self: center; flex-shrink: 0; }
 .fc-contender .name { font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
-.fc-contender .stats { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--nds-text-2); white-space: nowrap; }
+.fc-contender .stats { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--nds-grey-600); white-space: nowrap; }
 .fc-contender.champ .stats { color: #4a7c62; }
 .fc-contender .why { margin-left: auto; font-size: 11px; font-style: italic; white-space: nowrap; }
 
@@ -111,13 +111,13 @@
 .fc-autorow { display: flex; gap: 0; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); margin-bottom: 6px; overflow-x: auto; }
 .fc-autorow > div { display: flex; flex-direction: column; gap: 3px; padding: 11px 16px; border-right: 1px solid var(--nds-grey-75); white-space: nowrap; }
 .fc-autorow > div:last-child { border-right: 0; }
-.fc-autorow .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--nds-text-2); }
+.fc-autorow .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--nds-grey-600); }
 .fc-autorow .v { font-size: 14px; font-weight: 650; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 
 .fc-diamond { color: #b8860b; margin-right: 5px; }
-.fc-link { color: var(--nds-text-link); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+.fc-link { color: var(--nds-blue-700); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
 .fc-link:hover { text-decoration: underline; }
-.fc-foot { font-size: 12px; color: var(--nds-text-2); margin: 12px 0 0; line-height: 1.55; max-width: 96ch; }
+.fc-foot { font-size: 12px; color: var(--nds-grey-600); margin: 12px 0 0; line-height: 1.55; max-width: 96ch; }
 
 @media (max-width: 900px) {
   .fc-vitals, .fc-autorow { flex-wrap: wrap; }

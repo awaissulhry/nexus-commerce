@@ -7,19 +7,19 @@
    All that is left is the staged-changes dot the chip has no notion of. */
 .cp-tab .dot { color: #7c3aed; font-style: normal; }
 .cp-tabs .grow { flex: 1; }
-.cp-hint { font-size: 11.5px; color: var(--nds-text-muted); }
+.cp-hint { font-size: 11.5px; color: var(--nds-grey-600); }
 
 /* inspector */
 .cp-insp { width: 300px; flex-shrink: 0; height: 540px; overflow-y: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); padding: 14px; display: flex; flex-direction: column; gap: 16px; }
 .cp-insp-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .cp-insp-h .ttl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cp-insp-h .ty { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-2); }
+.cp-insp-h .ty { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-600); }
 .cp-insp-h b { font-size: 13.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-insp-kpis { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; background: var(--nds-grey-25); border-radius: 9px; }
 .cp-insp-kpis span { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--nds-grey-900); }
-.cp-insp-kpis i { font-style: normal; font-weight: 500; color: var(--nds-text-2); }
+.cp-insp-kpis i { font-style: normal; font-weight: 500; color: var(--nds-grey-600); }
 .cp-insp-sec { display: flex; flex-direction: column; gap: 10px; }
-.cp-sec-h { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--nds-text-2); }
+.cp-sec-h { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--nds-grey-600); }
 /* `min-width: 0` on the two field wrappers is load-bearing since the money/percent inputs
    became the DS `Input`. That primitive is a real flex container, so its min-content width is
    the adornment plus ~20 characters of input — and `.cp-fld2` / `.cp-pl3` are `1fr` grids,
@@ -39,11 +39,11 @@
 .cp-statusbtns button { border: none; background: var(--nds-white); font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--nds-grey-100); }
 .cp-statusbtns button:last-child { border-right: none; }
 .cp-statusbtns button:hover { background: var(--nds-grey-75); }
-.cp-statusbtns button.on { background: var(--nds-blue-50); color: var(--nds-text-link); }
+.cp-statusbtns button.on { background: var(--nds-blue-50); color: var(--nds-blue-700); }
 .cp-eurin.pct { width: 130px; }
 .cp-pl3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .cp-pl3 > label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.cp-pl3 > label > span { font-size: 10.5px; font-weight: 600; color: var(--nds-text-2); }
+.cp-pl3 > label > span { font-size: 10.5px; font-weight: 600; color: var(--nds-grey-600); }
 /* `min-width: 0` is load-bearing, not decoration: the field is a flex item of the
    `.cp-pl3 > label` column, and a flex item's automatic minimum is its min-content size —
    which for a text input is ~20 characters. Without it the three placement fields measured
@@ -56,8 +56,8 @@
 .cp-prov-row { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-bottom: 1px solid var(--nds-grey-50); font-size: 11.5px; }
 .cp-prov-row .f { font-weight: 700; color: var(--nds-grey-800); }
 .cp-prov-row .v { color: var(--nds-grey-900); }
-.cp-prov-row .m { color: var(--nds-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-prov-load, .cp-prov-empty { font-size: 12px; color: var(--nds-text-muted); padding: 6px 0; }
+.cp-prov-row .m { color: var(--nds-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-prov-load, .cp-prov-empty { font-size: 12px; color: var(--nds-grey-600); padding: 6px 0; }
 
 /* review bar (modal footer) */
 .cp-review { display: flex; align-items: center; gap: 10px; width: 100%; }
@@ -68,13 +68,13 @@
 .cp-review .sum em.down { color: #d9534f; }
 .cp-review .grow { flex: 1; }
 
-.cp-empty { padding: 56px 24px; text-align: center; color: var(--nds-text-2); font-size: 13px; }
+.cp-empty { padding: 56px 24px; text-align: center; color: var(--nds-grey-600); font-size: 13px; }
 
 /* P3 — scenario bar + compare */
 .cp-scenbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--nds-grey-100); }
 /* `--nds-grey-500` is #8a93a1 — 3.10:1 at 11px. A grey ramp step is not a text token;
    `--nds-text-2` is, and measures 5.91:1. */
-.cp-scenbar .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-2); }
+.cp-scenbar .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-600); }
 .cp-scenbar .grow { flex: 1; }
 /* Scenario bar: the working set is a `FilterChip` (it toggles), each SAVED scenario is a
    `TokenChip` (its label loads, its × deletes — the two-action shape that component exists
@@ -95,9 +95,9 @@
 .cp-compare-col { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px; background: var(--nds-white); }
 .cp-compare-col .hd { display: flex; flex-direction: column; gap: 3px; }
 .cp-compare-col .hd b { font-size: 13.5px; color: var(--nds-grey-900); }
-.cp-compare-col .hd .st { font-size: 11.5px; color: var(--nds-text-2); }
+.cp-compare-col .hd .st { font-size: 11.5px; color: var(--nds-grey-600); }
 .cp-compare-col .rows { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
-.cp-compare-col .rows .empty { font-size: 12.5px; color: var(--nds-text-muted); padding: 10px 0; }
+.cp-compare-col .rows .empty { font-size: 12.5px; color: var(--nds-grey-600); padding: 10px 0; }
 .cp-compare-col .row { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-bottom: 1px solid var(--nds-grey-50); }
 .cp-compare-col .row .nm { font-size: 12px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-compare-col .row .ch { font-size: 11.5px; color: #7c3aed; }
@@ -109,10 +109,10 @@
 .cp-bulk-row { display: flex; align-items: center; gap: 7px; }
 .cp-bulk-row > span:first-child { font-size: 12px; font-weight: 600; color: var(--nds-grey-600); min-width: 48px; }
 .cp-bulk-row .cp-eurin.pct { width: 80px; }
-.cp-bulk-hint { font-size: 11px; color: var(--nds-text-muted); line-height: 1.5; margin-top: auto; }
+.cp-bulk-hint { font-size: 11px; color: var(--nds-grey-600); line-height: 1.5; margin-top: auto; }
 
 /* P5 — live SSE indicator + canvas flash */
-.cp-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--nds-text-2); margin-right: 4px; }
+.cp-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); margin-right: 4px; }
 .cp-live .dot { width: 7px; height: 7px; border-radius: var(--nds-radius-full); background: #cbd2db; }
 .cp-live .dot.on { background: #1f9d5b; animation: cp-livedot 2s infinite; }
 @keyframes cp-livedot { 0% { box-shadow: 0 0 0 0 rgba(31, 157, 91, 0.5); } 70% { box-shadow: 0 0 0 5px rgba(31, 157, 91, 0); } 100% { box-shadow: 0 0 0 0 rgba(31, 157, 91, 0); } }
