@@ -46,6 +46,16 @@ if (bad.length) {
       `   in the scope where it is DECLARED. Add the same entry to the dark section of\n` +
       `   tokens/css-vars.ts — re-declaring it with the same var(X) is enough.`,
   )
+  // A dangling `else` here binds to the preceding `if`, which is how the first version of
+  // this banner ran only when there was nothing to report. Explicit condition.
+  if (process.argv[2] !== '--check') {
+    console.error(
+      `\n   ⚠️  REPORT MODE — this exits 0 despite the failure above. The gate is\n` +
+        `   \`--check\`, which exits 1. A guard with two modes has two exit codes, and\n` +
+        `   testing the wrong one is indistinguishable from testing nothing.`,
+    )
+  }
+
   if (process.argv[2] === '--check') process.exit(1)
 } else {
   console.log('✓ dark-alias scope: every :root alias of a dark-overridden token is re-declared in .dark')

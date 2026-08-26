@@ -140,6 +140,16 @@ if (missing.length || stale.length || scopeLost) {
     console.error(`\n   A stale pin that looks authoritative is worse than no pin: it silently drags a\n` +
                   `   token back to a value the DS has moved away from, inside this console only.`)
   }
+  // A dangling `else` here binds to the preceding `if`, which is how the first version of
+  // this banner ran only when there was nothing to report. Explicit condition.
+  if (process.argv[2] !== '--check') {
+    console.error(
+      `\n   ⚠️  REPORT MODE — this exits 0 despite the failure above. The gate is\n` +
+        `   \`--check\`, which exits 1. A guard with two modes has two exit codes, and\n` +
+        `   testing the wrong one is indistinguishable from testing nothing.`,
+    )
+  }
+
   if (process.argv[2] === '--check') process.exit(1)
 } else {
   console.log(`✓ shell-pin: ${pins.size} pin(s), all fresh, portal scope intact`)
