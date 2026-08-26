@@ -213,7 +213,6 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
             <Field className="cd-field" label="Campaign Name" required>
               <Input value={form.name} onChange={(e) => set('name', e.target.value)} fieldClassName="cd-field-full" />
             </Field>
-            {/* no `htmlFor` — `Listbox` takes no `id`; the trigger is named by its `ariaLabel`. */}
             <Field className="cd-field" label="Portfolio">
               <PortfolioSelect value={form.portfolioId} onChange={(v) => set('portfolioId', v)} marketplace={campaign?.marketplace ?? undefined} />
             </Field>
@@ -224,9 +223,9 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
               <Field className="cd-field" label="Start Date" required htmlFor="cd-startdate">
                 <div className="h10-cd-date ro"><span className="ib"><Calendar size={15} /></span><input id="cd-startdate" type="text" value={campaign?.startDate ? mdy(campaign.startDate as string) : ''} readOnly aria-readonly /></div>
               </Field>
-              {/* No `htmlFor`: `DateField` takes no `id`, so neither an explicit one nor `Field`'s
-                  auto-association can reach its trigger — a `<label for>` naming an id that does
-                  not exist is worse than none. The control is named by `ariaLabel`. Filed. */}
+              {/* `Field` auto-associates by cloning its single child with a generated id, and
+                  `DateField` takes an `id` now — so the label reaches the trigger without one
+                  being invented here. */}
               <Field className="cd-field" label="End Date" required={!form.neverExpire}>
                 <DateField
                   className="cd-datefield"
@@ -363,7 +362,7 @@ function AtomMark() {
 /** Portfolio picker — live list from GET /advertising/portfolios (sandbox → fixture).
  *  Opens a menu with "No Portfolio" + each portfolio; selecting sets the campaign's
  *  portfolioId (saved via PATCH; pushed to Amazon when the publish gate is live). */
-function PortfolioSelect({ value, onChange, marketplace }: { value: string; onChange: (v: string) => void; marketplace?: string }) {
+function PortfolioSelect({ value, onChange, marketplace, id }: { value: string; onChange: (v: string) => void; marketplace?: string; id?: string }) {
   const [portfolios, setPortfolios] = useState<Array<{ portfolioId: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
@@ -380,6 +379,7 @@ function PortfolioSelect({ value, onChange, marketplace }: { value: string; onCh
   // one — so "No Portfolio" is a real option here rather than a button above the list.
   return (
     <Listbox
+      id={id}
       width="100%"
       ariaLabel="Portfolio"
       value={value}

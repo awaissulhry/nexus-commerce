@@ -122,8 +122,9 @@
    rise. `inline` keeps them inside the cell's line box. */
 .h10-rep-tbl .rep-whrline { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .h10-rep-tbl .rep-whrbtn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-/* "Accept this conflict" is the DS button outright. Its amber hairline is NOT restated:
-   the note-warn trio has bg/fg/icon and no border token, and #e0d4a8 is exactly the kind
-   of one-off literal this alignment is removing. Filed. The line it sits on is amber
-   already, so the cue is not lost. */
-.h10-rep-tbl .rep-mini { flex: none; }
+/* "Accept this conflict" — the DS button, plus the amber hairline that IS the signal on
+   this affordance. I dropped the cue when the note-warn trio had no border token rather
+   than keep a one-off #e0d4a8; the DS added `--nds-note-warn-border` with that exact
+   value, so it comes back as a token. */
+.h10-rep-tbl .rep-mini { flex: none; border-color: var(--nds-note-warn-border); }
+.h10-rep-tbl .rep-mini:hover { background: var(--nds-note-warn-bg); }

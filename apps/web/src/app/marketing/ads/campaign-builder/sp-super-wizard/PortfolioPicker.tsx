@@ -15,7 +15,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 type Pf = { portfolioId: string; name: string }
 
-export function PortfolioPicker({ value, onChange, market = 'IT' }: { value: string; onChange: (id: string) => void; market?: string }) {
+export function PortfolioPicker({ value, onChange, market = 'IT', id }: { value: string; onChange: (id: string) => void; market?: string; id?: string }) {
   const [pfs, setPfs] = useState<Pf[]>([])
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
@@ -45,7 +45,7 @@ export function PortfolioPicker({ value, onChange, market = 'IT' }: { value: str
   }
   return (
     <div className="h10-spw-pf">
-      <Listbox width={300} options={options} value={value} onChange={onChange} ariaLabel="Portfolio" />
+      <Listbox id={id} width={300} options={options} value={value} onChange={onChange} ariaLabel="Portfolio" />
       <Button variant="link" size="sm" onClick={() => setCreating(true)}><Plus size={13} /> Create portfolio</Button>
       {creating && (
         <Modal open onClose={() => setCreating(false)} size="sm" title="Create portfolio"
