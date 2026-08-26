@@ -33,6 +33,7 @@
  */
 
 import { Eye, MessageSquare, Power, Zap, GraduationCap } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
 
 export type Level = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
 export const LEVELS: Level[] = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO']
@@ -68,10 +69,10 @@ export function ModeNotches({
         const on = level === lv
         const earned = earnedAuto && lv === 'AUTO' && !on
         return (
-          <button
+          <Button
             key={lv}
-            type="button"
-            className={`h10-au-notch ${lv.toLowerCase()}${on ? ' on' : ''}${earned ? ' earned' : ''}${above ? ' above' : ''}`}
+            className={`h10-au-notch ${lv.toLowerCase()}${earned ? ' earned' : ''}${above ? ' above' : ''}`}
+            active={on}
             aria-pressed={on}
             // 🔴 NEVER `disabled` for `above` — see the U13 note at the top. `busy` is fine: it
             // needs no explanation and clears itself.
@@ -84,7 +85,7 @@ export function ModeNotches({
           >
             {earned ? <GraduationCap size={12} aria-hidden /> : <M.Icon size={12} aria-hidden />}
             {M.label}
-          </button>
+          </Button>
         )
       })}
     </div>

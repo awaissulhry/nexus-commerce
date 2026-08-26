@@ -1228,8 +1228,8 @@
 .h10-au-namew { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .h10-au-swatch { flex-shrink: 0; width: 4px; height: 26px; border-radius: 2px; }
 .h10-au-nm { display: flex; flex-direction: column; min-width: 0; }
-.h10-au-name { border: 0; background: none; padding: 0; text-align: left; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-au-name:hover { color: var(--nds-blue-600); text-decoration: underline; }
+.nds-btn.h10-au-name { display: block; text-align: left; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-btn.h10-au-name:hover { color: var(--nds-blue-600); text-decoration: underline; background: none; }
 .h10-au-nm em { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-au-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-au-badge.writes { background: #fdf0e3; color: #a34909; }
@@ -1246,14 +1246,18 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── The mode dial ───────────────────────────────────────────────────────────────────── */
 .h10-au-dial { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; background: var(--nds-white); }
-.h10-au-notch { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-right: 1px solid var(--nds-grey-100); background: var(--nds-white); font-size: 10.5px; font-weight: 700; color: var(--nds-pill-neutral-fg); cursor: pointer; white-space: nowrap; }
-.h10-au-notch:last-child { border-right: 0; }
-.h10-au-notch:hover:not(:disabled):not(.above) { background: var(--nds-grey-50); color: var(--nds-grey-900); }
+/* A joined strip of DS `Button`s, so `border-radius: 0` is load-bearing — the DS rounds every
+   button and four rounded notches read as four controls rather than one dial. The `.on.<level>`
+   fills below are (0,3,0) and still outrank the DS `active`, which is the point: this dial says
+   WHICH level by colour, not merely that one is chosen. */
+.nds-btn.h10-au-notch { gap: 4px; padding: 4px 8px; border: 0; border-right: 1px solid var(--nds-grey-100); border-radius: 0; background: var(--nds-white); font-size: 10.5px; font-weight: 700; color: var(--nds-pill-neutral-fg); white-space: nowrap; }
+.nds-btn.h10-au-notch:last-child { border-right: 0; }
+.nds-btn.h10-au-notch:hover:not(:disabled):not(.above) { background: var(--nds-grey-50); color: var(--nds-grey-900); }
 /* Explicit colours, NOT opacity. A disabled notch is exempt from 1.4.3, but its tooltip is
    the only thing that explains why it refuses, so it has to be readable — and opacity
    composites, so the declared colour stops predicting the rendered one. #5f6875 on
    #f4f6f9 measures 5.21:1 while still reading as inert. */
-.h10-au-notch:disabled { cursor: not-allowed; background: var(--nds-grey-50); color: var(--nds-grey-600); }
+.nds-btn.h10-au-notch:disabled { cursor: not-allowed; background: var(--nds-grey-50); color: var(--nds-grey-600); }
 .h10-au-notch:disabled svg { opacity: .55; }
 .h10-au-notch.on.off { background: var(--nds-pill-neutral-fg); color: var(--nds-white); }
 .h10-au-notch.on.observe { background: var(--nds-grey-600); color: var(--nds-white); }
@@ -1262,7 +1266,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    consequence rather than a selection. */
 .h10-au-notch.on.auto { background: #b4530e; color: var(--nds-white); }
 /* The notch a rule has EARNED. Highlighted, never pre-selected and never auto-clicked. */
-.h10-au-notch.earned { background: #e7f5ed; color: var(--nds-success-text); box-shadow: inset 0 0 0 1px #b9dcc6; }
+.nds-btn.h10-au-notch.earned { background: #e7f5ed; color: var(--nds-success-text); box-shadow: inset 0 0 0 1px #b9dcc6; }
 
 /* ── Cells ───────────────────────────────────────────────────────────────────────────── */
 .h10-au-trg { font-size: 11.5px; color: var(--nds-grey-600); }
@@ -1869,7 +1873,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    rule rather than sitting fourth in the same funnel. */
 .h10-plc-sep { flex: 0 0 auto; align-self: stretch; width: 1px; min-height: 34px; background: var(--nds-grey-150); }
 .h10-plc-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 10px; cursor: pointer; }
-.h10-plc-clear:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
+
 
 /* ── the sentences under it ──────────────────────────────────────────────────────────────────── */
 .h10-plc-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
@@ -2601,8 +2605,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.
    🔴 It cannot appear today — `GET /advertising/apply-rules/cursor` does not exist and a failed
    poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
-.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
-.h10-ar-stale:hover { background: #fdeed5; }
+/* The two "changed since you loaded" nudges — here and on Placement — were the same amber
+   button written twice. Both are `Button variant="warning" size="xs"` now. */
 /* U13 — a refused bid-automation flip, in the toolbar slot the staleness chip uses. Danger, not
    warning: the stale chip means "there is more to see", this means "your write did not happen".
    #8c2f22 on #fdece9 is 7.21:1. */
@@ -2831,9 +2835,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── the census strip: every number is a filter, and every one states its denominator ────────── */
 .h10-plc-census { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 0; }
-.h10-plc-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 11px 13px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); text-align: left; cursor: pointer; font: inherit; }
-.h10-plc-cell:hover { border-color: var(--nds-blue-700); }
-.h10-plc-cell:focus-visible { outline: 2px solid var(--nds-blue-700); outline-offset: 1px; }
+/* Same shape as `.h10-bd-cell`: a DS `Button` carrying a bespoke tile. The look stays here
+   because the strip mixes filterable tiles with an `unknown` one that cannot be, and a drift
+   between them would show side by side. `.nds-btn` because the DS sets background, border and
+   font-weight at (0,2,0). */
+.nds-btn.h10-plc-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 11px 13px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); text-align: left; font: inherit; }
+.nds-btn.h10-plc-cell:hover { border-color: var(--nds-blue-700); }
 /* The headline number and, beside it, the population it is a share of. The denominator is not
    optional and not a tooltip: "6" alone and "6 of 23" are different claims. */
 .h10-plc-cellnum { display: flex; align-items: baseline; gap: 6px; }
@@ -2841,17 +2848,17 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-cellnum i { font-style: normal; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-plc-celllab { font-size: 11.5px; font-weight: 700; line-height: 1.35; color: var(--nds-grey-900); }
 .h10-plc-cellsub { font-size: 10.5px; font-weight: 600; line-height: 1.4; color: var(--nds-grey-600); }
-.h10-plc-cell.on { border-color: var(--nds-blue-700); background: var(--nds-blue-100); }
+.nds-btn.h10-plc-cell.on { border-color: var(--nds-blue-700); background: var(--nds-blue-100); }
 .h10-plc-cell.on .h10-plc-cellnum b, .h10-plc-cell.on .h10-plc-celllab { color: #0e3f74; }
 .h10-plc-cell.on .h10-plc-cellnum i, .h10-plc-cell.on .h10-plc-cellsub { color: var(--nds-info-text); }
 .h10-plc-cell.warn .h10-plc-cellnum b { color: var(--nds-warning-text); }
-.h10-plc-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
+.nds-btn.h10-plc-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
 .h10-plc-cell.warn.on .h10-plc-cellnum b, .h10-plc-cell.warn.on .h10-plc-celllab { color: #6d3f10; }
 .h10-plc-cell.warn.on .h10-plc-cellnum i, .h10-plc-cell.warn.on .h10-plc-cellsub { color: #7a4812; }
 /* 🔴 The unmeasurable zero. `0 of 0` is not a finding — it is "we could not check" — so the cell
    drops the big number entirely rather than printing a 0 that reads as an all-clear. */
-.h10-plc-cell.unknown { cursor: default; background: var(--nds-grey-25); }
-.h10-plc-cell.unknown:hover { border-color: var(--nds-grey-150); }
+.nds-btn.h10-plc-cell.unknown { cursor: default; background: var(--nds-grey-25); }
+.nds-btn.h10-plc-cell.unknown:hover { border-color: var(--nds-grey-150); }
 .h10-plc-cell.unknown .h10-plc-cellnum b { font-size: 13px; color: var(--nds-grey-600); font-weight: 700; }
 
 /* ── the lane split ─────────────────────────────────────────────────────────────────────────── */
@@ -2880,8 +2887,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-hour b { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-plc-hour .clock { padding: 1px 7px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
 /* The refresh offer. It OFFERS; it never refetches under a reading operator. */
-.h10-plc-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
-.h10-plc-stale:hover { background: #fdeed5; }
 
 @media (max-width: 1200px) {
   .h10-plc-census { grid-template-columns: repeat(2, 1fr); }
@@ -4411,9 +4416,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* AUTO.A1 — band tiles that filter. A button-tile keeps the stat card's look; the pressed state
    is a visible ring, not colour alone. */
-.h10-au-stat.tilebtn { appearance: none; font: inherit; text-align: left; cursor: pointer; }
-.h10-au-stat.tilebtn:hover { border-color: var(--nds-grey-300); }
-.h10-au-stat.tilebtn.on { border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
+/* Three of the six tiles filter the grid and three are read-only figures, all wearing
+   `.h10-au-stat`. The three that filter are DS `Button`s; `font: inherit` and the left align
+   undo the DS button's centred 13px/600, which would otherwise make the pair look unrelated. */
+.nds-btn.h10-au-stat.tilebtn { display: block; font: inherit; text-align: left; }
+.nds-btn.h10-au-stat.tilebtn:hover { border-color: var(--nds-grey-300); background: var(--nds-white); }
+.nds-btn.h10-au-stat.tilebtn.on { border-color: var(--nds-blue-600); background: var(--nds-white); box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
 .h10-au-stat.exposure .v { color: #b42318; }  /* 5.9:1 on the card ground */
 
 /* AUTO.A7 — the Limits view */
@@ -4464,8 +4472,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-queuehead { margin: 0; font-size: 13px; color: var(--nds-grey-900); max-width: 860px; }
 .h10-au-queuenote { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: #177a41; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--nds-radius-lg); padding: 8px 10px; }
 .h10-au-qgroup { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); overflow: hidden; }
-.h10-au-qgrouph { appearance: none; border: none; background: none; font: inherit; width: 100%; text-align: left; display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; cursor: pointer; }
-.h10-au-qgrouph:hover { background: var(--nds-grey-25); }
+.nds-btn.h10-au-qgrouph { font: inherit; width: 100%; text-align: left; display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; }
+.nds-btn.h10-au-qgrouph:hover { background: var(--nds-grey-25); }
 .h10-au-qgrouph b { font-size: 13.5px; color: var(--nds-grey-900); }
 .h10-au-qgrouph .qk { font-size: 11px; color: var(--nds-text-muted); font-family: ui-monospace, monospace; }
 .h10-au-qgrouph .qmeta { margin-left: auto; font-size: 12px; color: var(--nds-text-muted); }
@@ -5014,7 +5022,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    (`reference_inline_svg_display_block_trap`), which forces the label onto its own line. Measured
    on prod: the icon and the text rendered stacked inside a 36px button.
    Scoped to the toolbar so PLC.0's other uses of the class are untouched. */
-.h10-plc-tools .h10-plc-toggle { display: inline-flex; align-items: center; gap: 5px; }
+.h10-plc-tools .nds-btn.h10-plc-toggle { gap: 5px; }
 
 /* ── U12 — a name cell can never paint outside its own column ─────────────────────────
    Measured on prod 2026-08-19, Bid: 11 of 18 rows painted their row-hover actions OUTSIDE the Bid
@@ -5143,7 +5151,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    would promise the same silence the defect was made of. */
 .nds-toggle.held, .nds-toggle.busy { opacity: .55; }
 .nds-toggle.busy { cursor: progress; }
-.h10-au-notch.above { background: var(--nds-grey-50); color: var(--nds-grey-600); }
+.nds-btn.h10-au-notch.above { background: var(--nds-grey-50); color: var(--nds-grey-600); }
 .h10-au-notch.above svg { opacity: .55; }
 
 /* ── EA4 — the read-only notice at the head of the builder's content column ─────────────────────

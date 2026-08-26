@@ -864,7 +864,14 @@ export function ApplyRulesClient() {
         return (
           <span className="h10-edcell">
             <BidRuleCell algorithm={r.bidAlgorithm} bidder={o?.bidder} bidderName={o?.bidderName} known={!!bidOwners?.has(r.id)} />
-            <button type="button" className="h10-editpen" title={`Set the bid algorithm for ${r.name}`} aria-label={`Set the bid algorithm for ${r.name}`}
+            {/* DS-ALIGN — these four pencils stay raw <button>, and the class is the reason. `.h10-editpen`
+          is the DESIGN SYSTEM's own hook for an in-cell edit affordance: `workspace-grid.css:332`
+          reveals it on row hover, and `ads.css:581` colours it, across ten call sites in this
+          console. Wrapping these four in a `ToolbarButton` would fork a shared class four ways and
+          give them chrome the other six do not have — the opposite of alignment.
+          🔴 Reported separately: that shared glyph is #b6bdc8, which measures 1.89:1 on white
+          where a non-text control needs 3:1. The fix belongs in ads.css, for all ten at once. */}
+      <button type="button" className="h10-editpen" title={`Set the bid algorithm for ${r.name}`} aria-label={`Set the bid algorithm for ${r.name}`}
               onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAlgoMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
               <Pencil size={11} aria-hidden />
             </button>
@@ -1152,10 +1159,10 @@ export function ApplyRulesClient() {
       <AlertTriangle size={12} aria-hidden /> Bid automation unchanged — {autoErr}
     </span>
   ) : refresh.stale ? (
-    <button type="button" className="h10-ar-stale" onClick={() => setReloadTick((n) => n + 1)}
+    <Button variant="warning" size="xs" onClick={() => setReloadTick((n) => n + 1)}
       title="Something changed since this view was loaded. Nothing has been reordered underneath you — click to pick it up.">
       <RefreshCw size={12} /> Changed since you loaded
-    </button>
+    </Button>
   ) : null
 
   const activeTab = rulesTabByKey('rules')

@@ -363,3 +363,24 @@ which is a `DateField` question, not a button question.
 
 **The unit of work here is the class, not the directory.** Each row above wants one pass that
 touches every twin at once.
+
+## `.h10-editpen` is 1.89:1 — the DS reveals it, `ads.css` colours it, and the colour fails
+*Session 1 · ROUND 2 · 2026-08-26 · found in `apply-rules/ApplyRulesClient.tsx` (4 of 10 call sites)*
+
+The in-cell edit pencil is a split-ownership control:
+`design-system/styles/workspace-grid.css:332` reveals it (`.nds-wsgrid tbody tr:hover
+.h10-editpen { opacity: 1 }`), and `app/marketing/ads/ads.css:581` colours it —
+`color: #b6bdc8`, which measures **1.89:1 on white**. WCAG 1.4.11 asks 3:1 of a control's
+graphical indicator; this is a little over half of it, on the only affordance saying a cell is
+editable.
+
+Ten call sites across the ads console, four of them in this half. Not fixed here: forking a shared
+class four ways is the thing this whole exercise is undoing, and the rule that needs changing is
+outside this scope. `--nds-grey-500` (3.10:1) clears it and is what
+`rules-automation.css`'s `.h10-plc3-pencil` — the same control, hand-rolled — already uses.
+
+The deeper gap: **the DS defines this pattern only for `WorkspaceGrid`.** `.nds-wsgrid tbody
+tr:hover .h10-editpen` has no `.nds-grid` counterpart, so an in-cell edit affordance inside a
+`DataGrid` has to hand-roll its own reveal — which is exactly why `.h10-plc3-pencil` exists as a
+second copy with a `tr:hover` selector of its own. Either the reveal belongs on both grids, or the
+pencil belongs in the DS as a primitive (`EditAffordance`?) that owns its own colour and hover.

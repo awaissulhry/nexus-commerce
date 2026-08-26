@@ -119,11 +119,11 @@ export function QueueView({ onDecided }: { onDecided?: () => void }) {
         const isOpen = open.has(k)
         return (
           <section key={k} className="h10-au-qgroup">
-            <button type="button" className="h10-au-qgrouph" onClick={() => toggleOpen(k)} aria-expanded={isOpen}>
+            <Button variant="quiet" inline className="h10-au-qgrouph" onClick={() => toggleOpen(k)} aria-expanded={isOpen}>
               <b>{first.proposedAction.type ?? first.proposedKey}</b>
               <span className="qk">{first.proposedKey}</span>
               <span className="qmeta">{rows.length} {first.entityType.toLowerCase()}{rows.length === 1 ? '' : 's'} · from “{first.ruleName ?? first.ruleId}” · oldest {ago(rows[rows.length - 1]!.createdAt)}</span>
-            </button>
+            </Button>
             {isOpen && (
               <ul className="h10-au-qlist">
                 {rows.map((s) => (

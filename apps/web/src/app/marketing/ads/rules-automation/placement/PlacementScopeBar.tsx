@@ -40,6 +40,7 @@
  */
 
 import { useMemo } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Info, X } from 'lucide-react'
 import { Listbox } from '@/design-system/components'
 
@@ -178,13 +179,13 @@ export function PlacementScopeBar({
         </span>
 
         {(any || lane !== 'all') && (
-          <button
-            type="button"
+          <Button
+            variant="tonal" size="xs"
             className="h10-plc-clear"
             onClick={() => { onChange({ line: '', portfolio: '', campaign: '' }); onLaneChange('all') }}
           >
             <X size={12} /> Clear scope
-          </button>
+          </Button>
         )}
       </div>
 

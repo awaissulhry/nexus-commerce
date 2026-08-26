@@ -63,7 +63,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
-import { Button, Input, SegmentedControl } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
@@ -577,6 +577,10 @@ export function PlacementClient() {
               : <span className="h10-plc-notset" title="No bid adjustment on this placement. Amazon treats an absent lane and a lane set to 0 identically.">not set</span>}
             {/* The affordance appears on row hover only — 660 rows each shouting a pencil is
                 noise, and this cell's job is to be read far more often than it is edited. */}
+            {/* Raw <button> like the four `.h10-editpen` pencils on Apply Rules, for the same
+                reason and with one difference worth keeping: this one paints --nds-grey-500
+                (3.10:1) where the shared class paints #b6bdc8 (1.89:1). Adopting the shared class
+                here would LOWER it below the 3:1 a non-text control needs, so it keeps its own. */}
             <button
               type="button" className="h10-plc3-pencil"
               aria-label={`Edit ${LANE_LABEL[r.laneKey]} multiplier for ${r.name}`}
@@ -773,11 +777,11 @@ export function PlacementClient() {
       {census.length > 0 && (
         <div className="h10-plc-census" role="group" aria-label="What is true in this scope">
           {census.map((cell) => (
-            <button
+            <Button
               key={cell.key}
-              type="button"
               title={cell.tip}
-              className={`h10-plc-cell ${cell.tone ?? ''} ${flag === cell.key ? 'on' : ''} ${cell.unknown ? 'unknown' : ''}`}
+              className={`h10-plc-cell ${cell.tone ?? ''} ${cell.unknown ? 'unknown' : ''}`}
+              active={flag === cell.key}
               aria-pressed={flag === cell.key}
               disabled={cell.unknown}
               onClick={() => push({ flag: flag === cell.key ? 'all' : cell.key })}
@@ -789,7 +793,7 @@ export function PlacementClient() {
               </span>
               <span className="h10-plc-celllab">{cell.label}</span>
               <span className="h10-plc-cellsub">{cell.sub}</span>
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -846,9 +850,9 @@ export function PlacementClient() {
           {/* 🔴 It OFFERS. It never refetches under someone reading — the one screen used to decide
               whether a multiplier is wrong is not a screen that should reorder itself mid-sentence. */}
           {stale && (
-            <button type="button" className="h10-plc-stale" onClick={() => { setReloadTick((n) => n + 1); check() }}>
+            <Button variant="warning" size="xs" onClick={() => { setReloadTick((n) => n + 1); check() }}>
               <RefreshCw size={11} /> A placement multiplier has changed since this loaded — refresh
-            </button>
+            </Button>
           )}
         </p>
       )}
@@ -893,7 +897,7 @@ export function PlacementClient() {
           <div className="h10-plc-camp">
             {/* P2 — the name opens the inspector rail (`?row=`), so the first column is a real
                 control again; the P0 un-link CSS targeted span.t and this is a button. */}
-            <button type="button" className="t" title={`${r.name} — open the inspector: three lanes, owner, and the change ledger`} onClick={() => openRow(r.campaignId)}>{r.name}</button>
+            <Button variant="quiet" size="xs" inline className="t" title={`${r.name} — open the inspector: three lanes, owner, and the change ledger`} onClick={() => openRow(r.campaignId)}>{r.name}</Button>
             {r.owner === 'none' && r.multiplierPct > 0 && (
               <span className="fl warn" title="This campaign carries a multiplier on this lane and no engine governs it. Whatever the number is, nothing will revisit it.">unmanaged</span>
             )}
@@ -950,17 +954,17 @@ export function PlacementClient() {
               onBlur={() => { if (qDraft.trim() !== q) push({ q: qDraft.trim() }) }}
               placeholder="Search campaigns…"
               aria-label="Search campaigns"
-              suffix={q ? <button type="button" aria-label="Clear search" onClick={() => push({ q: '' })}><X size={12} /></button> : undefined}
+              suffix={q ? <ToolbarButton size="sm" icon={<X size={12} />} label="Clear search" tooltip={false} onClick={() => push({ q: '' })} /> : undefined}
             />
             {/* PLC.3 — the scope-bulk trigger. It opens a PREVIEW, never a write: the label says
                 so, because a button that writes on click is the wrong shape for an action whose
                 blast radius is "every campaign in the current scope". */}
-            <button
-              type="button" className="h10-plc-toggle" onClick={() => push({ bulk: '1' })}
+            <Button
+              size="xs" className="h10-plc-toggle" onClick={() => push({ bulk: '1' })}
               title="Set one lane's multiplier across the current scope. Opens a preview first — nothing is written until you confirm."
             >
               <Sliders size={12} aria-hidden /> Set across scope…
-            </button>
+            </Button>
             <SegmentedControl
               ariaLabel="Placement lane" size="sm"
               value={lane}
@@ -1064,16 +1068,16 @@ function LaneEditor({ row, busy, onSave, onCancel }: {
         aria-label={`${LANE_LABEL[row.laneKey]} multiplier percent, 0 to 900`}
       />
       <em>%</em>
-      <button
-        type="button" className="go" disabled={!valid || busy || unchanged}
+      <Button
+        variant={needsAck ? 'warning' : 'success'} size="xs" className="go" disabled={!valid || busy || unchanged}
         title={
           unchanged ? 'Already at this value — writing it would add a ledger row and change nothing.'
             : needsAck ? `⚠ ${row.ownerLabel ?? 'A rank schedule'} steers this campaign. The write will land and the engine will snap it back within ~15 minutes. Click again to do it anyway.`
               : 'Save'
         }
         onClick={() => { if (needsAck) { setAckGoverned(true); return } if (valid && !unchanged) onSave(Math.round(pct)) }}
-      >{needsAck ? <AlertTriangle size={12} aria-hidden /> : <Check size={12} aria-hidden />}</button>
-      <button type="button" onClick={onCancel} disabled={busy} title="Cancel"><X size={12} aria-hidden /></button>
+      >{needsAck ? <AlertTriangle size={12} aria-hidden /> : <Check size={12} aria-hidden />}</Button>
+      <ToolbarButton size="sm" icon={<X size={12} aria-hidden />} label="Cancel" tooltip={false} onClick={onCancel} disabled={busy} />
     </span>
   )
 }

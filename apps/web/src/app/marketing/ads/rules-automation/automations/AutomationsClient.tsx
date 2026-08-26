@@ -576,9 +576,9 @@ export function AutomationsClient() {
         <span className="h10-au-namew">
           <span className="h10-au-kindtag engine" aria-hidden>engine</span>
           <span className="h10-au-nm">
-            <button type="button" className="h10-au-name" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }}>
+            <Button variant="quiet" size="xs" inline className="h10-au-name" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }}>
               {e.name}
-            </button>
+            </Button>
             <em>{e.what}</em>
           </span>
           {e.warning && <span className="h10-au-badge conf" title={e.warning}><AlertTriangle size={10} aria-hidden /> attention</span>}
@@ -606,9 +606,9 @@ export function AutomationsClient() {
       <span className="h10-au-namew">
         <span className="h10-au-swatch" style={{ background: r.categoryColor }} title={r.categoryLabel} aria-hidden />
         <span className="h10-au-nm">
-          <button type="button" className="h10-au-name" onClick={(e) => { e.stopPropagation(); setDetailId(r.id) }}>
+          <Button variant="quiet" size="xs" inline className="h10-au-name" onClick={(e) => { e.stopPropagation(); setDetailId(r.id) }}>
             {r.name}
-          </button>
+          </Button>
           <em>{r.categoryLabel}{!r.writes && <> · reaches nothing</>}</em>
         </span>
         {r.level === 'AUTO' && r.writes && (
@@ -795,11 +795,11 @@ export function AutomationsClient() {
             {counts.neverRan > 0 ? `${counts.neverRan} have never evaluated once` : 'all have evaluated at least once'}
           </div>
         </div>
-        <button type="button" className={`h10-au-stat tilebtn${tile === 'off' ? ' on' : ''}`} aria-pressed={tile === 'off'} onClick={() => setTileAndUrl('off')}>
+        <Button className="h10-au-stat tilebtn" active={tile === 'off'} aria-pressed={tile === 'off'} onClick={() => setTileAndUrl('off')}>
           <div className="k">Off</div>
           <div className="v muted">{num(counts.off)}</div>
           <div className="s">rules that do not evaluate{counts.engineOff > 0 ? ` · ${counts.engineOff} engines off` : ''}</div>
-        </button>
+        </Button>
         <div className="h10-au-stat">
           <div className="k">Proposing</div>
           <div className="v">{num(counts.propose)}</div>
@@ -808,19 +808,19 @@ export function AutomationsClient() {
           </div>
         </div>
         {/* The emphasis, and it counts what can WRITE rather than what is on Auto. */}
-        <button type="button" className={`h10-au-stat writing tilebtn${tile === 'writing' ? ' on' : ''}`} aria-pressed={tile === 'writing'} onClick={() => setTileAndUrl('writing')}>
+        <Button className="h10-au-stat writing tilebtn" active={tile === 'writing'} aria-pressed={tile === 'writing'} onClick={() => setTileAndUrl('writing')}>
           <div className="k">Writing to Amazon</div>
           <div className="v">{rules === null || actors === null ? '…' : num(counts.writing + counts.engineAuto)}</div>
           <div className="s">
             {num(counts.writing)} rules + {actors === null ? '…' : num(counts.engineAuto)} engines on Auto
             {counts.autoNotifyOnly > 0 && <> · {counts.autoNotifyOnly} more on Auto that only notifies</>}
           </div>
-        </button>
-        <button type="button" className={`h10-au-stat exposure tilebtn${tile === 'unscoped' ? ' on' : ''}`} aria-pressed={tile === 'unscoped'} onClick={() => setTileAndUrl('unscoped')}>
+        </Button>
+        <Button className="h10-au-stat exposure tilebtn" active={tile === 'unscoped'} aria-pressed={tile === 'unscoped'} onClick={() => setTileAndUrl('unscoped')}>
           <div className="k">Unscoped and writing</div>
           <div className="v">{rules === null || actors === null ? '…' : num(counts.unscopedWriting + counts.engineAuto)}</div>
           <div className="s">bound to no market, portfolio, campaign or product — the account&rsquo;s actual exposure</div>
-        </button>
+        </Button>
         <div className="h10-au-stat">
           <div className="k">Awaiting you</div>
           <div className="v">{pendingCount === null ? '—' : num(pendingCount)}</div>
