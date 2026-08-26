@@ -43,6 +43,16 @@ const SHARE_SECTIONS: readonly SectionSpec[] = [
 ]
 const SECTION_KEY = 'rpx-share-sections'
 
+/**
+ * Row counts, keeping the half.
+ *
+ * The median of an even number of weeks IS a half — 558.5 here — and `fmtCount` rounds anything
+ * over ten to a whole number. That put "median of 559" on a panel whose own caveat, generated
+ * server-side from the same field, said 558.5. One screen, one number, two renderings: exactly
+ * the inconsistency that makes a reader stop trusting the smaller print.
+ */
+const fmtRows = (v: number) => v.toLocaleString('en-GB', { maximumFractionDigits: 1 })
+
 const CHART_METRICS: ChartMetric[] = [
   { key: 'impressionShare', label: 'Impression share', unit: 'pct' },
   { key: 'clickShare', label: 'Click share', unit: 'pct' },
@@ -189,7 +199,7 @@ export function MarketShareTab({ market }: { market: string }) {
     trend: (
       <Card
         header="Share over time"
-        description={`${data.series.length} weeks. The strip beneath is how many query rows Amazon delivered that week — a share computed over ${data.coverage.thinBelow} rows is not comparable to one computed over ${fmtCount(data.coverage.medianRows)}.`}
+        description={`${data.series.length} weeks. The strip beneath is how many query rows Amazon delivered that week — a share computed over ${fmtRows(data.coverage.thinBelow)} rows is not comparable to one computed over ${fmtRows(data.coverage.medianRows)}.`}
         headerAction={thin ? <Pill tone="warning">{thin} thin {thin === 1 ? 'week' : 'weeks'} excluded</Pill> : undefined}
       >
         <MetricChart
@@ -253,7 +263,7 @@ export function MarketShareTab({ market }: { market: string }) {
     coverage: data.series.length === 0 ? null : (
       <Card
         header="What Amazon delivered each week"
-        description={`Query rows per week against the window's median of ${fmtCount(data.coverage.medianRows)}. A week under ${fmtCount(data.coverage.thinBelow)} rows is marked thin and left out of the comparisons.`}
+        description={`Query rows per week against the window's median of ${fmtRows(data.coverage.medianRows)}. A week under ${fmtRows(data.coverage.thinBelow)} rows is marked thin and left out of the comparisons.`}
       >
         <div className="rpx-rows">
           {[...data.series].reverse().map((w) => (
