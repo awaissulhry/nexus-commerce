@@ -254,3 +254,4 @@ Suggested: `disabled?: boolean` plus `disabledReason?: string` on `SegmentedOpti
 reason rendered somewhere a keyboard user meets it rather than as a bare `title`. Worth pairing
 with a note in the docblock that dropping the option and explaining in adjacent text is often the
 better answer — that is what this call site did.
+- `Column.render` in `DataGrid` receives only `(row)` — no index — so an ordinal "#" column cannot be written. Numbering rows is a normal thing to want from a grid, and the workaround (an index Map built per render) exists only to avoid a quadratic `indexOf` per cell. Suggest `render: (row, index) => ReactNode`, which is additive and breaks no existing consumer — apps/web/src/design-system/components/DataGrid.tsx
