@@ -19,13 +19,24 @@
    `--nds-text-2` is literally `var(--nds-grey-600)` at `:root`, and `--nds-text-link` is the same
    #1a60c4 as `--nds-blue-700`. So light rendering is byte-identical and dark stops collapsing.
 
-   `.h10-shell` now pins all 57 of these tokens (`shared-shell.css`, 8fa177e6c), so inside the
-   shell the semantic names would be safe again. These stay ramp steps anyway, and the reason is
-   PORTALS: eight DS components render at `document.body` — Modal, Menu, Drawer, Listbox,
-   Combobox, MultiSelect, HoverCard, Toast — which is OUTSIDE `.h10-shell`, so the pin does not
-   reach them. This half styles ~100 rules on portalled surfaces (`.h10-kt-dr*`, `.acr-dw*`,
-   `.h10-ntm*`, `.h10-rowmenu*`). A ramp step is correct on both sides of a portal; a pinned
-   semantic token is correct only on one.
+   🔴 UPDATED 2026-08-26, later the same night: the pin now reaches portals too. It began as
+   `.h10-shell` (8fa177e6c) and became `body:has(.h10-shell), .h10-shell` (46c585969), because the
+   first version missed the eight DS components that render at `document.body` — Modal, Menu,
+   Drawer, Listbox, Combobox, MultiSelect, HoverCard, Toast — giving a light console dark
+   dropdowns on a dark OS. So semantic tokens would now be safe here as well.
+
+   These stay ramp steps regardless, and the reason is no longer necessity but DEPENDENCE. That
+   pin was rewritten three times in one night, and one of its own earlier declarations had quietly
+   re-aliased `--nds-text-3` back to `--nds-grey-500` — 2.74 against 3.20 on tinted grounds, with
+   only source order deciding which won. A ramp step needs none of that to be right: it is absent
+   from the `.dark` block, so it holds on either side of a portal and under any future rewrite of
+   the pin. This half styles ~100 rules on portalled surfaces (`.h10-kt-dr*`, `.acr-dw*`,
+   `.h10-ntm*`, `.h10-rowmenu*`), which is a large enough share to want that independence.
+
+   Verified while checking the new selector: the app nav rail is NOT caught by it. `.app-rail-host`
+   sits between `body` and the rail and re-declares all 13 rail tokens, with `.dark .app-rail-host`
+   overriding them — a nearer ancestor wins for inheritance, so the rail still follows the app
+   theme exactly as its own comment says it should.
 
    The cost, stated plainly: the grey ramp has no step at the muted tier — 500 is #8a93a1, 600 is
    #5b6573, nothing near #626c7b — so `--nds-text-muted` → `--nds-grey-600` buys 5.32 → 5.91 and
