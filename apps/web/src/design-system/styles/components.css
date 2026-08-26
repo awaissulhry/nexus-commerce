@@ -2097,3 +2097,39 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
     var(--nds-surface) 3px 6px
   );
 }
+
+/* ── SavedChip (GX.8) ─────────────────────────────────────────────────────────
+   One bordered pill holding a name you click to load and a few small actions.
+   Shared by the reporting page's saved-report and saved-view strips, which were
+   two copies of this markup before it moved here.
+
+   🔴 Every colour below is a WHOLE colour — `var(--nds-…)`, never
+   `rgb(var(--nds-…))`. The platform aliases inside `.h10-shell` are RGB channels
+   and read the other way round; mixing the two forms drops the declaration in
+   silence, and a dropped colour inherits rather than showing up as an error. */
+.nds-savedchip {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-sm);
+  overflow: hidden;
+}
+.nds-savedchip.is-active { border-color: var(--nds-primary); }
+.nds-savedchip-main {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: transparent; cursor: pointer;
+  padding: 4px 9px; font: inherit; font-size: 12.5px; color: var(--nds-text-strong);
+}
+.nds-savedchip.is-active .nds-savedchip-main { color: var(--nds-primary); font-weight: 600; }
+.nds-savedchip-meta {
+  font-size: 10.5px; color: var(--nds-text-muted); font-variant-numeric: tabular-nums;
+}
+.nds-savedchip-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-left: 1px solid var(--nds-border-subtle);
+  background: transparent; cursor: pointer; padding: 0 7px; color: var(--nds-text-muted);
+}
+.nds-savedchip-act[aria-pressed='true'] { color: var(--nds-primary); }
+.nds-savedchip-act:disabled { cursor: default; opacity: .5; }
+.nds-savedchip-main:hover, .nds-savedchip-act:not(:disabled):hover { background: var(--nds-surface-sunken); }
+.nds-savedchip-main:focus-visible, .nds-savedchip-act:focus-visible {
+  outline: 2px solid var(--nds-primary); outline-offset: -2px;
+}

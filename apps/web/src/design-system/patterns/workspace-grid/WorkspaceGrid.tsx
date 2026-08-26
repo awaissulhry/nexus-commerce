@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns'
 import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
+import { emitPrefsChanged } from '../prefs-bus'
 import { enabledRank } from './enabledRank'
 
 // The DS HoverCard takes a suppression check rather than knowing what a column drag is.
@@ -482,7 +483,12 @@ export function WorkspaceGrid<T>({
       : { ...p, visible: next }))
   }, [colKeySig, storageKey, columns])
 
-  const persistPrefs = (p: GridPrefs) => { if (storageKey) { try { localStorage.setItem(storageKey, JSON.stringify(p)) } catch { /* ignore */ } } }
+  const persistPrefs = (p: GridPrefs) => {
+    if (!storageKey) return
+    try { localStorage.setItem(storageKey, JSON.stringify(p)) } catch { /* ignore */ }
+    // GX.8 — so a saved-view bar can say "unsaved changes" truthfully; see ../prefs-bus.
+    emitPrefsChanged(storageKey)
+  }
 
   /** The operator's order IS the render order — a drag handle that did not move a column would lie. */
   const visibleCols = useMemo(() => {

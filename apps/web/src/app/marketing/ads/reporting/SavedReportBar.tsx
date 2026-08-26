@@ -15,6 +15,7 @@ import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
 import { Input } from '@/design-system/primitives/Input'
 import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
+import { SavedChip } from '@/design-system/components/SavedChip'
 import {
   archiveSaved,
   createSaved,
@@ -127,29 +128,22 @@ export function SavedReportBar({
       {saved.length === 0 && <span className="rpt-saved-empty">None yet</span>}
 
       {saved.map((r) => (
-        <span key={r.id} className={`rpt-chip${active?.id === r.id ? ' on' : ''}`}>
-          <button
-            type="button"
-            className="rpt-chip-main"
-            title={`${r.name} — v${r.version}, updated ${new Date(r.updatedAt).toLocaleDateString('en-GB')}`}
-            onClick={() => {
-              setActive(r)
-              onApply(queryToParams(r.query, params))
-            }}
-          >
-            {r.name}
-            <span className="v">v{r.version}</span>
-          </button>
-          <button
-            type="button"
-            className="rpt-chip-icon"
-            title={`History of "${r.name}"`}
-            aria-label={`History of ${r.name}`}
-            onClick={() => openHistory(r)}
-          >
-            <History size={12} aria-hidden />
-          </button>
-        </span>
+        <SavedChip
+          key={r.id}
+          label={r.name}
+          meta={`v${r.version}`}
+          active={active?.id === r.id}
+          title={`${r.name} — v${r.version}, updated ${new Date(r.updatedAt).toLocaleDateString('en-GB')}`}
+          onSelect={() => {
+            setActive(r)
+            onApply(queryToParams(r.query, params))
+          }}
+          actions={[{
+            icon: <History size={12} aria-hidden />,
+            label: `History of "${r.name}"`,
+            onClick: () => openHistory(r),
+          }]}
+        />
       ))}
 
       <span className="rpt-saved-actions">

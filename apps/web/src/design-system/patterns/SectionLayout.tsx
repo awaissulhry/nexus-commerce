@@ -33,6 +33,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives/Button'
+import { emitPrefsChanged } from './prefs-bus'
 
 export type SectionWidth = 'half' | 'two-thirds' | 'full'
 
@@ -123,6 +124,8 @@ export function readSectionLayout(storageKey: string, sections: readonly Section
 
 export function writeSectionLayout(storageKey: string, value: SectionLayoutValue): void {
   try { localStorage.setItem(storageKey, JSON.stringify(value)) } catch { /* private mode — in-session only */ }
+  // Announced AFTER the write, so a listener that reads the key back gets the new value.
+  emitPrefsChanged(storageKey)
 }
 
 export function SectionLayout({

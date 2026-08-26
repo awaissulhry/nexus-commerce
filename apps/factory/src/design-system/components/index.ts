@@ -21,6 +21,7 @@ export { PerformanceGraph, type PerformanceGraphProps, type ChartSeries } from '
 // dual-axis, and a burn-down's series are all one unit.
 export { BurnDownChart, type BurnDownChartProps, type BurnDownPoint } from './BurnDownChart'
 export { Heatmap, type HeatmapProps } from './Heatmap'
+export { SavedChip, type SavedChipProps, type SavedChipAction } from './SavedChip'
 export { DataGrid, type DataGridProps, type Column } from './DataGrid'
 export { ImageUpload, type ImageUploadProps, type ImageUploadCriterion } from './ImageUpload'
 export { Banner, type BannerProps } from './Banner'

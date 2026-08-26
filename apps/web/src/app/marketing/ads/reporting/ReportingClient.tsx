@@ -37,6 +37,9 @@ import { ExplorerTab } from './ExplorerTab'
 import { HourlyTab } from './HourlyTab'
 import { LibraryTab } from './LibraryTab'
 import { TodayBand } from './TodayBand'
+import { ViewBar } from './ViewBar'
+import { applyKeys } from './views'
+import type { ReportingView } from './views-api'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -88,12 +91,41 @@ export function ReportingClient() {
   const [reloadKey, setReloadKey] = useState(0)
   const [syncing, setSyncing] = useState(false)
 
-  const push = useCallback((next: { tab?: string; market?: string }) => {
+  // GX.8 — which saved view the page is showing. It lives in the URL so the link IS the view.
+  const [activeViewId, setActiveViewId] = useState<string | null>(() => params.get('view'))
+  // Captured once: whether the address bar named a tab when the page opened. A starred view may
+  // claim a page nobody asked to land on, never one somebody linked to.
+  const [openedBare] = useState(() => !params.get('tab') && !params.get('view'))
+
+  const push = useCallback((next: { tab?: string; market?: string; view?: string | null }) => {
     const qs = new URLSearchParams(params.toString())
     if (next.tab) qs.set('tab', next.tab)
     if (next.market) qs.set('market', next.market)
+    if (next.view === null) qs.delete('view')
+    else if (next.view) qs.set('view', next.view)
     router.replace(`${pathname}?${qs}`, { scroll: false })
   }, [params, pathname, router])
+
+  /**
+   * Apply a saved view: put its settings back, move the URL to what it names, and re-mount the
+   * tab so every panel re-reads them.
+   *
+   * The re-mount is load-bearing, not a refresh for its own sake. Section layouts and grid
+   * columns are read once, at mount, from localStorage — writing the keys under a mounted tab
+   * would change the store and leave the screen exactly as it was.
+   */
+  const applyView = useCallback((v: ReportingView) => {
+    applyKeys(v.payload.tab, v.payload.keys)
+    setActiveViewId(v.id)
+    push({ tab: v.payload.tab, market: v.payload.market, view: v.id })
+    setReloadKey((n) => n + 1)
+  }, [push])
+
+  /** Changing tab by hand leaves the view behind — it belongs to the tab it was saved on. */
+  const goTab = useCallback((id: string) => {
+    if (id !== tab) setActiveViewId(null)
+    push({ tab: id, view: id === tab ? undefined : null })
+  }, [push, tab])
 
   /**
    * Refresh re-mounts the tab's data, it does not reload the page.
@@ -143,7 +175,18 @@ export function ReportingClient() {
         ariaLabel="Reporting sections"
         tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
         active={tab}
-        onChange={(id) => push({ tab: id })}
+        onChange={goTab}
+      />
+
+      {/* GX.8 — load, save and share an arrangement of the tab you are on. Directly under the
+          tabs because it belongs to the tab, not to the page. */}
+      <ViewBar
+        tab={tab}
+        market={market}
+        activeId={activeViewId}
+        onApply={applyView}
+        onActiveChange={setActiveViewId}
+        mayAutoApply={openedBare}
       />
 
       {/* R5 — every feed on the first three tabs lands days behind; this one band does not. It

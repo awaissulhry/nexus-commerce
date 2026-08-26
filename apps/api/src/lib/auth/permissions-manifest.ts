@@ -200,6 +200,8 @@ const ENTRIES: Entry[] = [
   // about the account and touches no channel. Still mapped (never PUBLIC), and
   // still scoped to this exact prefix; every other advertising write is unchanged.
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/saved')),
+  // GX.8 — a saved view is the operator's own arrangement of a page they can already read.
+  P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/views')),
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/schedules')),
   // RPT.7 — importing a console export writes only to the import's OWN tables and
   // never touches campaigns, bids or budgets, so it sits with the other reporting

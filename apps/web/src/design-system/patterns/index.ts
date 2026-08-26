@@ -29,3 +29,4 @@ export type {
 } from './workspace-grid/WorkspaceGrid'
 export { SectionLayout, defaultSectionLayout, readSectionLayout, writeSectionLayout } from './SectionLayout'
 export type { SectionLayoutProps, SectionLayoutValue, SectionSpec, SectionWidth } from './SectionLayout'
+export { emitPrefsChanged, onPrefsChanged } from './prefs-bus'

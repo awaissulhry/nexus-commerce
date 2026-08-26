@@ -242,25 +242,6 @@
 .rpt-saved-empty { font-size: 12px; color: rgb(var(--text-tertiary)); }
 .rpt-saved-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 
-.rpt-chip {
-  display: inline-flex; align-items: stretch;
-  border: 1px solid rgb(var(--border-subtle)); border-radius: var(--nds-radius-sm); overflow: hidden;
-}
-.rpt-chip.on { border-color: var(--color-primary); }
-.rpt-chip-main {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 0; background: transparent; cursor: pointer;
-  padding: 4px 9px; font: inherit; font-size: 12.5px; color: rgb(var(--text-primary));
-}
-.rpt-chip.on .rpt-chip-main { color: var(--color-primary); font-weight: 600; }
-.rpt-chip-main .v { font-size: 10.5px; color: rgb(var(--text-tertiary)); font-variant-numeric: tabular-nums; }
-.rpt-chip-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-left: 1px solid rgb(var(--border-subtle));
-  background: transparent; cursor: pointer; padding: 0 7px; color: rgb(var(--text-tertiary));
-}
-.rpt-chip-icon:hover, .rpt-chip-main:hover { background: rgb(var(--surface-sunken)); }
-
 .rpt-saved-err {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--status-danger-strong);
@@ -1292,3 +1273,18 @@
 .rpx-nodes .d { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
 .rpx-nodes .w { font-variant-numeric: tabular-nums; color: rgb(var(--text-secondary)); min-width: 34px; text-align: right; }
 .rpx-nodes .row.is-current .nm { font-weight: 700; }
+
+/* ── GX.8 · saved views ────────────────────────────────────────────────────────
+   The strip reuses .rpt-saved verbatim — it IS the saved-report strip's gesture,
+   and two controls that do the same thing must not look different. The chip
+   itself moved into the DS as SavedChip, which both strips now render, so all
+   that is left here is where the strip sits on the page. */
+.rpx-viewbar { margin-bottom: 12px; }
+
+.rpx-viewsave { display: flex; flex-direction: column; gap: 8px; }
+.rpx-viewsave label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
+}
+.rpx-viewsave p { margin: 0; font-size: 12.5px; line-height: 1.55; color: rgb(var(--text-secondary)); }
+.rpx-viewsave p.mute { color: rgb(var(--text-tertiary)); }

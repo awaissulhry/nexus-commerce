@@ -176,7 +176,7 @@ export function BusinessTab({ market }: { market: string }) {
           selected={plotted}
           onSelectedChange={setPlotted}
           emptyLabel="No weeks in this window."
-          storageKey="rpx-biz-chart"
+          storageKey="rpx-business-chart"
         />
         {partials.length > 0 && (
           <p className="rpx-foot">

@@ -2265,6 +2265,52 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GX.8 — saved views for the Reporting page ────────────────────────────
+  // A view is the tab, the market and this page's own localStorage entries, kept in the
+  // platform's generic SavedView table under surface 'ads-reporting'. Its own prefix rather
+  // than /api/saved-views so it carries the ADS permission — that route is mapped to the
+  // products ones, and an ads operator would not have been able to save what they were reading.
+  fastify.get('/advertising/reporting/views', async (_request, reply) => {
+    const { listReportingViews } = await import('../services/advertising/ads-reporting-views.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await listReportingViews() }
+  })
+
+  fastify.post('/advertising/reporting/views', async (request, reply) => {
+    const body = request.body as { name?: unknown; payload?: unknown; isDefault?: boolean }
+    const svc = await import('../services/advertising/ads-reporting-views.service.js')
+    try {
+      return await svc.createReportingView({ name: body?.name, payload: body?.payload, isDefault: body?.isDefault })
+    } catch (err) {
+      if (err instanceof svc.ViewError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.patch('/advertising/reporting/views/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { name?: unknown; payload?: unknown; isDefault?: boolean }
+    const svc = await import('../services/advertising/ads-reporting-views.service.js')
+    try {
+      return await svc.updateReportingView(id, body ?? {})
+    } catch (err) {
+      if (err instanceof svc.ViewError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
+  fastify.delete('/advertising/reporting/views/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const svc = await import('../services/advertising/ads-reporting-views.service.js')
+    try {
+      await svc.deleteReportingView(id)
+      return { ok: true }
+    } catch (err) {
+      if (err instanceof svc.ViewError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
   // ── RPT.12 — operator-defined metrics ───────────────────────────────────
   // Under the same ads.view prefix rule: a custom metric is a formula over data
   // the caller can already read, and touches nothing on the account.
