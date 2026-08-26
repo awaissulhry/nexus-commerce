@@ -24,5 +24,5 @@
 
 /* Enter New Keywords layout + My List empty */
 .h10-scb-tgt-enter { display: flex; flex-direction: column; gap: 10px; }
-.h10-scb-tgt-mylist { padding: 30px 16px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; line-height: 1.5; }
+.h10-scb-tgt-mylist { padding: 30px 16px; text-align: center; color: var(--nds-text-2); font-size: 12.5px; line-height: 1.5; }
 

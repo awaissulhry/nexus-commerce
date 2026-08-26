@@ -2,6 +2,15 @@
  * ACR.7 — Automation Dock styles. Light-only; self-contained (no cross-page class borrowing).
  * The category colour arrives as --cat per rule row, set from the server's hex so every
  * surface renders the identical swatch.
+ *
+ * Colours are SEMANTIC tokens, not grey-ramp steps. `--nds-grey-500` is #8a93a1 — 3.10:1 on this
+ * dock's own white, which is the icon floor, not the 4.5 text needs; grey-450 is 2.58 and grey-300
+ * is 1.67, under even that. They read as text colours because grey-500 happens to share its hex
+ * with `--nds-text-3`, whose job is icons. So: text takes `--nds-text-2` (5.91) or
+ * `--nds-text-muted` (5.00), and the three icon-only rules — the collapse chevron, the drag grip
+ * and the edit pencil — take `--nds-text-3` (3.10), which clears the 3:1 they actually answer to.
+ * `.adock-notch:disabled` keeps grey-300 on purpose: a disabled control is exempt, and darkening
+ * it would make it read as available.
  */
 .adock {
   width: 352px; flex-shrink: 0; align-self: flex-start;
@@ -11,10 +20,10 @@
 }
 .adock-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
 .adock-head h2 { font-size: 12.5px; font-weight: 700; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.adock-count { font-size: 11px; color: var(--nds-grey-500); }
+.adock-count { font-size: 11px; color: var(--nds-text-2); }
 .adock-collapse {
   margin-left: auto; display: inline-flex; align-self: center;
-  color: var(--nds-grey-450); background: none; border: 0; border-radius: 5px; padding: 3px; cursor: pointer;
+  color: var(--nds-text-3); background: none; border: 0; border-radius: 5px; padding: 3px; cursor: pointer;
 }
 .adock-collapse:hover { background: var(--nds-grey-50); color: #2a5399; }
 
@@ -29,14 +38,14 @@
   writing-mode: vertical-rl; font-size: 10.5px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.08em;
 }
-.adock-rail-count { font-size: 10px; font-weight: 600; color: var(--nds-grey-500); font-variant-numeric: tabular-nums; }
+.adock-rail-count { font-size: 10px; font-weight: 600; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
 @media (max-width: 1100px) {
   .adock--rail { width: 100%; }
   .adock-rail-btn { flex-direction: row; justify-content: flex-start; padding: 8px 12px; }
   .adock-rail-label { writing-mode: horizontal-tb; }
   .adock-rail-count { margin-left: auto; }
 }
-.adock-hint { font-size: 11px; color: var(--nds-grey-500); margin: 5px 0 9px; padding: 0 14px; line-height: 1.45; }
+.adock-hint { font-size: 11px; color: var(--nds-text-2); margin: 5px 0 9px; padding: 0 14px; line-height: 1.45; }
 
 .adock-cats { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 14px 9px; border-bottom: 1px solid var(--nds-grey-75); }
 .adock-cat {
@@ -48,7 +57,7 @@
 .adock-cat.on { background: var(--nds-blue-50); border-color: #c8d8f5; color: #2a5399; }
 
 .adock-err { font-size: 11.5px; color: var(--nds-danger-text); padding: 10px 14px; }
-.adock-loading { font-size: 12px; color: var(--nds-grey-500); padding: 12px 14px; }
+.adock-loading { font-size: 12px; color: var(--nds-text-2); padding: 12px 14px; }
 
 .adock-list { list-style: none; margin: 0; padding: 4px 6px; overflow-y: auto; flex: 1; }
 .adock-rule {
@@ -60,14 +69,14 @@
 }
 .adock-rule:hover { background: var(--nds-grey-25); border-color: var(--nds-grey-150); border-left-color: var(--cat, var(--nds-grey-200)); }
 .adock-rule:active { cursor: grabbing; }
-.adock-grip { color: var(--nds-grey-300); padding-top: 2px; flex-shrink: 0; }
+.adock-grip { color: var(--nds-text-3); padding-top: 2px; flex-shrink: 0; }
 .adock-main { min-width: 0; flex: 1; }
 .adock-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adock-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--cat, var(--nds-grey-200)); flex-shrink: 0; }
 .adock-name { font-size: 12px; font-weight: 550; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.adock-edit { margin-left: auto; color: var(--nds-grey-450); flex-shrink: 0; display: inline-flex; }
+.adock-edit { margin-left: auto; color: var(--nds-text-3); flex-shrink: 0; display: inline-flex; }
 .adock-edit:hover { color: var(--nds-blue-600); }
-.adock-sub { font-size: 10.5px; color: var(--nds-grey-450); margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+.adock-sub { font-size: 10.5px; color: var(--nds-text-muted); margin: 2px 0 0; font-variant-numeric: tabular-nums; }
 
 .adock-scope {
   display: inline-flex; align-items: center; gap: 5px; margin-top: 4px;
