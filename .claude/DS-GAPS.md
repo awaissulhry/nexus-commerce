@@ -162,7 +162,7 @@
 - 🔴 `Stepper`'s new `onSelect` changes a step's AXIS. `.nds-step` is `flex-direction: column`, and a selectable step wraps its badge and label in `.nds-step-hit`, which is `flex-direction: row` — so inside ONE bar a completed (clickable) step reads badge-beside-label and an upcoming (inert) one reads badge-above-label. Measured on /marketing/ads/campaign-builder/quick with the four-step bar converted: step 0 badge y=105 label y=110 (row), step 1 badge y=105 label y=138 (stacked), and the bar grew 47px → 68px. The three builders the `onSelect` note names still cannot adopt it; the conversion is written and reverted, waiting on this. — apps/web/src/design-system/components/Stepper.tsx:50, styles/components.css `.nds-step`
 - `StepperStep.label` is `string`, so a step cannot carry sub-steps. Two of the five builders nest a `.h10-scb-substeps` list inside the active step's label (Guided step 2, Single step 1) and would lose it. — apps/web/src/design-system/components/Stepper.tsx:20
 
-## `DataGrid` — `Column` carries no per-cell `className`, and `td` has no `vertical-align`
+## ✅ RESOLVED — `DataGrid`: `Column` carries no per-cell `className`, and `td` has no `vertical-align`
 *Session 1 · ROUND 2 · 2026-08-26 · found converting ten `<table>`s in `rules-automation/`*
 
 Two things surfaced together while converting this half's tables, both about the cell.
@@ -191,6 +191,16 @@ it sets, even though app CSS loads later. Across these ten tables **96 declarati
 separate hand-rolled uppercase header treatments. That is the alignment working, but nothing in
 the DataGrid docblock says it will happen, and a stylesheet left un-swept afterwards reads as
 though those rules are still live.
+
+**Resolved 2026-08-26 in `3e7126ba0`** (nexus-commerce-95). `Column.className` lands on the `<td>`,
+and `.nds-grid tbody td` sets `vertical-align: top`. Both workarounds removed in `40d534809`.
+
+Worth keeping the second half of the story: the `:nth-child()` stand-in was not merely uglier, it
+was **wrong**. Those cells name a COLUMN and `nth-child` counts a POSITION, so on a grid with
+column customisation — which both of these are — hiding or reordering one column would have
+painted the rules onto the wrong cells. Silent, and only on a customised view. When a DS gap
+forces a positional workaround onto something that is logically named, that is worth treating as
+a defect from the start rather than a stopgap.
 - ✅ RESOLVED (DS session) — 🔴 my own `Stepper` `onSelect` regression. `.nds-step-hit` was `display: inline-flex`, which defaults to `row`, while `.nds-step` is `column` — so a selectable step read badge-beside-label and an inert one badge-above-label, in the same bar, and the bar grew 47px → 68px. I wrote `gap: inherit` assuming it carried the layout; **`flex-direction` is not inherited and nothing carries it**. Now written out explicitly and verified: all three step states measure badge y=32, label y=68, gap 7, centre-aligned, bar 51.6px. The conversion that was written and reverted can go back in.
 - ✅ RESOLVED (DS session) — `StepperStep.label` is `ReactNode`, so a step can nest a sub-step list.
 - `Toggle` has no `label` prop, unlike `Checkbox` and `Radio` which both take one. Four switches in the shared shell (`.h10-cd-switch` x3, `.h10-spw-sw`) are checkboxes styled as switches — visually a track+knob, but they announce as "checkbox", which `Toggle`'s `role="switch"` would fix. They cannot adopt it: each is wrapped in a `<label>` that makes the caption a click target, and a `<label>` cannot label a `<button>`. Converting trades correct switch semantics for a lost click target; a `label` slot on Toggle would give both — apps/web/src/app/marketing/ads/_shared/PlacementBidMultiplier.tsx:55
