@@ -118,7 +118,14 @@ const WINDOWS = [
     same: 'salesSameSku30dCents', sameOrders: 'ordersSameSku30d', sameUnits: 'unitsSameSku30d' },
 ] as const
 
-function coreMetrics(t: string, opts: { units?: boolean } = {}): Metric[] {
+/**
+ * Exported so the drill-down hierarchy can reuse the SAME expressions rather than declare a
+ * second ACOS. It is already parameterised by table alias, which is the whole reason it can be
+ * shared: any query that aliases the fact table `p` gets byte-identical arithmetic to the report
+ * grid, the totals row and the export. One metric registry is an engine invariant — a tree whose
+ * ACOS disagreed with the report's would be two definitions wearing one name.
+ */
+export function coreMetrics(t: string, opts: { units?: boolean } = {}): Metric[] {
   const cost = `SUM(${t}."costMicros")::numeric / 1000000.0`
   const sales = `SUM(COALESCE(${t}."sales7dCents", 0))::numeric / 100.0`
   const clicks = `SUM(${t}."clicks")::numeric`
@@ -380,6 +387,8 @@ const ENGAGEMENT_BAND: Metric[] = (BRAND_BAND_KEYS).map(([id, label, key]) => ({
   sql: `AVG(${bmJson(key)})`,
   help: 'Already a percentage — Amazon reports engagement as a bounded range, never a single figure.',
 }))
+
+export type { Metric }
 
 export interface ReportSpec {
   id: string

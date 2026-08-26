@@ -2095,6 +2095,33 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  // GX.2 — one level of the drill-down tree. Children of a node, over the caller's filters.
+  // Lazy by design: a tree that fetched everything would be the search-terms report's 12,443 rows
+  // in a browser, and expanding is a query rather than a slice.
+  fastify.get('/advertising/reporting/hierarchy', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { hierarchyChildren, HierarchyError } = await import('../services/advertising/ads-hierarchy.service.js')
+    const level = (q.level ?? 'root') as 'root' | 'market' | 'portfolio' | 'campaign'
+    if (!['root', 'market', 'portfolio', 'campaign'].includes(level)) {
+      reply.code(400); return { error: 'level must be root | market | portfolio | campaign' }
+    }
+    const to = q.to ?? new Date().toISOString().slice(0, 10)
+    const from = q.from ?? (() => { const d = new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0, 10) })()
+    try {
+      reply.header('Cache-Control', 'private, max-age=60')
+      return await hierarchyChildren({
+        level,
+        parentId: q.parentId ?? null,
+        from, to,
+        decompose: q.decompose === 'target' ? 'target' : 'product',
+        marketplaces: q.marketplaces ? q.marketplaces.split(',').map((m) => m.trim()).filter(Boolean) : [],
+      })
+    } catch (err) {
+      if (err instanceof HierarchyError) { reply.code(err.status); return { error: err.message } }
+      throw err
+    }
+  })
+
   // RPX.3 — the Market share tab: our slice of the whole market from Search Query Performance.
   fastify.get('/advertising/reporting/market-share', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
