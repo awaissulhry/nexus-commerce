@@ -1021,7 +1021,6 @@
 .rpx-bmk-head .scale i.mid { font-weight: 700; color: rgb(var(--text-secondary)); }
 
 /* ── new-to-brand + engagement band ───────────────────────────────────────── */
-.rpx-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 14px; }
 .rpx-ntb, .rpx-band { display: flex; flex-direction: column; gap: 3px; }
 .rpx-band { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgb(var(--border-subtle)); }
 .rpx-ntb .lbl, .rpx-band .lbl, .rpx-waste .lbl {
@@ -1155,7 +1154,6 @@
 .rpx-empty { padding: 28px 24px; text-align: center; color: rgb(var(--text-secondary)); font-size: 13px; line-height: 1.6; }
 
 @media (max-width: 1100px) {
-  .rpx-two { grid-template-columns: minmax(0, 1fr); }
 }
 
 .rpt-nototals {
@@ -1200,3 +1198,97 @@
 .rpx-prov-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .rpx-prov-actions + .rpx-prov-fresh { margin-left: 0; }
 .rpx-sectionctl { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── GX.7 · optional sections ──────────────────────────────────────────────────
+   Five panels that ship switched off, plus the two shared list shapes they use.
+   Every bar in here is drawn against ONE scale held by the panel, never rescaled
+   per row: a bar whose length changes meaning between rows is a bar that lies. */
+
+/* A labelled row with a bar and figures — the shape shared by coverage, stream
+   health and pace, so three panels cannot drift into three list styles. */
+.rpx-rows { display: flex; flex-direction: column; font-size: 13px; }
+.rpx-rows .row {
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+}
+.rpx-rows .row:last-child { border-bottom: none; }
+.rpx-rows .wk { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rpx-rows .c { font-size: 12px; color: rgb(var(--text-secondary)); }
+.rpx-rows .n { text-align: right; font-variant-numeric: tabular-nums; }
+.rpx-rows .n.s { color: rgb(var(--text-tertiary)); min-width: 44px; }
+.rpx-rows .bar {
+  height: 8px; border-radius: var(--nds-radius-pill);
+  background: rgb(var(--surface-sunken)); overflow: hidden;
+}
+.rpx-rows .bar i { display: block; height: 8px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
+/* A thin week, or an idle market: recessive, and never hidden — the row is the answer. */
+.rpx-rows .row.is-thin .wk, .rpx-rows .row.is-thin .n { color: rgb(var(--text-secondary)); }
+.rpx-rows .row.is-thin .bar i { background: rgb(var(--border-strong)); }
+
+/* Pace — three bars, one scale. The whole-day bar is drawn hollow because it is
+   not something today can be compared against yet. */
+.rpx-pace { display: flex; flex-direction: column; font-size: 13px; }
+.rpx-pace .row {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr) auto; gap: 12px;
+  align-items: center; padding: 9px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+}
+.rpx-pace .row:last-child { border-bottom: none; }
+.rpx-pace .lbl { color: rgb(var(--text-secondary)); }
+.rpx-pace .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rpx-pace .bar {
+  height: 10px; border-radius: var(--nds-radius-pill);
+  background: rgb(var(--surface-sunken)); overflow: hidden;
+}
+.rpx-pace .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: rgb(var(--border-strong)); }
+.rpx-pace .row.is-now .lbl { color: rgb(var(--text-primary)); font-weight: 600; }
+.rpx-pace .row.is-now .n { font-weight: 700; }
+.rpx-pace .row.is-now .bar i { background: var(--color-primary); }
+.rpx-pace .row.is-ghost .lbl, .rpx-pace .row.is-ghost .n { color: rgb(var(--text-tertiary)); }
+.rpx-pace .row.is-ghost .bar i { background: var(--color-primary-soft); }
+
+/* Sales advertising did not claim — two segments of one whole, so one hue at two
+   intensities rather than two categorical hues, with a 2px gap between them so a
+   boundary is never read as a colour change inside one fill. */
+.rpx-organic { display: flex; flex-direction: column; font-size: 13px; }
+.rpx-organic .row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px;
+  align-items: center; padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+}
+.rpx-organic .row:last-child { border-bottom: none; }
+.rpx-organic .wk { font-variant-numeric: tabular-nums; }
+.rpx-organic .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rpx-organic .n.s { color: rgb(var(--text-tertiary)); font-weight: 400; min-width: 40px; }
+.rpx-organic .bar { display: flex; gap: 2px; height: 10px; }
+.rpx-organic .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); }
+.rpx-organic .bar i.ad { background: var(--color-primary); }
+.rpx-organic .bar i.or { background: var(--color-primary-soft); }
+.rpx-organic .row.is-partial { color: rgb(var(--text-secondary)); }
+.rpx-organic .tag {
+  margin-left: 8px; font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: var(--nds-radius-pill); background: rgb(var(--surface-sunken)); color: rgb(var(--text-tertiary));
+}
+/* The week where the two feeds disagree: the sentence replaces the bar rather
+   than a clamped-at-zero segment pretending the subtraction worked. */
+.rpx-organic .row.is-over .over {
+  font-size: 12px; line-height: 1.5; color: var(--nds-warning-text);
+}
+.rpx-key { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
+.rpx-key i { display: inline-block; width: 18px; height: 8px; border-radius: var(--nds-radius-pill); }
+.rpx-key i.ad { background: var(--color-primary); }
+.rpx-key i.or { background: var(--color-primary-soft); }
+
+/* Category nodes Amazon holds. */
+.rpx-nodes { display: flex; flex-direction: column; font-size: 13px; }
+.rpx-nodes .row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
+}
+.rpx-nodes .row:last-child { border-bottom: none; }
+.rpx-nodes .nm { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rpx-nodes .nm i {
+  font-style: normal; font-size: 11px; color: rgb(var(--text-tertiary));
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rpx-nodes .d { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+.rpx-nodes .w { font-variant-numeric: tabular-nums; color: rgb(var(--text-secondary)); min-width: 34px; text-align: right; }
+.rpx-nodes .row.is-current .nm { font-weight: 700; }

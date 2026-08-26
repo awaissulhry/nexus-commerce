@@ -19,13 +19,29 @@
  *   server marks those weeks `thin`, the line breaks across them rather than averaging them in,
  *   and the row count sits under the chart at all times.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card } from '@/design-system/components/Card'
 import { Pill } from '@/design-system/primitives/Pill'
 import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
 import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
 import { fetchMarketShare, fmtCount, fmtShare, type MarketShare, type ShareQuery } from './strategy-api'
 import { Caveats, ProvenanceStrip, TabState } from './StrategyBits'
+import { SectionLayout, type SectionSpec } from '@/design-system/patterns/SectionLayout'
+import { useSections } from './useSections'
+
+/**
+ * GX.7 — the panels. `funnel` is locked: the four stages on one scale are what this tab IS, and
+ * the two panels beneath are both read against it. `coverage` ships OFF — the row counts already
+ * sit under the chart as a strip, and this is the same counts laid out to be compared week to
+ * week, which matters only when a share moves and you need to know whether the feed moved with it.
+ */
+const SHARE_SECTIONS: readonly SectionSpec[] = [
+  { id: 'funnel', label: 'Where our share goes', locked: true, defaultWidth: 'full' },
+  { id: 'trend', label: 'Share over time', defaultWidth: 'full' },
+  { id: 'queries', label: 'The queries the market is searching', defaultWidth: 'full' },
+  { id: 'coverage', label: 'What Amazon delivered each week', defaultWidth: 'half', defaultHidden: true },
+]
+const SECTION_KEY = 'rpx-share-sections'
 
 const CHART_METRICS: ChartMetric[] = [
   { key: 'impressionShare', label: 'Impression share', unit: 'pct' },
@@ -50,6 +66,7 @@ export function MarketShareTab({ market }: { market: string }) {
    * series is still allowed, and the chart's own caption says each is drawn to its own scale.
    */
   const [plotted, setPlotted] = useState<string[]>(['impressionShare'])
+  const sections = useSections(SHARE_SECTIONS, SECTION_KEY)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -141,6 +158,118 @@ export function MarketShareTab({ market }: { market: string }) {
 
   const held = data.weeksHeld
   const thin = data.coverage.thinWeeks.length
+  // One scale across the window, so a short bar means a short week and not a rescaled axis.
+  const coverageMax = data.series.reduce((m, w) => Math.max(m, w.rows), 0)
+
+  const nodes: Record<string, ReactNode> = {
+    funnel: (
+      <Card header="Where our share goes" description={`Amazon reports the whole market's count and ours for the same query. Week of ${data.week}.`}>
+        <div className="rpx-share-funnel">
+          {data.funnel.map((s) => (
+            <div key={s.id} className={`rpx-share-stage${s.share != null && s.share === 0 ? ' is-zero' : ''}`}>
+              <div className="lbl">{s.shareLabel}</div>
+              <div className="val">{fmtShare(s.share)}</div>
+              <div className="sub">
+                {s.share == null
+                  ? `the market recorded no ${s.label} — no denominator`
+                  : `${fmtCount(s.ours)} of ${fmtCount(s.market)}`}
+              </div>
+              <div className="bar">
+                {/* Scaled against the LARGEST share in this funnel, so the shape of the drop
+                    is readable at figures that all live under two per cent. */}
+                <span style={{ width: `${scaleBar(s.share, data.funnel)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <FunnelRead data={data} />
+      </Card>
+    ),
+
+    trend: (
+      <Card
+        header="Share over time"
+        description={`${data.series.length} weeks. The strip beneath is how many query rows Amazon delivered that week — a share computed over ${data.coverage.thinBelow} rows is not comparable to one computed over ${fmtCount(data.coverage.medianRows)}.`}
+        headerAction={thin ? <Pill tone="warning">{thin} thin {thin === 1 ? 'week' : 'weeks'} excluded</Pill> : undefined}
+      >
+        <MetricChart
+          title=""
+          subtitle={`By week · ${data.firstWeek ?? '—'} → ${data.lastWeek ?? '—'}`}
+          data={chartData}
+          metrics={CHART_METRICS}
+          selected={plotted}
+          onSelectedChange={setPlotted}
+          emptyLabel="No weeks held for this market."
+          storageKey="rpx-share-chart"
+        />
+        <p className="rpx-foot">
+          Each series ticked here is drawn to its own scale, so two of them cannot be compared
+          by height — the funnel above compares the four stages on one scale, with the
+          market&rsquo;s count beside ours.
+        </p>
+        <div className="rpx-coverage">
+          <span className="k">Rows delivered</span>
+          {data.series.map((w) => (
+            <span key={w.week} className={`c${w.thin ? ' is-thin' : ''}`} title={`${w.week}: ${fmtCount(w.rows)} query rows`}>
+              <b>{fmtCount(w.rows)}</b>
+              <i>{w.week.slice(5)}</i>
+            </span>
+          ))}
+        </div>
+      </Card>
+    ),
+
+    queries: (
+      <Card
+        header="The queries the market is searching"
+        description="Ordered by the market's impressions, not ours — the queries worth holding share on, whether or not we hold any today."
+      >
+        <AdsDataGrid<ShareQuery>
+          rows={data.queries}
+          rowId={(r) => r.query}
+          noun="Query"
+          firstColLabel="Search query"
+          renderFirst={(r) => <span className="rpx-q">{r.query}</span>}
+          firstSortValue={(r) => r.query}
+          columns={columns}
+          selectable={false}
+          showTotal={false}
+          searchable
+          searchPlaceholder="Filter queries…"
+          storageKey="rpx-share-queries"
+          emptyLabel="No queries for this week."
+        />
+      </Card>
+    ),
+
+    /**
+     * GX.7 — ships OFF. How many query rows Amazon actually delivered each week, against the
+     * window's median.
+     *
+     * A share is a ratio, so it stays plausible while its denominator collapses: a week built
+     * from a tenth of the usual rows reports a share with the same number of decimal places as a
+     * complete one. This is the panel that says which weeks the chart above is entitled to.
+     */
+    coverage: data.series.length === 0 ? null : (
+      <Card
+        header="What Amazon delivered each week"
+        description={`Query rows per week against the window's median of ${fmtCount(data.coverage.medianRows)}. A week under ${fmtCount(data.coverage.thinBelow)} rows is marked thin and left out of the comparisons.`}
+      >
+        <div className="rpx-rows">
+          {[...data.series].reverse().map((w) => (
+            <div key={w.week} className={`row${w.thin ? ' is-thin' : ''}`}>
+              <span className="wk">{w.week}</span>
+              <span className="bar" aria-hidden>
+                <i style={{ width: `${coverageMax > 0 ? (w.rows / coverageMax) * 100 : 0}%` }} />
+              </span>
+              <span className="n">{fmtCount(w.rows)}</span>
+              <span className="c">{w.thin ? <Pill tone="warning">thin</Pill> : null}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    ),
+  }
 
   return (
     <div className="rpx">
@@ -149,6 +278,7 @@ export function MarketShareTab({ market }: { market: string }) {
         grain="query × ASIN × week"
         held={`${held} ${held === 1 ? 'week' : 'weeks'} · ${data.firstWeek ?? '—'} → ${data.lastWeek ?? '—'}`}
         markets={freshness}
+        actions={data.week ? sections.controls : null}
         extra={market === 'all' ? (
           <><span className="k">Market</span><span className="v">{chosen} — a share is per market; four pooled would invent one</span></>
         ) : null}
@@ -157,81 +287,9 @@ export function MarketShareTab({ market }: { market: string }) {
       {!data.week ? (
         <Card><div className="rpx-empty"><b>No Search Query Performance held for {chosen}.</b> Amazon publishes this feed weekly, roughly ten days in arrears, for queries where our ASINs appeared.</div></Card>
       ) : (
-        <>
-          <Card header="Where our share goes" description={`Amazon reports the whole market's count and ours for the same query. Week of ${data.week}.`}>
-            <div className="rpx-share-funnel">
-              {data.funnel.map((s) => (
-                <div key={s.id} className={`rpx-share-stage${s.share != null && s.share === 0 ? ' is-zero' : ''}`}>
-                  <div className="lbl">{s.shareLabel}</div>
-                  <div className="val">{fmtShare(s.share)}</div>
-                  <div className="sub">
-                    {s.share == null
-                      ? `the market recorded no ${s.label} — no denominator`
-                      : `${fmtCount(s.ours)} of ${fmtCount(s.market)}`}
-                  </div>
-                  <div className="bar">
-                    {/* Scaled against the LARGEST share in this funnel, so the shape of the drop
-                        is readable at figures that all live under two per cent. */}
-                    <span style={{ width: `${scaleBar(s.share, data.funnel)}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <FunnelRead data={data} />
-          </Card>
-
-          <Card
-            header="Share over time"
-            description={`${data.series.length} weeks. The strip beneath is how many query rows Amazon delivered that week — a share computed over ${data.coverage.thinBelow} rows is not comparable to one computed over ${fmtCount(data.coverage.medianRows)}.`}
-            headerAction={thin ? <Pill tone="warning">{thin} thin {thin === 1 ? 'week' : 'weeks'} excluded</Pill> : undefined}
-          >
-            <MetricChart
-              title=""
-              subtitle={`By week · ${data.firstWeek ?? '—'} → ${data.lastWeek ?? '—'}`}
-              data={chartData}
-              metrics={CHART_METRICS}
-              selected={plotted}
-              onSelectedChange={setPlotted}
-              emptyLabel="No weeks held for this market."
-              storageKey="rpx-share-chart"
-            />
-            <p className="rpx-foot">
-              Each series ticked here is drawn to its own scale, so two of them cannot be compared
-              by height — the funnel above compares the four stages on one scale, with the
-              market&rsquo;s count beside ours.
-            </p>
-            <div className="rpx-coverage">
-              <span className="k">Rows delivered</span>
-              {data.series.map((w) => (
-                <span key={w.week} className={`c${w.thin ? ' is-thin' : ''}`} title={`${w.week}: ${fmtCount(w.rows)} query rows`}>
-                  <b>{fmtCount(w.rows)}</b>
-                  <i>{w.week.slice(5)}</i>
-                </span>
-              ))}
-            </div>
-          </Card>
-
-          <Card
-            header="The queries the market is searching"
-            description="Ordered by the market's impressions, not ours — the queries worth holding share on, whether or not we hold any today."
-          >
-            <AdsDataGrid<ShareQuery>
-              rows={data.queries}
-              rowId={(r) => r.query}
-              noun="Query"
-              firstColLabel="Search query"
-              renderFirst={(r) => <span className="rpx-q">{r.query}</span>}
-              firstSortValue={(r) => r.query}
-              columns={columns}
-              selectable={false}
-              showTotal={false}
-              searchable
-              searchPlaceholder="Filter queries…"
-              storageKey="rpx-share-queries"
-              emptyLabel="No queries for this week."
-            />
-          </Card>
-        </>
+        <SectionLayout sections={SHARE_SECTIONS} storageKey={SECTION_KEY} editing={sections.arranging}>
+          {nodes}
+        </SectionLayout>
       )}
 
       <Caveats items={data.caveats} />

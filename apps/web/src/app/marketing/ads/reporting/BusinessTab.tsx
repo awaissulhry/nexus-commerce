@@ -17,13 +17,15 @@
  * One market at a time, because a TACoS blended across four markets hides exactly the market
  * that moved.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card } from '@/design-system/components/Card'
 import { Pill } from '@/design-system/primitives/Pill'
 import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
+import { SectionLayout, type SectionSpec } from '@/design-system/patterns/SectionLayout'
 import { fetchBusinessContext, type BusinessContext } from './business-api'
 import { fmtCount, fmtMoney, fmtShare } from './strategy-api'
 import { BlockedNote, Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
+import { useSections } from './useSections'
 
 /** Amazon's own names, so a reader is not left to expand SP/SB/SD themselves. */
 const AD_PRODUCT_NAME: Record<string, string> = {
@@ -44,12 +46,31 @@ const CHART_METRICS: ChartMetric[] = [
 /** The window the tab opens on. Long enough for a trend, short enough to still be this quarter. */
 const WINDOW_DAYS = 72
 
+/**
+ * GX.7 — the panels, and which of them the tab opens with.
+ *
+ * `stats` is locked: the four figures every other panel is read against. `organic` ships OFF —
+ * it is the same two feeds subtracted, so it adds no measurement, and it is a question ("what is
+ * the business doing without advertising?") that matters some weeks and never others.
+ */
+const BUSINESS_SECTIONS: readonly SectionSpec[] = [
+  { id: 'stats', label: 'Spend, sales and TACoS', locked: true, defaultWidth: 'full' },
+  { id: 'tacos', label: 'Total advertising cost of sale', defaultWidth: 'full' },
+  { id: 'weeks', label: 'Week by week', defaultWidth: 'full' },
+  { id: 'mix', label: 'Where the spend goes by ad type', defaultWidth: 'full' },
+  { id: 'waste', label: 'Wasted spend', defaultWidth: 'half' },
+  { id: 'markets', label: 'By market', defaultWidth: 'half' },
+  { id: 'organic', label: 'Sales advertising did not claim', defaultWidth: 'half', defaultHidden: true },
+]
+const SECTION_KEY = 'rpx-business-sections'
+
 export function BusinessTab({ market }: { market: string }) {
   const [data, setData] = useState<BusinessContext | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
   const [plotted, setPlotted] = useState<string[]>(['tacos'])
+  const sections = useSections(BUSINESS_SECTIONS, SECTION_KEY)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -101,24 +122,19 @@ export function BusinessTab({ market }: { market: string }) {
     return `${now > before ? '↗' : '↘'} ${(Math.abs(now / before - 1) * 100).toFixed(1)}%`
   }
 
-  return (
-    <div className="rpx">
-      <ProvenanceStrip
-        source="Ads daily performance × account sales"
-        grain="day, rolled to ISO weeks"
-        held={`${data.window.from} → ${data.window.to}`}
-        markets={[]}
-        extra={(
-          <>
-            <span className="k">Complete through</span>
-            <span className="v">{data.completeThrough ?? '—'}</span>
-            <span className="sep" aria-hidden />
-            <span className="k">Market</span>
-            <span className="v">{data.marketplaces.length ? data.marketplaces.join(', ') : 'all'}</span>
-          </>
-        )}
-      />
+  // The optional organic panel. `over` marks a week where advertising claimed more than the
+  // account recorded — real, and reported rather than clamped. Newest week first, like the table.
+  const organic = [...data.series].reverse().map((w) => ({
+    ...w,
+    rest: w.totalSales - w.adSales,
+    over: w.adSales > w.totalSales,
+  }))
+  // One scale across every week, so a bar's length means the same thing in each row. Built from
+  // total sales, not from the parts, so the two segments always fill the same span together.
+  const organicMax = organic.reduce((m, w) => (w.over ? m : Math.max(m, w.totalSales)), 0)
 
+  const nodes: Record<string, ReactNode> = {
+    stats: (
       <div className="rpx-stats">
         <StatCard
           label="Ad spend"
@@ -144,7 +160,9 @@ export function BusinessTab({ market }: { market: string }) {
             : <>Spend ÷ every euro the account took</>}
         />
       </div>
+    ),
 
+    tacos: (
       <Card
         header="Total advertising cost of sale"
         description="Ad spend as a share of every euro the account took, not just the euros advertising claims. One point per ISO week."
@@ -168,7 +186,9 @@ export function BusinessTab({ market }: { market: string }) {
           </p>
         )}
       </Card>
+    ),
 
+    weeks: (
       <Card
         header="Week by week"
         description="The same four figures the headline is built from. Nothing here is a different definition of TACoS — it is the same expression over a narrower window."
@@ -190,7 +210,9 @@ export function BusinessTab({ market }: { market: string }) {
           ))}
         </div>
       </Card>
+    ),
 
+    mix: (
       <Card
         header="Where the spend goes by ad type"
         description="Every campaign on the account, whether or not it ran in this window."
@@ -221,51 +243,122 @@ export function BusinessTab({ market }: { market: string }) {
           </BlockedNote>
         )}
       </Card>
+    ),
 
-      <div className="rpx-two">
-        <Card header="Wasted spend" description={`Clicks that produced no attributed sales, judged only to ${data.wasted.maturedTo}.`}>
-          <div className="rpx-waste">
-            <div className="big">{fmtMoney(data.wasted.amount)}</div>
-            <div className="sub">
-              {fmtCount(data.wasted.terms)} search terms, {fmtShare(data.wasted.pctOfSpend, 1)} of the spend examined.
-              A term must reach {data.wasted.minClicks} clicks before zero sales counts as waste rather than sampling.
-            </div>
+    waste: (
+      <Card header="Wasted spend" description={`Clicks that produced no attributed sales, judged only to ${data.wasted.maturedTo}.`}>
+        <div className="rpx-waste">
+          <div className="big">{fmtMoney(data.wasted.amount)}</div>
+          <div className="sub">
+            {fmtCount(data.wasted.terms)} search terms, {fmtShare(data.wasted.pctOfSpend, 1)} of the spend examined.
+            A term must reach {data.wasted.minClicks} clicks before zero sales counts as waste rather than sampling.
           </div>
-          {data.wasted.top.length > 0 && (
-            <div className="rpx-wastelist">
-              {data.wasted.top.slice(0, 6).map((w) => (
-                <div key={`${w.marketplace}-${w.query}`} className="r">
-                  <span className="q">{w.query}</span>
-                  <span className="m">{w.marketplace}</span>
-                  <span className="c">{fmtCount(w.clicks)} clicks</span>
-                  <span className="s">{fmtMoney(w.spend)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <BlockedNote title="Not a margin figure" tone="warn">
-            This is spend that produced no attributed sales, not spend below break-even. A
-            margin-based number needs cost of goods on every product, and the caveat below counts
-            how far that has got — the figure is built from the count, never asserted.
-          </BlockedNote>
-        </Card>
-
-        <Card header="By market" description="Each market on its own, because a blended TACoS hides the one that moved.">
-          <div className="rpx-mktrows">
-            <div className="hd"><span>Market</span><span className="n">Spend</span><span className="n">Ad sales</span><span className="n">Total sales</span><span className="n">ACOS</span><span className="n">TACoS</span></div>
-            {data.byMarket.map((m) => (
-              <div key={m.marketplace} className="row">
-                <span>{m.marketplace}</span>
-                <span className="n">{fmtMoney(m.adSpend)}</span>
-                <span className="n">{fmtMoney(m.adSales)}</span>
-                <span className="n">{fmtMoney(m.totalSales)}</span>
-                <span className="n">{m.acos == null ? '—' : fmtShare(m.acos, 1)}</span>
-                <span className="n b">{m.tacos == null ? '—' : fmtShare(m.tacos, 1)}</span>
+        </div>
+        {data.wasted.top.length > 0 && (
+          <div className="rpx-wastelist">
+            {data.wasted.top.slice(0, 6).map((w) => (
+              <div key={`${w.marketplace}-${w.query}`} className="r">
+                <span className="q">{w.query}</span>
+                <span className="m">{w.marketplace}</span>
+                <span className="c">{fmtCount(w.clicks)} clicks</span>
+                <span className="s">{fmtMoney(w.spend)}</span>
               </div>
             ))}
           </div>
-        </Card>
-      </div>
+        )}
+        <BlockedNote title="Not a margin figure" tone="warn">
+          This is spend that produced no attributed sales, not spend below break-even. A
+          margin-based number needs cost of goods on every product, and the caveat below counts
+          how far that has got — the figure is built from the count, never asserted.
+        </BlockedNote>
+      </Card>
+    ),
+
+    markets: (
+      <Card header="By market" description="Each market on its own, because a blended TACoS hides the one that moved.">
+        <div className="rpx-mktrows">
+          <div className="hd"><span>Market</span><span className="n">Spend</span><span className="n">Ad sales</span><span className="n">Total sales</span><span className="n">ACOS</span><span className="n">TACoS</span></div>
+          {data.byMarket.map((m) => (
+            <div key={m.marketplace} className="row">
+              <span>{m.marketplace}</span>
+              <span className="n">{fmtMoney(m.adSpend)}</span>
+              <span className="n">{fmtMoney(m.adSales)}</span>
+              <span className="n">{fmtMoney(m.totalSales)}</span>
+              <span className="n">{m.acos == null ? '—' : fmtShare(m.acos, 1)}</span>
+              <span className="n b">{m.tacos == null ? '—' : fmtShare(m.tacos, 1)}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    ),
+
+    /**
+     * GX.7 — ships OFF. The two feeds subtracted, week by week, on one shared scale.
+     *
+     * 🔴 It is a SUBTRACTION between two feeds that count differently, not a measured figure, and
+     * the code refuses to draw it as one. Ad-attributed sales carry Amazon's attribution window,
+     * so a sale advertising claims can land in a week the order did not — which makes the
+     * remainder negative. A negative organic figure is not a small rounding artefact to clamp at
+     * zero; it is the week saying the two feeds disagree, and the row says exactly that instead.
+     */
+    organic: organic.length === 0 ? null : (
+      <Card
+        header="Sales advertising did not claim"
+        description="Every euro the account took, split into what advertising claimed and what it did not. One scale across all weeks, so the bars are comparable."
+      >
+        <div className="rpx-organic">
+          {organic.map((w) => (
+            <div key={w.weekStart} className={`row${w.partial ? ' is-partial' : ''}${w.over ? ' is-over' : ''}`}>
+              <span className="wk">{w.weekStart}{w.partial && <span className="tag">partial</span>}</span>
+              {w.over ? (
+                <span className="over">
+                  advertising claimed {fmtMoney(w.adSales)} against {fmtMoney(w.totalSales)} recorded —
+                  attribution reaches outside this week
+                </span>
+              ) : (
+                <span className="bar" aria-hidden>
+                  <i className="ad" style={{ width: `${organicMax > 0 ? (w.adSales / organicMax) * 100 : 0}%` }} />
+                  <i className="or" style={{ width: `${organicMax > 0 ? (w.rest / organicMax) * 100 : 0}%` }} />
+                </span>
+              )}
+              <span className="n">{w.over ? '—' : fmtMoney(w.rest)}</span>
+              <span className="n s">{w.over || w.totalSales === 0 ? '—' : fmtShare(w.rest / w.totalSales, 0)}</span>
+            </div>
+          ))}
+        </div>
+        <p className="rpx-foot">
+          <span className="rpx-key"><i className="ad" /> claimed by advertising</span>
+          <span className="rpx-key"><i className="or" /> the rest</span>
+          {' '}The rest is not &ldquo;organic&rdquo; in Amazon&rsquo;s sense — it is every euro no ad
+          claimed, which includes repeat buyers, subscriptions and sales advertising influenced
+          outside its attribution window.
+        </p>
+      </Card>
+    ),
+  }
+
+  return (
+    <div className="rpx">
+      <ProvenanceStrip
+        source="Ads daily performance × account sales"
+        grain="day, rolled to ISO weeks"
+        held={`${data.window.from} → ${data.window.to}`}
+        markets={[]}
+        actions={sections.controls}
+        extra={(
+          <>
+            <span className="k">Complete through</span>
+            <span className="v">{data.completeThrough ?? '—'}</span>
+            <span className="sep" aria-hidden />
+            <span className="k">Market</span>
+            <span className="v">{data.marketplaces.length ? data.marketplaces.join(', ') : 'all'}</span>
+          </>
+        )}
+      />
+
+      <SectionLayout sections={BUSINESS_SECTIONS} storageKey={SECTION_KEY} editing={sections.arranging}>
+        {nodes}
+      </SectionLayout>
 
       <Caveats items={data.caveats} />
     </div>

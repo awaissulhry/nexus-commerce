@@ -47,6 +47,14 @@ export interface SectionSpec {
   locked?: boolean
   /** Where it sits before the operator has an opinion. */
   defaultWidth?: SectionWidth
+  /**
+   * GX.7 — ships switched OFF, and is found in the Sections dialog rather than chosen for you.
+   *
+   * For panels that are genuinely useful to some operators and noise to others. It is not a
+   * place to put half-finished work: a hidden section still has to be correct the first time
+   * someone turns it on, and nobody will be watching when they do.
+   */
+  defaultHidden?: boolean
 }
 
 export interface SectionLayoutValue {
@@ -70,7 +78,7 @@ export interface SectionLayoutProps {
 /** The default layout for a set of sections — everything visible, in declared order. */
 export function defaultSectionLayout(sections: readonly SectionSpec[]): SectionLayoutValue {
   return {
-    order: sections.map((s) => s.id),
+    order: sections.filter((s) => !s.defaultHidden).map((s) => s.id),
     widths: Object.fromEntries(sections.map((s) => [s.id, s.defaultWidth ?? 'full'])),
   }
 }
@@ -94,8 +102,12 @@ export function readSectionLayout(storageKey: string, sections: readonly Section
 
   const known = new Set(sections.map((s) => s.id))
   const kept = stored.order.filter((id) => known.has(id))
-  // A section the operator has never seen cannot have been hidden by them.
-  const added = sections.filter((s) => !stored!.order!.includes(s.id)).map((s) => s.id)
+  // A section the operator has never seen cannot have been hidden by them — EXCEPT one that ships
+  // hidden, which is absent from a saved layout for exactly the reason it is absent from a fresh
+  // one. Turning those on unasked would defeat the point of shipping them off.
+  const added = sections
+    .filter((s) => !s.defaultHidden && !stored!.order!.includes(s.id))
+    .map((s) => s.id)
   const locked = sections.filter((s) => s.locked && !kept.includes(s.id)).map((s) => s.id)
 
   return {

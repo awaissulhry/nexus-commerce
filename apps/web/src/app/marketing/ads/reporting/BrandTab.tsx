@@ -32,10 +32,9 @@ import {
   type BrandBenchmark, type BrandStrategy,
 } from './strategy-api'
 import { BlockedNote, Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
-import { SectionControls } from './SectionControls'
+import { useSections } from './useSections'
 import {
-  SectionLayout, defaultSectionLayout, readSectionLayout,
-  type SectionLayoutValue, type SectionSpec,
+  SectionLayout, type SectionSpec,
 } from '@/design-system/patterns/SectionLayout'
 
 /**
@@ -51,6 +50,11 @@ const BRAND_SECTIONS: readonly SectionSpec[] = [
   { id: 'benchmarks', label: 'Furthest from the category median', defaultWidth: 'full' },
   { id: 'ntb', label: 'New-to-brand and engagement', defaultWidth: 'half' },
   { id: 'trend', label: 'Over time', defaultWidth: 'half' },
+  // Ships OFF. Every figure above is measured at ONE node, and which node that is decides the
+  // benchmark it is compared against — but on a normal day you pick a node from the header and
+  // never think about the rest of the tree. When a benchmark looks wrong, this is the panel that
+  // explains it, so it is one switch away rather than permanently in the way.
+  { id: 'nodetree', label: 'Category nodes Amazon holds', defaultWidth: 'half', defaultHidden: true },
 ]
 const SECTION_KEY = 'rpx-brand-sections'
 
@@ -113,11 +117,7 @@ export function BrandTab({ market }: { market: string }) {
    * the chart's own caption says each metric is drawn to its own scale.
    */
   const [plotted, setPlotted] = useState<string[]>(['brandCustomers'])
-  const [arranging, setArranging] = useState(false)
-  const [layout, setLayout] = useState<SectionLayoutValue>(() => defaultSectionLayout(BRAND_SECTIONS))
-  // Read after mount, not in the initializer: the initializer runs during render, where
-  // localStorage does not exist on the server.
-  useEffect(() => { setLayout(readSectionLayout(SECTION_KEY, BRAND_SECTIONS)) }, [])
+  const sections = useSections(BRAND_SECTIONS, SECTION_KEY)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -163,16 +163,7 @@ export function BrandTab({ market }: { market: string }) {
           ? `${data.freshness.length} markets`
           : `${data.weeksHeld} ${data.weeksHeld === 1 ? 'week' : 'weeks'} · ${data.firstWeek ?? '—'} → ${data.lastWeek ?? '—'}`}
         markets={freshness}
-        actions={!isAll ? (
-          <SectionControls
-            sections={BRAND_SECTIONS}
-            storageKey={SECTION_KEY}
-            value={layout}
-            onChange={setLayout}
-            arranging={arranging}
-            onArrangingChange={setArranging}
-          />
-        ) : null}
+        actions={!isAll ? sections.controls : null}
         extra={!isAll && data.nodes.length > 0 ? (
           <>
             <span className="k">Node</span>
@@ -194,7 +185,7 @@ export function BrandTab({ market }: { market: string }) {
 
       {isAll
         ? <AllMarkets data={data} />
-        : <OneMarket data={data} chartData={chartData} plotted={plotted} setPlotted={setPlotted} arranging={arranging} />}
+        : <OneMarket data={data} chartData={chartData} plotted={plotted} setPlotted={setPlotted} arranging={sections.arranging} />}
 
       <Caveats items={data.caveats} />
     </div>
@@ -361,6 +352,41 @@ function OneMarket({
             height. The funnel and the ranked benchmarks above compare our figures against the
             category median directly.
           </p>
+      </Card>
+    ),
+
+    /**
+     * Every figure on this tab is measured at ONE node of Amazon's category tree, and the median
+     * it is compared against is that node's median. A parent and its child are different markets
+     * with different competitors, so their numbers are not two readings of the same thing and
+     * must never be added — which is also why the tab shows no totals.
+     */
+    nodetree: data.nodes.length === 0 ? null : (
+      <Card
+        header="Category nodes Amazon holds"
+        description="The node chosen in the header decides both our figures and the median they are judged against. Weeks differ per node — Amazon starts and stops publishing them independently."
+      >
+        <div className="rpx-nodes">
+          {data.nodes.map((n) => {
+            const leaf = n.name.split('/').filter(Boolean)
+            return (
+              <div key={n.name} className={`row${data.node?.name === n.name ? ' is-current' : ''}`}>
+                <span className="nm" title={n.name}>
+                  {leaf.slice(-1)[0]}
+                  {leaf.length > 1 && <i>{leaf.slice(0, -1).join(' › ')}</i>}
+                </span>
+                <span className="c">
+                  {n.isRoot ? <Pill tone="neutral">root</Pill> : <span className="d">depth {leaf.length}</span>}
+                </span>
+                <span className="w">{n.weeks}w</span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="rpx-foot">
+          A node is not a slice of its parent that can be added back up. Each one carries its own
+          median, so the same week read at two depths gives two answers and both are correct.
+        </p>
       </Card>
     ),
   }
