@@ -65,7 +65,12 @@ export interface DataGridProps<T> {
    * The GRID owns the `colSpan`, because only it knows the column count — which shifts with
    * `selectable` and with hidden columns, and is exactly the number every hand-rolled version got
    * wrong the moment a column was toggled. The CALLER owns the caret: put it in whichever cell it
-   * belongs to, with its own `aria-expanded`, as `CampaignsTable` already does.
+   * belongs to, with its own `aria-expanded` — the caret pattern `CampaignsTable` uses today for
+   * its own hand-rolled expansion. (It does NOT use this prop; the precedent is the CARET, not
+   * the expansion.)
+   *
+   * Renders ONE full-width cell. For children that must line up under the SAME columns as their
+   * parent — a campaign's spend under the same Spend header — use `getSubRows` instead.
    */
   renderExpanded?: (row: T) => ReactNode
   /** Keys of the currently expanded rows. Controlled — the grid keeps no expansion state. */
@@ -79,14 +84,37 @@ export interface DataGridProps<T> {
    */
   rowProps?: (row: T) => HTMLAttributes<HTMLTableRowElement>
   /**
+   * Extra props for each `<th>` — pointer handlers and `data-*`.
+   *
+   * Drag-to-reorder columns needs `onPointerDown`/`onMouseEnter`/`onMouseLeave` on the header and
+   * `data-col` readable back off the DOM. Without these a grid that already ships column dragging
+   * cannot adopt `DataGrid` without DELETING that behaviour.
+   */
+  headerProps?: (column: Column<T>, index: number) => HTMLAttributes<HTMLTableCellElement>
+  /** Extra props for each `<td>` — the same drag code reads `data-item`/`data-col` off cells. */
+  cellProps?: (row: T, column: Column<T>, index: number) => HTMLAttributes<HTMLTableCellElement>
+  /**
+   * Children rendered as REAL rows beneath their parent, using the SAME columns — so a child's
+   * spend sits under the same Spend header as its parent's.
+   *
+   * `renderExpanded` gives one full-width cell, which cannot express that. The workaround was
+   * flattening parents and children into one `rows` array with a `kind` union and `sort={null}`,
+   * which works but costs the grid its sorting. Shown only for rows in `expanded`.
+   */
+  getSubRows?: (row: T) => T[] | undefined
+  /**
    * Row density. `md` (default) is 13px with 11px/14px cells; `sm` is 12.5px / 7px 10px; `xs` is
    * 11.5px / 5px 9px, matching the tier every other control gained.
    *
    * Measured against five real tables: 12px/11px 14px, 12.5px/7px 10px, 12.5px/6px 11px,
    * 11px/6px 10px, 11.5px/5px 9px. At one density the grid added up to 12px per row, which on a
    * page of six stacked tables is the difference between a page and a scroll.
+   *
+   * It scales UP as well: `lg` (14px) and `xl` (19px) vertical padding. A grid with no density
+   * above its default cannot host a density control at all, and the campaigns grid ships a live
+   * Compact / Comfortable / Spacious switch whose two looser steps had no DS equivalent.
    */
-  size?: 'md' | 'sm' | 'xs'
+  size?: 'xl' | 'lg' | 'md' | 'sm' | 'xs'
   initialSort?: { key: string; dir: 'asc' | 'desc' }
   /**
    * Controlled sort (NAF.SB.AS-S1R S1.e — additive, opt-in).
@@ -168,7 +196,7 @@ export function DataGrid<T>({
   selectAllHint,
   selectRowHint,
   showTotals,
-  emptyState, renderExpanded, expanded, rowProps, size = 'md',
+  emptyState, renderExpanded, expanded, rowProps, size = 'md', headerProps, cellProps, getSubRows,
   initialSort,
   sort: controlledSort,
   onSortChange,
@@ -377,7 +405,7 @@ export function DataGrid<T>({
                 />
               </th>
             )}
-            {cols.map((c) => {
+            {cols.map((c, ci) => {
               const sorted = sort?.key === c.key
               const cls = [alignClass(c.align), stickyCls(c), sorted ? 'sorted' : ''].filter(Boolean).join(' ')
               return (
@@ -396,6 +424,7 @@ export function DataGrid<T>({
                         : 'none'
                       : undefined
                   }
+                      {...(headerProps?.(c, ci) ?? {})}
                 >
                   {c.sortable ? (
                     <button type="button" className="sortbtn" onClick={() => toggleSort(c.key)}>
@@ -432,21 +461,40 @@ export function DataGrid<T>({
                       )}
                     </td>
                   )}
-                  {cols.map((c) => (
-                    <td key={c.key} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
+                  {cols.map((c, ci) => (
+                    <td key={c.key} {...(cellProps?.(row, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                       {c.render(row)}
                     </td>
                   ))}
                 </tr>
               )
-              const sub = renderExpanded && expanded?.has(k) ? renderExpanded(row) : null
-              if (sub == null) return main
+              const isOpen = !!expanded?.has(k)
+              const sub = renderExpanded && isOpen ? renderExpanded(row) : null
+              const kids = getSubRows && isOpen ? (getSubRows(row) ?? []) : []
+              if (sub == null && kids.length === 0) return main
               return (
                 <Fragment key={k}>
                   {main}
-                  <tr className="nds-grid-sub">
-                    <td colSpan={cols.length + (selectable ? 1 : 0)}>{sub}</td>
-                  </tr>
+                  {/* Children as REAL rows: same `cols`, so a child's figure sits under the same
+                      header as its parent's. That is the whole reason to expand. */}
+                  {kids.map((kid) => {
+                    const kk = rowKey(kid)
+                    return (
+                      <tr key={kk} {...(rowProps?.(kid) ?? {})} className={['nds-grid-kid', rowClassName?.(kid) ?? ''].filter(Boolean).join(' ') || undefined}>
+                        {selectable && <td className="ck sticky" style={{ left: 0 }} />}
+                        {cols.map((c, ci) => (
+                          <td key={c.key} {...(cellProps?.(kid, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
+                            {c.render(kid)}
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  })}
+                  {sub != null && (
+                    <tr className="nds-grid-sub">
+                      <td colSpan={cols.length + (selectable ? 1 : 0)}>{sub}</td>
+                    </tr>
+                  )}
                 </Fragment>
               )
             })

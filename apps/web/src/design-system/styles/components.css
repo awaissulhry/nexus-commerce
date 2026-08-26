@@ -1957,3 +1957,27 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   outline-offset: 2px;
   border-radius: var(--nds-radius-sm);
 }
+
+/* A child row from `getSubRows`. Real row, same columns — a child's figure sits under the same
+   header as its parent's, which is the whole reason to expand. The tint and the inset on the
+   first cell are what say "child" without costing a column. */
+.nds-grid tbody tr.nds-grid-kid > td {
+  background: var(--nds-surface-sunken);
+}
+.nds-grid tbody tr.nds-grid-kid > td:first-of-type {
+  box-shadow: inset 3px 0 0 var(--nds-border);
+}
+.nds-grid tbody tr.nds-grid-kid:hover > td {
+  background: var(--nds-surface-hover);
+}
+
+/* Densities ABOVE the default. A grid with no density above `md` cannot host a density control,
+   and the campaigns grid ships a live Compact / Comfortable / Spacious switch. */
+.nds-grid.lg tbody td,
+.nds-grid.lg thead th {
+  padding: 14px 14px;
+}
+.nds-grid.xl tbody td,
+.nds-grid.xl thead th {
+  padding: 19px 14px;
+}
