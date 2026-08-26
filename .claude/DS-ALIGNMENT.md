@@ -51,7 +51,14 @@ File it in `.claude/DS-GAPS.md` with the measurement. See /DESIGN.md for the ful
   Drawer, EmptyState, Pagination, ProgressBar, DateField, DateRangePicker, HoverCard, DataGrid…
 - `patterns/` — AppShell, PageHeader, FilterBar, GridToolbar, PreferencesModal, BulkActionBar,
   ColumnCustomizer, EditModeBar, Builder, DetailHeader, workspace-grid/**WorkspaceGrid**
-Read the component before using it. `components/README.md` and `patterns/README.md` are current.
+**Read the `.tsx`, never the `.d.ts`.** The `.d.ts` files beside each component are GITIGNORED
+local build artifacts (`.gitignore:86`) — they are not regenerated on a prop change and they go
+stale silently. Measured 2026-08-26: 19 components were missing 52 props between them and
+`ButtonVariant` listed 5 of its 10 members, so a session planning from the declaration was
+planning against a component that does not exist. `node scripts/check-ds-dts-fresh.mjs --write`
+refreshes them locally if you want them.
+
+`components/README.md` and `patterns/README.md` are current.
 
 ## 🔴 Rule 1 — you may NOT edit the design system
 `design-system/**` is owned by the DS session alone. Six sessions editing shared files is how

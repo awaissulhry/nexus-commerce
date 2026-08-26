@@ -13,10 +13,15 @@
  * cost most was `DataGrid.size`: without it a dense grid converts at `md` and loses a third of
  * its visible rows.
  *
- * This regenerates into a temp directory and compares. It does not write.
+ * 🔴 NOT a pre-push guard, deliberately. These files are GITIGNORED (.gitignore:86) — they are
+ * local build artifacts, not committed API. A pre-push check on them is VACUOUS: on a fresh
+ * clone none exist, so it skips every file and passes. I wired one in and then proved it passes
+ * with zero declarations present, which is the same empty-assertion trap this repo has been
+ * caught by before.
  *
- *   node scripts/check-ds-dts-fresh.mjs           # report
- *   node scripts/check-ds-dts-fresh.mjs --check   # exit 1 if any committed .d.ts is stale
+ * So this is a REGENERATOR. Run it after changing a component's props if you want the local
+ * declarations to match. The durable fix is in the session brief: read the .tsx, never the .d.ts.
+ *
  *   node scripts/check-ds-dts-fresh.mjs --write   # regenerate them in place
  */
 import { execSync } from 'node:child_process'
@@ -56,7 +61,8 @@ const mode = process.argv[2]
 for (const fresh of walk(out)) {
   const rel = relative(out, fresh)
   const committed = join(DS, rel)
-  if (!existsSync(committed)) continue // emitted but not committed beside the source — not ours
+  // no existsSync gate: these are generated artifacts, so a MISSING one is stale too. The gate
+  // is what made the --check mode vacuous on a clean clone.
   if (readFileSync(fresh, 'utf8') === readFileSync(committed, 'utf8')) continue
   stale.push(rel)
   if (mode === '--write') copyFileSync(fresh, committed)
