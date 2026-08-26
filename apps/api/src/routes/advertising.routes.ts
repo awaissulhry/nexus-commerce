@@ -29,7 +29,7 @@ import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegio
 // threw "Cannot access 'conditionsTextOf' before initialization" on prod.
 import { conditionsTextOf } from '../services/advertising/rule-conditions-text.js'
 import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
-import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
+import { allocate, microsToCents, toEurCents, ntbIsPublishedFor } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { PROFIT_UNKNOWN_REASON } from '../services/advertising/profit-coverage.js'
 import { getFxRate } from '../services/fx-rate.service.js'
@@ -439,9 +439,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const saleUnits = summed('units7d')
         const sameSkuCents = summed('salesSameSku7dCents')
         const ppcOrders = n(a?.orders7d) + n(b?.orders7d)
-        const ntbOrders = summed('ntbOrders14d')
-        const ntbSalesCents = summed('ntbSalesCents14d')
-        const ntbUnits = summed('ntbUnits14d')
+        // 🔴 ADM-A5 — gate NTB on the AD PRODUCT, not just on whether a row exists.
+        //
+        // `ntbOrders14d` and `ntbSalesCents14d` are the two legacy columns carrying `DEFAULT 0`, so
+        // every one of the 6,019 Sponsored Products rows already holds a 0 that nobody measured —
+        // we never requested a newToBrand column for any ad product until today, and Amazon does
+        // not publish one for SP at all (52 allowed columns, none of them newToBrand, verified
+        // 2026-08-26). `_count` cannot save us here: a defaulted 0 counts as present.
+        //
+        // Without this gate the grid printed "0" for new-to-brand orders on Sponsored Products
+        // campaigns — a confident measurement of something Amazon has never reported and never
+        // will. Caught on prod immediately after the ADM-A3 deploy, on the same page it fixed.
+        const ntbPublished = ntbIsPublishedFor(it.adProduct)
+        const ntbOrders = ntbPublished ? summed('ntbOrders14d') : null
+        const ntbSalesCents = ntbPublished ? summed('ntbSalesCents14d') : null
+        const ntbUnits = ntbPublished ? summed('ntbUnits14d') : null
         // Amazon's own rate: take whichever bucket reported it rather than averaging the two —
         // combining two means is the mean-of-means error this file already avoids for topOfSearchIS
         // and budget utilization. In practice a campaign's rows sit in one bucket or the other.
@@ -491,7 +503,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           ntbUnitsPct: ntbUnits == null || saleUnits == null || saleUnits <= 0 ? null : ntbUnits / saleUnits,
           // Amazon's OWN rate, SB only — deliberately not back-filled from the derivation above, so
           // a reading and a calculation are never confused for one another.
-          ntbOrderRate: reported('ntbOrders14d') ? avgRate : null,
+          ntbOrderRate: ntbPublished && reported('ntbOrders14d') ? avgRate : null,
           // ADM-A3 — KENP. Offered on the SP report; never requested until now. The Ad Manager said
           // "this account sells no books, so Amazon has nothing to report" — a business claim
           // standing in for an ingest gap. Now the data answers it.
