@@ -223,7 +223,10 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
               <Field className="cd-field" label="Start Date" required htmlFor="cd-startdate">
                 <div className="h10-cd-date ro"><span className="ib"><Calendar size={15} /></span><input id="cd-startdate" type="text" value={campaign?.startDate ? mdy(campaign.startDate as string) : ''} readOnly aria-readonly /></div>
               </Field>
-              <Field className="cd-field" label="End Date" required={!form.neverExpire} htmlFor="cd-enddate">
+              {/* No `htmlFor`: `DateField` takes no `id`, so neither an explicit one nor `Field`'s
+                  auto-association can reach its trigger — a `<label for>` naming an id that does
+                  not exist is worse than none. The control is named by `ariaLabel`. Filed. */}
+              <Field className="cd-field" label="End Date" required={!form.neverExpire}>
                 <DateField
                   className="cd-datefield"
                   value={form.endDate}
