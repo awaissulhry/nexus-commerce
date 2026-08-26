@@ -38,7 +38,7 @@
   letter-spacing: 0.02em; text-transform: uppercase;
 }
 .dt-dayhead .dt-daycount {
-  font-weight: 550; text-transform: none; letter-spacing: 0; color: var(--nds-text-2);
+  font-weight: 550; text-transform: none; letter-spacing: 0; color: var(--nds-grey-600);
 }
 
 /* ── one row ────────────────────────────────────────────────────────── */
@@ -87,14 +87,14 @@
 
 .dt-meta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  font-size: 11px; color: var(--nds-text-2);
+  font-size: 11px; color: var(--nds-grey-600);
 }
 /* Correcting myself. I first called this "·" pure decoration and gave it --nds-text-3, the icon
    token. It is not: it is the only thing separating two facts on one line, and if it disappears
    they run together — that is structure, which is the same argument I used to call `.acr-gg-dash`
    text because the em-dash IS the answer. A separator matching the muted items either side of it
    is ordinary typography, not competition. --nds-text-muted, and no audit exception left. */
-.dt-meta .dt-sep { color: var(--nds-text-muted); }
+.dt-meta .dt-sep { color: var(--nds-grey-600); }
 
 .dt-detail {
   font-size: 11.5px; color: #616d7c; line-height: 1.5;
@@ -105,7 +105,7 @@
 .dt-detail.bad { background: #fdf5f4; border-left-color: #e6bcba; color: #7d3f3b; }
 
 .dt-time {
-  font-size: 11px; color: var(--nds-text-muted); white-space: nowrap;
+  font-size: 11px; color: var(--nds-grey-600); white-space: nowrap;
   font-variant-numeric: tabular-nums; padding-top: 3px;
 }
 
@@ -132,7 +132,7 @@
 
 /* ── rolled-up repeats ──────────────────────────────────────────────── */
 
-.dt-rollup { font-size: 11px; color: var(--nds-text-muted); }
+.dt-rollup { font-size: 11px; color: var(--nds-grey-600); }
 /* The DS `Button variant="link" inline` carries the chrome, the colour and the hover — its blue
    is 5.98:1 where this rule's #2f6fb5 was 5.17:1. What the DS will not carry is the underline at
    rest (it underlines on hover only, and --nds-text-link is 1.03:1 against body text, so the
@@ -171,7 +171,7 @@
 .dt-eptitle { font-size: 12.5px; font-weight: 600; color: #232c37; line-height: 1.4; }
 .dt-epsub {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  font-size: 11px; color: var(--nds-text-2); margin-top: 2px;
+  font-size: 11px; color: var(--nds-grey-600); margin-top: 2px;
 }
 .dt-epright { display: flex; align-items: center; gap: 7px; }
 
@@ -190,7 +190,7 @@
   padding: 10px 0 2px;
 }
 
-.dt-showing { font-size: 11.5px; color: var(--nds-text-muted); }
+.dt-showing { font-size: 11.5px; color: var(--nds-grey-600); }
 
 .dt-skeleton {
   background: linear-gradient(90deg, var(--nds-grey-75) 25%, var(--nds-grey-100) 37%, var(--nds-grey-75) 63%);
@@ -374,7 +374,7 @@
 .ap-decidedwhat { font-size: 12.5px; color: #232c37; line-height: 1.45; overflow-wrap: anywhere; }
 .ap-decidedmeta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px;
-  font-size: 11px; color: var(--nds-text-2);
+  font-size: 11px; color: var(--nds-grey-600);
 }
 .ap-reason {
   font-size: 11.5px; color: #616d7c; font-style: italic;
@@ -384,7 +384,7 @@
 .ap-prefleet {
   display: inline-flex; align-items: center; padding: 1px 6px;
   border-radius: 4px; font-size: 10px; font-weight: 650;
-  border: 1px dashed #ccd4de; background: var(--nds-grey-25); color: var(--nds-text-muted);
+  border: 1px dashed #ccd4de; background: var(--nds-grey-25); color: var(--nds-grey-600);
   white-space: nowrap;
 }
 
@@ -398,11 +398,11 @@
 .dt-legend {
   display: flex; flex-wrap: wrap; gap: 6px 14px;
   padding: 8px 0 4px; margin: 0 0 2px;
-  font-size: 11px; color: var(--nds-text-muted);
+  font-size: 11px; color: var(--nds-grey-600);
   border-bottom: 1px solid var(--nds-grey-75);
 }
 .dt-legenditem { display: inline-flex; align-items: center; gap: 5px; }
 .dt-legenditem .dt-marker { width: 17px; height: 17px; }
 
 .ap-tabsblock { margin: 0 0 12px; }
-.ap-tabhint { margin: 6px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }
+.ap-tabhint { margin: 6px 0 0; font-size: 11.5px; color: var(--nds-grey-600); }
