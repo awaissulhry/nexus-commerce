@@ -24,8 +24,16 @@
 
 .h10-rb-body { flex: 1; overflow-y: auto; display: flex; align-items: flex-start; background: var(--nds-white); }
 .h10-rb-nav { position: sticky; top: 0; flex: 0 0 320px; padding: 68px 22px 22px 52px; display: flex; flex-direction: column; }
-.nds-btn.h10-rb-step { font: inherit; font-size: 14px; font-weight: 600; color: var(--nds-grey-700); text-align: left; padding: 10px 15px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; } /* BP.P3: 16/500 → 14/600 */
+/* 🔴 THREE call sites, and only one of them is a DS `Button`: `_rank/RankGoalBuilder` is, while
+   `_schedule/ScheduleBuilder` and `_shared/RuleBuilder` are still raw <button> in the other half.
+   So both selectors, in one rule — `.h10-rb-step` (0,1,0) dresses the raw pair, and
+   `.nds-btn.h10-rb-step` (0,2,0) outranks the DS `quiet` variant on the converted one. Prefixing
+   this rule alone left the other two with no styling at all. */
+.h10-rb-step,
+.nds-btn.h10-rb-step { appearance: none; border: 0; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: var(--nds-grey-700); text-align: left; padding: 10px 15px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; } /* BP.P3: 16/500 → 14/600 */
+.h10-rb-step:hover,
 .nds-btn.h10-rb-step:hover { color: #1b2230; background: var(--nds-grey-50); }
+.h10-rb-step.on,
 .nds-btn.h10-rb-step.on { color: var(--nds-blue-600); font-weight: 700; background: var(--nds-blue-100); }
 
 .h10-rb-main { flex: 1; min-width: 0; }
@@ -1233,6 +1241,10 @@
 .h10-au-namew { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .h10-au-swatch { flex-shrink: 0; width: 4px; height: 26px; border-radius: 2px; }
 .h10-au-nm { display: flex; flex-direction: column; min-width: 0; }
+/* 🔴 Two of the three call sites are DS `Button`s; the third is `<span class="h10-au-name asname">`,
+   an actor that cannot be opened. Both selectors, so the span keeps its size, weight and ellipsis —
+   prefixing this rule alone dropped all three from it and a long actor name overflowed the cell. */
+.h10-au-name,
 .nds-btn.h10-au-name { display: block; text-align: left; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nds-btn.h10-au-name:hover { color: var(--nds-blue-600); text-decoration: underline; background: none; }
 .h10-au-nm em { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
