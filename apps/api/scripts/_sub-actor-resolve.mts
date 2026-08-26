@@ -1,0 +1,11 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const d2 = new Date(Date.now() - 2*86400000)
+const a = await prisma.advertisingActionLog.findFirst({ where: { createdAt: { gte: d2 }, userId: { startsWith: 'automation:rank-defend-' } }, orderBy: { createdAt: 'desc' }, select: { userId: true } })
+const id = String(a?.userId).replace('automation:rank-defend-','')
+const s = await prisma.adSchedule.findUnique({ where: { id }, select: { id: true, campaignId: true, groupId: true, enabled: true, lastApplied: true, lastEvaluatedAt: true } })
+console.log('AdSchedule:', JSON.stringify(s))
+if (s?.groupId) console.log('Group:', JSON.stringify(await prisma.rankScheduleGroup.findUnique({ where: { id: s.groupId }, select: { name: true, enabled: true, marketplace: true } })))
+console.log('AdSchedule total:', await prisma.adSchedule.count(), 'enabled:', await prisma.adSchedule.count({ where: { enabled: true } }))
+console.log('AdSchedule with groupId:', await prisma.adSchedule.count({ where: { groupId: { not: null } } }))
+await prisma.$disconnect()

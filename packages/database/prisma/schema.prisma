@@ -3325,12 +3325,43 @@ model AmazonAdsDailyPerformance {
   entityStatus String?
 
   // New-to-brand (SB/SD only)
+  //
+  // 🔴 ADM-A3 — these two were `@default(0)` and 0 on all 6,045 rows, and the reason was NOT that
+  // Amazon withholds them: `CAMPAIGN_COLUMNS` never requested a single `newToBrand*` column for
+  // ANY ad product. Verified 2026-08-26 by asking Amazon directly (an invalid column name makes
+  // the v3 report API return its allowed list): SPONSORED_BRANDS offers 14 newToBrand columns,
+  // SPONSORED_DISPLAY 11, and SPONSORED_PRODUCTS **none** — so "n/a — SP" is true for SP and was
+  // never true for SB/SD. `default(0)` is what let an unasked question read as a measured zero.
   ntbOrders14d     Int? @default(0)
   ntbSalesCents14d Int? @default(0)
+  // ADM-A3 — the third base count. Amazon offers `newToBrandUnitsSold` on both SB and SD.
+  // No `@default(0)`: null means "not reported for this ad product", which is the distinction the
+  // two columns above lost.
+  ntbUnits14d      Int?
+  // Amazon's OWN new-to-brand order rate (`newToBrandPurchasesRate`). SPONSORED_BRANDS only — SD
+  // does not offer it — so null on every SP and SD row by construction, not by omission. The three
+  // NTB *percentages* the grid shows are derived (ntb ÷ total) rather than stored, because only SB
+  // publishes them and one derivation used everywhere beats two rules that can disagree.
+  ntbOrdersRate14d Float?
 
   // Engagement (SD/SB only)
+  //
+  // ⚠ `viewableImpressions` is NOT offered by ANY v3 campaign report — not SP, not SB, not SD
+  // (SD publishes `viewabilityRate` and `viewClickThroughRate` instead, which are rates, not a
+  // count). So the grid's "View Impr." column can never be sourced at campaign grain and its cell
+  // says so. Kept because the field is still part of the ingest row shape.
   viewableImpressions Int? @default(0)
+  // ⚠ Offered by SB and SD (`detailPageViews`) but by no SP report, and NOTHING renders it today.
+  // Left unrequested deliberately: requesting a column no surface reads is how this table filled
+  // up with measured-looking zeros in the first place.
   detailPageViews7d   Int? @default(0)
+
+  // ADM-A3 — Kindle Edition Normalized Pages. The Ad Manager said "this account sells no books, so
+  // Amazon has nothing to report" — an unverified BUSINESS claim standing in for an ingest gap.
+  // Amazon offers `kindleEditionNormalizedPagesRead14d` and `…Royalties14d` on the SP campaigns
+  // report; we simply never asked. Null means not reported; 0 will mean a real measured zero.
+  kenpRead14d           Int?
+  kenpRoyaltiesCents14d Int?
 
   // Derived — indexed for filtering "show me campaigns with ACOS > 50%"
   acos7d Decimal? @db.Decimal(8, 4)

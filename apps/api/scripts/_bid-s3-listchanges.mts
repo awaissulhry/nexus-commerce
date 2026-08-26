@@ -1,0 +1,21 @@
+import '../src/env.js'
+const { listChanges } = await import('../src/services/advertising/ads-changes.service.js')
+const { default: prisma } = await import('../src/db.js')
+const ID = 'cmr28mgl50019qq010p4nqnhg'
+const t = await prisma.adTarget.findUnique({ where: { id: ID }, select: { bidCents: true, expressionValue: true, status: true } })
+console.log(`\nfixture live bid: €${((t?.bidCents??0)/100).toFixed(2)} · "${t?.expressionValue}" · ${t?.status}`)
+const r = await listChanges({ entityType: 'AD_TARGET', entityId: ID, field: 'bid', from: new Date(Date.now()-60*86400_000), limit: 500 })
+console.log(`rows: ${r.count} · window ${r.from.toISOString().slice(0,10)} → ${r.to.toISOString().slice(0,10)}`)
+const byDelivery = new Map<string, number>()
+for (const i of r.items) byDelivery.set(i.delivery?.state ?? 'NULL', (byDelivery.get(i.delivery?.state ?? 'NULL') ?? 0) + 1)
+console.log(`delivery states: ${[...byDelivery.entries()].map(([k,v])=>`${k} ${v}`).join(' · ')}`)
+console.log(`origins: ${[...new Set(r.items.map(i=>`${i.origin.kind}:${i.origin.name}`))].join(' · ')}`)
+console.log(`reasons: ${[...new Set(r.items.map(i=>i.reason))].map(s=>`"${String(s).slice(0,44)}"`).join('\n         ')}`)
+console.log(`evidence present on: ${r.items.filter(i=>i.evidence).length} of ${r.count}`)
+console.log(`undoable: ${r.items.filter(i=>i.undoable).length} · with undoActionLogId: ${r.items.filter(i=>i.undoActionLogId).length}`)
+console.log(`blocked reasons: ${[...new Set(r.items.map(i=>i.undoBlockedReason).filter(Boolean))].join(' · ')}`)
+const f = r.items[0], l = r.items[r.items.length-1]
+console.log(`\nnewest: ${f.at.toISOString().slice(0,16)} ${f.oldValue}→${f.newValue} ${f.delivery?.state} attempts=${f.delivery?.attempts} err=${String(f.delivery?.lastError).slice(0,40)}`)
+console.log(`oldest: ${l.at.toISOString().slice(0,16)} ${l.oldValue}→${l.newValue} ${l.delivery?.state} err=${String(l.delivery?.lastError).slice(0,50)}`)
+console.log(`\ncampaign on the row: ${JSON.stringify(f.campaign)} · entity: ${JSON.stringify(f.entity)}`)
+await prisma.$disconnect()

@@ -1,0 +1,11 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const { getSovStrip } = await import('../src/services/advertising/ads-sov-keyword-share.service.js')
+const s = await getSovStrip()
+console.log(JSON.stringify(s, null, 1))
+console.log(`\nrendered line would read:`)
+const pctf = (f: number | null) => f == null ? '—' : (f > 0 && f < 0.0001 ? '<0.01%' : (f*100).toFixed(2)+'%')
+const ok = s.periods.filter((p) => !p.refused)
+const bad = s.periods.filter((p) => p.refused)
+console.log(`  ${s.measured} of ${s.enabledKeywords} enabled keywords carry a market share · median ${pctf(s.medianPct)} · ${s.underOnePct} under 1% · Amazon's week: ${ok.map((p)=>`${p.marketplace} ${p.week} (${p.ageDays}d)`).join(' · ')}${bad.length?` · ${bad.map(p=>p.marketplace).join('/')} skipped — no complete week yet`:''} · shares come from Amazon's own search-query report`)
+await prisma.$disconnect()

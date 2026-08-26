@@ -1,0 +1,12 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+console.log('variations:', await prisma.productVariation.count())
+console.log('ads with sku:', await prisma.adProductAd.count({ where: { sku: { not: null } } }))
+const sampleAds = await prisma.adProductAd.findMany({ where: { sku: { not: null } }, take: 5, select: { sku: true, asin: true } })
+console.log('sample ad skus:', JSON.stringify(sampleAds))
+const skus = sampleAds.map(a => a.sku!) 
+console.log('matching variations:', await prisma.productVariation.count({ where: { sku: { in: skus } } }))
+const { deriveVariantOf } = await import('../src/services/agent-fleet/graph-derivation.service.js')
+const out = await deriveVariantOf().catch(e => ({ error: String(e) }))
+console.log('deriveVariantOf:', JSON.stringify(out))
+await prisma.$disconnect()

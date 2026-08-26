@@ -288,16 +288,32 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const _sum = {
         impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true,
         units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true,
+        // ADM-A3 — new-to-brand and KENP. Requested from Amazon for the first time on 2026-08-26:
+        // SB/SD publish newToBrand*, SP publishes the two kindle columns, and CAMPAIGN_COLUMNS had
+        // asked for none of them, which is why all four legacy fields were 0 on 6,045 rows.
+        ntbOrders14d: true, ntbSalesCents14d: true, ntbUnits14d: true,
+        kenpRead14d: true, kenpRoyaltiesCents14d: true,
       } as const
-      const _count = { units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true } as const
+      const _count = {
+        units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true,
+        ntbOrders14d: true, ntbSalesCents14d: true, ntbUnits14d: true,
+        kenpRead14d: true, kenpRoyaltiesCents14d: true,
+      } as const
+      // 🔴 ntbOrdersRate14d is a RATE, so it goes through _avg, never _sum — adding a rate across
+      // days produces a number with no meaning (7 days at 20% would read 140%). Same reasoning as
+      // weightedIS above; this one Amazon publishes per day, so a mean over the reported days is
+      // the faithful reading.
+      const _avg = { ntbOrdersRate14d: true } as const
       const [byLocal, byExt] = await Promise.all([
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum, _count }),
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum, _count }),
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum, _count, _avg }),
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum, _count, _avg }),
       ])
       const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
       const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
       const cntL = new Map(byLocal.map((r) => [r.localEntityId, r._count]))
       const cntE = new Map(byExt.map((r) => [r.entityId, r._count]))
+      const avgL = new Map(byLocal.map((r) => [r.localEntityId, r._avg]))
+      const avgE = new Map(byExt.map((r) => [r.entityId, r._avg]))
       /**
        * ADM-H P2, RESTORED — Average Budget Utilization.
        *
@@ -419,10 +435,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const cb = it.externalCampaignId ? cntE.get(it.externalCampaignId) : undefined
         const tosPts = (it.externalCampaignId ? tosByExt.get(it.externalCampaignId) : undefined) ?? []
         const reported = (f: keyof typeof _count) => n(ca?.[f]) + n(cb?.[f]) > 0
-        const summed = (f: 'units7d' | 'salesSameSku7dCents' | 'ordersSameSku7d' | 'unitsSameSku7d') =>
-          reported(f) ? n(a?.[f]) + n(b?.[f]) : null
+        const summed = (f: keyof typeof _count) => (reported(f) ? n(a?.[f]) + n(b?.[f]) : null)
         const saleUnits = summed('units7d')
         const sameSkuCents = summed('salesSameSku7dCents')
+        const ppcOrders = n(a?.orders7d) + n(b?.orders7d)
+        const ntbOrders = summed('ntbOrders14d')
+        const ntbSalesCents = summed('ntbSalesCents14d')
+        const ntbUnits = summed('ntbUnits14d')
+        // Amazon's own rate: take whichever bucket reported it rather than averaging the two —
+        // combining two means is the mean-of-means error this file already avoids for topOfSearchIS
+        // and budget utilization. In practice a campaign's rows sit in one bucket or the other.
+        const avgRate = avgL.get(it.id)?.ntbOrdersRate14d
+          ?? (it.externalCampaignId ? avgE.get(it.externalCampaignId)?.ntbOrdersRate14d : null)
+          ?? null
         // Halo: Amazon publishes no other-SKU column at campaign grain, so it is (total − sameSKU).
         // Null when the same-SKU half is unknown — a subtraction with an unknown operand is not 0,
         // and clamped at 0 because attribution windows can make the parts exceed the whole.
@@ -435,7 +460,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           sales: salesCents / 100,
           acos: salesCents > 0 ? spendCents / salesCents : null,
           roas: spendCents > 0 ? salesCents / spendCents : null,
-          ppcOrders: n(a?.orders7d) + n(b?.orders7d),
+          ppcOrders,
           // ADM-H P3 — euros for the money columns, counts for the rest, a FRACTION for the
           // percentage: the units each cell already formats for (eur / toLocaleString / sharePct).
           saleUnits,
@@ -452,6 +477,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // never read as a week's.
           topOfSearchIS: tosPts.length ? weightedIS(tosPts) : null,
           topOfSearchISDays: tosPts.length,
+          // ADM-A3 — new-to-brand. Null (never 0) when this campaign's ad product does not publish
+          // it: Amazon offers no newToBrand column on the SP report at all, so an SP campaign is a
+          // real "not applicable" and the cell says so, while an SB/SD campaign with no attributed
+          // NTB is a real zero. `_count` is what separates the two.
+          ntbOrders, ntbSales: ntbSalesCents == null ? null : ntbSalesCents / 100, ntbUnits,
+          // The three percentages are DERIVED (ntb ÷ total) rather than stored: only SB publishes
+          // *Percentage columns, and one rule applied everywhere beats a stored SB figure sitting
+          // beside a derived SD one where the two could disagree. Null when the numerator is
+          // unknown or the denominator is zero — a share of nothing is not 0%.
+          ntbOrdersPct: ntbOrders == null || ppcOrders <= 0 ? null : ntbOrders / ppcOrders,
+          ntbSalesPct: ntbSalesCents == null || salesCents <= 0 ? null : ntbSalesCents / salesCents,
+          ntbUnitsPct: ntbUnits == null || saleUnits == null || saleUnits <= 0 ? null : ntbUnits / saleUnits,
+          // Amazon's OWN rate, SB only — deliberately not back-filled from the derivation above, so
+          // a reading and a calculation are never confused for one another.
+          ntbOrderRate: reported('ntbOrders14d') ? avgRate : null,
+          // ADM-A3 — KENP. Offered on the SP report; never requested until now. The Ad Manager said
+          // "this account sells no books, so Amazon has nothing to report" — a business claim
+          // standing in for an ingest gap. Now the data answers it.
+          kindleReads: summed('kenpRead14d'),
+          kindleRoyalties: (() => { const c = summed('kenpRoyaltiesCents14d'); return c == null ? null : c / 100 })(),
           // ADM-P6 — TODAY's utilization, as a FRACTION, and null whenever the state is not a
           // reading: `silent` (Amazon has reported nothing since the 00:00 UTC reset),
           // `unsupported` (SD/SB — the SP endpoint does not cover them), `unknown` (never

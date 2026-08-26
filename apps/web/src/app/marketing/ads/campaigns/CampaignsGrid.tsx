@@ -70,6 +70,18 @@ interface Camp {
   avgBudgetUtilDays?: number
   // ADM-H P3 — columns that were rendering "—" over data already in AmazonAdsDailyPerformance.
   // Every one of these is `null` (never 0) when Amazon reported nothing: the cells say so.
+  // ADM-A3 — new-to-brand and KENP, requested from Amazon for the first time 2026-08-26.
+  // null = this campaign's ad product does not publish the metric (SP publishes no newToBrand
+  // column at all); a number, including 0, is a real reading.
+  ntbOrders?: number | null
+  ntbSales?: number | null        // EUROS
+  ntbUnits?: number | null
+  ntbOrdersPct?: number | null    // FRACTION, derived (ntb ÷ total)
+  ntbSalesPct?: number | null     // FRACTION, derived
+  ntbUnitsPct?: number | null     // FRACTION, derived
+  ntbOrderRate?: number | null    // FRACTION — Amazon's OWN rate, Sponsored Brands only
+  kindleReads?: number | null
+  kindleRoyalties?: number | null // EUROS
   topOfSearchIS?: number | null   // FRACTION — mean of the daily shares
   topOfSearchISDays?: number
   saleUnits?: number | null
@@ -139,14 +151,13 @@ const na = (label: string, why: string): ReactNode => <span className="h10-rc-un
  */
 const SP_ONLY_METRICS = new Set(['ntbOrders', 'ntbOrdersPct', 'ntbOrderRate', 'ntbSales', 'ntbSalesPct', 'ntbUnits', 'ntbUnitsPct', 'viewImpr'])
 
-const NTB_WHY_SP = 'New-to-brand is reported only for Sponsored Brands and Sponsored Display. This is a Sponsored Products campaign, so Amazon reports nothing here — not a gap in our ingest.'
-const NTB_UNITS_WHY_SP = 'New-to-brand UNITS are not ingested at all (only NTB orders and NTB sales are), and NTB itself is a Sponsored Brands / Display metric — this is a Sponsored Products campaign.'
-const VIEW_WHY_SP = 'Viewable impressions are reported for Sponsored Display and Sponsored Brands. This is a Sponsored Products campaign, and the ingested field is 0 on every row.'
-/** SD/SB: the metric DOES apply here, so the honest answer is that nothing has been reported. */
-const NTB_WHY_SDSB = 'New-to-brand IS reported for this ad product, so this is not "not applicable" — Amazon has reported no value for this campaign in the selected window. Every Sponsored Display / Sponsored Brands campaign in this account is currently paused, and the ingested NTB fields are 0 on every row.'
-const VIEW_WHY_SDSB = 'Viewable impressions ARE reported for this ad product — Amazon has reported no value for this campaign in the selected window. The ingested field is 0 on every row.'
-
-const KINDLE_WHY = 'A Kindle Direct Publishing metric. This account sells no books, so Amazon has nothing to report.'
+const NTB_WHY_SP = 'New-to-brand is not offered on the Sponsored Products campaign report at all — Amazon\'s own allowed-column list for spCampaigns holds 52 columns and none is a newToBrand metric (verified against the API 2026-08-26). This is a Sponsored Products campaign, so there is nothing to report and nothing our ingest could ask for.'
+const NTB_UNITS_WHY_SP = NTB_WHY_SP
+const VIEW_WHY_SP = 'Viewable impressions are not offered on ANY v3 campaign report — not Sponsored Products, and not Sponsored Display or Brands either, which publish viewabilityRate (a rate) instead of a count. Verified against Amazon\'s allowed-column lists 2026-08-26.'
+/** SD/SB: the metric applies AND we now request it, so an absence is Amazon's silence, not ours. */
+const NTB_WHY_SDSB = 'New-to-brand IS reported for this ad product and we now request it (added 2026-08-26 — Sponsored Brands publishes 14 newToBrand columns, Sponsored Display 11). Amazon has reported no value for this campaign in the selected window; every Sponsored Display and Brands campaign in this account is currently paused.'
+const VIEW_WHY_SDSB = 'Viewable impressions are not offered as a COUNT on any v3 campaign report. Sponsored Display publishes viewabilityRate instead, which is a different measurement and is not what this column states.'
+const KINDLE_WHY = 'Kindle Edition Normalized Pages. Amazon does offer these on the Sponsored Products report and we now request them (added 2026-08-26 — previously this cell claimed the account sells no books, which was an assumption standing in for a gap in our ingest). No value has been reported for this campaign in the selected window.'
 
 function notApplicableFor(key: string, c: Camp): ReactNode | null {
   if (key === 'kindleReads' || key === 'kindleRoyalties') return na('n/a', KINDLE_WHY)
@@ -464,6 +475,18 @@ function renderCol(c: Camp, key: string): ReactNode {
      * those apart is the entire job — an unreported same-SKU figure printed as €0.00 would read
      * as "none of this campaign's sales were the advertised ASIN", which is a finding, not a gap.
      */
+    // ADM-A3 — these nine were unconditional N/A tokens: the map they fell through to was keyed by
+    // COLUMN, so no row could ever show a value even once Amazon started sending one. Now the
+    // reading wins when there is one, and `notApplicableFor` explains the absence when there isn't.
+    case 'ntbOrders': return c.ntbOrders == null ? (notApplicableFor(key, c) ?? UNKNOWN) : c.ntbOrders.toLocaleString()
+    case 'ntbUnits': return c.ntbUnits == null ? (notApplicableFor(key, c) ?? UNKNOWN) : c.ntbUnits.toLocaleString()
+    case 'ntbSales': return c.ntbSales == null ? (notApplicableFor(key, c) ?? UNKNOWN) : eur(c.ntbSales)
+    case 'ntbOrdersPct': return c.ntbOrdersPct == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbOrdersPct)
+    case 'ntbSalesPct': return c.ntbSalesPct == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbSalesPct)
+    case 'ntbUnitsPct': return c.ntbUnitsPct == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbUnitsPct)
+    case 'ntbOrderRate': return c.ntbOrderRate == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbOrderRate)
+    case 'kindleReads': return c.kindleReads == null ? (notApplicableFor(key, c) ?? UNKNOWN) : c.kindleReads.toLocaleString()
+    case 'kindleRoyalties': return c.kindleRoyalties == null ? (notApplicableFor(key, c) ?? UNKNOWN) : eur(c.kindleRoyalties)
     case 'saleUnits': return c.saleUnits == null ? UNKNOWN : c.saleUnits.toLocaleString()
     case 'asp': return c.asp == null ? UNKNOWN : eur(c.asp)
     case 'otherSales': return c.otherSales == null ? UNKNOWN : eur(c.otherSales)
@@ -525,6 +548,15 @@ function metricVal(c: Camp, key: string): number {
     // ADM-H P3 — without these, clicking any of the newly-wired headers sorted every row as 0,
     // i.e. it did nothing while looking like it had. -1 for an unreported value so a real zero
     // still outranks "Amazon never said", in both directions.
+    case 'ntbOrders': return c.ntbOrders ?? -1
+    case 'ntbUnits': return c.ntbUnits ?? -1
+    case 'ntbSales': return c.ntbSales ?? -1
+    case 'ntbOrdersPct': return c.ntbOrdersPct != null ? c.ntbOrdersPct * 100 : -1
+    case 'ntbSalesPct': return c.ntbSalesPct != null ? c.ntbSalesPct * 100 : -1
+    case 'ntbUnitsPct': return c.ntbUnitsPct != null ? c.ntbUnitsPct * 100 : -1
+    case 'ntbOrderRate': return c.ntbOrderRate != null ? c.ntbOrderRate * 100 : -1
+    case 'kindleReads': return c.kindleReads ?? -1
+    case 'kindleRoyalties': return c.kindleRoyalties ?? -1
     case 'saleUnits': return c.saleUnits ?? -1
     case 'asp': return c.asp ?? -1
     case 'otherSales': return c.otherSales ?? -1

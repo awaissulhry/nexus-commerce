@@ -99,6 +99,11 @@ export const CAMPAIGN_COLUMNS: Record<AdProduct, string[]> = {
     'unitsSoldSameSku1d', 'unitsSoldSameSku7d', 'unitsSoldSameSku14d', 'unitsSoldSameSku30d',
     // bid-limited or volume-limited, per campaign
     'topOfSearchImpressionShare',
+    // ADM-A3 — Kindle Edition Normalized Pages. The Ad Manager rendered "n/a" for these two with
+    // the reason "this account sells no books, so Amazon has nothing to report" — a BUSINESS claim
+    // standing in for an ingest gap. Amazon offers both on the SP campaigns report; we never asked.
+    // Whether the account sells books is now answered by the data instead of by a sentence.
+    'kindleEditionNormalizedPagesRead14d', 'kindleEditionNormalizedPagesRoyalties14d',
     // the campaign's settings as at that day, free on a row we already fetch
     'campaignBudgetAmount', 'campaignBudgetType', 'campaignBiddingStrategy',
     'campaignRuleBasedBudgetAmount', 'campaignApplicableBudgetRuleId', 'campaignApplicableBudgetRuleName',
@@ -112,6 +117,11 @@ export const CAMPAIGN_COLUMNS: Record<AdProduct, string[]> = {
     'date', 'campaignId', 'campaignName',
     'impressions', 'clicks', 'cost',
     'sales', 'purchases',
+    // ADM-A3 — new-to-brand. SD publishes 11 newToBrand columns and this request asked for none,
+    // which is why `ntbOrders14d` / `ntbSalesCents14d` were 0 on all 6,045 rows while the grid
+    // blamed Amazon. These three are the base counts; SD does NOT offer the *Percentage or
+    // *Rate variants (SB does), so the grid's percentages are derived from these instead.
+    'newToBrandPurchases', 'newToBrandSales', 'newToBrandUnitsSold',
   ],
   SPONSORED_BRANDS: [
     // Phase G fix: v3 SB reports rejected attributedSales14d /
@@ -122,8 +132,23 @@ export const CAMPAIGN_COLUMNS: Record<AdProduct, string[]> = {
     'date', 'campaignId', 'campaignName',
     'impressions', 'clicks', 'cost',
     'sales', 'purchases',
+    // ADM-A3 — new-to-brand. SB publishes all 14 newToBrand columns; these are the three base
+    // counts plus Amazon's own order RATE, which only SB offers.
+    'newToBrandPurchases', 'newToBrandSales', 'newToBrandUnitsSold', 'newToBrandPurchasesRate',
   ],
 }
+/**
+ * ADM-A3 — every column name above was validated against Amazon's own allowed list on 2026-08-26,
+ * per ad product, before being added (`scripts/_adm11-verify-cols.mts`). That matters here more
+ * than usual: an invalid column 400s the WHOLE report, and both SD and SB sets carry scars from
+ * exactly that (the Phase G notes above). The trick is that v3 answers with its allowed list when
+ * a column is rejected, so the API can be asked rather than guessed at:
+ *
+ *   POST /reporting/reports with columns: ['date','__probe__'] → 400 "Allowed values: (...)"
+ *
+ * SP allows 52 columns and NONE of them is `newToBrand*` or `view*` — so the Ad Manager's
+ * "n/a — SP" on those columns is confirmed true by Amazon, not assumed.
+ */
 
 export const CAMPAIGN_REPORT_TYPE_ID: Record<AdProduct, string> = {
   SPONSORED_PRODUCTS: 'spCampaigns',
@@ -470,6 +495,16 @@ interface ReportRow {
   unitsSoldSameSku14d?: number
   unitsSoldSameSku30d?: number
   topOfSearchImpressionShare?: number
+  // ADM-A3 — new-to-brand (SB + SD) and KENP (SP). Optional because which of them arrives depends
+  // on the ad product's report: SP sends the two kindle columns and no NTB, SD sends three NTB
+  // counts and no rate, SB sends all four. `undefined` therefore means "this product's report does
+  // not carry it", which is exactly what the mapper must preserve as null rather than 0.
+  newToBrandPurchases?: number
+  newToBrandSales?: number
+  newToBrandUnitsSold?: number
+  newToBrandPurchasesRate?: number
+  kindleEditionNormalizedPagesRead14d?: number
+  kindleEditionNormalizedPagesRoyalties14d?: number
   campaignBudgetAmount?: number
   campaignBudgetType?: string
   campaignBiddingStrategy?: string
@@ -722,6 +757,19 @@ async function ingestCampaignRows(
 
       // Normalised, NOT raw — Amazon mixes percentages and fractions in one report.
       topOfSearchIS: toImpressionShareFraction(r.topOfSearchImpressionShare),
+
+      // ADM-A3 — null, never 0, when this ad product's report does not carry the column. The two
+      // pre-existing NTB fields carry `@default(0)`, which is precisely how "we never asked" came
+      // to render as a measured zero on 6,045 rows; `intOrNull` keeps the new ones honest, and
+      // passes the real 0 through when Amazon does answer.
+      ntbOrders14d: intOrNull(r.newToBrandPurchases),
+      ntbSalesCents14d: centsOrNull(r.newToBrandSales),
+      ntbUnits14d: intOrNull(r.newToBrandUnitsSold),
+      // SB-only. `toImpressionShareFraction` because Amazon mixes percent and fraction across
+      // rate-shaped columns exactly as it does for impression share — same normaliser, one rule.
+      ntbOrdersRate14d: toImpressionShareFraction(r.newToBrandPurchasesRate),
+      kenpRead14d: intOrNull(r.kindleEditionNormalizedPagesRead14d),
+      kenpRoyaltiesCents14d: centsOrNull(r.kindleEditionNormalizedPagesRoyalties14d),
 
       campaignBudgetCents: centsOrNull(r.campaignBudgetAmount),
       campaignBudgetType: strOrNull(r.campaignBudgetType),

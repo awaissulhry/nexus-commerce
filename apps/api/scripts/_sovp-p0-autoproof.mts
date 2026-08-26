@@ -1,0 +1,20 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const c = await prisma.campaign.findFirst({ where: { name: 'DE_Auto_Close' }, select: { id: true, name: true, marketplace: true, adGroups: { select: { name: true, targets: { where: { isNegative: false }, select: { kind: true, expressionValue: true, bidCents: true, status: true } } } } } })
+console.log(`campaign "${c?.name}" (${c?.marketplace})`)
+const ts = (c?.adGroups ?? []).flatMap((g) => g.targets)
+console.log(`positive targets: ${ts.length}`)
+for (const t of ts) console.log(`  kind=${t.kind} value="${t.expressionValue}" bid=${(t.bidCents??0)/100} status=${t.status}`)
+console.log(`\nSOV engine selects where { kind:'KEYWORD', isNegative:false } →  eligible here: ${ts.filter((t)=>t.kind==='KEYWORD').length}`)
+
+// how general is this? every campaign with ZERO keyword targets is previewable but un-actable
+const camps = await prisma.campaign.findMany({ select: { id: true, name: true, adGroups: { select: { targets: { where: { isNegative: false }, select: { kind: true } } } } } })
+const rows = camps.map((c) => { const t = c.adGroups.flatMap((g) => g.targets); return { name: c.name, all: t.length, kw: t.filter((x)=>x.kind==='KEYWORD').length } })
+const previewable = rows.filter((r) => r.all > 0)
+const noKw = previewable.filter((r) => r.kw === 0)
+console.log(`\ncampaigns with previewable targets: ${previewable.length}`)
+console.log(`🔴 of those, campaigns where the SOV engine can act on NOTHING (0 keyword targets): ${noKw.length}`)
+console.log(`   e.g. ${noKw.slice(0,8).map((r)=>`"${r.name}" (${r.all} rows previewed, 0 actionable)`).join(', ')}`)
+const totalPrev = previewable.reduce((a,r)=>a+r.all,0), totalKw = previewable.reduce((a,r)=>a+r.kw,0)
+console.log(`   account-wide: preview would list ${totalPrev} targets; only ${totalKw} are of a kind the SOV engine can ever select (${((totalKw/totalPrev)*100).toFixed(1)}%)`)
+await prisma.$disconnect()
