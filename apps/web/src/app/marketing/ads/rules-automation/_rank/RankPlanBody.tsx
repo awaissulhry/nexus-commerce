@@ -15,7 +15,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
-import { Button, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { SchedCampaign } from '../_schedule/CampaignSection'
@@ -232,10 +232,12 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
         {/* Target windows — Grid painter (default) ↔ precise List editor */}
         <div className="h10-rp-sec">
           <div className="h10-rp-lbl wins">During these windows, hold a different rank:<span className="grow" />
-            <span className="h10-rp-seg" role="tablist" aria-label="Window editor view">
-              <button type="button" role="tab" aria-selected={winView === 'grid'} className={winView === 'grid' ? 'on' : ''} onClick={() => setWinView('grid')}>Grid</button>
-              <button type="button" role="tab" aria-selected={winView === 'list'} className={winView === 'list' ? 'on' : ''} onClick={() => setWinView('list')}>List</button>
-            </span>
+            <SegmentedControl
+              ariaLabel="Window editor view" size="sm"
+              value={winView}
+              onChange={(v) => setWinView(v as 'grid' | 'list')}
+              options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]}
+            />
             {winView === 'list' && <Button variant="link" inline className="h10-rp-link" onClick={addWindow}><Plus size={12} /> Add window</Button>}
           </div>
           {winView === 'grid' ? (

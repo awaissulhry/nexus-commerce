@@ -16,7 +16,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
-import { Button, Input, Radio, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Radio, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -324,11 +324,22 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
       <div className="box h10-rte" onClick={e => e.stopPropagation()} style={{ width: 'min(680px, 95vw)' }}>
         <div className="hd">Rank targets — what each paint colour does<span className="grow" /><ToolbarButton className="h10-kebab" icon={<X size={14} />} label="Close" tooltip={false} onClick={() => onClose(changed)} /></div>
         <div className="h10-rte-scope">
-          <span className="h10-mode-seg h10-scope-seg" role="tablist" style={{ display: 'inline-flex', border: '1px solid #d8dde4', borderRadius: 6, overflow: 'hidden' }}>
-            <button type="button" role="tab" aria-selected={view === 'scope'} className={view === 'scope' ? 'on' : ''} disabled={!scopeAvailable} onClick={() => setView('scope')} title={scopeAvailable ? '' : `Save the ${scopeKind} first to set overrides here`}>{scopeKind === 'product' ? 'This product' : 'This campaign'}</button>
-            <button type="button" role="tab" aria-selected={view === 'global'} className={view === 'global' ? 'on' : ''} onClick={() => setView('global')}>Global defaults</button>
-          </span>
-          <span className="h10-rte-scopehint"><Info size={12} /> {view === 'scope' ? `Overrides apply only to ${scopeLabel}. Empty = use the global default.` : 'Editing the shared default — changes every product & campaign.'}</span>
+          {/* `SegmentedOption` carries no per-option `disabled` (DS-GAPS), and a disabled tab
+              explaining itself only through a hover `title` was the weaker half of this control
+              anyway. When the scope has nothing to override yet, the reachable option is the
+              only one shown and the reason moves into the hint beside it, as visible text. */}
+          <SegmentedControl
+            ariaLabel="Which defaults to edit" size="sm"
+            value={scopeAvailable ? view : 'global'}
+            onChange={(v) => setView(v as 'scope' | 'global')}
+            options={[
+              ...(scopeAvailable ? [{ value: 'scope', label: scopeKind === 'product' ? 'This product' : 'This campaign' }] : []),
+              { value: 'global', label: 'Global defaults' },
+            ]}
+          />
+          <span className="h10-rte-scopehint"><Info size={12} /> {!scopeAvailable
+            ? `Save the ${scopeKind} first to set overrides here — until then this edits the shared default, which changes every product & campaign.`
+            : view === 'scope' ? `Overrides apply only to ${scopeLabel}. Empty = use the global default.` : 'Editing the shared default — changes every product & campaign.'}</span>
         </div>
         <div className="list h10-rte-list">
           <div className="h10-rte-row h10-rte-head"><span className="nm">Target</span>{FIELDS.map(f => <span key={f.f} className="fld" title={f.hint}>{f.label} {f.unit === '€' ? '€' : '%'}</span>)}<span className="act" /></div>

@@ -235,3 +235,22 @@ around #0b3f8f or darker, and that is a large change to make for this reason alo
 - ✅ VERIFIED STALE (DS session) — `.h10-rep-bulkbtn.danger` needs 6.21:1 and `Button variant="danger-outline"` gives **7.36:1**; the four `.h10-*-stale` spellings need 8.27:1 and the darkened `variant="warning"` gives **exactly 8.27:1**. Both were filed before those shipped. Nothing to do.
 - `DateField` takes no `id`, so its visible label cannot be associated with it. `Field` auto-associates by cloning its single child with a generated `id`, and `DateField` has no rest spread — the prop is dropped, so `<label for>` names an element that does not exist (verified in the DOM: `getElementById` returns null; the control's only name is `ariaLabel`). This also blocks the campaign's read-only Start Date, which has a working `<label for="cd-startdate">` today and would LOSE it by converting. Same shape as `Listbox`. — apps/web/src/design-system/components/DateField.tsx:67, components/Field.tsx:48
 - `DataGrid` renders `<tr {...rowProps(row)} className={…}>` — the explicit `className` comes AFTER the spread, so a `className` passed through `rowProps` is silently discarded. Every other `rowProps` key applies, which makes it look like the prop works. `rowClassName` is the right slot and the docblock says so, but the discard is silent: I shipped a probe grid whose rows were clickable with no `cursor: pointer` and neither tsc nor the diff could see it. Either merge the two or drop `className` from `rowProps`'s accepted type — apps/web/src/design-system/components/DataGrid.tsx:425
+
+## `SegmentedOption` has no per-option `disabled`
+*Session 1 · ROUND 2 · 2026-08-26 · found converting `_rank/RankTargetEditor.tsx`*
+
+`SegmentedOption` is `{ value, label, icon?, title? }`, and `disabled` exists only on the whole
+control. The Rank target editor's switch needs one segment disabled and the other live: until the
+product or campaign is saved there is nothing to override, so "This product" is unreachable while
+"Global defaults" must stay usable. Disabling the control disables both.
+
+Handled here without the prop, and arguably better for it: when the scope is unavailable the
+option is not rendered and the reason moves into the hint line beside the control as visible text.
+The hand-rolled version put that reason in a `title` on a disabled button, which is the pattern
+this console has already written down as a defect — a disabled control cannot explain itself, and
+a hover tooltip reaches neither a keyboard nor a touch user.
+
+Suggested: `disabled?: boolean` plus `disabledReason?: string` on `SegmentedOption`, with the
+reason rendered somewhere a keyboard user meets it rather than as a bare `title`. Worth pairing
+with a note in the docblock that dropping the option and explaining in adjacent text is often the
+better answer — that is what this call site did.

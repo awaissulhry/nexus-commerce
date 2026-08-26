@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
-import { Button, Input, RadioCard, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, RadioCard, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
@@ -39,10 +39,12 @@ function AtomMark({ size = 20 }: { size?: number }) {
 // The Rank-goal ↔ Dayparting segmented control, shown in both top bars so you can switch either way.
 function StyleToggle({ value, onChange }: { value: 'rank' | 'classic'; onChange: (v: 'rank' | 'classic') => void }) {
   return (
-    <span className="h10-rgd-toggle" role="tablist" aria-label="Schedule style">
-      <button type="button" role="tab" aria-selected={value === 'rank'} className={value === 'rank' ? 'on' : ''} onClick={() => onChange('rank')}>Rank goal</button>
-      <button type="button" role="tab" aria-selected={value === 'classic'} className={value === 'classic' ? 'on' : ''} onClick={() => onChange('classic')}>Dayparting</button>
-    </span>
+    <SegmentedControl
+      ariaLabel="Schedule style" size="sm" className="h10-rgd-toggle"
+      value={value}
+      onChange={(v) => onChange(v as 'rank' | 'classic')}
+      options={[{ value: 'rank', label: 'Rank goal' }, { value: 'classic', label: 'Dayparting' }]}
+    />
   )
 }
 
