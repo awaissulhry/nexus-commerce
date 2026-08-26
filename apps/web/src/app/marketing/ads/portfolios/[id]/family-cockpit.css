@@ -106,7 +106,7 @@
 
 .fc-notes { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .fc-notes li { display: flex; gap: 7px; font-size: 12.5px; color: #56637a; line-height: 1.5; max-width: 100ch; }
-.fc-notes svg { flex-shrink: 0; margin-top: 2px; color: var(--nds-grey-500); }
+.fc-notes svg { flex-shrink: 0; margin-top: 2px; color: var(--nds-text-3); }
 
 .fc-autorow { display: flex; gap: 0; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); margin-bottom: 6px; overflow-x: auto; }
 .fc-autorow > div { display: flex; flex-direction: column; gap: 3px; padding: 11px 16px; border-right: 1px solid var(--nds-grey-75); white-space: nowrap; }

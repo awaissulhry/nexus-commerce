@@ -102,7 +102,7 @@
 .h10-spw-cset-row .ag .spw-agb { flex: 1; min-width: 0; }
 .h10-spw-cset-row .ag .spw-agb .spw-agbfield { width: 100%; }
 .h10-spw-cset-row .ag .spw-agb .sub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); margin-top: 7px; }
-.h10-spw-cset-row .ag .spw-agb .sub svg { color: var(--nds-grey-500); flex-shrink: 0; }
+.h10-spw-cset-row .ag .spw-agb .sub svg { color: var(--nds-text-3); flex-shrink: 0; }
 
 /* ── replicate: the fields ─────────────────────────────────────────────────
    `.h10-rep-search input`, `.h10-rep-reps .row input` and `.h10-rep-scope .item`
@@ -113,7 +113,7 @@
 .rep-search .ad.suf { background: none; border-left: 0; padding: 0 6px 0 0; }
 .rep-repsrow { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
 .rep-repsfield { flex: 1; }
-.rep-repsrow .arr { color: var(--nds-grey-500); flex: none; }
+.rep-repsrow .arr { color: var(--nds-text-3); flex: none; }
 /* The inline money cell (`.h10-rep .inl`) is `Input size="xs" prefix="€"` — the DS's own
    money field. Only the 54px right-aligned number box is still this table's. */
 .rep-inlfield > input { width: 54px; text-align: right; }
