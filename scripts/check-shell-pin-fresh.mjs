@@ -17,9 +17,18 @@
  * prevent. This guard is the alternative to that discipline — it lets a pin be written either
  * way and simply fails when it stops agreeing with the DS.
  *
- * TWO CHECKS
+ * THREE CHECKS
  *   1. COMPLETE — every token `.dark` redefines is pinned.
  *   2. FRESH    — every pin resolves to the DS's own LIGHT value.
+ *   3. SCOPE    — the pin still reaches PORTALS.
+ *
+ * The third exists because Session 1 spotted that the first two are blind to it. The pin's
+ * selector was narrowed once already — it read `.h10-shell` alone, and the eight DS components
+ * that portal into `document.body` rendered outside it: a light console whose every dropdown was
+ * dark. COMPLETE and FRESH both passed at every point in that sequence, because the SET OF
+ * SURFACES REACHED changed while the pins themselves stayed correct. Asserting the selector is a
+ * static approximation of "which surfaces does this reach" — the real question is only fully
+ * answerable at runtime, but this catches the one regression that has actually happened.
  *
  *   node scripts/check-shell-pin-fresh.mjs           # report
  *   node scripts/check-shell-pin-fresh.mjs --check   # exit 1 on a missing or stale pin
@@ -79,6 +88,15 @@ for (const m of shell.matchAll(/(?:^|,|\s)(?:body:has\(\.h10-shell\)|\.h10-shell
   for (const d of m[1].matchAll(/(--nds-[a-z0-9-]+):\s*([^;]+);/g)) pins.set(d[1], d[2].trim()) // later wins
 }
 
+// 3. SCOPE — the portal-covering form must survive. A portal's target IS `body`, so a pin scoped
+// to `.h10-shell` alone cannot reach it, and neither of the other two checks can tell.
+// Comments are STRIPPED first. The block above this rule explains itself using the very string
+// being searched for, so testing the raw file made the check unfailable — narrowing the selector
+// left the prose behind and the guard stayed green. A guard that cannot fail is not a guard.
+const shellCode = shell.replace(/\/\*[\s\S]*?\*\//g, ' ')
+const PORTAL_SCOPE = /body:has\(\.h10-shell\)\s*(?:,|\{)/
+const scopeLost = !PORTAL_SCOPE.test(shellCode)
+
 const missing = [...flips].filter((t) => !pins.has(t)).sort()
 const stale = []
 for (const [tok, expr] of pins) {
@@ -89,7 +107,15 @@ for (const [tok, expr] of pins) {
   if (a.toLowerCase() !== b.toLowerCase()) stale.push({ tok, expr, got: a, want: b })
 }
 
-if (missing.length || stale.length) {
+if (missing.length || stale.length || scopeLost) {
+  if (scopeLost) {
+    console.error(`❌ shell-pin SCOPE: the pin no longer matches \`body:has(.h10-shell)\`.`)
+    console.error(`   Eight DS components portal into document.body — Listbox, Menu, Combobox,`)
+    console.error(`   MultiSelect, HoverCard, Modal, Drawer, Toast. Scoped to \`.h10-shell\` alone the`)
+    console.error(`   pin cannot reach them, and the console renders light with dark dropdowns.`)
+    console.error(`   Nothing else here can see that: every pin stays correct and every popover stays`)
+    console.error(`   internally above AA. It is a coherence failure, not a contrast one.\n`)
+  }
   if (missing.length) {
     console.error(`❌ shell-pin INCOMPLETE: ${missing.length} token(s) that .dark flips are not pinned:`)
     for (const t of missing) console.error(`   ${t}`)
@@ -102,5 +128,5 @@ if (missing.length || stale.length) {
   }
   if (process.argv[2] === '--check') process.exit(1)
 } else {
-  console.log(`✓ shell-pin: ${pins.size} pin(s), all fresh — every token .dark flips is pinned to its DS light value`)
+  console.log(`✓ shell-pin: ${pins.size} pin(s), all fresh, portal scope intact`)
 }
