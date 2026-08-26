@@ -74,7 +74,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-3', value: '#7e8796' },
   // 5.01:1 on --nds-surface. --nds-text-3 is 3.10:1 and fails AA as body text; muted is the
   // tier to use for secondary copy. Ported from apps/web 2026-08-25.
-  { name: '--nds-text-muted', value: '#667080' },
+  { name: '--nds-text-muted', value: '#626c7b' },
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },

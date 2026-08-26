@@ -99,7 +99,7 @@
 .nds-btn.ghost {
   background: var(--nds-surface);
   border-color: var(--nds-primary-ghost-border);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-btn.ghost:hover {
   background: var(--nds-wash-primary);

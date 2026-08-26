@@ -1165,7 +1165,7 @@
 .nds-grid th.sorted,
 .nds-grid th.sorted .sortbtn,
 .nds-grid th.sorted .sortbtn svg {
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-grid input[type='checkbox'] {
   width: 15px;
@@ -1212,7 +1212,7 @@
 .nds-imgup-crit .h { font-size: 12px; font-weight: 700; color: var(--nds-text-2); margin-bottom: 2px; }
 .nds-imgup-crit .c { font-size: 12px; color: var(--nds-text-muted); line-height: 1.5; }
 .nds-imgup-crit .c b { color: var(--nds-text-2); font-weight: 600; }
-.nds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-primary); cursor: pointer; }
+.nds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-text-link); cursor: pointer; }
 .nds-imgup-assets:hover { text-decoration: underline; }
 .nds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-imgup-err); }
 
@@ -1372,7 +1372,7 @@
 .nds-step.active .nds-step-badge {
   background: var(--nds-surface);
   border-color: var(--nds-primary);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   box-shadow: var(--nds-focus-ring);
 }
 .nds-step.active .nds-step-label {
@@ -1430,7 +1430,7 @@
 }
 .nds-dropzone:hover:not(:disabled) .nds-dropzone-primary,
 .nds-dropzone.drag .nds-dropzone-primary {
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-dropzone-hint {
   font-size: 11.5px;
@@ -1473,7 +1473,7 @@
 .nds-dp-nav button { border: none; background: none; color: var(--nds-text-2); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .nds-dp-nav button:hover { background: var(--nds-surface-hover); }
 .nds-datefield-foot { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
-.nds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--nds-primary); cursor: pointer; }
+.nds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--nds-text-link); cursor: pointer; }
 
 /* ── BurnDownChart (BSP.1) ─────────────────────────────────────────────────
    Appended at EOF under a new prefix; no existing selector is touched.

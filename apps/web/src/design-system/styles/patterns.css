@@ -253,7 +253,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   cursor: pointer;
 }
 .nds-detailhdr-row {

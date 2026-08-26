@@ -210,7 +210,12 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // #667080 is 5.01:1 and is not invented: the ads console computed it and used it 207 times,
   // noting "measured in the deployed DOM, not estimated". Same story as the status -text tier —
   // the console hit a gap in this system and filled it correctly.
-  { name: '--nds-text-muted', value: '#667080' },
+  // #626c7b, was #667080. The -muted tier is TEXT, floor 4.5, and it cleared that on white (5.01)
+  // and on the shell (4.62) while missing it on --nds-surface-sunken (4.42) — a ground this
+  // system defines itself. Third token found that way, which is the real finding: whatever check
+  // produced these pairs was run against WHITE ONLY. #626c7b is the smallest move that clears 4.5
+  // on every ground (5.32 / 4.91 / 4.69 / 4.82).
+  { name: '--nds-text-muted', value: '#626c7b' },
   // #146034, was #14724d. Third instance of the same finding in one sweep: an engaged GREEN
   // toggle measured #146034 on #e7f4ec = 6.74:1 while the DS pair was 5.40:1, so it could not
   // convert without losing contrast. Darkening only the TEXT clears it at 6.95:1 on the existing
