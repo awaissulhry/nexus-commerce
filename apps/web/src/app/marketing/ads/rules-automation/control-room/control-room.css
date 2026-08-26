@@ -169,18 +169,22 @@
 /* ── the per-rule dial ───────────────────────────────────────────────────── */
 .acr-row.rule { align-items: center; }
 .acr-dial { display: inline-flex; flex-shrink: 0; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); overflow: hidden; background: var(--nds-white); }
-.acr-notch {
-  display: inline-flex; align-items: center; gap: 5px;
+/* A joined strip of DS `Button`s, so `border-radius: 0` is load-bearing — the DS rounds every
+   button and four rounded notches read as four controls rather than one dial. Same shape as
+   `.h10-au-notch` on Automations; the `.on.<level>` fills below are (0,3,0) and still outrank the
+   DS `active`, which is the point: this dial says WHICH level by colour. */
+.nds-btn.acr-notch {
+  gap: 5px;
   font-size: 11.5px; font-weight: 550; color: #5a6779;
   background: var(--nds-white); border: 0; border-right: 1px solid var(--nds-grey-150);
-  padding: 7px 11px; cursor: pointer; white-space: nowrap;
+  border-radius: 0; padding: 7px 11px; white-space: nowrap;
 }
-.acr-notch:last-child { border-right: 0; }
-.acr-notch:hover:not(:disabled):not(.on) { background: var(--nds-grey-50); }
+.nds-btn.acr-notch:last-child { border-right: 0; }
+.nds-btn.acr-notch:hover:not(:disabled):not(.on) { background: var(--nds-grey-50); }
 /* Disabled = above this rule's graduation ceiling. Muted, still legible, keeps its tooltip —
    an operator must be able to SEE the rung they cannot reach, and why. */
-.acr-notch:disabled { color: var(--nds-grey-400); cursor: not-allowed; background: var(--nds-white); }
-.acr-notch.on { color: var(--nds-white); }
+.nds-btn.acr-notch:disabled { color: var(--nds-grey-400); cursor: not-allowed; background: var(--nds-white); }
+.nds-btn.acr-notch.on { color: var(--nds-white); }
 .acr-notch.on.off { background: #7a869a; }
 .acr-notch.on.observe { background: #4d5b6e; }
 .acr-notch.on.propose { background: #2a5399; }
@@ -426,11 +430,11 @@
 
 /* The earned notch. An invitation, never a pre-selection: it is outlined, not filled, so it
    cannot be mistaken at a glance for the level the rule is already at. */
-.acr-notch.earned {
+.nds-btn.acr-notch.earned {
   color: var(--nds-success-text); background: #f2fbf7;
   box-shadow: inset 0 0 0 1.5px #7fc9a7;
 }
-.acr-notch.earned:hover:not(:disabled) { background: #e8f6ef; }
+.nds-btn.acr-notch.earned:hover:not(:disabled) { background: #e8f6ef; }
 .acr-row.rule.graduable { border-color: #cfe8dc; }
 
 /* ── ACR.1.2b — the engine drawer ─────────────────────────────────────────
@@ -594,15 +598,17 @@
    states a campaign is in. The DS secondary clears it. */
 
 .acr-gg-pins { display: inline-flex; gap: 4px; }
-.acr-gg-pin {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 10.5px; font-weight: 650; cursor: pointer;
-  border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-450);
-  border-radius: 4px; padding: 3px 6px; min-width: 34px; justify-content: center;
+.nds-btn.acr-gg-pin {
+  gap: 3px;
+  font-size: 10.5px; font-weight: 650;
+  /* 🔴 --nds-grey-450 measures 2.58:1 on white. These three letters are the whole label of a
+     control that withdraws an engine's authority over a campaign; --nds-text-muted is 5.01:1. */
+  border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-text-muted);
+  border-radius: 4px; padding: 3px 6px; min-width: 34px;
 }
-.acr-gg-pin:hover { border-color: var(--nds-grey-300); color: #46536a; }
+.nds-btn.acr-gg-pin:hover { border-color: var(--nds-grey-300); color: #46536a; }
 /* Amber, not green: a pin is a withdrawal of authority, and it must not read as "healthy". */
-.acr-gg-pin.on { background: #fdf4e6; color: #8a6320; border-color: #f0dcbb; }
+.nds-btn.acr-gg-pin.on { background: #fdf4e6; color: #8a6320; border-color: #f0dcbb; }
 
 .acr-gg-sup { font-size: 11px; color: #8a6320; background: #fdf4e6; border: 1px solid #f0dcbb; border-radius: 4px; padding: 2px 6px; }
 .acr-gg-rules {
@@ -699,15 +705,15 @@
 /* Set / clear as one control, so "pin" and "unpin" cannot be confused for a toggle
    whose current state means something across a mixed selection. */
 .acr-gg-bulk-pin { display: inline-flex; }
-.acr-gg-bulk-pin button {
+.acr-gg-bulk-pin .nds-btn {
   font-size: 10.5px; font-weight: 650; cursor: pointer;
   border: 1px solid #f0dcbb; background: #fdf4e6; color: #8a6320;
   padding: 4px 7px;
 }
-.acr-gg-bulk-pin button:first-child { border-radius: 4px 0 0 4px; border-right: none; }
-.acr-gg-bulk-pin button.off { border-radius: 0 4px 4px 0; background: var(--nds-white); color: var(--nds-grey-450); border-color: var(--nds-grey-150); }
-.acr-gg-bulk-pin button:disabled { opacity: 0.55; cursor: default; }
-.acr-gg-bulk-pin button:hover:not(:disabled) { filter: brightness(0.97); }
+.acr-gg-bulk-pin .nds-btn:first-child { border-radius: 4px 0 0 4px; border-right: none; }
+.acr-gg-bulk-pin .nds-btn.off { border-radius: 0 4px 4px 0; background: var(--nds-white); color: var(--nds-grey-450); border-color: var(--nds-grey-150); }
+.acr-gg-bulk-pin .nds-btn:disabled { opacity: 0.55; cursor: default; }
+.acr-gg-bulk-pin .nds-btn:hover:not(:disabled) { filter: brightness(0.97); }
 
 /* `.nds-grid tbody tr.sel td` paints the selected row, and the grid's own hover sits under it —
    both from the DS now, on the same `sel` class this grid already set. The selection column's
@@ -723,13 +729,8 @@
    keeps its own fill: white on this #a3342b measures 6.81:1 where the DS `danger` token is
    5.44:1, and a substitution may only raise contrast. */
 /* The committing step is the only one tinted — the first click must not look like the action. */
-.acr-undo-btn.go {
-  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-  font-size: 11.5px; font-weight: 550; padding: 4px 9px; border-radius: 5px;
-  color: var(--nds-white); background: #a3342b; border: 1px solid #a3342b;
-}
-.acr-undo-btn.go:hover:not(:disabled) { background: #8f2d25; }
-.acr-undo-btn.go:disabled { opacity: .55; cursor: not-allowed; }
+/* The undo confirm is `Button variant="danger"` — its own red is retired now that
+   --nds-danger-strong (#a3211a, 7.53:1) sits above the #b3261e (6.81:1) this drew. */
 .acr-undo-msg { font-size: 11.5px; }
 .acr-undo-msg.ok { color: var(--nds-success-text); }
 .acr-undo-msg.bad { color: #a3342b; }

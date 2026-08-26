@@ -250,9 +250,12 @@ export function RankGoalBuilder() {
       </header>
 
       <div className="h10-rb-body" ref={scrollRef}>
-        <nav className="h10-rb-nav" role="tablist" aria-label="Rank schedule steps">
+        {/* Not `role="tablist"`: these scroll the body to a section, they do not swap panels, and
+            nothing here carries `aria-controls`. A `<nav>` of links-as-buttons is what it is, and
+            `aria-current` says which section you are in without promising tab behaviour. */}
+        <nav className="h10-rb-nav" aria-label="Rank schedule steps">
           {(groupId ? [...STEPS, EVENTS_STEP, HISTORY_STEP] : STEPS).map((s) => (
-            <button key={s.id} type="button" role="tab" aria-selected={active === s.id} className={`h10-rb-step ${active === s.id ? 'on' : ''}`} onClick={() => goto(s.id)}>{s.label}</button>
+            <Button key={s.id} variant="quiet" className={`h10-rb-step ${active === s.id ? 'on' : ''}`} aria-current={active === s.id ? 'true' : undefined} onClick={() => goto(s.id)}>{s.label}</Button>
           ))}
         </nav>
 

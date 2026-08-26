@@ -24,9 +24,9 @@
 
 .h10-rb-body { flex: 1; overflow-y: auto; display: flex; align-items: flex-start; background: var(--nds-white); }
 .h10-rb-nav { position: sticky; top: 0; flex: 0 0 320px; padding: 68px 22px 22px 52px; display: flex; flex-direction: column; }
-.h10-rb-step { appearance: none; border: 0; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: var(--nds-grey-700); text-align: left; padding: 10px 15px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; } /* BP.P3: 16/500 → 14/600 */
-.h10-rb-step:hover { color: #1b2230; background: var(--nds-grey-50); }
-.h10-rb-step.on { color: var(--nds-blue-600); font-weight: 700; background: var(--nds-blue-100); }
+.nds-btn.h10-rb-step { font: inherit; font-size: 14px; font-weight: 600; color: var(--nds-grey-700); text-align: left; padding: 10px 15px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; } /* BP.P3: 16/500 → 14/600 */
+.nds-btn.h10-rb-step:hover { color: #1b2230; background: var(--nds-grey-50); }
+.nds-btn.h10-rb-step.on { color: var(--nds-blue-600); font-weight: 700; background: var(--nds-blue-100); }
 
 .h10-rb-main { flex: 1; min-width: 0; }
 .h10-rb-wrap { max-width: 1200px; padding: 72px 36px 90px 12px; }
@@ -585,7 +585,9 @@
 .h10-trgrid-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .h10-trgrid-bar .lbl { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-trgrid-bar .grow { flex: 1; }
-.h10-tr-swatch { font: inherit; font-size: 11.5px; font-weight: 700; border: 1px solid rgba(0,0,0,.1); border-radius: var(--nds-radius-sm); padding: 4px 10px; cursor: pointer; }
+/* The brush swatches carry an operator-chosen colour as an inline style, so the DS cannot own
+   their fill — only the reset, the focus ring and the pressed outline below. */
+.nds-btn.h10-tr-swatch { font: inherit; font-size: 11.5px; font-weight: 700; border: 1px solid rgba(0,0,0,.1); border-radius: var(--nds-radius-sm); padding: 4px 10px; }
 .h10-tr-swatch.on { outline: 2px solid var(--nds-blue-600); outline-offset: 1px; }
 /* DS-ALIGN — the grid's toolbar buttons are the DS `Button` at `xs`. The class is kept only so
    the bar's own layout rules can still reach them. */
@@ -594,13 +596,15 @@
 .h10-tr-hrow, .h10-tr-drow { display: grid; grid-template-columns: 46px repeat(24, 1fr); gap: 2px; }
 .h10-tr-drow { margin-top: 2px; }
 .h10-tr-hh { font-size: 9px; color: var(--nds-grey-500); text-align: center; align-self: end; }
-.h10-tr-dlbl { font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: 4px; cursor: pointer; padding: 0; }
-.h10-tr-dlbl:hover { background: var(--nds-grey-150); }
+.nds-btn.h10-tr-dlbl { font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border-radius: 4px; padding: 0; }
+.nds-btn.h10-tr-dlbl:hover { background: var(--nds-grey-150); }
 .h10-tr-cell { height: 22px; border-radius: 3px; cursor: pointer; position: relative; overflow: hidden; border: 1px solid rgba(0,0,0,.04); }
 .h10-tr-cell:hover { outline: 1px solid var(--nds-blue-600); outline-offset: -1px; }
 .h10-tr-cell .dmd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(15,31,68,.28); }
-.h10-tr-collbl { font-size: 10px; color: var(--nds-grey-400); background: none; border: 0; cursor: pointer; padding: 0; }
-.h10-tr-collbl:hover { color: var(--nds-blue-600); }
+/* 🔴 --nds-grey-400 measures 2.04:1 on white; this arrow is the only affordance saying an hour
+   column can be painted, and 1.4.11 asks 3:1 of it. --nds-text-muted is 5.01:1. */
+.nds-btn.h10-tr-collbl { font-size: 10px; color: var(--nds-text-muted); padding: 0; }
+.nds-btn.h10-tr-collbl:hover { color: var(--nds-blue-600); background: none; }
 .h10-trgrid-legend { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--nds-grey-600); }
 .h10-trgrid-legend .it { display: inline-flex; align-items: center; gap: 5px; }
 .h10-trgrid-legend .it i { width: 10px; height: 10px; border-radius: 3px; }
@@ -2082,8 +2086,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── a section ────────────────────────────────────────────────────────────────────────────────── */
 .h10-bsp-sec { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); scroll-margin-top: 120px; }
-.h10-bsp-sechd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; background: none; border: 0; font: inherit; text-align: left; cursor: pointer; }
-.h10-bsp-sechd:hover { background: var(--nds-grey-25); border-radius: 9px; }
+.nds-btn.h10-bsp-sechd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; font: inherit; text-align: left; }
+.nds-btn.h10-bsp-sechd:hover { background: var(--nds-grey-25); border-radius: 9px; }
 .h10-bsp-sechd .chev { flex: none; color: var(--nds-grey-450); transition: transform .15s ease; transform: rotate(-90deg); }
 .h10-bsp-sec.open .h10-bsp-sechd .chev { transform: rotate(0deg); }
 .h10-bsp-sechd .ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -2657,7 +2661,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    band's height — spine + band is 101px against a 120px budget. */
 .h10-bsp-month { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); }
 .h10-bsp-month b { min-width: 104px; text-align: center; font-size: 11.5px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-bsp-month button { display: inline-flex; padding: 2px; background: none; border: 0; border-radius: 5px; color: var(--nds-grey-600); cursor: pointer; }
+.h10-bsp-month .nds-tbtn { padding: 2px; color: var(--nds-grey-600); }
 .h10-bsp-month button:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-bsp-month .today { padding: 2px 7px; font-size: 10.5px; font-weight: 800; color: var(--nds-info-text); }
 
@@ -2681,13 +2685,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    that stays is the DELETE, and only because of a measurement: white on this #b3261e is 6.54:1
    where the DS `danger` token (#c0392b) is 5.44:1, and a substitution may only ever raise
    contrast. It goes the moment that token is darkened — filed in .claude/DS-GAPS.md. */
-.h10-bsp-btn.danger {
-  display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; cursor: pointer;
-  border-radius: var(--nds-radius-lg); font-size: 12px; font-weight: 700;
-  background: #b3261e; border: 1px solid var(--nds-note-error-icon); color: var(--nds-white);
-}
-.h10-bsp-btn.danger:hover:not(:disabled) { background: #8c1d17; border-color: #8c1d17; }
-.h10-bsp-btn.danger:disabled { opacity: .5; cursor: not-allowed; }
+/* The hand-rolled delete red is retired: --nds-danger-strong is #a3211a (7.53:1) where this rule
+   drew #b3261e (6.54:1), so `variant="danger"` raises it. */
 .h10-bsp-saverow { display: flex; gap: 7px; }
 
 /* ── the two live switches ────────────────────────────────────────────────────────────────────
@@ -2699,12 +2698,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-mode { margin: 2px 0 0; padding-top: 7px; border-top: 1px solid var(--nds-grey-100); font-size: 11px; color: var(--nds-grey-600); }
 .h10-bsp-mode b { font-weight: 800; color: var(--nds-grey-900); text-transform: uppercase; letter-spacing: .03em; }
 
-.h10-bsp-disc { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 9px; background: none; border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-lg); font: inherit; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); text-align: left; cursor: pointer; }
-.h10-bsp-disc:hover { background: var(--nds-grey-25); color: var(--nds-grey-900); border-color: var(--nds-grey-300); }
+/* Dashed, because it opens something that is not there yet — the DS has no dashed variant. */
+.nds-btn.h10-bsp-disc { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 9px; background: none; border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-lg); font: inherit; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); text-align: left; }
+.nds-btn.h10-bsp-disc:hover { background: var(--nds-grey-25); color: var(--nds-grey-900); border-color: var(--nds-grey-300); }
 .h10-bsp-disc i { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 600; color: var(--nds-text-muted); }
 
 .h10-bsp-del { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; background: none; border: 0; font-size: 11.5px; font-weight: 700; color: var(--nds-note-error-icon); cursor: pointer; }
-.h10-bsp-del:hover:not(:disabled) { text-decoration: underline; }
+.nds-btn.h10-bsp-del:hover:not(:disabled) { text-decoration: underline; background: none; }
 .h10-bsp-del:disabled { color: var(--nds-grey-450); cursor: not-allowed; }
 
 .h10-bsp-sub { display: flex; flex-direction: column; gap: 6px; padding-top: 9px; border-top: 1px solid var(--nds-grey-100); }
@@ -4979,8 +4979,9 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    destination — but it must still read and behave as the primary cell affordance.
    🔴 The shared grid paints its first column blue at (0,3,1) via `.nds-wsgrid td.nm .t`; this
    matches that specificity rather than reaching for !important. */
-.h10-bsp-open { padding: 0; background: none; border: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-blue-600); text-align: left; cursor: pointer; }
-.h10-bsp-open:hover { text-decoration: underline; }
+/* `Button variant="link" inline`; the underline is permanent for the reason in DS-GAPS. */
+.nds-btn.h10-bsp-open { font: inherit; font-size: 13px; font-weight: 600; text-align: left; text-decoration: underline; }
+
 
 /* ── the one affordance that leaves the page (§8.13 · D9) ─────────────────────────────────── */
 .h10-bsp-cause { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); font-size: 11.5px; font-weight: 700; color: var(--nds-info-text); text-decoration: none; white-space: nowrap; }

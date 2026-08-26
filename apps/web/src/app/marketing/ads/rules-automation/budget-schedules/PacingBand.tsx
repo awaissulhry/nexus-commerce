@@ -43,6 +43,7 @@
  */
 
 import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { ProgressBar } from '@/design-system/components'
 import type { BudgetManagerResult, BudgetPlanRow } from './slot-contract'
 import { currentMonthUTC, shiftMonth } from './urlState'
@@ -77,16 +78,12 @@ function MonthStepper({ month, onMonth }: { month: string; onMonth: (m: string) 
   const isCurrent = month === currentMonthUTC()
   return (
     <div className="h10-bsp-month">
-      <button type="button" aria-label="Previous month" onClick={() => onMonth(shiftMonth(month, -1))}>
-        <ChevronLeft size={14} />
-      </button>
+      <ToolbarButton size="sm" icon={<ChevronLeft size={14} />} label="Previous month" tooltip={false} onClick={() => onMonth(shiftMonth(month, -1))} />
       <b>{label}</b>
-      <button type="button" aria-label="Next month" onClick={() => onMonth(shiftMonth(month, 1))}>
-        <ChevronRight size={14} />
-      </button>
+      <ToolbarButton size="sm" icon={<ChevronRight size={14} />} label="Next month" tooltip={false} onClick={() => onMonth(shiftMonth(month, 1))} />
       {/* A month that is not "now" must say so — every number beside it is then historical. */}
       {!isCurrent && (
-        <button type="button" className="today" onClick={() => onMonth(currentMonthUTC())}>Today</button>
+        <Button variant="quiet" size="xs" inline className="today" onClick={() => onMonth(currentMonthUTC())}>Today</Button>
       )}
     </div>
   )
@@ -162,13 +159,13 @@ export function PacingBand({
           const on = market === r.marketplace
           const ratio = r.monthlyBudgetCents > 0 ? Math.min(100, ((r.spendCents ?? 0) / r.monthlyBudgetCents) * 100) : 0
           return (
-            <button
+            <Button
               key={r.marketplace}
-              type="button"
               // Clicking the selected chip clears back to the account view, so the control is its
               // own undo and there is no separate "all markets" affordance to hunt for.
               onClick={() => onMarket(on ? 'all' : r.marketplace)}
-              className={`h10-bsp-chip${on ? ' on' : ''} s-${r.status}`}
+              className={`h10-bsp-chip s-${r.status}`}
+              active={on}
               aria-pressed={on}
               title={`${r.marketplace}: ${r.status === 'no-budget' ? 'no monthly cap set' : `${pct((r.spendCents ?? 0) / r.monthlyBudgetCents)} of cap, ${pct(r.expectedPct)} expected by today`}`}
             >
@@ -183,7 +180,7 @@ export function PacingBand({
                   : <>{eur0(r.spendCents ?? 0)} <s>/</s> {eur0(r.monthlyBudgetCents)}</>}
               </span>
               <ProgressBar value={ratio} height={4} className="h10-bsp-bar" />
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -200,13 +197,13 @@ export function PacingBand({
             </>
           )}
         </span>
-        <button
-          type="button"
+        <Button
+          size="xs"
           className="h10-bsp-plan"
           onClick={() => onOpenPlan(selected ? selected.marketplace : (rows[0]?.marketplace ?? ''))}
         >
           Plan <ExternalLink size={11} />
-        </button>
+        </Button>
       </div>
     </div>
   )

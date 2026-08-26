@@ -216,10 +216,10 @@ export function PlanEditor({
       )}
 
       {/* ── the calendar ──────────────────────────────────────────────────────────────────── */}
-      <button type="button" className="h10-bsp-disc" aria-expanded={showCal} onClick={() => setShowCal((v) => !v)}>
+      <Button variant="quiet" className="h10-bsp-disc" aria-expanded={showCal} onClick={() => setShowCal((v) => !v)}>
         {showCal ? '▾' : '▸'} Custom distribution
         <i>{calDraft.length ? `${calDraft.length} weighted` : 'even split'}</i>
-      </button>
+      </Button>
       {showCal && (
         <CalendarEditor
           boosted={calDraft}
@@ -300,27 +300,28 @@ export function PlanEditor({
         />
       </div>
 
-      <button type="button" className="h10-bsp-disc" onClick={onOpenLimits}>
+      <Button variant="quiet" className="h10-bsp-disc" onClick={onOpenLimits}>
         ▸ Per-campaign limits
         <i>{row?.campaignLimitCount ? `${row.campaignLimitCount} set` : 'none set'}</i>
-      </button>
+      </Button>
 
       {/* ── delete. Absent when there is nothing to delete. ───────────────────────────────── */}
       {row?.id && (
         confirmDelete ? (
           <div className="h10-bsp-saverow">
-            {/* 🔴 NOT `variant="danger"`: this red is #b3261e (white on it, 6.54:1) and the DS
-                token is #c0392b (5.44:1). Lower is not an allowed substitution. */}
-            <button type="button" className="h10-bsp-btn danger" disabled={busy}
+            {/* This deferred to its own red while --nds-danger-strong was #c0392b (5.44:1) against
+                this rule's #b3261e (6.54:1). The token has since been darkened to #a3211a — 7.53:1 —
+                so `variant="danger"` now RAISES it and the hand-rolled red is retired. */}
+            <Button variant="danger" size="sm" disabled={busy}
               onClick={() => { setConfirmDelete(false); onDeletePlan(row.id as string) }}>
               Delete the {marketplace} plan
-            </button>
+            </Button>
             <Button size="sm" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep it</Button>
           </div>
         ) : (
-          <button type="button" className="h10-bsp-del" disabled={busy} onClick={() => setConfirmDelete(true)}>
+          <Button variant="quiet" size="xs" className="h10-bsp-del" disabled={busy} onClick={() => setConfirmDelete(true)}>
             <Trash2 size={12} /> Delete this plan
-          </button>
+          </Button>
         )
       )}
 

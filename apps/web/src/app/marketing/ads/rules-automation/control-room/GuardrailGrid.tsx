@@ -479,10 +479,10 @@ export function GuardrailGrid() {
             </Button>
             {/* Explicit, because an empty box must keep meaning "leave alone". */}
             <span className="acr-gg-bulk-pin">
-              <button type="button" disabled={!!bulkBusy} className="off"
-                title="Clear the MINIMUM bid on the selection" onClick={() => void clearBulkBounds('min')}>✕ min</button>
-              <button type="button" disabled={!!bulkBusy} className="off"
-                title="Clear the MAXIMUM bid on the selection" onClick={() => void clearBulkBounds('max')}>✕ max</button>
+              <Button variant="secondary" size="xs" className="off" disabled={!!bulkBusy}
+                title="Clear the MINIMUM bid on the selection" onClick={() => void clearBulkBounds('min')}>✕ min</Button>
+              <Button variant="secondary" size="xs" className="off" disabled={!!bulkBusy}
+                title="Clear the MAXIMUM bid on the selection" onClick={() => void clearBulkBounds('max')}>✕ max</Button>
             </span>
           </span>
 
@@ -490,10 +490,10 @@ export function GuardrailGrid() {
             <span className="acr-gg-bulk-lbl">Hands off</span>
             {DIMS.map((d) => (
               <span key={d.key} className="acr-gg-bulk-pin">
-                <button type="button" disabled={!!bulkBusy} title={`Pin ${d.key} on the selection. ${d.hint}`}
-                  onClick={() => void applyBulkPin(d, true)}>{d.short}</button>
-                <button type="button" disabled={!!bulkBusy} className="off" title={`Clear the ${d.key} pin on the selection`}
-                  onClick={() => void applyBulkPin(d, false)}>✕</button>
+                <Button variant="warning" size="xs" disabled={!!bulkBusy} title={`Pin ${d.key} on the selection. ${d.hint}`}
+                  onClick={() => void applyBulkPin(d, true)}>{d.short}</Button>
+                <Button variant="secondary" size="xs" className="off" disabled={!!bulkBusy} title={`Clear the ${d.key} pin on the selection`}
+                  onClick={() => void applyBulkPin(d, false)}>✕</Button>
               </span>
             ))}
           </span>
@@ -575,16 +575,16 @@ export function GuardrailGrid() {
               render: (r) => (
                 <div className="acr-gg-pins">
                   {DIMS.map((d) => (
-                    <button
+                    <Button
                       key={d.key}
-                      type="button"
+                      variant="secondary" size="xs"
                       className={`acr-gg-pin ${r.pins[d.key] ? 'on' : ''}`}
                       onClick={() => void togglePin(r, d)}
                       title={`${d.hint}${r.pins[d.key] && r.pinnedBy ? `\nPinned by ${r.pinnedBy}` : ''}`}
                       aria-pressed={r.pins[d.key]}
                     >
                       {r.pins[d.key] && <Pin size={9} />}{d.short}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               ),

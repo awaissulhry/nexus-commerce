@@ -49,6 +49,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, ExternalLink, Info } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -200,9 +201,9 @@ export function BindingSection({ scope, weeks, openRail, onRows }: Pick<BspSlotP
           <span className="h10-bsp-cname" title={r.name}>
             {/* A button, not a link: this opens the inspector rail via the URL, and the rail is a
                 view of this page rather than a destination. */}
-            <button type="button" className="h10-bsp-open" onClick={() => openRail({ kind: 'campaign', id: r.id })}>
+            <Button variant="link" inline className="h10-bsp-open" onClick={() => openRail({ kind: 'campaign', id: r.id })}>
               {r.name}
-            </button>
+            </Button>
             {r.approximate && (
               <span className="h10-bsp-approx" title="This campaign has no budget history in the audit log, so every ratio is measured against today's budget rather than the budget actually in force that day.">≈</span>
             )}

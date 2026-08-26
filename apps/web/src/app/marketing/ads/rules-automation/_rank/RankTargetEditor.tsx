@@ -460,7 +460,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   </div>
                   <div className="h10-mrecipes">
                     <span style={{ fontSize: 10, fontWeight: 700, color: '#3730a3' }}>Recipes:</span>
-                    {RECIPES.map(r => <button key={r.id} type="button" className="h10-rcp" disabled={view === 'scope' && !scopeAvailable} title={r.hint} onClick={() => applyRecipe(t, r.m)}>{r.label}</button>)}
+                    {RECIPES.map(r => <Button key={r.id} variant="tonal" size="xs" className="h10-rcp" disabled={view === 'scope' && !scopeAvailable} title={r.hint} onClick={() => applyRecipe(t, r.m)}>{r.label}</Button>)}
                   </div>
                   <div className="h10-mnote">Blank = snap to {effOf(t, 'biasPct') ?? 0}% Placement (up or down) and hold — never above it. Set a Ceiling above Placement % to let it climb.{effKeep(t) ? ' Keep-climbing ON → pushes to the Ceiling on its own.' : ''}</div>
                 </div>

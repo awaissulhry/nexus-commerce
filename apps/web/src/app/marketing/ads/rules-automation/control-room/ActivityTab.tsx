@@ -439,12 +439,12 @@ export function ActivityTab() {
                       This writes to Amazon.
                     </span>
                     {/* 🔴 NOT `variant="danger"`. This red is #a3342b — white on it measures
-                        6.81:1, where the DS token (#c0392b) measures 5.44:1. Both pass AA, but a
-                        substitution may only ever RAISE contrast, so the commit step keeps its own
-                        colour until the DS token is darkened. Filed in .claude/DS-GAPS.md. */}
-                    <button type="button" className="acr-undo-btn go" disabled={undoing === c.id} onClick={() => void doUndo(c)}>
+                        6.81:1, where --nds-danger-strong was #c0392b (5.44:1) — lower, so the
+                        conversion waited. The token has since been darkened to #a3211a, which is
+                        7.53:1: `variant="danger"` now RAISES it and the hand-rolled red is gone. */}
+                    <Button variant="danger" size="xs" disabled={undoing === c.id} onClick={() => void doUndo(c)}>
                       {undoing === c.id ? 'Undoing…' : 'Yes, undo'}
-                    </button>
+                    </Button>
                     <Button size="xs" onClick={() => setConfirming(null)}>Cancel</Button>
                   </div>
                 ) : (

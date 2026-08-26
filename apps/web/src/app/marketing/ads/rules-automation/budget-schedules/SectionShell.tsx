@@ -38,6 +38,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import { ChevronDown, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { EmptyState } from '@/design-system/components'
 import { NoDataIllus } from '../_shared/NoDataIllus'
@@ -158,14 +159,14 @@ export function SectionShell({
 
   return (
     <section id={`bsp-${id}`} ref={ref} className={`h10-bsp-sec${open ? ' open' : ''}`}>
-      <button type="button" className="h10-bsp-sechd" onClick={onToggle} aria-expanded={open} aria-controls={`bsp-body-${id}`}>
+      <Button variant="quiet" className="h10-bsp-sechd" onClick={onToggle} aria-expanded={open} aria-controls={`bsp-body-${id}`}>
         <ChevronDown size={15} className="chev" aria-hidden="true" />
         <span className="ttl">
           <b>{heading}</b>
           <i>{purpose}</i>
         </span>
         {owner && <span className="own">{owner}</span>}
-      </button>
+      </Button>
       {open && <div className="h10-bsp-secbd" id={`bsp-body-${id}`}>{children}</div>}
     </section>
   )

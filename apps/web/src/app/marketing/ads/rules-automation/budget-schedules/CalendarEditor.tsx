@@ -39,7 +39,7 @@
 
 import { useMemo, useState } from 'react'
 import { Plus, Trash2, AlertTriangle } from 'lucide-react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { calendarTotal, materialiseCalendar, type CalendarDay } from './planMath'
 
 const pctFmt = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)}%`
@@ -100,10 +100,11 @@ export function CalendarEditor({
               <span className="d">Day {b.day}</span>
               <span className="p">{pctFmt(b.pct)}</span>
               <span className="e">€{((b.pct / 100) * capCents / 100).toFixed(2)}</span>
-              <button type="button" aria-label={`Remove the weighting on day ${b.day}`} disabled={disabled}
-                onClick={() => onChange(boosted.filter((x) => x.day !== b.day))}>
-                <Trash2 size={12} />
-              </button>
+              <ToolbarButton
+                size="sm" tone="danger" icon={<Trash2 size={12} />}
+                label={`Remove the weighting on day ${b.day}`} tooltip={false} disabled={disabled}
+                onClick={() => onChange(boosted.filter((x) => x.day !== b.day))}
+              />
             </li>
           ))}
         </ul>

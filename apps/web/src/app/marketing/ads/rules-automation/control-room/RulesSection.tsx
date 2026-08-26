@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Zap, Eye, MessageSquare, Power, ShieldAlert, AlertTriangle, GraduationCap } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -234,9 +235,8 @@ export function RulesSection() {
                 // rests on it staying that way.
                 const earned = !!g?.canGraduate && lv === 'AUTO' && !on
                 return (
-                  <button
+                  <Button
                     key={lv}
-                    type="button"
                     className={`acr-notch ${on ? 'on' : ''} ${lv.toLowerCase()}${earned ? ' earned' : ''}`}
                     aria-pressed={on}
                     disabled={above || busy === r.id}
@@ -246,7 +246,7 @@ export function RulesSection() {
                     onClick={() => void setLevel(r, lv)}
                   >
                     <M.Icon size={12} /> {M.label}
-                  </button>
+                  </Button>
                 )
               })}
             </div>

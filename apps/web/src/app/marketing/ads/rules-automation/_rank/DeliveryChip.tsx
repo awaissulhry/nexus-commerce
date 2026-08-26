@@ -6,6 +6,7 @@
  * GET /advertising/campaigns/:id/pending-writes (write-gate decision + queue state + sync stamps).
  */
 import { useCallback, useEffect, useState } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -54,7 +55,7 @@ export function DeliveryChip({ campaignId, reloadSignal }: { campaignId: string;
       {!!pw.pendingCount && <><span className="sep">·</span><span>{pw.pendingCount} pending</span></>}
       <span className="sep">·</span>
       <span className="last">{lastLabel}</span>
-      <button type="button" className="ref" onClick={load} title="Refresh delivery status" aria-label="Refresh delivery status"><RefreshCw size={11} /></button>
+      <ToolbarButton size="sm" className="ref" icon={<RefreshCw size={11} />} label="Refresh delivery status" tooltip={false} onClick={load} />
     </span>
   )
 }

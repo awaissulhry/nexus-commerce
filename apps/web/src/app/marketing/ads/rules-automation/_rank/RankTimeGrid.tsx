@@ -87,7 +87,7 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
       <div className="h10-trgrid-bar">
         <span className="lbl">Paint:</span>
         {palette.map(p => (
-          <button key={p.key || 'baseline'} type="button" className={`h10-tr-swatch ${brush === p.key ? 'on' : ''}`} style={{ background: p.color, color: p.text }} onClick={() => setBrush(p.key)} title={p.key === BASELINE ? 'Clear back to the baseline (no window)' : `Hold ${p.name} during painted hours`}>{p.name}</button>
+          <Button key={p.key || 'baseline'} className={`h10-tr-swatch ${brush === p.key ? 'on' : ''}`} style={{ background: p.color, color: p.text }} onClick={() => setBrush(p.key)} title={p.key === BASELINE ? 'Clear back to the baseline (no window)' : `Hold ${p.name} during painted hours`}>{p.name}</Button>
         ))}
         <span className="grow" />
         {onEditTargets && <Button size="xs" className="h10-tr-mini" onClick={onEditTargets} title="Customize what each colour does (placement %, bids), or add your own">✎ Edit targets</Button>}
@@ -110,7 +110,7 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
         </div>
         {DOW_ORDER.map(d => (
           <div key={d} className="h10-tr-drow">
-            <button type="button" className="h10-tr-dlbl" onClick={() => paintRow(d)} title={`Paint all of ${DOW_LABEL[d]}`}>{DOW_LABEL[d]}</button>
+            <Button variant="quiet" size="xs" inline className="h10-tr-dlbl" onClick={() => paintRow(d)} title={`Paint all of ${DOW_LABEL[d]}`}>{DOW_LABEL[d]}</Button>
             {Array.from({ length: 24 }, (_, h) => {
               const key = grid[d][h]
               const def = colorOf[key] ?? { color: BASELINE_COLOR, text: BASELINE_TEXT, name: 'Baseline' }
@@ -133,7 +133,7 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
         ))}
         <div className="h10-tr-hrow foot">
           <div className="h10-tr-corner" />
-          {Array.from({ length: 24 }, (_, h) => <button key={h} type="button" className="h10-tr-collbl" onClick={() => paintCol(h)} title={`Paint ${String(h).padStart(2, '0')}:00 across the week`}>{h % 3 === 0 ? '↥' : ''}</button>)}
+          {Array.from({ length: 24 }, (_, h) => <Button key={h} variant="quiet" size="xs" inline className="h10-tr-collbl" onClick={() => paintCol(h)} aria-label={`Paint ${String(h).padStart(2, '0')}:00 across the week`} title={`Paint ${String(h).padStart(2, '0')}:00 across the week`}>{h % 3 === 0 ? '↥' : ''}</Button>)}
         </div>
       </div>
 

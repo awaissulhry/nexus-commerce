@@ -193,9 +193,9 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
           <div className="h10-rp-lbl">Baseline — the rest of the week, hold:</div>
           <div className="h10-rp-chips">
             {targets.map(t => (
-              <button key={t.key} type="button" className={`h10-rp-chip ${baseline === t.key ? 'on' : ''}`} style={baseline === t.key && t.color ? { borderColor: t.color, boxShadow: `0 0 0 1px ${t.color} inset` } : undefined} onClick={() => setBaseline(baseline === t.key ? '' : t.key)} title={t.allOut ? 'Ignores ACOS — holds at any cost' : t.targetISPct != null ? `Target ${t.targetISPct}% top-of-search share` : ''}>
+              <Button key={t.key} className={`h10-rp-chip ${baseline === t.key ? 'on' : ''}`} style={baseline === t.key && t.color ? { borderColor: t.color, boxShadow: `0 0 0 1px ${t.color} inset` } : undefined} onClick={() => setBaseline(baseline === t.key ? '' : t.key)} title={t.allOut ? 'Ignores ACOS — holds at any cost' : t.targetISPct != null ? `Target ${t.targetISPct}% top-of-search share` : ''}>
                 <span className="sw" style={{ background: t.color ?? '#999' }} />{t.name}{t.allOut && <span className="ao">ALL-OUT</span>}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -246,7 +246,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
             {windows.length === 0 && <div className="h10-rp-empty">No time windows — the baseline applies all week. Add one to push harder during peak hours.</div>}
             {windows.map((w, i) => (
               <div key={i} className="h10-rp-win">
-                <div className="days">{DAYS.map((d, di) => <button key={di} type="button" className={w.days.includes(di) ? 'on' : ''} onClick={() => toggleDay(i, di)} aria-label={d} aria-pressed={w.days.includes(di)}>{d[0]}</button>)}</div>
+                <div className="days">{DAYS.map((d, di) => <Button key={di} variant="quiet" size="xs" inline active={w.days.includes(di)} onClick={() => toggleDay(i, di)} aria-label={d} aria-pressed={w.days.includes(di)}>{d[0]}</Button>)}</div>
                 <Select size="sm" value={w.startHour} onChange={e => setWin(i, { startHour: Number(e.target.value) })} aria-label="Start hour">{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hh(h)}</option>)}</Select>
                 <span className="to">to</span>
                 <Select size="sm" value={w.endHour} onChange={e => setWin(i, { endHour: Number(e.target.value) })} aria-label="End hour">{Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{hh(h % 24)}{h === 24 ? ' (24)' : ''}</option>)}</Select>
