@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Check, FlaskConical, ShieldCheck, Wand2, Settings2, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { marketLabel } from '../_shared/amazonLinks'
 import {
@@ -261,7 +261,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
                   <Listbox ariaLabel="Operator" width={150} value={c.op} onChange={(v) => setCond(gi, ri, { op: v })} options={OPS.map((o) => ({ value: o.v, label: o.l }))} />
                   {c.op !== 'exists' && <Input type={['in', 'contains'].includes(c.op) ? 'text' : 'number'} step="any" aria-label="Condition value" value={c.value} onChange={(e) => setCond(gi, ri, { value: e.target.value })} placeholder={c.op === 'in' ? 'a, b, c' : 'value'} style={{ width: 84 }} />}
                   <span className="az-bld-unit">{fieldSuffix(fieldDef(c.field)?.unit ?? 'num')}</span>
-                  <button className="az-kebab" onClick={() => removeRow(gi, ri)} style={{ color: '#cc1100' }} aria-label="Remove condition"><Trash2 size={14} /></button>
+                  <ToolbarButton icon={<Trash2 size={14} />} label="Remove condition" tooltip={false} size="sm" className="az-del-btn" onClick={() => removeRow(gi, ri)} />
                 </div>
               ))}
               <Button variant="link" onClick={() => addRow(gi)}><Plus size={13} /> Add condition (AND)</Button>
@@ -282,7 +282,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
                 options={ACTIONS.map((x) => ({ value: x.t, label: x.label, group: x.cat }))}
               />
               {paramInput(ai, a)}
-              <button className="az-kebab" onClick={() => removeAct(ai)} style={{ color: '#cc1100' }} aria-label="Remove action"><Trash2 size={14} /></button>
+              <ToolbarButton icon={<Trash2 size={14} />} label="Remove action" tooltip={false} size="sm" className="az-del-btn" onClick={() => removeAct(ai)} />
             </div>
           ))}
           <Button variant="link" onClick={() => setActs((r) => [...r, { type: 'notify', params: seedParams('notify') }])}><Plus size={13} /> Add action</Button>

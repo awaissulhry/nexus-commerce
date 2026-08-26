@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
@@ -202,7 +202,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
                 <span className="arrow">→</span>
                 <Listbox ariaLabel="Rank target" width={170} value={w.targetKey ?? ''} onChange={v => setWin(i, { targetKey: v })} options={targets.map(t => ({ value: t.key, label: t.name }))} />
                 <span className="grow" />
-                <button type="button" className="az-kebab" onClick={() => removeWin(i)} style={{ color: '#cc1100' }} aria-label="Remove window"><Trash2 size={13} /></button>
+                <ToolbarButton icon={<Trash2 size={13} />} label="Remove window" tooltip={false} size="sm" className="az-del-btn" onClick={() => removeWin(i)} />
               </div>
             ))}
           </>)}

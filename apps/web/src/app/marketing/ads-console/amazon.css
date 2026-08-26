@@ -1568,6 +1568,16 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
    left here — and as a TOKEN, because the raw-hex ratchet holds this file at its count and
    caught the literal I first wrote. Contrast measured, not assumed: see the commit. */
 .az-del-btn { color: var(--nds-danger-text); }
+
+/* Rest colour for a DS ToolbarButton inside this console.
+   `.nds-tbtn` rests at --nds-text-2 #5b6573 (5.91:1). This console's own `.az-kebab` rests at
+   --ink2 #565959 (7.07:1), because it inherits Amazon's palette — so converting a kebab to the
+   DS primitive LOWERS it by 1.16, and the documented Rule-3 exception covers --ink → text-strong
+   only, not this pair. One class, deliberately (0,1,0): it ties `.nds-tbtn` and wins on source
+   order, while every richer state stays with the DS — :hover (0,3,0), [aria-expanded] (0,2,0)
+   and .boxed (0,2,0) all still outrank it. A blanket `.az-root .nds-tbtn` would have tied the
+   last two and silently killed the disclosure and boxed looks. */
+.az-tbtn-ink { color: var(--ink2); }
 .az-del-btn:hover:not(:disabled) { color: var(--nds-danger-strong); }
 
 /* The harvest grid keeps the 18px gap its `.az-tablewrap` carried inline. */

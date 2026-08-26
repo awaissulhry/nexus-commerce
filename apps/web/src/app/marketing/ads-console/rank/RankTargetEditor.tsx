@@ -13,9 +13,9 @@
  */
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
+import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Radio } from '@/design-system/primitives'
+import { Button, Radio, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
@@ -229,7 +229,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   return (
     <div className="az-rd-copymodal" role="dialog" aria-modal="true" aria-label="Edit rank targets" onClick={() => onClose(changed)}>
       <div className="box az-rte" onClick={e => e.stopPropagation()} style={{ width: 'min(680px, 95vw)' }}>
-        <div className="hd">Rank targets — what each paint colour does<span className="grow" /><button type="button" className="az-kebab" onClick={() => onClose(changed)} aria-label="Close">✕</button></div>
+        <div className="hd">Rank targets — what each paint colour does<span className="grow" /><ToolbarButton icon={<X size={14} />} label="Close" tooltip={false} className="az-tbtn-ink" onClick={() => onClose(changed)} /></div>
         <div className="az-rte-scope">
           <span className="az-mode-seg az-scope-seg" role="tablist" style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
             <button type="button" role="tab" aria-selected={view === 'scope'} className={view === 'scope' ? 'on' : ''} disabled={!scopeAvailable} onClick={() => setView('scope')} title={scopeAvailable ? '' : `Save the ${scopeKind} first to set overrides here`}>{scopeKind === 'product' ? 'This product' : 'This campaign'}</button>
@@ -275,9 +275,9 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 <span className="act">
                   {!t.pause && <button type="button" className="az-kebab" title="Motion — how the bid moves (jump / climb / ease / ceiling)" aria-expanded={mOpen} style={mOpen ? { color: '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><SlidersHorizontal size={13} /></button>}
                   {!t.pause && <button type="button" className="az-kebab" disabled={view === 'scope' && !scopeAvailable} title={view === 'scope' ? `Blend for ${scopeLabel} — drive Top + Rest of Search + Product pages at once (+ base bid), just here` : 'Blend — drive Top + Rest of Search + Product pages at once (+ base bid)'} aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))}><Layers size={13} /></button>}
-                  {view === 'scope' && hasOverride(t) && <button type="button" className="az-kebab" title="Clear override (use default)" onClick={() => clearOverride(t.key)}><RotateCcw size={13} /></button>}
-                  {view === 'global' && t.builtIn && <button type="button" className="az-kebab" title="Reset to default" onClick={() => void resetTarget(t.id)}><RotateCcw size={13} /></button>}
-                  {view === 'global' && !t.builtIn && <button type="button" className="az-kebab" title="Delete custom" style={{ color: '#cc1100' }} onClick={() => void deleteTarget(t.id, t.name)}><Trash2 size={13} /></button>}
+                  {view === 'scope' && hasOverride(t) && <ToolbarButton icon={<RotateCcw size={13} />} label="Clear override (use default)" tooltip={false} size="sm" className="az-tbtn-ink" onClick={() => clearOverride(t.key)} />}
+                  {view === 'global' && t.builtIn && <ToolbarButton icon={<RotateCcw size={13} />} label="Reset to default" tooltip={false} size="sm" className="az-tbtn-ink" onClick={() => void resetTarget(t.id)} />}
+                  {view === 'global' && !t.builtIn && <ToolbarButton icon={<Trash2 size={13} />} label="Delete custom" tooltip={false} size="sm" className="az-del-btn" onClick={() => void deleteTarget(t.id, t.name)} />}
                 </span>
               </div>
               {mOpen && !t.pause && (

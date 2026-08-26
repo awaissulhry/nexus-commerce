@@ -306,7 +306,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
     const b = r.b
     switch (key) {
       case 'active': return <Toggle checked={b.status === 'ENABLED'} disabled={busy === b.id} onChange={() => void toggleActive(b)} aria-label="Toggle active" />
-      case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><button className={`az-expand ${expanded.has(b.id) ? 'open' : ''}`} onClick={() => toggleExpand(b.id)} aria-label={expanded.has(b.id) ? 'Collapse ad groups' : 'Expand ad groups'} aria-expanded={expanded.has(b.id)}><ChevronRight size={15} /></button><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><button className="az-kebab" title="Actions" aria-label="Row actions" onClick={(e) => openMenu(e, b.id)}><MoreVertical size={15} /></button></span>
+      case 'name': return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><button className={`az-expand ${expanded.has(b.id) ? 'open' : ''}`} onClick={() => toggleExpand(b.id)} aria-label={expanded.has(b.id) ? 'Collapse ad groups' : 'Expand ad groups'} aria-expanded={expanded.has(b.id)}><ChevronRight size={15} /></button><a className="cn" href={`${TD}/${b.id}`} target="_blank" rel="noopener noreferrer">{b.name}</a><ToolbarButton icon={<MoreVertical size={15} />} label="Row actions" tooltip={false} className="az-tbtn-ink" onClick={(e) => openMenu(e, b.id)} /></span>
       case 'country': return marketplaceCountryName(b.marketplace) || '—'
       case 'status': return statusBadge(b)
       case 'type': return TYPE_LABEL[b.type] ?? b.type

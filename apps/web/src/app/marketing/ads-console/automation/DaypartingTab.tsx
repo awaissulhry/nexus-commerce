@@ -15,7 +15,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useSearchParams } from 'next/navigation'
 import { Clock, Search, X, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, FilterChip, Input, Toggle } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DateField } from '@/design-system/components/DateField'
 import { useCampaignMap, type CampRef } from './useCampaignMap'
@@ -390,7 +390,7 @@ export function DaypartingTab() {
                 <div className="nm"><div className="t">{s.name}</div><div className="d2">{camp ? `${camp.name}${camp.marketplace ? ` · ${camp.marketplace}` : ''}` : s.campaignId} · {winSummary(s.windows)}</div></div>
                 <span className={`az-live ${s.enabled ? 'on' : 'dry'}`}>{s.enabled ? 'LIVE' : 'Off'}</span>
                 {s.lastEvaluatedAt && <div className="stat" title="Last evaluated by the dayparting cron"><b>{s.lastApplied ?? '—'}</b>{new Date(s.lastEvaluatedAt).toLocaleDateString('en-IE')}</div>}
-                <button className="az-kebab" disabled={busy} onClick={() => void delSched(s)} title="Delete" style={{ color: '#cc1100' }}><Trash2 size={15} /></button>
+                <ToolbarButton icon={<Trash2 size={15} />} label="Delete schedule" tooltip={false} className="az-del-btn" disabled={busy} onClick={() => void delSched(s)} />
               </div>
             )
           })}

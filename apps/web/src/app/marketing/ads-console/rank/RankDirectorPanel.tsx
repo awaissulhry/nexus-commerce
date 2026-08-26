@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, Undo2, Wand2, Package, ShieldCheck, Power, Play, RotateCcw, Info, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { Modal } from '@/design-system/components/Modal'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
@@ -237,7 +237,7 @@ export function RankDirectorPanel({ market, productId, onPickProduct }: { market
                   <span className="arrow">→</span>
                   <Listbox ariaLabel="Rank target" width={170} value={w.targetKey ?? ''} onChange={v => setWin(i, { targetKey: v })} options={targets.map(t => ({ value: t.key, label: t.name }))} />
                   <span className="grow" />
-                  <button type="button" className="az-kebab" onClick={() => removeWin(i)} style={{ color: '#cc1100' }} aria-label="Remove window"><Trash2 size={13} /></button>
+                  <ToolbarButton icon={<Trash2 size={13} />} label="Remove window" tooltip={false} size="sm" className="az-del-btn" onClick={() => removeWin(i)} />
                 </div>
               ))}
             </>)}

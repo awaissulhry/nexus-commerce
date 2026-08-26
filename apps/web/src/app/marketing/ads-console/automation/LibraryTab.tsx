@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, Sliders, Check, Trash2 } from 'lucide-react'
-import { Button, Checkbox, FilterChip, Input } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, type AutomationDef } from './automations'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
@@ -106,7 +106,7 @@ export function LibraryTab({ ruleNames, busy, onAdd, onAddMany, onEnablePlaybook
                 const all = autos.length > 0 && have === autos.length
                 return (
                   <div key={pb.id} className="az-pbcard">
-                    <div className="top"><span className="ic"><PlaybookIcon /></span><span className="nm">{pb.name}</span><button className="az-kebab" onClick={() => setCustomPbs(deleteCustomPlaybook(pb.id))} title="Delete saved strategy" style={{ color: '#cc1100' }}><Trash2 size={14} /></button></div>
+                    <div className="top"><span className="ic"><PlaybookIcon /></span><span className="nm">{pb.name}</span><ToolbarButton icon={<Trash2 size={14} />} label="Delete saved strategy" tooltip={false} size="sm" className="az-del-btn" onClick={() => setCustomPbs(deleteCustomPlaybook(pb.id))} /></div>
                     <div className="goal">Saved strategy · {autos.length} automations</div>
                     <div className="chips">{autos.map((a) => <span key={a.id} className={`chip ${ruleNames.has(a.name) ? 'on' : ''}`}>{a.name}</span>)}</div>
                     <div className="foot"><span className="grow" />{all ? <Button onClick={onGoActive}><Check size={14} />Active</Button> : <Button variant="primary" disabled={busy === `cpb:${pb.id}`} onClick={() => void onActivateCustom(pb)}>{busy === `cpb:${pb.id}` ? 'Adding…' : 'Activate'}</Button>}</div>

@@ -242,8 +242,8 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
                     <button className={`az-live ${r.dryRun ? 'dry' : 'on'}`} disabled={busy === r.id} onClick={() => void toggleLive(r)} title="Toggle dry-run / live">{r.dryRun ? 'Dry run' : 'LIVE'}</button>
                     <ToolbarButton variant="boxed" icon={<FlaskConical size={14} />} label="Check logic + show details" disabled={busy === r.id} onClick={() => void testRule(r)} />
                     <ToolbarButton variant="boxed" icon={<Copy size={14} />} label="Duplicate this rule" disabled={busy === r.id} onClick={() => void cloneRule(r)} />
-                    <button className="az-kebab" onClick={() => toggleExpand(r.id)} title="Show details" aria-expanded={isExp}><ChevronDown size={15} style={{ transform: isExp ? 'rotate(180deg)' : undefined, transition: 'transform .12s' }} /></button>
-                    <button className="az-kebab" disabled={busy === r.id} onClick={() => void deleteRule(r)} title="Delete" style={{ color: '#cc1100' }}><Trash2 size={15} /></button>
+                    <ToolbarButton icon={<ChevronDown size={15} style={{ transform: isExp ? 'rotate(180deg)' : undefined, transition: 'transform .12s' }} />} label={isExp ? 'Hide details' : 'Show details'} tooltip={false} className="az-tbtn-ink" onClick={() => toggleExpand(r.id)} aria-expanded={isExp} />
+                    <ToolbarButton icon={<Trash2 size={15} />} label="Delete rule" tooltip={false} className="az-del-btn" disabled={busy === r.id} onClick={() => void deleteRule(r)} />
                     {engineMsg[r.id] && <span style={{ color: 'var(--ink2)', fontSize: 11 }}>{engineMsg[r.id]}</span>}
                   </div>
                   {isExp && (
