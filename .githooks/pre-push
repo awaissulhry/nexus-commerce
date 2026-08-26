@@ -93,6 +93,15 @@ node scripts/check-css-hex-ratchet.mjs --check || {
 # it has and may not gain one, and a file with no baseline entry is held at ZERO. Anything the DS
 # genuinely does not cover gets ADDED to the DS and filed in .claude/DS-GAPS.md — 89 of the 98
 # gaps filed during the sweep were closed that way, not worked around.
+# A custom property whose value is `var(X)` resolves in the scope where it is DECLARED. So a
+# :root alias of a token that .dark overrides keeps its LIGHT value inside .dark, and no amount
+# of overriding X reaches it. Three status pills measured 1.50, 2.09 and 2.21 in the browser
+# while a static resolver called them passing.
+node scripts/check-dark-alias-scope.mjs --check || {
+  echo "❌ dark-alias scope guard FAILED — see message above (rule + why: scripts/check-dark-alias-scope.mjs header)"
+  exit 1
+}
+
 node scripts/check-raw-primitives-ratchet.mjs --check || {
   echo "❌ raw-primitive ratchet FAILED — see message above (rule + why: scripts/check-raw-primitives-ratchet.mjs header)"
   exit 1

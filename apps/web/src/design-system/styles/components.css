@@ -1533,7 +1533,7 @@
 .nds-acct-pill-n {
   min-width: 15px; padding: 0 4px; margin-left: 1px;
   border-radius: var(--nds-radius-round);
-  background: var(--nds-primary); color: var(--nds-white);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
   font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
 }
 
@@ -1657,7 +1657,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-acctp-warn { color: var(--nds-warning-strong); }
 .nds-acctp-badge {
   padding: 1px 7px; border-radius: var(--nds-radius-round);
-  background: var(--nds-primary); color: var(--nds-white);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
   font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
 }
 .nds-acctp-input {

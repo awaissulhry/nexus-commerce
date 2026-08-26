@@ -69,7 +69,7 @@
 
 .nds-wsgrid td.nm .pin { color: var(--nds-wsgrid-icon-muted); flex-shrink: 0; }
 
-.nds-wsgrid td.nm .tg { font-size: 10px; font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .tg { font-size: 10px; font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-pill-neutral-bg); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
 
 .nds-wsgrid td.nm .pb { font-size: 9px; font-weight: 800; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
 
@@ -253,7 +253,7 @@
 
 .nds-wsgrid td.nm .nmw .tg[data-t="M"] { background: var(--nds-purple-600); }
 
-.nds-wsgrid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-white); border: 1px solid var(--nds-wsgrid-pb-border); border-radius: 5px; flex-shrink: 0; }
+.nds-wsgrid td.nm .nmw .pb { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 24px; padding: 0 5px; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--nds-text-muted); background: var(--nds-surface); border: 1px solid var(--nds-wsgrid-pb-border); border-radius: 5px; flex-shrink: 0; }
 
 /* ── CBN.2h.9 — custom rounded checkboxes (H10), ~19px, grid + bulk modal ── */
 .nds-wsgrid input[type="checkbox"], .h10-bulk-row .ck input, .h10-bulk-hd .ck input,
@@ -441,7 +441,7 @@
 /* inline 🔍 search next to the toolbar count (AdsDataGrid `searchable`) */
 .h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: var(--nds-text-muted); border-radius: 7px; cursor: pointer; }
 
-.h10-am-searchbtn:hover { background: var(--nds-grey-100); color: var(--nds-text-link); }
+.h10-am-searchbtn:hover { background: var(--nds-surface-hover); color: var(--nds-text-link); }
 
 .h10-am-searchbox { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--nds-grey-300); border-radius: 8px; background: var(--nds-white); }
 

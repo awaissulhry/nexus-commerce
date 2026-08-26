@@ -440,6 +440,63 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-surface-sunken', value: '#1a2330' },
   { name: '--nds-rail-bg', value: '#18263b' },
 
+  // ── the dark palette, measured 2026-08-26 ────────────────────────────────────────────────────
+  // The dark block overrode 29 tokens out of ~240, so most washes and fills kept their LIGHT
+  // value on a dark canvas: 28 DS rules measured below AA after the aliases below were applied.
+  // Every value here was chosen against its ACTUAL usage, not picked to look right in isolation.
+  //
+  // --nds-primary is the constrained one: it is a FILL carrying --nds-text-inverse AND is used as
+  // TEXT on --nds-surface, so one value has to clear both. #6d9ee8 gives 5.84 and 5.59.
+  // Deliberately NOT #8ab6f0, which would clear both more comfortably but IS --nds-text-link —
+  // reusing it makes "primary" and "link" the same colour in dark and different in light.
+  { name: '--nds-primary', value: '#6d9ee8' },
+  { name: '--nds-primary-soft', value: '#1c2f4d' },      // link on it 6.42
+  { name: '--nds-wash-primary', value: '#182a44' },      // link on it 6.90
+  { name: '--nds-pill-neutral-bg', value: '#26323f' },   // text-2 on it 6.32
+  { name: '--nds-success-soft', value: '#173a2c' },      // success-strong on it 8.14
+  { name: '--nds-danger-soft', value: '#3a1c1c' },       // danger-strong on it 6.92
+  { name: '--nds-danger-text', value: '#ef9c93' },       // on surface 7.14
+  { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
+  { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
+  { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 7.67
+  { name: '--nds-imgup-drag', value: '#1c2f4d' },        // text-link on it 6.42
+  // The -text tier is DARK by construction (it exists to be read on a light wash), so on a dark
+  // wash it is dark-on-dark: success-text measured 1.64:1 on the new --nds-success-soft. In dark
+  // the -strong tier is the readable one — this block already chose those values to be AA on the
+  // dark canvas — so -text aliases to it. --nds-stale-text follows --nds-warning-text and needs
+  // no entry of its own.
+  { name: '--nds-success-text', value: 'var(--nds-success-strong)' },   // 8.14 on success-soft
+  { name: '--nds-warning-text', value: 'var(--nds-warning-strong)' },   // 7.24 on warning-soft
+  // warning-soft had no dark value, so a "warning" surface rendered a LIGHT amber wash on a dark
+  // canvas — a contrast PASS that is still a visual bug, and the reason a ratio check alone is
+  // not enough.
+  { name: '--nds-warning-soft', value: '#3a2e12' },
+  // The status pills carry their own bg tokens, which had no dark value — so once the -text tier
+  // aliased to -strong (light) above, a warning pill was light-on-light at 1.66:1. These three
+  // mirror the tone washes.
+  { name: '--nds-pill-warning-bg', value: '#3a2e12' },
+  // BLUE, not green. This console's success pill is blue — "ok = blue Enabled" is the convention
+  // pillTone.ts documents, and the LIGHT value is #d2e6fc with a blue-900 foreground. Mirroring
+  // the tone NAME to green would have made the same pill green in dark and blue in light.
+  { name: '--nds-pill-success-bg', value: '#1c2f4d' },
+  { name: '--nds-pill-success-fg', value: 'var(--nds-text-link)' },   // 6.42 on it
+  { name: '--nds-pill-danger-bg', value: '#3a1c1c' },
+  // 🔴 These four ALIAS a token that .dark overrides, and must therefore be re-declared HERE.
+  // A custom property whose value is `var(X)` resolves in the scope where it is DECLARED, not
+  // where it is used: declared on :root, `--nds-pill-warning-fg: var(--nds-warning-text)`
+  // computes to the LIGHT #6d3f10 on :root and then inherits that literal into .dark. Overriding
+  // --nds-warning-text in .dark never reaches it. Measured in-browser: the warning pill was
+  // 1.50:1, the neutral pill 2.21:1 and the danger pill 2.09:1 — while a static resolver that
+  // assumed lazy resolution reported all three as passing.
+  { name: '--nds-pill-warning-fg', value: 'var(--nds-warning-text)' },
+  { name: '--nds-pill-neutral-fg', value: 'var(--nds-text-2)' },
+  { name: '--nds-pill-danger-fg', value: 'var(--nds-danger-text)' },
+  { name: '--nds-stale-text', value: 'var(--nds-warning-text)' },
+  //
+  // NOT overridden on purpose: --nds-white and --nds-grey-100, which workspace-grid.css uses as
+  // BACKGROUNDS. A ramp step is an absolute colour — a dark "white" would make every other
+  // consumer shift silently. Those two rules need repointing to a semantic surface instead.
+
   // Three tokens that had NO dark value, so they kept their LIGHT one on a dark canvas.
   // Measured 2026-08-26 across every DS rule setting both a token colour and a token background:
   //

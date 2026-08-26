@@ -216,7 +216,7 @@
 .nds-tag.neutral { color: var(--nds-text-strong); background: var(--nds-surface-sunken); }
 .nds-tag.info { color: var(--nds-info-strong); background: var(--nds-info-soft); }
 .nds-tag.success { color: var(--nds-success-strong); background: var(--nds-success-soft); }
-.nds-tag.warning { color: var(--nds-amber-text); background: var(--nds-warning-soft); }
+.nds-tag.warning { color: var(--nds-warning-text); background: var(--nds-warning-soft); }
 .nds-tag.danger { color: var(--nds-danger-strong); background: var(--nds-danger-soft); }
 
 /* ── TagInput (tag-based free entry + suggestion menu) ───────────── */
@@ -730,7 +730,7 @@
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 14px; height: 14px; padding: 0 3px;
   border-radius: var(--nds-radius-round);
-  background: var(--nds-primary); color: var(--nds-white);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
   font-size: 9px; font-weight: 700; line-height: 1;
   pointer-events: none;
 }
