@@ -139,10 +139,18 @@
   --accent: 99 102 241;
 
   /* The DS's own h10-* semantic aliases (tokens.css). Expressed through the primitive ramp,
-     which the .dark block never touches, so there is one source of truth for the hex. */
+     which the .dark block never touches, so there is one source of truth for the hex.
+     🔴 This block is PARTIAL. The complete pin — all 54 tokens `.dark` redefines — is the
+     consolidated block at the END of this file, and it wins on source order. Add new pins there,
+     not here, and check any pin here still matches the DS's light value before trusting it: a
+     ramp reference goes stale the moment a role diverges from its ramp. */
   --nds-text: var(--nds-grey-900);
   --nds-text-2: var(--nds-grey-600);
-  --nds-text-3: var(--nds-grey-500);
+  /* --nds-text-3 is pinned in the consolidated block at the END of this file, not here.
+     It used to read `var(--nds-grey-500)` (#8a93a1) — but --nds-text-3 is the ICON tier and was
+     darkened to #7e8796 to clear its 3:1 floor on tinted grounds (#8a93a1 is 2.74 on grey-100,
+     #7e8796 is 3.20). Pinning it back to the ramp here silently undid that inside the console.
+     Source order already made the later pin win; this line only misled anyone grepping. */
   --nds-text-disabled: var(--nds-grey-400);
   --nds-text-inverse: var(--nds-white);
   --nds-bg: var(--nds-grey-50);
@@ -408,6 +416,14 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    have re-frozen every other file's in-flight literals at the same time.
 
    🔴 Adding a `.dark` override to a token in the DS means adding its pin HERE too. */
+/* 🔴 `body:has(.h10-shell)`, not `.h10-shell` alone. Eight DS components portal into
+   `document.body` — Listbox, Menu, Combobox, MultiSelect, HoverCard, Modal, Drawer, Toast — so
+   they render OUTSIDE the shell and a pin scoped to `.h10-shell` never reaches them. The result
+   was a light console whose every dropdown was dark, which no per-surface contrast probe can
+   see: each popover is internally coherent and above AA in both themes. It is a coherence
+   failure, not a contrast one. Pinning on the body that CONTAINS a shell covers the portals
+   without any component needing to know about themes. */
+body:has(.h10-shell),
 .h10-shell {
   --nds-bg: var(--nds-grey-50);
   --nds-border: var(--nds-grey-200);
