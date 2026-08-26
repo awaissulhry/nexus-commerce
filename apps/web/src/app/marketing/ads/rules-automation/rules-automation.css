@@ -1394,7 +1394,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-note svg { flex-shrink: 0; margin-top: 2px; color: var(--nds-text-muted); }
 .h10-kt-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-kt-note.out { padding: 8px 11px; border-radius: var(--nds-radius-lg); background: var(--nds-grey-75); }
-.h10-kt-note .lnk { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 
 /* What a scope CANNOT reach. Amber, not red: the view is correct, its reach is partial. */
 .h10-kt-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: var(--nds-radius-lg); background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; }
@@ -1884,7 +1883,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    is 4.79:1 on white and **4.42:1 on #f4f6f9**, so the section's link colour fails AA everywhere
    it is used outside a white card. #1a61c6 is 5.33:1 there and 5.88:1 on white.
    getComputedStyle reports the DECLARED colour and would have called this a pass. */
-.h10-plc-fresh .lnk { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-blue-700); text-decoration: underline; }
 
 .h10-plc-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
 .h10-plc-scope .h10-plc-note { margin: 0; }
@@ -2573,9 +2571,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-floor { color: var(--nds-text-muted); text-decoration: underline dotted 1px; text-underline-offset: 3px; }
 
 /* One link treatment for every button-as-link on this page, on the ground and inside the card. */
-.h10-ar-lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-700); text-decoration: underline; cursor: pointer; }
-.h10-ar-lnk:hover { color: #16509f; }
-.h10-ar-lnk:focus-visible { outline: 2px solid var(--nds-blue-700); outline-offset: 2px; border-radius: 3px; }
 
 /* ── notes: a refusal is never the colour of a failure ────────────────────────────────────────── */
 .h10-ar-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
@@ -2584,7 +2579,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* Broke — the read failed. Amber, and the only state on this page that is allowed to look wrong. */
 .h10-ar-note.warn { background: var(--nds-note-warn-bg); border: 1px solid var(--nds-note-warn-bg); color: var(--nds-note-warn-fg); }
 .h10-ar-note.warn svg, .h10-ar-note.warn b { color: var(--nds-note-warn-fg); }
-.h10-ar-note.warn .h10-ar-lnk { color: var(--nds-note-warn-fg); }
+.h10-ar-note.warn .nds-btn.h10-lnk { color: var(--nds-note-warn-fg); }
 /* Refused — the scope cannot resolve. A refusal is not a failure: it is the system working, and it
    gets its own colour so an operator never reads "this is broken" where the answer is "this asks
    for two things that cannot both be true". */
@@ -2877,7 +2872,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* ── the engine sentence ────────────────────────────────────────────────────────────────────── */
 .h10-plc-hour { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 7px; margin: 10px 0 0; padding: 10px 13px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); background: var(--nds-white); font-size: 11.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-plc-hour b { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-plc-hour .lnk { font: inherit; font-weight: 700; color: var(--nds-blue-700); text-decoration: underline; }
 .h10-plc-hour .clock { padding: 1px 7px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
 /* The refresh offer. It OFFERS; it never refetches under a reading operator. */
 .h10-plc-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
@@ -4766,8 +4760,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    are SCOPED to `.h10-rules-tabs` and change nothing outside these eleven pages. Fixing the shared
    family is a console-wide change and belongs to whoever owns it.
 
-   Both replacements are colours this stylesheet ALREADY uses (#1a61c6 = `.h10-ar-lnk`,
-   #55606d = `.h10-ar-said`), so the palette gains nothing and the DS ratchet sees no new hex.
+   Both replacements are colours this stylesheet ALREADY uses (#1a61c6 was `.h10-ar-lnk`,
+   now the DS `link` variant's own blue; #55606d = `.h10-ar-said`), so the palette gains nothing
+   and the DS ratchet sees no new hex.
    #1a61c6 = 5.43:1 on the ground and 5.12:1 on the active badge; #55606d = 5.65:1 on #eef1f5.
 
    No `!important`: each selector adds `.h10-rules-tabs` and therefore outranks the original by one
@@ -4879,7 +4874,6 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-plc3-warn { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #f0dcbe; border-radius: 9px; background: #fff6e8; color: #7a4812; font-size: 11.5px; line-height: 1.55; }
 .h10-plc3-warn svg { flex-shrink: 0; margin-top: 2px; }
 .h10-plc3-warn b { font-weight: 800; color: #6d3f10; }
-.h10-plc3-warn .lnk { font: inherit; font-weight: 700; color: var(--nds-blue-700); text-decoration: underline; }
 
 /* the per-row result line after a bulk runs */
 .h10-plc3-result { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
@@ -5648,3 +5642,15 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-kt6-tbl td,
 .h10-n24-t td,
 .h10-plc3-rows td { vertical-align: top; }
+
+/* ── The link-style button, once ──────────────────────────────────────────────────────────────
+   Nineteen call sites across apply-rules, placement, keyword-tracker and bid are the DS
+   `Button variant="link" inline` now — it brings the colour token, the focus ring, the hover and
+   the disabled state. What it cannot bring is the underline: `.nds-btn.link` underlines on HOVER
+   only, and `--nds-text-link` (#1a60c4) measures **1.03:1 against --nds-grey-600 body text** and
+   1.30:1 against #46536a. Under 1.4.1 a link distinguished from its prose by colour alone needs
+   3:1, so the underline is the only thing making these nineteen legible as links at all — it is
+   permanent here, exactly as the eight hand-rolled `.lnk` rules had it.
+   `font: inherit` before `font-weight`: the shorthand resets weight, so the order is load-bearing.
+   Logged in DS-GAPS; the console holds ten more `.lnk` rules outside this half waiting on it. */
+.nds-btn.h10-lnk { font: inherit; font-weight: 700; text-decoration: underline; }

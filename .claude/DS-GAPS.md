@@ -198,3 +198,33 @@ though those rules are still live.
 - ✅ RESOLVED (DS session) — `DateField` takes `format` (`dd/mm/yyyy` | `mm/dd/yyyy` | `yyyy-mm-dd`) and `locale`. `value`/`onChange` were ALREADY ISO, so the stored date never changed meaning — only the display was locale-fixed, in two places. Default stays `dd/mm/yyyy`/`en-GB`, so nothing existing shifts. Verified: ISO `2026-09-08` renders `08/09/2026` or `09/08/2026` on demand — the exact ambiguity that blocked the campaign start/end dates.
 - 🔴 `DataGrid.d.ts` omits NINE props the `.tsx` declares (updated count): `customizable`, `customizeOpen`, `customizeTitle`, `expanded`, `onCustomizeOpenChange`, `renderExpanded`, `rowProps`, `size`, `storageKey`. `size` is the one that would have cost most — without it a compact console grid converts at `md` and loses a third of its visible rows. Anyone planning a conversion from the declaration is planning against a component that does not exist — apps/web/src/design-system/components/DataGrid.d.ts
 - `Stepper` STACKS and the console's step bar is a ROW. Both earlier gaps are closed and verified (the axis fix holds — all three steps now read the same way, bar 68px → 49px — and `label` takes a `ReactNode`), so this is the only thing left between the component and its five call sites: `.nds-step` is `flex-direction: column; align-items: center; text-align: center`, while `.h10-spw-step` is `row` with `gap: 9px`, left-aligned. Measured 2026-08-26 on /marketing/ads/campaign-builder/quick — DS steps `[stacked, stacked, stacked]` at 49px, the live bar `[row, row]` at 47px. Adopting it as-is redesigns the header of all five builders rather than aligning them, so it needs a row variant (or a decision that the stacked look is the one). The conversion is written and reverted twice now; it goes in the day this is settled. — apps/web/src/design-system/styles/components.css `.nds-step`
+
+## `Button variant="link"` underlines on hover only, and the link token is 1.03:1 against body text
+*Session 1 · ROUND 2 · 2026-08-26 · found converting 19 link-style buttons in `rules-automation/`*
+
+`.nds-btn.link` sets `color: var(--nds-text-link)` and puts `text-decoration: underline` under
+`:hover`. In prose that is not enough to say "this is a link". Measured against the body colours
+these actually sit in:
+
+| link colour | adjacent text | ratio |
+|---|---|---|
+| `--nds-text-link` #1a60c4 | `--nds-grey-600` #5b6573 | **1.03:1** |
+| `--nds-text-link` #1a60c4 | #46536a | **1.30:1** |
+| `--nds-text-link` #1a60c4 | white ground | 5.98:1 (text contrast is fine) |
+
+WCAG 1.4.1 asks for ≥3:1 between the link and the text around it when colour is the only cue.
+1.03:1 is not a cue at all — at rest these read as ordinary prose, and the link only announces
+itself once the pointer is already on it, which is no help to anyone reading or tabbing.
+
+Every hand-rolled version in this console had already reached the same conclusion independently:
+**eighteen separate `.lnk` / `.h10-ar-lnk` rules, and every one of them underlines permanently.**
+That unanimity is the finding. Nineteen of those call sites are the DS `Button` now, with one
+retained class supplying the single declaration the DS will not:
+`.nds-btn.h10-lnk { font: inherit; font-weight: 700; text-decoration: underline; }`. Ten `.lnk`
+rules outside this half are still waiting on the same thing.
+
+Suggested, in order of preference: (1) `text-decoration: underline` on `.nds-btn.link` itself,
+with the hover reserved for a colour or thickness change; or (2) an `underline` prop on `Button`;
+or (3) if the hover-only rest state is deliberate for toolbar-ish uses, raise `--nds-text-link`
+far enough that it clears 3:1 against `--nds-grey-600` — which from #5b6573 means something
+around #0b3f8f or darker, and that is a large change to make for this reason alone.

@@ -51,7 +51,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
-import { Input, Select } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -1108,7 +1108,7 @@ function EmptyState({ loading, data, q, push }: { loading: boolean; data: BidGri
       <b>{num(data.census.targets)} targets are in this scope — the filters hide all of them.</b>
       <span>
         {q ? <>Nothing matches “{q}”. </> : null}
-        <button type="button" className="lnk" onClick={() => push({ q: '', kind: '', match: '', band: '', measured: 'all' })}>Clear the filters</button>
+        <Button variant="link" inline className="h10-lnk" onClick={() => push({ q: '', kind: '', match: '', band: '', measured: 'all' })}>Clear the filters</Button>
       </span>
     </span>
   )

@@ -750,7 +750,7 @@ export function KeywordTrackerClient() {
                 Watching <b>“{s.list.name}”</b> — {num(s.list.terms)} term{s.list.terms === 1 ? '' : 's'}
                 {s.list.source ? <>, {LIST_SOURCE[s.list.source] ?? s.list.source}</> : null}. It belongs to
                 this page and to <b>{s.list.marketplace}</b> only; nothing automated reads it.
-                {' '}<button type="button" className="lnk" onClick={() => setEditing(true)}>Edit the list</button>
+                {' '}<Button variant="link" inline className="h10-lnk" onClick={() => setEditing(true)}>Edit the list</Button>
               </span>
             </p>
           )}
@@ -769,7 +769,7 @@ export function KeywordTrackerClient() {
                 {market === 'DE' ? 'German' : market === 'ES' ? 'Spanish' : market === 'FR' ? 'French' : 'local'} row,
                 so those grids were a wrong-list artefact rather than a data gap. Create a list for{' '}
                 {market} instead.{' '}
-                <button type="button" className="lnk" onClick={() => setEditing(true)}>Create one</button>
+                <Button variant="link" inline className="h10-lnk" onClick={() => setEditing(true)}>Create one</Button>
               </span>
             </p>
           )}
@@ -931,7 +931,7 @@ export function KeywordTrackerClient() {
                       {data?.scope.list
                         ? <>Every term on it is one of our own brand terms, which are excluded by default. Include brand terms, or add terms to the list.</>
                         : <>A watchlist belongs to one marketplace. Create one for {market} — nothing on this page falls back to another market’s terms.</>}
-                      {' '}<button type="button" className="lnk" onClick={() => setEditing(true)}>{data?.scope.list ? 'Edit the list' : 'Create a list'}</button>
+                      {' '}<Button variant="link" inline className="h10-lnk" onClick={() => setEditing(true)}>{data?.scope.list ? 'Edit the list' : 'Create a list'}</Button>
                     </span>
                   </>
                 ) : (

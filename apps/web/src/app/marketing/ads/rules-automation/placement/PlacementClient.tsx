@@ -63,7 +63,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
@@ -842,7 +842,7 @@ export function PlacementClient() {
               .map((l) => `${l.targetKey} (${l.heldPct}%)`).join(', ') || 'nothing else'} at other hours,
             {' '}<b>which is why the counts above are a reading of this hour and not a constant.</b>
           </span>
-          <a className="lnk" href={`${RULES_BASE}/dayparting`}>See the plan →</a>
+          <Button variant="link" inline className="h10-lnk" asChild><a href={`${RULES_BASE}/dayparting`}>See the plan →</a></Button>
           {/* 🔴 It OFFERS. It never refetches under someone reading — the one screen used to decide
               whether a multiplier is wrong is not a screen that should reorder itself mid-sentence. */}
           {stale && (
@@ -878,7 +878,7 @@ export function PlacementClient() {
             {' — '}{rowRefusal.reason}
             {rowRefusal.deniedAt === 'authority_pin' && <> The pin for this page&rsquo;s dimension is on the campaign&rsquo;s row rail — open it with the campaign name.</>}
             {rowRefusal.deniedAt === 'campaign_allowlist' && <> The per-campaign write gate lives on Apply Rules.</>}
-            {' '}<button type="button" className="lnk" onClick={() => setRowRefusal(null)}>Dismiss</button>
+            {' '}<Button variant="link" inline className="h10-lnk" onClick={() => setRowRefusal(null)}>Dismiss</Button>
           </span>
         </p>
       )}
@@ -1118,7 +1118,7 @@ function EmptyState({
         <span>
           {data.scope.contradiction}. The market in the header and the pickers above are ANDed
           together, so two choices that share no campaign leave nothing to show.{' '}
-          <button type="button" className="lnk" onClick={() => push({ line: '', portfolio: '', campaign: '' })}>Clear the scope</button>
+          <Button variant="link" inline className="h10-lnk" onClick={() => push({ line: '', portfolio: '', campaign: '' })}>Clear the scope</Button>
         </span>
       </span>
     )
@@ -1131,7 +1131,7 @@ function EmptyState({
         <span>
           Nothing here has a placement to show. Widen the scope — this account holds{' '}
           {num(data.scope.totalCampaigns)} campaigns in total.{' '}
-          <button type="button" className="lnk" onClick={() => push({ market: 'all', line: '', portfolio: '', campaign: '' })}>Show all markets</button>
+          <Button variant="link" inline className="h10-lnk" onClick={() => push({ market: 'all', line: '', portfolio: '', campaign: '' })}>Show all markets</Button>
         </span>
       </span>
     )
@@ -1162,7 +1162,7 @@ function EmptyState({
               ? <>An inversion needs at least {num(data.flags.inverted.minClicks)} clicks on two lanes before a ROAS is allowed to decide anything, and none of the {num(data.counts.campaigns)} campaigns here clears that over {data.range.days} day{data.range.days === 1 ? '' : 's'}. Widen the date range — this is “we could not check”, not “nothing is wrong”.</>
               : <>A decorative goal is a property of a plan, and nothing here has one.</>
             : <>All {num(stat.of)} {FLAG_DENOM_LABEL[flag]} are clear. That is a real zero, not a gap.</>}
-          {' '}<button type="button" className="lnk" onClick={() => push({ flag: 'all' })}>Show every campaign</button>
+          {' '}<Button variant="link" inline className="h10-lnk" onClick={() => push({ flag: 'all' })}>Show every campaign</Button>
         </span>
       </span>
     )
@@ -1183,7 +1183,7 @@ function EmptyState({
       </b>
       <span>
         {q ? <>No campaign name contains “{q}”. </> : null}
-        <button type="button" className="lnk" onClick={() => push({ q: '', lane: 'all' })}>Clear the search and the lane filter</button>
+        <Button variant="link" inline className="h10-lnk" onClick={() => push({ q: '', lane: 'all' })}>Clear the search and the lane filter</Button>
       </span>
     </span>
   )

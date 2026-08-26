@@ -814,9 +814,9 @@ export function ApplyRulesClient() {
       sortValue: (r) => (r.portfolioId ? (r.portfolioName ?? portfolioNames.get(r.portfolioId) ?? '') : '￿'),
       render: (r) => (r.portfolioId
         ? (
-          <button type="button" className="h10-ar-lnk" onClick={() => push({ portfolio: r.portfolioId ?? '', grain: 'campaign' })}>
+          <Button variant="link" inline className="h10-lnk" onClick={() => push({ portfolio: r.portfolioId ?? '', grain: 'campaign' })}>
             {r.portfolioName ?? portfolioNames.get(r.portfolioId) ?? r.portfolioId}
-          </button>
+          </Button>
         )
         : <span className="h10-ar-nd" title="No portfolio — a portfolio-scoped rule cannot reach this campaign">none</span>),
     },
@@ -830,10 +830,10 @@ export function ApplyRulesClient() {
         if (!r.lineIds.length) return <span className="h10-ar-nd" title="This campaign advertises no product we hold — no product-scoped rule can reach it">advertising nothing</span>
         const names = r.lineIds.map((id) => lineNames.get(id) ?? id)
         return (
-          <button type="button" className="h10-ar-lnk" title={names.join(' · ')}
+          <Button variant="link" inline className="h10-lnk" title={names.join(' · ')}
             onClick={() => push({ line: r.lineIds[0], grain: 'campaign' })}>
             {names[0]}{names.length > 1 ? ` +${names.length - 1}` : ''}
-          </button>
+          </Button>
         )
       },
     },
@@ -1206,7 +1206,7 @@ export function ApplyRulesClient() {
             campaign data can be up to 5 minutes old
           </span>
           {appliedScope.length > 0 && (
-            <> · <button type="button" className="h10-ar-lnk" onClick={clearScope}>clear scope</button></>
+            <> · <Button variant="link" inline className="h10-lnk" onClick={clearScope}>clear scope</Button></>
           )}
         </p>
       )}
@@ -1215,7 +1215,7 @@ export function ApplyRulesClient() {
         <p className="h10-ar-note bad">
           <AlertTriangle size={13} />
           <span>{error}{' '}
-            <button type="button" className="h10-ar-lnk" onClick={() => setReloadTick((n) => n + 1)}>try again</button>
+            <Button variant="link" inline className="h10-lnk" onClick={() => setReloadTick((n) => n + 1)}>try again</Button>
           </span>
         </p>
       )}
@@ -1226,7 +1226,7 @@ export function ApplyRulesClient() {
         <p className="h10-ar-note refused">
           <Info size={13} />
           <span>{contradiction}{' '}
-            <button type="button" className="h10-ar-lnk" onClick={clearScope}>clear the scope</button> to see every campaign.</span>
+            <Button variant="link" inline className="h10-lnk" onClick={clearScope}>clear the scope</Button> to see every campaign.</span>
         </p>
       )}
 
@@ -1481,7 +1481,7 @@ function EmptyState({
       <div className="h10-page-empty bad">
         <b>This did not load</b>
         <span>{error} Nothing is wrong with the account — the page could not read it.</span>
-        <button type="button" className="h10-ar-lnk" onClick={onRetry}>Try again</button>
+        <Button variant="link" inline className="h10-lnk" onClick={onRetry}>Try again</Button>
       </div>
     )
   }
@@ -1491,7 +1491,7 @@ function EmptyState({
       <div className="h10-page-empty refused">
         <b>This scope cannot resolve</b>
         <span>{contradiction}</span>
-        <button type="button" className="h10-ar-lnk" onClick={onClear}>Clear the scope</button>
+        <Button variant="link" inline className="h10-lnk" onClick={onClear}>Clear the scope</Button>
       </div>
     )
   }
@@ -1518,7 +1518,7 @@ function EmptyState({
             : `${scoped} campaign${scoped === 1 ? '' : 's'} are in scope, and the filters hide all of them.`}
         {filtered === 0 && ' Nothing is hidden that you did not hide.'}
       </span>
-      <button type="button" className="h10-ar-lnk" onClick={onClear}>Clear everything</button>
+      <Button variant="link" inline className="h10-lnk" onClick={onClear}>Clear everything</Button>
     </div>
   )
 }

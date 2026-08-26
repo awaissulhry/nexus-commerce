@@ -321,7 +321,7 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                     The write will land, and <b>within about fifteen minutes</b>{' '}
                     the engine will snap the multiplier back to its target&rsquo;s own value. To change
                     those for good, change the target on{' '}
-                    <a className="lnk" href="/marketing/ads/rules-automation/dayparting">Rank &amp; Dayparting</a>.
+                    <Button variant="link" inline className="h10-lnk" asChild><a href="/marketing/ads/rules-automation/dayparting">Rank &amp; Dayparting</a></Button>.
                   </span>
                 </p>
               )}
