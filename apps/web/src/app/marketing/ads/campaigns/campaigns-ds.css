@@ -61,7 +61,9 @@
 .h10-apm .apm-addbtn { flex-shrink: 0; font-size: 12.5px; }
 .h10-apm .apm-addbtn.added:disabled { color: var(--nds-success-text); }
 .h10-apm .apm-thead .apm-sortbtn { font-size: 11px; font-weight: 700; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: 0.03em; padding: 0; }
-.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-grey-300); }
+/* the sort caret carries the column's state, so it is meaningful non-text: 3:1 floor.
+   grey-300 is ~2:1; --nds-text-3 is the icon tier at 3.10:1. */
+.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-text-3); }
 .h10-apm .apm-thead .apm-sortbtn.asc svg, .h10-apm .apm-thead .apm-sortbtn.desc svg { color: var(--nds-primary); }
 
 /* ── campaign / ad-group tab bar ───────────────────────────────────────────

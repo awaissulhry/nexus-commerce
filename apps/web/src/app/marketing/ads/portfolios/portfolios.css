@@ -7,13 +7,13 @@
 
 /* toolbar */
 .pf-toolbar { display: flex; align-items: center; gap: 10px; }
-.pf-synced { font-size: 11px; color: var(--nds-grey-500); }
+.pf-synced { font-size: 11px; color: var(--nds-text-2); }
 .pf-toolbar-r { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 /* summary tiles */
 .pf-tiles { display: flex; flex-wrap: wrap; gap: 10px; }
 .pf-tile { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 8px 13px; background: var(--nds-white); min-width: 120px; }
-.pf-tile-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+.pf-tile-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .pf-tile-v { font-weight: 800; font-size: 18px; color: var(--nds-grey-900); margin-top: 2px; }
 .pf-tile-v.ok { color: #067d62; }
 
@@ -26,18 +26,20 @@
 .pf-state { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-100); color: var(--nds-grey-600); }
 .pf-state--enabled { background: #e7f5ee; color: #067d62; }
 .pf-state--paused { background: #fff4e0; color: var(--nds-amber-600); }
-.pf-state--archived { background: var(--nds-grey-50); color: var(--nds-grey-450); }
+.pf-state--archived { background: var(--nds-grey-50); color: var(--nds-text-muted); }
 .pf-src { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-blue-50); color: var(--nds-blue-600); }
-.pf-src--local { background: var(--nds-grey-50); color: var(--nds-grey-500); }
+.pf-src--local { background: var(--nds-grey-50); color: var(--nds-text-2); }
 .pf-mkts { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .pf-mkt { font-size: 10px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-50); border-radius: 5px; padding: 1px 6px; }
-.pf-mkt-none { color: var(--nds-grey-300); }
+/* the em-dash IS the answer here ("no markets"), so it is text, not decoration.
+   grey-300 measured 1.67:1 on white — effectively invisible. */
+.pf-mkt-none { color: var(--nds-text-muted); }
 .pf-acos { font-weight: 700; }
 
 /* empty state */
 .pf-empty { border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-2xl); padding: 40px 24px; text-align: center; background: var(--nds-white); }
 .pf-empty-h { font-size: 15px; font-weight: 800; color: var(--nds-grey-900); }
-.pf-empty-p { font-size: 12px; color: var(--nds-grey-500); max-width: 460px; margin: 6px auto 16px; line-height: 1.5; }
+.pf-empty-p { font-size: 12px; color: var(--nds-text-2); max-width: 460px; margin: 6px auto 16px; line-height: 1.5; }
 .pf-empty-acts { display: inline-flex; gap: 8px; }
 
 /* create modal */

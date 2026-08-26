@@ -14,7 +14,7 @@
 .h10-gcb .h10-spw-step { align-items: flex-start; }
 .h10-gcb .h10-spw-step .lbl { display: flex; flex-direction: column; gap: 4px; padding-top: 3px; }
 .h10-gcb .h10-scb-substeps { display: flex; gap: 16px; }
-.h10-gcb .h10-scb-substeps .ss { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-500); white-space: nowrap; }
+.h10-gcb .h10-scb-substeps .ss { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--nds-text-2); white-space: nowrap; }
 .h10-gcb .h10-scb-substeps .ss .dot { width: 6px; height: 6px; border-radius: 50%; background: #c2cdda; flex-shrink: 0; }
 .h10-gcb .h10-scb-substeps .ss.done { color: var(--nds-grey-600); }
 .h10-gcb .h10-scb-substeps .ss.done .dot { background: var(--nds-grey-900); }
@@ -34,16 +34,16 @@
 /* Per-type Campaign Settings table (Ad Group · Default Bid · Budget · Bid Algorithm). */
 .h10-gcb-set { padding: 0; overflow: hidden; }
 .h10-gcb-set-head, .h10-gcb-set-row { display: grid; grid-template-columns: minmax(260px, 1.7fr) 200px 200px 150px; gap: 18px; align-items: center; }
-.h10-gcb-set-head { padding: 13px 20px; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-grey-500); background: var(--nds-grey-25); }
+.h10-gcb-set-head { padding: 13px 20px; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-text-2); background: var(--nds-grey-25); }
 .h10-gcb-set-row { padding: 16px 20px; border-bottom: 1px solid var(--nds-grey-75); }
 .h10-gcb-set-row:last-child { border-bottom: none; }
 .h10-gcb-set-row .ag { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .h10-gcb-set-row .ag .badge { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
 .h10-gcb-set-row .ag .nm { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .h10-gcb-set-row .ag .nm .t { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-gcb-set-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-500); }
+.h10-gcb-set-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-text-2); }
 .h10-gcb-set-row .num { display: flex; flex-direction: column; gap: 5px; }
-.h10-gcb-set-row .num .sug { font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-gcb-set-row .num .sug { font-size: 11.5px; color: var(--nds-text-2); }
 .h10-gcb-set-row .num .sug b { color: var(--nds-grey-600); font-weight: 600; }
 .h10-gcb-set-row .algo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-grey-700); }
 .h10-gcb-set-row .algo svg { color: var(--nds-blue-600); }
@@ -55,7 +55,7 @@
 
 /* Step-4 recap table (read-only, multi-format: Ad Group · Type · Targeting · Daily Budget · Default Bid · Bid Algorithm). */
 .h10-gcb-rev-head, .h10-gcb-rev-row { display: grid; grid-template-columns: minmax(260px, 2fr) 70px 90px 120px 110px 1fr; gap: 14px; align-items: center; }
-.h10-gcb-rev-head { padding: 13px 20px; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-grey-500); background: var(--nds-grey-25); }
+.h10-gcb-rev-head { padding: 13px 20px; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-text-2); background: var(--nds-grey-25); }
 .h10-gcb-rev-row { padding: 14px 20px; border-bottom: 1px solid var(--nds-grey-75); font-size: 13px; color: var(--nds-grey-700); }
 .h10-gcb-rev-row:last-child { border-bottom: none; }
 .h10-gcb-rev-row .ag { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--nds-grey-900); min-width: 0; }
