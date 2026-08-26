@@ -197,6 +197,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // Lazy-load children of this parent. Pass the parent's ID
       // verbatim. Disables the default parentId=null filter.
       parentId?: string
+      /** Include a windowed sales roll-up per row (`sales`). Opt-in — costs one extra groupBy. */
+      includeSales?: string
+      /** Window for `includeSales`, in days. Default 90, clamped 1–365. */
+      salesDays?: string
       // P.10 — products that are NOT listed on any of these channels.
       // Comma-separated channel names (AMAZON, EBAY, ...). Used by
       // the "Missing on..." filter chips to surface coverage gaps.
@@ -255,6 +259,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const sort = q.sort ?? 'updated'
       const includeCoverage = q.includeCoverage === 'true' || q.includeCoverage === '1'
       const includeTags = q.includeTags === 'true' || q.includeTags === '1'
+      // Sales roll-up is opt-in and windowed. Off by default so the plain list stays one query.
+      const includeSales = q.includeSales === 'true' || q.includeSales === '1'
+      const salesDays = Math.min(Math.max(Number(q.salesDays ?? 90), 1), 365)
 
       // Default scope: top-level rows only. Override with ?parentId=<id>
       // to fetch children of a specific parent (used by the grid's
@@ -795,6 +802,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const pageProductIds = sortedRawProducts.map((p) => p.id)
       const offersByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
       const stockByProduct = new Map<string, { fba: number; non: number }>()
+      const salesByProduct = new Map<string, { units: number; revenueCents: number }>()
+      let salesUnattributed: Array<{ channel: string; orders: number; units: number; revenueCents: number }> = []
       if (pageProductIds.length > 0) {
         // Stock lives on the child (variation) products — a parent owns none
         // directly — so a parent's Available total is the sum across its
@@ -843,6 +852,82 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           if (s.location.type === 'AMAZON_FBA') cur.fba += s.quantity
           else cur.non += s.quantity
           stockByProduct.set(ownerId, cur)
+        }
+
+        // Sales roll up exactly like stock, and for the same reason: measured on this
+        // database, ALL 859 ProductProfitDaily rows attach to a child and NONE to a parent, so
+        // a Sales column read straight off the product row would render 0.00 for every parent
+        // in the grid. `childToParent` is the same map the stock fold uses.
+        //
+        // 🔴 SOURCE IS ORDERS, NOT ProductProfitDaily — this is the whole point.
+        // `ProductProfitDaily.marketplace` holds IT/DE/FR/ES: those are Amazon COUNTRIES, not
+        // channels. The table is Amazon-only, so summing it gives a figure labelled "Sales"
+        // that silently means "Amazon sales", excludes the eBay orders that already exist, and
+        // contributes nothing for any channel connected later. `Order.channel` is an enum of
+        // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY | MANUAL, so orders are channel-agnostic
+        // by construction and a new channel counts the day it lands.
+        //
+        // Three filters, each load-bearing:
+        //   • status <> CANCELLED — 531 of 4,426 orders are cancelled; including them added
+        //     €124.84 of revenue that never happened to the 90-day window.
+        //   • productId IS NOT NULL — an unattributable line cannot be charged to a product.
+        //     This is not cosmetic: all four eBay orders are currently orphaned this way, so
+        //     eBay revenue is real, is NOT counted here, and `salesUnattributed` reports it
+        //     rather than letting it vanish.
+        //   • the window, shared with the label the client renders.
+        //
+        // Raw SQL because the figure is SUM(quantity × price) and Prisma's groupBy cannot
+        // aggregate an expression. Currency is EUR on all 4,426 orders today; if a second one
+        // ever appears this sum is wrong and `currencies` below is what will say so.
+        if (includeSales) {
+          const since = new Date()
+          since.setUTCDate(since.getUTCDate() - salesDays)
+          const salesRows = await prisma.$queryRaw<
+            Array<{ productId: string; units: bigint | number; revenueCents: bigint | number }>
+          >`
+            SELECT oi."productId" AS "productId",
+                   SUM(oi.quantity)::bigint AS units,
+                   ROUND(SUM(oi.quantity * oi.price) * 100)::bigint AS "revenueCents"
+            FROM "OrderItem" oi
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" IN (${Prisma.join(stockIds)})
+              AND o."createdAt" >= ${since}
+              AND o.status <> 'CANCELLED'
+            GROUP BY oi."productId"
+          `
+          for (const r of salesRows) {
+            const ownerId = childToParent.get(r.productId) ?? r.productId
+            const cur = salesByProduct.get(ownerId) ?? { units: 0, revenueCents: 0 }
+            cur.units += Number(r.units ?? 0)
+            cur.revenueCents += Number(r.revenueCents ?? 0)
+            salesByProduct.set(ownerId, cur)
+          }
+
+          // Revenue the column CANNOT show, reported rather than dropped. An order line with no
+          // productId is a real sale that no product row can carry — measured over 90 days:
+          // €840.00 on Amazon and €109.95 on eBay, ~1.9% of the window. Without this the column
+          // simply under-reports and looks precise while doing it, which is worse than a gap you
+          // can see. Per-channel because the reason differs by channel and the fix does too.
+          const orphanRows = await prisma.$queryRaw<
+            Array<{ channel: string; orders: bigint | number; units: bigint | number; revenueCents: bigint | number }>
+          >`
+            SELECT o.channel::text AS channel,
+                   COUNT(DISTINCT o.id)::bigint AS orders,
+                   SUM(oi.quantity)::bigint AS units,
+                   ROUND(SUM(oi.quantity * oi.price) * 100)::bigint AS "revenueCents"
+            FROM "OrderItem" oi
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" IS NULL
+              AND o."createdAt" >= ${since}
+              AND o.status <> 'CANCELLED'
+            GROUP BY 1
+          `
+          salesUnattributed = orphanRows.map((r) => ({
+            channel: r.channel,
+            orders: Number(r.orders ?? 0),
+            units: Number(r.units ?? 0),
+            revenueCents: Number(r.revenueCents ?? 0),
+          }))
         }
       }
 
@@ -962,6 +1047,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             variantCount: p.variantCount,
             childCount: p.childCount,
             driftCount: (p as any).driftCount ?? 0,
+            // Same field on BOTH response paths. This branch returns its own object literal, so
+            // adding `sales` only to the live-query branch below would leave it `undefined`
+            // whenever the read cache serves the page — the column would render empty on a
+            // cache hit and fill on a miss, which is the hardest kind of bug to reproduce.
+            // `salesByProduct` is folded before the branch, so it is in scope for both.
+            sales: includeSales
+              ? { ...(salesByProduct.get(p.id) ?? { units: 0, revenueCents: 0 }), days: salesDays }
+              : null,
             coverage,
             // P-RT.5 — outbound queue rollup. Null when includeCoverage
             // is false; populated map miss = empty state (no queue rows
@@ -1015,6 +1108,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           channelCount: p._count?.channelListings ?? 0,
           variantCount: p._count?.variations ?? 0,
           childCount: p._count?.children ?? 0,
+          // `null` when not requested, so a consumer can tell "not asked" from "asked, none" —
+          // a zero would read as a measured no-sales. `days` travels with the figures so the
+          // column can label its own window instead of assuming one.
+          sales: includeSales
+            ? { ...(salesByProduct.get(p.id) ?? { units: 0, revenueCents: 0 }), days: salesDays }
+            : null,
           coverage,
           // P-RT.5 — see cache path above for shape rationale.
           syncQueue: includeCoverage
@@ -1033,6 +1132,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         limit,
         total,
         totalPages: Math.max(1, Math.ceil(total / limit)),
+        // Per-channel revenue in the window that no product row can carry. `null` when sales
+        // were not requested; `[]` when every line attributed cleanly.
+        salesUnattributed: includeSales ? salesUnattributed : null,
         stats: {
           total: statsRows[0],
           active: statsRows[1],
