@@ -131,7 +131,7 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
 
   return (
     <div className={`h10-cov ${clean ? 'ok' : ''}`}>
-      <button type="button" className="h10-cov-hd" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <Button variant="quiet" inline className="h10-cov-hd" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         {clean ? <ShieldCheck size={15} className="ic" /> : <span className="dot" aria-hidden="true" />}
         <span className="ttl">
           <b>{data.covered + data.governed} of {data.total}</b> campaigns are under rank control
@@ -152,7 +152,7 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
         <span className="bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
         <span className="pct">{pct}%</span>
         {!clean && <ChevronDown size={15} className={`chev ${open ? 'on' : ''}`} />}
-      </button>
+      </Button>
 
       {integrity && !integrity.clean && (
         <div className="h10-cov-int-list">

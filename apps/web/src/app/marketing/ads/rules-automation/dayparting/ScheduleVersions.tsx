@@ -17,6 +17,7 @@
  * Rendered in both places a schedule is looked at: the list's Activity drawer and the builder.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Tabs } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { History, RotateCcw } from 'lucide-react'
 import { gridFromWindows, type RankWin } from '../_rank/rank-grid-model'
@@ -196,9 +197,9 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
             <ul className="diff">{diff.map((d, k) => <li key={k}>{d}</li>)}</ul>
             {/* The current plan is already in effect, so only earlier versions can be restored. */}
             {i > 0 && (
-              <button type="button" className="h10-ver-restore" onClick={() => setConfirming(v)} disabled={busy}>
+              <Button size="xs" className="h10-ver-restore" onClick={() => setConfirming(v)} disabled={busy}>
                 <RotateCcw size={12} /> Restore this plan
-              </button>
+              </Button>
             )}
             {/* The shape at that point in time — the fastest way to see an evening block move. */}
             <WeekShape
@@ -229,10 +230,14 @@ export function ScheduleVersionsSection({ groupId, palette }: { groupId: string;
     <section id="rgd-history" className="h10-rb-sec">
       <h2><History size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} />History</h2>
       <p className="h10-rb-desc">What this schedule changed on Amazon, and how the plan itself has been edited.</p>
-      <div className="h10-act-tabs inset" role="tablist" aria-label="History type">
-        <button type="button" role="tab" aria-selected={tab === 'amazon'} className={tab === 'amazon' ? 'on' : ''} onClick={() => setTab('amazon')}>Amazon changes</button>
-        <button type="button" role="tab" aria-selected={tab === 'plan'} className={tab === 'plan' ? 'on' : ''} onClick={() => setTab('plan')}>Plan edits</button>
-      </div>
+      {/* This one DOES switch the block below it, so it is the DS `Tabs` — an underline bar —
+          rather than the pill `SegmentedControl` the filters use. */}
+      <Tabs
+        className="h10-hist-tabs" ariaLabel="History type"
+        active={tab}
+        onChange={(v) => setTab(v as 'amazon' | 'plan')}
+        tabs={[{ id: 'amazon', label: 'Amazon changes' }, { id: 'plan', label: 'Plan edits' }]}
+      />
       <div className="h10-rb-hist">
         {tab === 'amazon'
           ? <ChangeList groupId={groupId} />

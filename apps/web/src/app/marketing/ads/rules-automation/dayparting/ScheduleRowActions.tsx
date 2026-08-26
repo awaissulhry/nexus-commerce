@@ -16,12 +16,12 @@
  * The menu renders fixed-position from the button's own rect rather than as a child popover: the
  * grid card clips overflow, which would cut the last item off on a short table.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreHorizontal, Pencil, Trash2, BookmarkPlus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Menu, Modal } from '@/design-system/components'
 
 export interface RowTarget {
   id: string
@@ -40,72 +40,37 @@ export function ScheduleRowActions({ row, onRenamed, onDeleted }: {
   onRenamed: (id: string, name: string) => void
   onDeleted: (id: string) => void
 }) {
-  const [open, setOpen] = useState(false)
   const [dialog, setDialog] = useState<Dialog | null>(null)
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
-  useLayoutEffect(() => {
-    if (!open || !btnRef.current) return
-    const r = btnRef.current.getBoundingClientRect()
-    const W = 210, H = 132
-    // Opens RIGHTWARD from the button. Right-aligning it (left = r.right - W) sent the menu
-    // travelling left across the sticky name column and underneath the app sidebar, because the
-    // trigger sits near the left edge of the row.
-    // Flips ABOVE the button when there isn't room below — clamping instead would drop the menu
-    // on top of its own trigger.
-    const below = r.bottom + 4
-    const flip = below + H > window.innerHeight - 8
-    setPos({
-      top: flip ? Math.max(8, r.top - H - 4) : below,
-      left: Math.max(8, Math.min(r.left, window.innerWidth - W - 8)),
-    })
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const close = () => setOpen(false)
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
-    document.addEventListener('keydown', key)
-    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); document.removeEventListener('keydown', key) }
-  }, [open])
-
-  const pick = (d: Dialog) => (e: React.MouseEvent) => { e.stopPropagation(); setOpen(false); setDialog(d) }
 
   return (
     <>
-      <button
-        ref={btnRef}
-        type="button"
-        className="h10-rowmenu-btn"
-        aria-label={`Actions for ${row.name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
-      >
-        <MoreHorizontal size={15} />
-      </button>
-
       {/*
-        PORTALLED TO document.body — not a styling nicety, a correctness requirement.
-        The trigger lives in the grid's sticky first column, and `.nds-wsgrid td.nm` carries
-        `position: sticky; z-index: 3`, which opens a STACKING CONTEXT. Any z-index on a descendant
-        is resolved inside that context, so the menu composited beneath the app sidebar no matter
-        how high the number went. Rendering at body level is the only way out of it.
+        PORTALLED — not a styling nicety, a correctness requirement, and the reason this is the DS
+        `Menu` rather than a hand-rolled popover kept for old times' sake: `Menu` portals to
+        `document.body` at --nds-z-popover (1450). The trigger lives in the grid's sticky first
+        column, and `.nds-wsgrid td.nm` carries `position: sticky; z-index: 3`, which opens a
+        STACKING CONTEXT — any z-index on a descendant is resolved inside it, so the old menu
+        composited beneath the app sidebar however high the number went.
+
+        The wrapping span is load-bearing too. `AdsDataGrid` gives this row an `onRowClick` that
+        opens the Activity drawer, so every control inside it stops propagation; `Menu` owns the
+        trigger's `onClick` (a `triggerProps.onClick` would replace its toggle), so the stop
+        happens one level out. The menu panel itself is at body level and never bubbles here.
       */}
-      {open && pos && typeof document !== 'undefined' && createPortal(
-        <>
-          <div className="h10-rowmenu-back" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
-          <div className="h10-rowmenu" role="menu" style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}>
-            <button type="button" role="menuitem" onClick={pick('rename')}><Pencil size={13} /> Rename</button>
-            <button type="button" role="menuitem" onClick={pick('template')}><BookmarkPlus size={13} /> Save as template</button>
-            <button type="button" role="menuitem" className="danger" onClick={pick('delete')}><Trash2 size={13} /> Delete</button>
-          </div>
-        </>,
-        document.body,
-      )}
+      <span onClick={(e) => e.stopPropagation()} role="presentation">
+        <Menu
+          className="h10-rowmenu-wrap"
+          label={<MoreHorizontal size={15} />}
+          triggerProps={{ className: 'nds-btn h10-rowmenu-btn', 'aria-label': `Actions for ${row.name}` }}
+          items={[
+            { id: 'rename', icon: <Pencil size={13} />, label: 'Rename', onSelect: () => setDialog('rename') },
+            { id: 'template', icon: <BookmarkPlus size={13} />, label: 'Save as template', onSelect: () => setDialog('template') },
+            // `MenuItemDef` carries no tone (DS-GAPS), so the danger ink rides on the label.
+            { id: 'delete', icon: <Trash2 size={13} />, label: <span className="h10-menu-danger">Delete</span>, onSelect: () => setDialog('delete') },
+          ]}
+        />
+      </span>
 
       {/* Same stacking trap, same fix: the confirm/rename modals are also children of the sticky cell. */}
       {dialog && typeof document !== 'undefined' && createPortal(

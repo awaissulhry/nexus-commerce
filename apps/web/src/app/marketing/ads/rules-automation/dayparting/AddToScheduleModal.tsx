@@ -122,7 +122,7 @@ export function AddToScheduleModal({ schedules, windows, hours, targetName, targ
             {shown.length === 0
               ? <div className="h10-d2-empty">No schedule matches “{q}”.</div>
               : shown.map((s) => (
-                <button type="button" key={s.value} className="h10-d2-opt" onClick={() => void preview(s)}>{s.label}</button>
+                <Button variant="quiet" size="sm" block key={s.value} className="h10-d2-opt" onClick={() => void preview(s)}>{s.label}</Button>
               ))}
           </div>
         </>
@@ -130,7 +130,7 @@ export function AddToScheduleModal({ schedules, windows, hours, targetName, targ
         <div className="h10-d2-diff">
           <div className="pick">
             <b>{picked.label}</b>
-            <button type="button" className="chg" onClick={() => { setPicked(null); setDiff(null); setErr('') }}>Change</button>
+            <Button variant="link" inline className="chg" onClick={() => { setPicked(null); setDiff(null); setErr('') }}>Change</Button>
           </div>
 
           {busy && !diff && <div className="h10-d2-empty">Working out what would change…</div>}

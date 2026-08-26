@@ -72,7 +72,14 @@ export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', 
 
         {/* FB.3e — real tab semantics: each tab names the panel it controls, the panel names the
             tab that labels it, and only the active tab sits in the tab order (arrow keys move
-            within the list, the ARIA tabs pattern). */}
+            within the list, the ARIA tabs pattern).
+
+            DS-ALIGN — the one tab bar in this half that stays hand-rolled, and the reason is the
+            paragraph above. The DS `Tabs` renders `role="tab"` but offers no way to name a panel:
+            no `aria-controls`, no `id`/`aria-labelledby` pairing (logged in DS-GAPS). Every OTHER
+            `role="tablist"` in this half controlled nothing at all and became a `SegmentedControl`
+            or a `Tabs`; this one is correct, and swapping it for a tidier component would trade a
+            working control for a matching one. */}
         <div className="h10-act-tabs" role="tablist" aria-label="Schedule detail"
           onKeyDown={(e) => {
             if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return

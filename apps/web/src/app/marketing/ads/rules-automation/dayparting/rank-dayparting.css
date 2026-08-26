@@ -157,17 +157,19 @@
 /* RD.P1 — the fleet-state band. Buttons, because each tile IS the filter it counts; the pressed
    state is the one visual answer to "why is the grid short" on a ?tile= deep link. */
 .rd-band { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.rd-band-tile {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 7px 12px; font-size: 12.5px; color: var(--nds-grey-700);
-  background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); cursor: pointer;
+/* Filter tiles: a count and a label, one of them pressed. They are DS `Button`s with the DS
+   `active` state, so the border, the background and the hover come from there — including the
+   pressed look, which `.rd-band-tile.on` used to draw by hand. What stays is the tile's own
+   shape: baseline-aligned so a 14px figure sits on the same line as its 12.5px label, and
+   tabular figures so the row does not shuffle as counts change. */
+.nds-btn.rd-band-tile {
+  align-items: baseline; gap: 6px;
+  padding: 7px 12px; font-size: 12.5px; font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 .rd-band-tile b { font-size: 14px; font-weight: 700; color: #16202b; }
-.rd-band-tile:hover { border-color: #b9c4d0; }
-.rd-band-tile.on { border-color: var(--nds-blue-600); background: var(--nds-blue-50); color: #17436f; }
-.rd-band-tile.on b { color: #123a63; }
-.rd-band-tile.zero { color: var(--nds-text-muted); }
+.nds-btn.rd-band-tile.on b { color: #123a63; }
+.nds-btn.rd-band-tile.zero { color: var(--nds-text-muted); }
 .rd-band-tile.zero b { color: var(--nds-text-muted); font-weight: 600; }
 .rd-band-note { font-size: 11.5px; color: var(--nds-text-muted); margin-left: auto; }
 .rd-band-note a { color: var(--nds-blue-600); }

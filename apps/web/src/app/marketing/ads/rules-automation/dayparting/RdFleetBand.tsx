@@ -22,6 +22,7 @@
  * — the band links down instead.
  */
 import { useMemo } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { campaignMatchesScope } from './_rd/scope'
@@ -62,16 +63,16 @@ export function RdFleetBand() {
     <RdSection id="p1">
       <div className="rd-band" role="group" aria-label="Fleet state">
         {RD_TILE_KEYS.map((k) => (
-          <button
+          <Button
             key={k}
-            type="button"
-            className={`rd-band-tile${state.tile === k ? ' on' : ''}${counts[k] === 0 ? ' zero' : ''}`}
+            active={state.tile === k}
+            className={`rd-band-tile${counts[k] === 0 ? ' zero' : ''}`}
             aria-pressed={state.tile === k}
             title={TILE_TITLE[k]}
             onClick={() => click(k)}
           >
             <b>{counts[k]}</b> {TILE_LABEL[k]}
-          </button>
+          </Button>
         ))}
         <span className="rd-band-note">
           states, not a partition — a campaign can sit in several · what no schedule covers is counted under{' '}

@@ -19,7 +19,7 @@
  * weeks early is the mistake the feature exists to prevent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Input, Pill, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Pill, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
@@ -276,10 +276,12 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
           <label>Name<Input fieldClassName="h10-rb-input" value={name} onChange={(ev) => setName(ev.target.value)} placeholder="Black Friday" /></label>
           <label>Starts<Input fieldClassName="h10-rb-input" type="datetime-local" value={starts} onChange={(ev) => setStarts(ev.target.value)} /></label>
           <label>Ends<Input fieldClassName="h10-rb-input" type="datetime-local" value={ends} onChange={(ev) => setEnds(ev.target.value)} /></label>
-          <div className="h10-evt-mode" role="tablist" aria-label="Event plan">
-            <button type="button" role="tab" aria-selected={mode === 'rank'} className={mode === 'rank' ? 'on' : ''} onClick={() => setMode('rank')}>Hold one rank</button>
-            <button type="button" role="tab" aria-selected={mode === 'template'} className={mode === 'template' ? 'on' : ''} onClick={() => setMode('template')}>Use a template</button>
-          </div>
+          <SegmentedControl
+            ariaLabel="Event plan" size="sm"
+            value={mode}
+            onChange={(v) => setMode(v as 'rank' | 'template')}
+            options={[{ value: 'rank', label: 'Hold one rank' }, { value: 'template', label: 'Use a template' }]}
+          />
           {mode === 'rank'
             ? <label>Rank to hold<Listbox width={260} options={rankOptions} value={rank} onChange={setRank} ariaLabel="Rank to hold" /></label>
             : <label>Template<Listbox width={260} options={tplOptions.length ? tplOptions : [{ value: '', label: 'No templates saved yet' }]} value={templateId} onChange={setTemplateId} ariaLabel="Template" searchable /></label>}

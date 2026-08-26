@@ -805,19 +805,23 @@
    The trigger lives in the sticky first column so it can't be hidden by column customisation
    (a destructive action you can accidentally hide is worse than no action). Visible on hover
    and on keyboard focus, matching the Manage/Activity buttons beside it. */
-.h10-rowmenu-btn { opacity: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-grey-200); background: var(--nds-white); color: var(--nds-pill-neutral-fg); border-radius: var(--nds-radius-md); padding: 3px 5px; cursor: pointer; transition: opacity .1s; flex-shrink: 0; }
+/* The row menu is the DS `Menu`. Its trigger keeps this class beside `nds-btn` (Menu's
+   `triggerProps.className` REPLACES the DS one, so both are passed) for the one behaviour the DS
+   has no opinion on: the button is invisible until the row is hovered, focused, or the menu is
+   open, so a grid of 200 rows is not 200 kebabs. Chrome, hover and focus ring come from the DS. */
+.h10-rowmenu-btn { opacity: 0; padding: 3px 5px; transition: opacity .1s; flex-shrink: 0; }
+.h10-rowmenu-wrap { display: inline-flex; }
 .nds-wsgrid tbody tr:hover .h10-rowmenu-btn, .h10-rowmenu-btn:focus-visible, .h10-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
-.h10-rowmenu-btn:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); border-color: var(--nds-blue-600); }
 /* Fixed, not absolute: the grid card clips overflow, which would cut the last item off. */
 /* Portalled to document.body, so these z-indexes finally compete at the top level instead of
    inside the sticky name column's stacking context. Above the app sidebar and the console's own
    fixed layers (the date picker and tooltip sit at 1000). */
-.h10-rowmenu-back { position: fixed; inset: 0; z-index: 1200; }
-.h10-rowmenu { position: fixed; z-index: 1201; width: 210px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 9px; box-shadow: 0 12px 32px rgba(20,28,38,.18); padding: 5px; display: flex; flex-direction: column; }
-.h10-rowmenu button { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; text-align: left; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-800); padding: 8px 10px; border-radius: var(--nds-radius-sm); cursor: pointer; }
-.h10-rowmenu button:hover { background: var(--nds-grey-75); }
-.h10-rowmenu button.danger { color: #a3211a; }
-.h10-rowmenu button.danger:hover { background: #fbdedb; }
+/* The panel, its backdrop and its 22 lines of flip-and-clamp position maths are the DS `Menu`'s
+   now — portalled to body at --nds-z-popover (1450, well clear of the old hand-rolled 1201) and
+   closed by `useClickAway` instead of a full-screen div. `MenuItemDef` carries no tone (DS-GAPS),
+   so Delete's ink rides on its label: #a3211a is 7.53:1 on the menu surface, the same danger
+   colour the rest of this section uses. */
+.nds-menu .h10-menu-danger { color: #a3211a; }
 /* Dialog feedback lines, reusing the shared h10-ntm modal chrome. */
 .h10-ntm-err { margin-top: 10px; font-size: 12.5px; font-weight: 600; color: #a3211a; }
 .h10-ntm-ok { font-size: 12.5px; color: var(--nds-grey-700); line-height: 1.5; }
@@ -839,8 +843,11 @@
    Collapsed to one line by default: on a healthy account this should be boring, and a large
    permanent panel for "nothing to do" would push the schedules it relates to off the fold. */
 .h10-cov { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); margin-bottom: 12px; overflow: hidden; }
-.h10-cov-hd { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 11px 16px; cursor: pointer; text-align: left; font-size: 12.5px; color: var(--nds-grey-700); }
-.h10-cov.ok .h10-cov-hd { cursor: default; }
+/* A coverage header that opens its own detail. `Button variant="quiet" inline` brings the reset,
+   the hover and the focus ring; the full-width flex row and this panel's padding are its own, and
+   `display: flex` has to beat the DS `inline-flex`, hence `.nds-btn`. */
+.nds-btn.h10-cov-hd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 16px; text-align: left; font-size: 12.5px; font-weight: 400; color: var(--nds-grey-700); }
+.h10-cov.ok .nds-btn.h10-cov-hd { cursor: default; }
 .h10-cov-hd .ic { color: #0a7d48; flex-shrink: 0; }
 /* An amber dot, not red: uncovered campaigns are a gap to review, not a failure. */
 .h10-cov-hd .dot { width: 8px; height: 8px; border-radius: 50%; background: #e0a52e; flex-shrink: 0; }
@@ -899,7 +906,11 @@
 .h10-act-all:hover { text-decoration: underline; }
 /* The history tabs inside the builder sit in a section rather than a drawer, so they lose the
    drawer's page-edge padding and gain a rule to sit on. */
-.h10-act-tabs.inset { padding: 0; margin: 4px 0 0; }
+/* The History bar switches the block under it, so it is the DS `Tabs` (underline, not pill) and
+   keeps only its inset. `.h10-act-tabs` itself stays: ScheduleActivityDrawer's bar is a REAL
+   tablist — `aria-controls`, a `role="tabpanel"`, roving tabIndex — and `Tabs` offers no way to
+   name a panel (DS-GAPS), so converting it would have traded a correct control for a tidier one. */
+.h10-hist-tabs { margin: 4px 0 0; }
 .h10-rb-hist { margin-top: 10px; border: 1px solid var(--nds-grey-100); border-radius: 9px; overflow: hidden; }
 .h10-rb-hist .h10-act-bar { padding: 10px 12px; }
 .h10-rb-hist .h10-ver { padding: 12px 14px; }
@@ -1046,9 +1057,9 @@
 .h10-arm-fit.thin .txt { display: block; color: var(--nds-pill-neutral-fg); }
 /* HX.8b — restore, on the version it would bring back. Understated: the plan in effect is the one
    at the top, and restoring is the exception rather than the expected action. */
-.h10-ver-restore { display: inline-flex; align-items: center; gap: 5px; margin: 2px 0 8px; border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: var(--nds-radius-md); padding: 4px 9px; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-700); cursor: pointer; }
-.h10-ver-restore:hover:not(:disabled) { border-color: var(--nds-blue-600); color: var(--nds-blue-600); background: var(--nds-grey-25); }
-.h10-ver-restore:disabled { opacity: .5; cursor: default; }
+/* The DS `Button size="xs"` is this button — border, hover, disabled state and all. Only the
+   margin that sets it off from the diff above it is left. */
+.h10-ver-restore { margin: 2px 0 8px; }
 .h10-ver-msg { margin-bottom: 10px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5; color: var(--nds-blue-900); background: var(--nds-blue-50); border-radius: var(--nds-radius-md); }
 
 /* ── RDX/D2 — "Add to schedule…" picker + diff ───────────────────────────────────────────────
@@ -1056,12 +1067,16 @@
    diff lists one row per changed hour and a 440px column would wrap every one of them. */
 .h10-ntm.wide { width: 560px; }
 .h10-d2-list { margin-top: 10px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.h10-d2-opt { text-align: left; border: 0; background: none; font: inherit; font-size: 13px; color: var(--nds-grey-900); padding: 8px 10px; border-radius: var(--nds-radius-md); cursor: pointer; }
-.h10-d2-opt:hover { background: var(--nds-grey-75); }
+/* `Button variant="quiet" size="sm" block` — the DS carries the reset and the hover wash.
+   `justify-content` because a DS button centres its content and a list of names reads left. */
+.nds-btn.h10-d2-opt { justify-content: flex-start; text-align: left; font-size: 13px; font-weight: 400; color: var(--nds-grey-900); }
 .h10-d2-empty { padding: 12px 9px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; }
 .h10-d2-diff .pick { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--nds-grey-900); padding-bottom: 10px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-d2-diff .pick b { font-weight: 700; }
-.h10-d2-diff .pick .chg { margin-left: auto; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: #2563eb; cursor: pointer; padding: 2px 4px; }
+/* `Button variant="link" inline`. #2563eb measured 5.17:1; --nds-text-link is 5.98:1, so the
+   substitution raises it. Permanent underline for the same reason as every other link-button in
+   this console — see DS-GAPS. */
+.h10-d2-diff .pick .nds-btn.chg { margin-left: auto; font-size: 12px; text-decoration: underline; }
 .h10-d2-diff .sum { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 0; font-size: 12.5px; color: #4a5462; }
 .h10-d2-diff .sum b { font-weight: 700; color: var(--nds-grey-900); }
 .h10-d2-diff .sum .warn b { color: var(--nds-note-error-fg); }
@@ -1095,9 +1110,8 @@
 
 .h10-evt-form { border: 1px solid var(--nds-grey-150); border-radius: 9px; padding: 14px; display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
 .h10-evt-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--nds-grey-700); }
-.h10-evt-mode { display: inline-flex; gap: 2px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); padding: 3px; width: fit-content; }
-.h10-evt-mode button { border: 0; background: none; font-size: 12.5px; font-weight: 600; color: var(--nds-pill-neutral-fg); padding: 5px 12px; border-radius: var(--nds-radius-sm); cursor: pointer; }
-.h10-evt-mode button.on { background: var(--nds-white); color: var(--nds-grey-900); box-shadow: 0 1px 2px rgba(20,28,38,.1); }
+/* The event-plan switch is the DS `SegmentedControl` — a seventh spelling of the same pill, gone
+   with the other six. */
 .h10-evt-note { margin: 0; font-size: 11.5px; color: var(--nds-grey-500); line-height: 1.5; }
 .h10-evt-act { display: flex; align-items: center; gap: 10px; }
 
