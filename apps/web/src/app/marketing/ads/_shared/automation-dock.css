@@ -7,19 +7,27 @@
  * "modernise" them back to the semantic tokens: it looks like an improvement and is a
  * dark-theme regression.
  *
- * `.dark` goes on <html> whenever the OS is dark (system is the default), and it redefines 54
- * SEMANTIC tokens and zero ramp steps. This dock pins its ground light — `background:
- * var(--nds-white)`, itself a ramp step, so it does not flip. A semantic text token therefore
- * turns light while the ground stays white:
+ * `.dark` goes on <html> whenever the OS is dark (system is the default) and redefines 54 SEMANTIC
+ * tokens and zero ramp steps. Whether that reaches a given rule depends on CONTAINMENT, which is a
+ * DOM fact and was measured, not assumed:
  *
- *     --nds-text-2      5.91 light  ->  2.06 dark
- *     --nds-text-muted  5.32 light  ->  2.06 dark
- *     --nds-grey-600    5.91 light  ->  5.91 dark
+ *   - This dock renders inside `.h10-shell` (marketing/ads/layout.tsx:28), and that block in
+ *     app/_shared/shared-shell.css PINS the semantic tokens light. So `--nds-text-2` and
+ *     `--nds-text-3` never flipped here. An earlier version of this comment claimed they did;
+ *     that was wrong.
+ *   - `--nds-text-muted` was NOT among the pinned tokens until 8fa177e6c, so `.adock-sub` really
+ *     did fall from 5.32 to 2.06 on this dock's white. That one was a live defect.
  *
- * `--nds-text-2` is DEFINED as `var(--nds-grey-600)` at :root, so pinning the ramp renders
- * byte-identically in light and simply stops the flip. Icons take `--nds-grey-500` (3.10 in both
- * themes, clearing the 3:1 an icon answers to) rather than `--nds-text-3`, which falls to 2.70 on
- * a grey ground in dark. The originals — grey-450 at 2.58 and grey-300 at 1.67 — cleared neither.
+ * The ramp is kept anyway, because a pin protects only what stays inside the shell. The DS `Modal`
+ * and `Drawer` portal to document.body and escape it — `keyword-targeting.css`'s panel does
+ * exactly that from the SP wizard — so a ramp step is the spelling that cannot be undone by where
+ * a component happens to be mounted. `--nds-text-2` is DEFINED as `var(--nds-grey-600)` at :root,
+ * so this renders byte-identically in light and simply cannot flip.
+ *
+ * Icons take `--nds-grey-500` (3.10 in both themes) rather than `--nds-text-3`, which falls to
+ * 2.70 on a grey-100 ground in dark — under the 3:1 an icon answers to. Measure an icon on the
+ * ground it actually sits on, not on white. The originals — grey-450 at 2.58, grey-300 at 1.67 —
+ * cleared neither floor in either theme.
  *
  * `.adock-notch:disabled` keeps grey-300 on purpose: a disabled control is exempt, and darkening
  * it would make it read as available.

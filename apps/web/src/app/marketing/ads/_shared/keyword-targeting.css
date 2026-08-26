@@ -24,5 +24,11 @@
 
 /* Enter New Keywords layout + My List empty */
 .h10-scb-tgt-enter { display: flex; flex-direction: column; gap: 10px; }
+/* Ramp step, not `--nds-text-2` — and here that is load-bearing rather than defensive. This panel
+   is rendered inside a DS `Modal` by campaign-builder/sp-super-wizard/TargetingModal.tsx:177, and
+   `Modal` createPortals to document.body (Modal.tsx:41), which puts it OUTSIDE `.h10-shell` and
+   outside the pin that keeps the console's semantic tokens light. A semantic token here would
+   flip with the OS while this panel's ground did not. grey-600 is what `--nds-text-2` resolves to
+   at :root, so light is byte-identical. */
 .h10-scb-tgt-mylist { padding: 30px 16px; text-align: center; color: var(--nds-grey-600); font-size: 12.5px; line-height: 1.5; }
 
