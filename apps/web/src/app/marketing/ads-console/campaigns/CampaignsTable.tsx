@@ -473,11 +473,16 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         {chips.length > 0 && <span className="clear" onClick={() => setFilters(EMPTY_FILTERS)}>Clear all</span>}
       </div>
 
+      {/* Density is the DS `size` tier, NOT a className. `className` lands on `.nds-grid-wrap`,
+          so the `.nds-grid.comfortable` / `.spacious` rules in amazon.css needed BOTH classes on
+          the <table> — which only ever receives `nds-grid` plus `size`. That compound selector
+          could never match, so the View menu's two looser steps did nothing. `lg`/`xl` are 14px
+          and 19px, the exact values `.az-table.comfortable`/`.spacious` carried. */}
       <DataGrid<CampRow>
         rows={campRows}
         rowKey={(r) => (r.kind === 'campaign' ? r.r.b.id : r.kind === 'child' ? `g:${r.parentId}:${r.g.id}` : `n:${r.parentId}`)}
         columns={campaignColumns({ order, cell, childCell })}
-        className={density}
+        size={density === 'comfortable' ? 'lg' : density === 'spacious' ? 'xl' : 'md'}
         selectable
         selected={sel}
         onSelectedChange={setSel}
