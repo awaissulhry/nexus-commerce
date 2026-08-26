@@ -99,7 +99,7 @@
   color: var(--nds-text);
 }
 .nds-tab.on {
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-tab.on::after {
   content: '';
@@ -170,7 +170,7 @@
   color: var(--nds-text);
 }
 .nds-tabs.lg .nds-tab.on {
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-tabs.lg .nds-tab.on::after {
   left: 0;

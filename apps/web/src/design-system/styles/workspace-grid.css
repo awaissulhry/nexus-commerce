@@ -47,7 +47,7 @@
 
 .nds-wsgrid td.nm .mk { font-size: 10px; color: var(--nds-grey-500); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 1px 5px; }
 
-.nds-wsgrid td.empty { text-align: center; color: var(--nds-grey-500); padding: 28px; }
+.nds-wsgrid td.empty { text-align: center; color: var(--nds-text-2); padding: 28px; }
 
 /**
  * 🔴 SGX — an empty state's sentence was being CLIPPED, unreadable, on every wide grid.
