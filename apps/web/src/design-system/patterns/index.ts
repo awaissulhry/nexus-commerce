@@ -27,3 +27,5 @@ export type {
   GridPrefs, GridColumn, GridHierarchy, GridRangeFilter, GridSelectFilter, GridMultiSelectFilter, GridFilter,
   GridEditField, GridEditMode, RangeVal, FilterState, WorkspaceGridProps,
 } from './workspace-grid/WorkspaceGrid'
+export { SectionLayout, defaultSectionLayout, readSectionLayout, writeSectionLayout } from './SectionLayout'
+export type { SectionLayoutProps, SectionLayoutValue, SectionSpec, SectionWidth } from './SectionLayout'

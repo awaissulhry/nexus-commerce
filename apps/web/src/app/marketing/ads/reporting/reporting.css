@@ -1195,3 +1195,8 @@
 .gx-go { color: rgb(var(--text-tertiary)); opacity: 0; transition: opacity .12s ease; flex: none; }
 .nds-wsgrid tbody tr:hover .gx-go { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .gx-go { transition: none; } }
+
+/* GX.6 — the section arrangers sit after the freshness chips, before they push to the right. */
+.rpx-prov-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.rpx-prov-actions + .rpx-prov-fresh { margin-left: 0; }
+.rpx-sectionctl { display: inline-flex; align-items: center; gap: 6px; }

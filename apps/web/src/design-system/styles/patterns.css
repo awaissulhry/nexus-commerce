@@ -490,6 +490,10 @@
     gap: 18px;
   }
 }
+/* Nothing to put on the left — do not reserve half the dialog for it. */
+.nds-prefs.single {
+  grid-template-columns: 1fr;
+}
 .nds-prefs-col {
   display: flex;
   flex-direction: column;
@@ -779,4 +783,43 @@
 .nds-colcust-row .grip button:disabled {
   color: var(--nds-text-disabled);
   cursor: default;
+}
+
+/* ── SectionLayout (GX.6) ────────────────────────────────────────────────
+   Six columns, because half / two-thirds / full divide it cleanly. `dense` lets a later
+   half-width panel backfill the gap a two-thirds one leaves, so the page has no holes. */
+.nds-sections {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: 14px;
+  align-items: start;
+}
+.nds-section { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Only while arranging. The width control lives on the section rather than in the dialog
+   because you are choosing how a panel sits against the ones beside it, which you cannot
+   see from inside a modal. */
+.nds-sections.is-editing .nds-section {
+  outline: 1px dashed var(--nds-primary);
+  outline-offset: 4px;
+  border-radius: var(--nds-radius-lg);
+}
+.nds-section-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px;
+  background: var(--nds-wash-primary);
+  border-radius: var(--nds-radius-sm);
+}
+.nds-section-name {
+  font-size: 12px; font-weight: 700; color: var(--nds-text-strong);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nds-section-bar .nds-btn { margin-left: auto; }
+
+/* One column below the point where a half-width chart stops being readable. Panels here hold
+   charts and tables with their own minimum widths; a "half" that is 300px wide is not a half. */
+@media (max-width: 1100px) {
+  .nds-sections { grid-template-columns: minmax(0, 1fr); }
+  .nds-section { grid-column: span 1 !important; }
 }

@@ -22,13 +22,15 @@ export interface ProvenanceMarket {
 }
 
 export function ProvenanceStrip({
-  source, grain, held, markets, extra,
+  source, grain, held, markets, extra, actions,
 }: {
   source: string
   grain: string
   held: ReactNode
   markets: ProvenanceMarket[]
   extra?: ReactNode
+  /** Right-hand controls — GX.6 puts the section arrangers here, after the freshness chips. */
+  actions?: ReactNode
 }) {
   return (
     <div className="rpx-prov">
@@ -38,6 +40,7 @@ export function ProvenanceStrip({
       <span className="sep" aria-hidden />
       <span className="k">Held</span><span className="v">{held}</span>
       {extra ? (<><span className="sep" aria-hidden />{extra}</>) : null}
+      {actions ? <span className="rpx-prov-actions">{actions}</span> : null}
       {markets.length > 0 && (
         <span className="rpx-prov-fresh">
           <span className="k">Freshness</span>

@@ -21,7 +21,7 @@
  *    market against its OWN category tree — because the four trees are different objects and
  *    adding them describes a category that does not exist.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card } from '@/design-system/components/Card'
 import { BenchmarkBar } from '@/design-system/components/BenchmarkBar'
 import { Pill } from '@/design-system/primitives/Pill'
@@ -32,6 +32,27 @@ import {
   type BrandBenchmark, type BrandStrategy,
 } from './strategy-api'
 import { BlockedNote, Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
+import { SectionControls } from './SectionControls'
+import {
+  SectionLayout, defaultSectionLayout, readSectionLayout,
+  type SectionLayoutValue, type SectionSpec,
+} from '@/design-system/patterns/SectionLayout'
+
+/**
+ * GX.6 — the panels on this tab, as things the operator arranges.
+ *
+ * `stats` is locked: the week, its lag and the three indices are what every other panel is read
+ * against, and a tab that can be reduced to nothing is a tab that can be misread. Everything else
+ * can be moved, resized or switched off.
+ */
+const BRAND_SECTIONS: readonly SectionSpec[] = [
+  { id: 'stats', label: 'Week and indices', locked: true, defaultWidth: 'full' },
+  { id: 'funnel', label: 'The brand funnel', defaultWidth: 'full' },
+  { id: 'benchmarks', label: 'Furthest from the category median', defaultWidth: 'full' },
+  { id: 'ntb', label: 'New-to-brand and engagement', defaultWidth: 'half' },
+  { id: 'trend', label: 'Over time', defaultWidth: 'half' },
+]
+const SECTION_KEY = 'rpx-brand-sections'
 
 /**
  * The distance scale: |ln(ratio)| of 1.8 fills the bar, which is six times ahead or a sixth
@@ -92,6 +113,11 @@ export function BrandTab({ market }: { market: string }) {
    * the chart's own caption says each metric is drawn to its own scale.
    */
   const [plotted, setPlotted] = useState<string[]>(['brandCustomers'])
+  const [arranging, setArranging] = useState(false)
+  const [layout, setLayout] = useState<SectionLayoutValue>(() => defaultSectionLayout(BRAND_SECTIONS))
+  // Read after mount, not in the initializer: the initializer runs during render, where
+  // localStorage does not exist on the server.
+  useEffect(() => { setLayout(readSectionLayout(SECTION_KEY, BRAND_SECTIONS)) }, [])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -137,6 +163,16 @@ export function BrandTab({ market }: { market: string }) {
           ? `${data.freshness.length} markets`
           : `${data.weeksHeld} ${data.weeksHeld === 1 ? 'week' : 'weeks'} · ${data.firstWeek ?? '—'} → ${data.lastWeek ?? '—'}`}
         markets={freshness}
+        actions={!isAll ? (
+          <SectionControls
+            sections={BRAND_SECTIONS}
+            storageKey={SECTION_KEY}
+            value={layout}
+            onChange={setLayout}
+            arranging={arranging}
+            onArrangingChange={setArranging}
+          />
+        ) : null}
         extra={!isAll && data.nodes.length > 0 ? (
           <>
             <span className="k">Node</span>
@@ -156,7 +192,9 @@ export function BrandTab({ market }: { market: string }) {
         ) : null}
       />
 
-      {isAll ? <AllMarkets data={data} /> : <OneMarket data={data} chartData={chartData} plotted={plotted} setPlotted={setPlotted} />}
+      {isAll
+        ? <AllMarkets data={data} />
+        : <OneMarket data={data} chartData={chartData} plotted={plotted} setPlotted={setPlotted} arranging={arranging} />}
 
       <Caveats items={data.caveats} />
     </div>
@@ -166,12 +204,13 @@ export function BrandTab({ market }: { market: string }) {
 // ── one market ────────────────────────────────────────────────────────────────
 
 function OneMarket({
-  data, chartData, plotted, setPlotted,
+  data, chartData, plotted, setPlotted, arranging,
 }: {
   data: BrandStrategy
   chartData: Array<Record<string, string | number | null>>
   plotted: string[]
   setPlotted: (k: string[]) => void
+  arranging: boolean
 }) {
   const ntb = data.benchmarks.find((b) => b.id === 'newToBrandCustomerRate') ?? null
   const band = data.bands[0] ?? null
@@ -187,8 +226,8 @@ function OneMarket({
     )
   }
 
-  return (
-    <>
+  const nodes: Record<string, ReactNode> = {
+    stats: (
       <div className="rpx-stats">
         <StatCard
           label="Week"
@@ -204,7 +243,8 @@ function OneMarket({
           />
         ))}
       </div>
-
+    ),
+    funnel: (
       <Card header="The brand funnel" description={`Amazon's three stage indices and the counts it reports inside each, against this node's median and top performers. Week of ${data.week}.`}>
         <div className="rpx-funnel">
           {data.stages.map((s) => (
@@ -239,7 +279,8 @@ function OneMarket({
           from detail-page views to carts or customers — a percentage here would be ours, not theirs.
         </p>
       </Card>
-
+    ),
+    benchmarks: (
       <Card
         header="Furthest from the category median"
         description="Every benchmarked figure Amazon sends for this node, ordered by how far we sit from the median brand. Distance is a ratio, so five times ahead and a fifth behind are the same size of gap."
@@ -267,9 +308,9 @@ function OneMarket({
           />
         ))}
       </Card>
-
-      <div className="rpx-two">
-        <Card header="New-to-brand customers" description="The only place this account can answer the question.">
+    ),
+    ntb: (
+      <Card header="New-to-brand customers" description="The only place this account can answer the question.">
           <div className="rpx-ntb">
             <div className="lbl">New-to-brand customer rate</div>
             <div className="big">{ntb ? fmtBenchmark(ntb.value, ntb.format) : '—'}</div>
@@ -301,9 +342,10 @@ function OneMarket({
               )}
             </div>
           )}
-        </Card>
-
-        <Card header="Over time" description={`${data.weeksHeld} weeks held for this node. Amazon publishes this feed weekly, so each point is one week.`}>
+      </Card>
+    ),
+    trend: (
+      <Card header="Over time" description={`${data.weeksHeld} weeks held for this node. Amazon publishes this feed weekly, so each point is one week.`}>
           <MetricChart
             title=""
             subtitle={`By week · ${data.firstWeek ?? '—'} → ${data.lastWeek ?? '—'}`}
@@ -319,9 +361,14 @@ function OneMarket({
             height. The funnel and the ranked benchmarks above compare our figures against the
             category median directly.
           </p>
-        </Card>
-      </div>
-    </>
+      </Card>
+    ),
+  }
+
+  return (
+    <SectionLayout sections={BRAND_SECTIONS} storageKey={SECTION_KEY} editing={arranging}>
+      {nodes}
+    </SectionLayout>
   )
 }
 
