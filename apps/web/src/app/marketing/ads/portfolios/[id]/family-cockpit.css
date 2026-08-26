@@ -56,7 +56,10 @@
 .fc-grid .multi { color: var(--nds-success-text); font-weight: 650; }
 .fc-grid .none { color: #8a6320; font-weight: 600; }
 .fc-grid .mono { font-family: ui-monospace, monospace; font-size: 11.5px; }
-.fc-grid tbody tr.off td { color: var(--nds-grey-450); }
+/* A paused row RECEDES, it is not removed — its name, spend and ACoS are still content
+   someone reads. grey-450 measured 2.58:1 at 12.5px, which is removal in every sense
+   that matters to a reader. --nds-text-muted is 4.86:1 and still clearly the quieter row. */
+.fc-grid tbody tr.off td { color: var(--nds-text-muted); }
 /* The campaigns grid declares all ten widths, so it can be `fixed` — which is what lets the
    name cell ellipsize. Under the grid's default `auto` a long campaign name widens the column
    instead, and the cap has to be a px guess about a width that lives in another stylesheet. */

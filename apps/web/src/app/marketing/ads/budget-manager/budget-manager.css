@@ -47,7 +47,9 @@
 .bm-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; border: 1px solid transparent; border-radius: var(--nds-radius-full); padding: 3px 9px; cursor: pointer; }
 .bm-pill svg { color: inherit; opacity: 0.7; }
 .bm-pill.on { background: #e7f6ec; color: #1f7a44; border-color: #c9ead4; }
-.bm-pill.off { background: #fdf2cf; color: #97700f; border-color: #f3e2a6; }
+/* #97700f on #fdf2cf measured 4.05:1 — under AA for 12px. --nds-note-warn-fg on the
+   same ground is 6.37:1, and the pill is a STATUS, so its text is the whole point. */
+.bm-pill.off { background: #fdf2cf; color: var(--nds-note-warn-fg); border-color: #f3e2a6; }
 .bm-pill:hover { filter: brightness(0.98); }
 /* keeps the two rows’ labels aligned when only one carries the check */
 .bm-mi-gap { display: inline-block; width: 12px; }
@@ -204,7 +206,9 @@
 .bp-toggle.dry { background: #fff4e0; border-color: #f0d9a8; color: #8a5a00; }
 .bp-toggle.live { background: #fdeaea; border-color: #f5c6c7; color: var(--nds-note-error-icon); }
 .bp-toggle:disabled { opacity: 0.45; }
-.bp-meta { font-size: 11px; color: var(--nds-grey-500); font-weight: 600; }
+/* --nds-grey-500 resolves to #8a93a1 inside `.h10-shell`, which is 3.1:1 at 11px —
+   measured, not read off the token name. --nds-text-2 is a real hex in every scope. */
+.bp-meta { font-size: 11px; color: var(--nds-text-2); font-weight: 600; }
 
 .bp-sec-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); margin: 14px 0 7px; display: flex; align-items: center; gap: 6px; }
 .bp-sec-h em { font-style: normal; background: var(--nds-grey-100); color: var(--nds-grey-600); border-radius: 5px; padding: 1px 5px; }
