@@ -384,3 +384,83 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-user-txt .nm { font-size: 13px; font-weight: 600; color: var(--nds-rail-text-strong); }
 .h10-user-txt .sub { font-size: 11px; color: var(--nds-rail-text-2); }
 .h10-rail:hover .h10-railft { opacity: 1; }
+
+/* ── 🔴 The light pin ───────────────────────────────────────────────────────────────────────
+   This console pins its own ground light — `.h10-shell` grounds on `--nds-grey-50`, a RAMP
+   step, and `color-scheme: light`. But `.dark` lands on <html> whenever the OS prefers dark
+   (`system` is the default mode), and it redefines the SEMANTIC tokens while leaving every
+   ramp step alone. So the text flipped and the ground did not.
+
+   Measured on this ground with `.dark` applied, before this block:
+     --nds-text 1.11 · --nds-text-strong 1.11 · --nds-success-text 1.42 · --nds-warning-text 1.70
+     --nds-text-2 1.91 · --nds-text-muted 1.91 · --nds-text-link 1.93 · --nds-danger-text 1.97
+
+   Every one illegible, on every ads page, for anyone whose OS is dark. The defect lived in
+   the space between two CORRECT documents — the console documents that it pins itself light,
+   the DS documents that `.dark` flips its tokens — which is why reading either one alone
+   would never have found it.
+
+   A page that pins its ground must pin its tokens. Each is set to the DS's own LIGHT value,
+   so light rendering is byte-identical and dark can no longer move underneath it.
+   22 of the 54 pins are raw hex, and unavoidably so: they ARE the DS's light literals, and CSS
+   has no way to say "the light value of a token that flips". The hex ratchet's entry for this
+   file was bumped 8 → 30 for exactly that, surgically rather than with --baseline, which would
+   have re-frozen every other file's in-flight literals at the same time.
+
+   🔴 Adding a `.dark` override to a token in the DS means adding its pin HERE too. */
+.h10-shell {
+  --nds-bg: var(--nds-grey-50);
+  --nds-border: var(--nds-grey-200);
+  --nds-border-strong: var(--nds-grey-300);
+  --nds-border-subtle: var(--nds-grey-150);
+  --nds-danger-soft: var(--nds-red-soft);
+  --nds-danger-strong: #a3211a;
+  --nds-danger-text: #9c2f2a;
+  --nds-imgup-drag: #e9f2ff;
+  --nds-imgup-surface: #f7faff;
+  --nds-pill-danger-bg: var(--nds-danger-soft);
+  --nds-pill-danger-fg: var(--nds-danger-text);
+  --nds-pill-neutral-bg: var(--nds-grey-100);
+  --nds-pill-neutral-fg: var(--nds-text-2);
+  --nds-pill-success-bg: #d2e6fc;
+  --nds-pill-success-fg: var(--nds-blue-900);
+  --nds-pill-warning-bg: var(--nds-amber-soft);
+  --nds-pill-warning-fg: var(--nds-warning-text);
+  --nds-primary: var(--nds-blue-600);
+  --nds-primary-soft: var(--nds-blue-100);
+  --nds-rail-bg: var(--nds-rail-surface);
+  --nds-rail-border: var(--nds-rail-line);
+  --nds-rail-chev: #98a2b3;
+  --nds-rail-chip-active-bg: #dce8fb;
+  --nds-rail-chip-active-fg: #1f6fde;
+  --nds-rail-chip-bg: #e8ebf0;
+  --nds-rail-ft: #aeb6c2;
+  --nds-rail-icon: #8a93a1;
+  --nds-rail-item-hover: #e6eaf0;
+  --nds-rail-item-hover-2: #f1f4f8;
+  --nds-rail-text: #4a5462;
+  --nds-rail-text-2: #5b6573;
+  --nds-rail-text-strong: #1c2530;
+  --nds-stale-text: var(--nds-warning-text);
+  --nds-success-soft: var(--nds-green-soft);
+  --nds-success-strong: var(--nds-green-700);
+  --nds-success-text: #146034;
+  --nds-surface: var(--nds-white);
+  --nds-surface-hover: var(--nds-grey-75);
+  --nds-surface-raised: var(--nds-grey-25);
+  --nds-surface-sunken: var(--nds-grey-100);
+  --nds-targeting-auto: var(--nds-blue-800);
+  --nds-targeting-manual: var(--nds-purple-600);
+  --nds-text: var(--nds-grey-900);
+  --nds-text-2: var(--nds-grey-600);
+  --nds-text-3: #7e8796;
+  --nds-text-disabled: var(--nds-grey-400);
+  --nds-text-inverse: var(--nds-white);
+  --nds-text-link: #1a60c4;
+  --nds-text-muted: #626c7b;
+  --nds-text-strong: var(--nds-grey-700);
+  --nds-warning-soft: #fff6e8;
+  --nds-warning-strong: var(--nds-amber-700);
+  --nds-warning-text: #6d3f10;
+  --nds-wash-primary: var(--nds-blue-50);
+}

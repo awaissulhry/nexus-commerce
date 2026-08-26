@@ -1,9 +1,9 @@
 {
   "note": "Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero.",
   "updatedAt": "2026-08-25",
-  "total": 3181,
+  "total": 3203,
   "files": {
-    "app/_shared/shared-shell.css": 8,
+    "app/_shared/shared-shell.css": 30,
     "app/fleet/activity/activity.css": 77,
     "app/fleet/approvals/approvals.css": 63,
     "app/fleet/assignments/assignments.css": 94,
