@@ -272,8 +272,16 @@ export async function hierarchyChildren(q: Query): Promise<HierarchyResult> {
   if (parentCost != null) {
     const childCost = nodes.reduce((t, n) => t + (n.metrics.cost ?? 0), 0)
     const gap = parentCost - childCost
-    // A cent of float noise is not a finding. Half a percent of the parent is.
-    if (gap > 0.01 && parentCost > 0 && gap / parentCost > 0.005) {
+    // 🔴 A CENT is the only threshold. There used to be a 0.5%-of-parent floor beside it, and it
+    // quietly broke the tree's one promise the moment the data got good: after GX.1 recovered the
+    // missing product days, one campaign's children summed to €539.01 against a parent of €539.54
+    // and NO remainder row was drawn, because €0.53 is 0.098% — under the floor. Fifty-three cents
+    // of real money simply vanished from a grid whose entire claim is that every level adds up.
+    //
+    // The percentage floor was guarding against float noise, which the absolute one already does:
+    // summing fifteen products cannot drift a cent. A small remainder is a small remainder, and it
+    // gets a row saying so.
+    if (gap > 0.01 && parentCost > 0) {
       const additive: Record<string, number | null> = {}
       for (const k of ADDITIVE) {
         const pv = parent[k]
