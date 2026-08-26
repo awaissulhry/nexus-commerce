@@ -631,3 +631,27 @@ rule saying `--nds-blue-600` is invisible to a check that only bans `--nds-grey-
 reason, and the same applies to any role that is still an alias.
 - ✅ RESOLVED (DS session) — 🔴 **the systemic finding, named by Session 1: "whatever check produced the token pairs was run against WHITE ONLY."** Three tokens had been reported one at a time (`--nds-primary` 4.42, `--nds-text-3` 2.87, `--nds-text-muted` 4.42) — all fine on white, all failing on grounds the system defines itself. So I ran the full matrix instead of fixing a third instance: every text/icon role token against every ground (`white`, `.h10-shell`, `--nds-bg`, `--nds-surface`, `-raised`, `-sunken`, `-hover`). Exactly **2** failed. `--nds-text-muted` → **#626c7b** (worst ground 4.42 → 4.69), the smallest move clearing 4.5 everywhere. `--nds-primary` was NOT darkened — it is a FILL, and darkening it changes every primary button; instead the 7 rules using it as TEXT now use `--nds-text-link`, which is the same principle already applied to the tabs. Icons left on it (floor 3:1, clears). **Now 0 of 11 role tokens fail on any defined ground.**
 - 📋 IDEA (Session 1) — a ratchet on `color: var(--nds-grey-*)`. Their point: "a rule that names a RAMP gets no benefit when you fix a ROLE" — they had four icon rules naming `--nds-grey-500` directly, so raising `--nds-text-3` left them exactly where they were. The token-guard already bans ramps in components/primitives/patterns but NOT in `workspace-grid.css`, which is built on them. Converting that file is the prerequisite.
+
+## workspace-grid.css ramp→role conversion — SIZED AND FILED, deliberately not done
+*DS session · 2026-08-26 · the prerequisite Session 1 named for a `color: var(--nds-grey-*)` ratchet*
+
+**Scope, measured:** 99 ramp-token declarations across 22 tokens — 40 `background`, 38 `color`, 16 border-ish, 2 `box-shadow`, 2 `accent-color`. All 38 of the DS's ramp-as-colour uses are in this ONE file; `components`/`primitives`/`patterns` have **zero**, because token-guard already bans ramps there.
+
+**Why it is not a rename.** Roles have DIVERGED from the ramps they once aliased, so 13 of 28 property-aware mappings change the rendered colour. Three change it badly:
+
+| property | ramp | proposed role | ramp hex | role hex | |
+|---|---|---|---|---|---|
+| background | `--nds-purple-600` | `--nds-badge-sp-bg` | #7400bc | #f3e8ff | 🔴 dark purple → pale lavender |
+| color | `--nds-grey-300` | `--nds-text-3` | #c2c9d3 | #7e8796 | 🔴 a resting sort arrow darkens hard |
+| background | `--nds-green-500` | `--nds-success-strong` | #1e9e62 | #15803d | 🔴 visibly darker fill |
+| color | `--nds-blue-600` | `--nds-text-link` | #1f6fde | #1a60c4 | ok, raises |
+| color | `--nds-grey-450`/`-500` | `--nds-text-3` | #98a2b3/#8a93a1 | #7e8796 | ok, raises |
+| color | `--nds-grey-800` | `--nds-text` | #2b3440 | #1c2530 | ok, raises |
+| background | `--nds-grey-50`/`-75`/`-100` | surface tiers | — | — | ±1 step, subtle |
+| border | `--nds-grey-100` | `--nds-border-subtle` | #eef1f5 | #e6e9ee | ok |
+
+The remaining 15 map with no change at all.
+
+**So it needs per-rule judgement, not a substitution** — and this grid is rendered by 58 files. The measurable failures in it are ALREADY fixed (the three sub-AA rules, and `.pb`'s `--nds-white` background that broke in dark). What is left is a consistency and dark-mode-completeness job, not a correctness one.
+
+**When it is done:** add `styles/workspace-grid.css` to `RAMP_FILES` in `tools/token-guard.mjs` in the same commit, or it will drift straight back. And per Session 1: the check should flag ALIAS TARGETS too — a rule naming `--nds-blue-600` is invisible to a ban that only knows role names.
