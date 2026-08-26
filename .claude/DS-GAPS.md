@@ -399,3 +399,37 @@ Not done here: `ads.css` is outside this session's scope and is the most contend
 console, so removal belongs to a session that owns it. The explanatory comment at
 `campaigns-ds.css:44` describes the conflict in the present tense; once the rules go it is history,
 and could say so.
+
+## `DataGrid` has no density tier ABOVE `md` — it blocks the console's Comfortable/Spacious
+*Session 6 · ROUND 2 · 2026-08-26 · found converting `ads-console/campaigns/CampaignsTable.tsx`*
+
+`size` offers `md` (13px / 11px 14px), `sm` (7px 10px) and `xs` (5px 9px) — three tiers that all go
+DOWN. `CampaignsTable` ships a live three-way density control in its View menu: `.az-table` 11px,
+`.az-table.comfortable` 14px, `.az-table.spacious` 19px (`amazon.css:1392–1393`). Only `compact`
+has a `DataGrid` equivalent, so converting today would silently collapse a shipped operator control
+to one setting. The table was left hand-rolled and only its pager `<select>` converted (`77e4e16ea`).
+
+The padding is hard-coded in `components.css` (`.nds-grid tbody td { padding: 11px 14px }`), not
+tokenised, so a page cannot reach it from outside either — not via `className` (that lands on
+`.nds-grid-wrap`) and not via `rowProps` (the padding is on the `<td>`, not the `<tr>`). Either two
+tiers above `md` (`lg` 14px, `xl` 19px), or a `--nds-grid-cell-pad-y` the caller may set.
+
+## `DataGrid` cannot express a column-DRAGGING grid — `CampaignsGrid` is not convertible
+*Session 6 · ROUND 2 · 2026-08-26*
+
+`marketing/ads/campaigns/CampaignsGrid.tsx:1937–1988` is a `<table>` inside `.nds-wsgrid` — it
+already wears the DS grid's skin. It is NOT a hand-rolled table awaiting `DataGrid`; converting it
+would DELETE shipped behaviour. Four things have no prop:
+
+- `onPointerDown` / `onMouseEnter` / `onMouseLeave` on `<th>` — drag-to-reorder columns and the
+  column hover highlight. `rowProps` covers `<tr>`; there is no `headerProps`/`thProps` counterpart.
+- `data-item` / `data-col` on both `<th>` and `<td>` — the drag code reads them back off the DOM.
+- a per-column `dragging` class while a drag is in flight.
+- a loading state: it renders eight `.sk` skeleton rows, which under `DataGrid` would have to be
+  faked as real rows carrying skeleton cells.
+
+So the count of "unconverted tables" overstates the remaining work. This one is a bespoke grid
+engine, and the honest ask is for `DataGrid` to grow header hooks — not for the page to give up
+dragging to satisfy a metric.
+
+- `DataGrid`'s left-pinned columns get no edge shadow, though right-pinned ones do: `components.css:1143–1147` gives `.sticky-right` an `inset 1px 0 0`, and `.sticky` nothing. Every ads-console table that pins a column hand-rolls `box-shadow: 6px 0 8px -6px rgba(0,0,0,.18)` (`amazon.css:1399` and `:1426`) — the cue that tells you a column is pinned while you scroll sideways. Every conversion of those tables loses it silently — apps/web/src/design-system/styles/components.css:1143
