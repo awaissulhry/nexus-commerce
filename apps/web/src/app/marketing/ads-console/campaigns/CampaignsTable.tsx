@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, ChevronRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
 import { Button, FilterChip, TokenChip, ToolbarButton, Toggle } from '@/design-system/primitives'
-import { DataGrid, Listbox, Pagination, type Column } from '@/design-system/components'
+import { DataGrid, Listbox, Menu, Pagination, type Column } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
@@ -134,7 +134,6 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [visible, setVisible] = useState<string[]>(DEFAULT_VISIBLE)
   const [showCols, setShowCols] = useState(false)
   const [days, setDays] = useState(30)
-  const [showRange, setShowRange] = useState(false)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [showFilter, setShowFilter] = useState(false)
   const [pageSize, setPageSize] = useState(50)
@@ -142,7 +141,6 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [groups, setGroups] = useState<Record<string, AdGroup[] | 'loading' | 'error'>>({})
   const [density, setDensity] = useState<Density>('compact')
-  const [showView, setShowView] = useState(false)
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
   const densityLabel = DENSITIES.find((d) => d.k === density)?.label ?? 'Compact'
@@ -441,28 +439,30 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       <PerformancePanel adProduct={tab} days={days} />
 
       <div className="az-tbar2">
-        <span className="az-menuwrap">
-          <span className="ctl" onClick={() => setShowView((v) => !v)}>View: {densityLabel} <ChevronDown size={14} /></span>
-          {showView && <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setShowView(false)} />
-            <div className="az-menu">
-              {DENSITIES.map((d) => <button key={d.k} className={density === d.k ? 'on' : ''} onClick={() => { setDensity(d.k); setShowView(false) }}>{d.label}{density === d.k && <span>✔</span>}</button>)}
-            </div>
-          </>}
-        </span>
-        <span className="ctl" onClick={() => setShowCols(true)} title="Customise columns">Columns <ChevronDown size={14} /></span>
-        <span className="az-menuwrap">
-          <span className="ctl" onClick={() => setShowRange((v) => !v)}>{rangeLabel} <ChevronDown size={14} /></span>
-          {showRange && <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setShowRange(false)} />
-            <div className="az-menu">
-              {RANGES.map((r) => <button key={r.d} className={days === r.d ? 'on' : ''} onClick={() => { setDays(r.d); setShowRange(false) }}>{r.label}{days === r.d && <span>✔</span>}</button>)}
-            </div>
-          </>}
-        </span>
+        <Menu
+          align="right"
+          label={<>View: {densityLabel} <ChevronDown size={14} /></>}
+          triggerProps={{ className: 'nds-btn quiet', 'aria-label': `Row density, currently ${densityLabel}` }}
+          items={DENSITIES.map((d) => ({
+            id: d.k,
+            label: <>{d.label}{density === d.k && <span aria-hidden="true"> ✔</span>}</>,
+            onSelect: () => setDensity(d.k),
+          }))}
+        />
+        <Button variant="quiet" onClick={() => setShowCols(true)} title="Customise columns">Columns <ChevronDown size={14} /></Button>
+        <Menu
+          align="right"
+          label={<>{rangeLabel} <ChevronDown size={14} /></>}
+          triggerProps={{ className: 'nds-btn quiet', 'aria-label': `Date range, currently ${rangeLabel}` }}
+          items={RANGES.map((r) => ({
+            id: String(r.d),
+            label: <>{r.label}{days === r.d && <span aria-hidden="true"> ✔</span>}</>,
+            onSelect: () => setDays(r.d),
+          }))}
+        />
         <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={() => void refetch()} />
         <ToolbarButton icon={<Settings size={16} />} label="Settings" onClick={() => setShowCols(true)} />
-        <span className="ctl" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></span>
+        <Button variant="quiet" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></Button>
       </div>
 
       <div className="az-chips">
