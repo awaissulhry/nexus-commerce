@@ -343,11 +343,10 @@ function AllMarkets({ data }: { data: BrandStrategy }) {
       <Card>
         <div className="rpx-lede">
           <b>Across markets we compare ratios, never totals.</b> Amazon computes each median
-          against <b>one market&rsquo;s</b> category tree, and the four trees are different objects —{' '}
-          <i>{data.byMarket[0]?.node.split('/').filter(Boolean).slice(-1)[0]}</i> is not the node
-          Germany is measured against. Adding four markets&rsquo; counts together produces a figure for
-          a category that does not exist. What <i>is</i> comparable is how far each market sits
-          from its own median, so that is what this view shows.
+          against <b>one market&rsquo;s</b> category tree, and the {data.byMarket.length} trees below
+          are different objects — four categories, not one. Adding their counts together produces a
+          figure for a category that does not exist. What <b>is</b> comparable is how far each
+          market sits from its own median, so that is what this view shows.
         </div>
       </Card>
 
