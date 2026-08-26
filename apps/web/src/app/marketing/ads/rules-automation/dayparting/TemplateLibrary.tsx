@@ -20,7 +20,7 @@ import { Trash2, Check } from 'lucide-react'
 import { WeekShape } from './WeekShape'
 import type { TargetPalette } from './ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, ToolbarButton } from '@/design-system/primitives'
+import { Button, Radio, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 
 interface Template {
@@ -122,7 +122,7 @@ export function TemplateLibrary({ groupIds, groupNames, palette, onClose, onAppl
         <div className="h10-tpl-list">
           {items.map((t) => (
             <label key={t.id} className={`h10-tpl-r ${picked === t.id ? 'on' : ''}`}>
-              <input type="radio" name="tpl" checked={picked === t.id} onChange={() => setPicked(t.id)} />
+              <Radio name="tpl" checked={picked === t.id} onChange={() => setPicked(t.id)} aria-label={t.name} />
               <span className="body">
                 <span className="nm">{t.name}</span>
                 <span className="meta">

@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Check, Download, Plus, Star, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -227,7 +227,7 @@ export function WatchlistPanel({
           <div className="h10-kt-wlterms">
             {terms == null ? <p className="cap">Loading…</p> : terms.length === 0 ? <p className="cap">No terms yet.</p> : terms.map((t) => (
               <label key={t.id} className={`h10-kt-wlterm ${sel.has(t.id) ? 'on' : ''}`}>
-                <input type="checkbox" checked={sel.has(t.id)} onChange={() => toggle(t.id)} />
+                <Checkbox checked={sel.has(t.id)} onChange={() => toggle(t.id)} aria-label={`Select ${t.term}`} />
                 <span className="t">{t.term}</span>
                 {t.isBranded && <span className="bd" title="One of our own brand terms — hidden from the grid unless brand terms are included">brand</span>}
               </label>

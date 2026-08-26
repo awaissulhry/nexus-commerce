@@ -16,7 +16,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
-import { Button, Input, Radio, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -455,7 +455,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                       <span>Keep climbing</span>
                       {view === 'scope'
                         ? <Select size="xs" disabled={!scopeAvailable} value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'} onChange={e => setScopeKeep(t.key, e.target.value as '' | 'on' | 'off')}><option value="">inherit</option><option value="on">on</option><option value="off">off</option></Select>
-                        : <input type="checkbox" checked={effKeep(t)} onChange={e => setLibKeep(t.id, e.target.checked)} />}
+                        : <Checkbox checked={effKeep(t)} onChange={e => setLibKeep(t.id, e.target.checked)} />}
                     </label>
                   </div>
                   <div className="h10-mrecipes">
@@ -479,7 +479,11 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
           })}
           {adding && (
             <div className="h10-rte-row h10-rte-add">
-              <span className="nm"><Input size="sm" fieldClassName="h10-rte-name" placeholder="New target name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} aria-label="New target name" /><input type="color" value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} style={{ width: 26, height: 22, padding: 0, border: '1px solid #d8dde4', borderRadius: 4 }} /></span>
+              <span className="nm"><Input size="sm" fieldClassName="h10-rte-name" placeholder="New target name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} aria-label="New target name" />{/* DS-ALIGN — the only raw <input> left in this half. `type="color"` opens the platform's own
+                colour picker; the design system has no primitive for it (logged in DS-GAPS), and wrapping
+                it in `Input` would give it a text field's chrome around a swatch. Its inline style is a
+                named class now, so the border is a token rather than a hex written at the call site. */}
+              <input type="color" className="h10-rte-color" value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} aria-label="Target colour" /></span>
               {FIELDS.map(f => <span key={f.f} className="fld"><Input size="xs" type="number" placeholder={f.unit} value={(form[f.f] == null ? '' : f.f === 'maxCpcCents' ? eur(form[f.f]) : form[f.f]) as string | number} onChange={e => setForm(s => ({ ...s, [f.f]: e.target.value === '' ? undefined : f.f === 'maxCpcCents' ? Math.round(Number(e.target.value) * 100) : Math.round(Number(e.target.value)) }))} step={f.f === 'maxCpcCents' ? '0.01' : '1'} aria-label={f.label} /></span>)}
               <span className="act" />
               <div className="h10-rte-addscope">

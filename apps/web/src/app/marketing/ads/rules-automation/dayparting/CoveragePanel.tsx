@@ -17,7 +17,7 @@
  * work that doesn't exist.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Checkbox } from '@/design-system/primitives'
 import { ChevronDown, ShieldCheck, Plus } from 'lucide-react'
 
 import { getBackendUrl } from '@/lib/backend-url'
@@ -174,7 +174,7 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
           <div className="h10-cov-list">
             {data.items.map((c) => (
               <label key={c.id} className={`h10-cov-r ${sel.has(c.id) ? 'on' : ''}`}>
-                <input type="checkbox" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} />
+                <Checkbox checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} />
                 <span className="nm" title={c.name}>{c.name}</span>
                 {c.marketplace && <span className="mk">{c.marketplace}</span>}
                 <span className="sp">{c.spendCents > 0 ? eur(c.spendCents) : '—'}</span>

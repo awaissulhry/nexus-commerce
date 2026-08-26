@@ -361,7 +361,8 @@
 .h10-rb-twocol .agrow .nm b { font-size: 13px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rb-twocol .agrow .nm .camp { font-size: 11.5px; color: var(--nds-grey-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rb-twocol .agrow .look { flex-shrink: 0; display: inline-flex; align-items: center; padding-right: 4px; }
-.h10-rb-twocol .agrow .look input { accent-color: var(--nds-blue-600); width: 16px; height: 16px; cursor: pointer; }
+/* (was `.look input { accent-color; 16px }` — the DS `Checkbox` sizes and colours its own box,
+   and `.nds-check` is the wrapping label rather than the input, so there is nothing to size here.) */
 .h10-rb-twocol .agrow.tgt { justify-content: space-between; }
 .h10-rb-twocol .agrow .chips { display: inline-flex; gap: 8px; }
 .h10-rb-twocol .agrow .tchip { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--nds-grey-200); background: var(--nds-white); color: var(--nds-grey-500); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -5671,3 +5672,8 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    `font: inherit` before `font-weight`: the shorthand resets weight, so the order is load-bearing.
    Logged in DS-GAPS; the console holds ten more `.lnk` rules outside this half waiting on it. */
 .nds-btn.h10-lnk { font: inherit; font-weight: 700; text-decoration: underline; }
+
+/* The rank target editor's swatch picker. `type="color"` has no DS primitive — see DS-GAPS — so
+   this is the one raw input left in this half; the border it used to carry as an inline #d8dde4
+   is `--nds-border` here, which is the same colour named rather than written out. */
+.h10-rte-color { width: 26px; height: 22px; padding: 0; border: 1px solid var(--nds-border); border-radius: 4px; }

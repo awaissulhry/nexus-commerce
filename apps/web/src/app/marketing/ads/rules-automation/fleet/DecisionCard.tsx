@@ -34,7 +34,7 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
 
@@ -353,8 +353,11 @@ export function DecisionCard({
 
       {needsAck ? (
         <label className="ap-ack">
-          <input
-            type="checkbox"
+          {/* `tone="warning"` rather than the default blue: this tick authorises a write to
+              Amazon, and the DS added the prop for exactly this call site — `.ap-ack` had been
+              re-declaring `accent-color: #8a6320` because the primitive knew one colour. */}
+          <Checkbox
+            tone="warning"
             checked={acknowledged}
             onChange={(e) => setAcknowledged(e.target.checked)}
           />

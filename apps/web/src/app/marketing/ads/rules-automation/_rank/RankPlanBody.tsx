@@ -15,7 +15,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
-import { Button, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { SchedCampaign } from '../_schedule/CampaignSection'
@@ -219,7 +219,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
                   searchPlaceholder="Search campaigns…"
                 />
               )}
-              {smoothed && <label className="h10-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><input type="checkbox" checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
+              {smoothed && <label className="h10-rp-smooth" title="Sparse product? Smooth toward the market's overall pattern. Off = your real sales."><Checkbox checked={smooth} onChange={e => setSmooth(e.target.checked)} /> smooth</label>}
               <Select className="h10-rp-tf" size="xs" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
                 {[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}
               </Select>

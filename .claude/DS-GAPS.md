@@ -505,3 +505,17 @@ the control goes silently inert the moment the table converts unless a matching
 directions, not just one.
 - `DataGrid.size` only scales DOWN — `md` / `sm` / `xs`. The campaigns grid has a live "View: Compact / Comfortable / Spacious" density control whose two looser steps (14px and 19px vertical padding against md's 11px) have no DS equivalent, so a grid with no density above its default cannot host a density control at all. Both steps re-homed onto `.nds-grid` in amazon.css so all three settings survive; a `lg`/`xl` on the same scale would serve every consumer — apps/web/src/design-system/components/DataGrid.tsx
 - ✅ RESOLVED (DS session) — the stale `.d.ts` files, and a guard so they cannot go stale again. **19 components were missing 52 props**, and `ButtonVariant` listed 5 of its 10 members while `ButtonSize` listed 2 of 4 — nearly all of them props I added this session and never regenerated. Regenerated all 31; `scripts/check-ds-dts-fresh.mjs` now runs in pre-push (`--write` regenerates). Worth noting the first count I produced was **345 props across 55 components**, which was my own parser requiring 2-space indentation where the files use 4 — the real number is 52.
+
+## No colour-input primitive
+*Session 1 · ROUND 2 · 2026-08-26 · found in `_rank/RankTargetEditor.tsx`*
+
+`<input type="color">` has no DS counterpart. `Input` would wrap a swatch in a text field's
+chrome, and `Select`/`Listbox` cannot open the platform's own picker. One call site here — the
+rank target editor, where an operator picks the colour a paint brush uses on the week grid — so
+this is the last raw `<input>` in this half. It had a three-property inline `style` including a
+hand-written `#d8dde4`; that is a named class using `--nds-border` now, so the hex is gone even
+though the control is not.
+
+Low priority: one call site, and a native colour picker is genuinely hard to skin. Worth a
+`ColorSwatch` primitive only if a second surface ever needs one — but worth *naming* in the
+primitives README either way, so the next person does not re-derive the inline style.

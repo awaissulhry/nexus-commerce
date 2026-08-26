@@ -300,7 +300,11 @@
   background: var(--nds-white); border: 1px solid #ecd9ae; border-radius: var(--nds-radius-md);
   font-size: 12px; color: #6b5522; line-height: 1.5; cursor: pointer;
 }
-.ap-ack input { width: 15px; height: 15px; margin-top: 1px; cursor: pointer; accent-color: #8a6320; }
+/* This tick is the DS `Checkbox` with `tone="warning"` — the primitive grew that prop for this
+   exact call site, which had been re-declaring `accent-color: #8a6320` because the DS knew one
+   colour. The amber is the DS's now; only the top nudge that lines it up with the first line of
+   the sentence beside it is left. */
+.ap-ack .nds-check { margin-top: 1px; }
 .ap-ack:hover { background: #fffaf1; }
 
 /* ── AP.6: an action handed back because the facts moved ───────────── */
