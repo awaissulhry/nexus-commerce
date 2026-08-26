@@ -72,7 +72,8 @@
 
 /* P3 — scenario bar + compare */
 .cp-scenbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--nds-grey-100); }
-/* 3.1:1 measured at 11px — `--nds-grey-500` is #8a93a1 inside the ads shell. */
+/* `--nds-grey-500` is #8a93a1 — 3.10:1 at 11px. A grey ramp step is not a text token;
+   `--nds-text-2` is, and measures 5.91:1. */
 .cp-scenbar .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-2); }
 .cp-scenbar .grow { flex: 1; }
 /* Scenario bar: the working set is a `FilterChip` (it toggles), each SAVED scenario is a

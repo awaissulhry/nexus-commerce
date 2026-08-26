@@ -206,8 +206,10 @@
 .bp-toggle.dry { background: #fff4e0; border-color: #f0d9a8; color: #8a5a00; }
 .bp-toggle.live { background: #fdeaea; border-color: #f5c6c7; color: var(--nds-note-error-icon); }
 .bp-toggle:disabled { opacity: 0.45; }
-/* --nds-grey-500 resolves to #8a93a1 inside `.h10-shell`, which is 3.1:1 at 11px —
-   measured, not read off the token name. --nds-text-2 is a real hex in every scope. */
+/* `--nds-grey-500` is #8a93a1 — 3.10:1 on white, so the ramp's "500" is NOT a text-safe
+   grey, whatever the number suggests. `--nds-text-2` (#5b6573) is the secondary-TEXT
+   token and measures 5.91:1. Both checked at :root and inside `.h10-shell`; they are the
+   same in both — the value was never scope-dependent, it was simply too light. */
 .bp-meta { font-size: 11px; color: var(--nds-text-2); font-weight: 600; }
 
 .bp-sec-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); margin: 14px 0 7px; display: flex; align-items: center; gap: 6px; }
