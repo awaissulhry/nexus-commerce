@@ -578,3 +578,38 @@ call site will need the same until then.
 - `DateField` has `disabled` but no `readOnly`. They are not the same control: a disabled trigger leaves the tab order and its value cannot be focused or copied. The campaign's Start Date is a value Amazon owns and the operator reads — it is read-only, not disabled — so it stays a raw `<input readOnly>` rather than lose selection and keyboard reach. Its `<label for>` resolves today (verified in the DOM), so this is the only thing keeping it un-converted. Same shape as `Listbox`. — apps/web/src/design-system/components/DateField.tsx:74, apps/web/src/app/marketing/ads/campaigns/[id]/tabs/DetailsTab.tsx:224
 - ✅ RESOLVED (DS session) — `--nds-text-3` is the ICON tier, floor 3:1, and it cleared that on a white card (3.10) while MISSING it on the console's own ground (#f4f6f9, **2.87**) and on `--nds-surface-sunken` (**2.74**). Handed back by Session 1, same shape as the `--nds-primary` finding: one token, one ground either side of the line. Now **#7e8796** — the smallest move that clears 3:1 on all three (3.62 / 3.35 / 3.20), so nothing shifts more than it must. Decoupled from `--nds-grey-500`, which its other consumers still use unchanged. Dark override untouched (already 4.62–5.20). Also extended `vertical-align: top` to `.nds-grid thead th` — Session 1 kept a narrowed override for exactly that gap.
 - ✏️ CORRECTION to the `.bp-btn.warn` line above (line 43): it says `secondary` would "delete the only signal separating the safe rehearsal from the live write". That overstates it. The two buttons are labelled **"Dry-run preview"** and **"Run rebalance"**, and each carries its own icon — the amber is a semantic tint ON TOP of an already-distinguishable control, not the sole carrier of the distinction. At 5.66:1 it is a good cue and worth having (the DS `warning` variant now provides it), but "the only signal" is the kind of phrasing that gets repeated into a requirement. Same correction another session made to its own "the border IS the signal" claim; no hairline in this system could carry 1.4.11 alone — `--nds-border` is 1.3:1.
+
+## Three tokens in a row pass on white and miss on a ground the system defines
+*Session 1 · ROUND 2 · 2026-08-26 · found sweeping contrast in `rules-automation/`*
+
+Measured against the three light grounds the design system itself defines — `#ffffff`,
+the shell's `#f4f6f9`, and `--nds-surface-sunken` (`--nds-grey-100`, `#eef1f5`):
+
+| token | white | shell | sunken | floor |
+|---|---|---|---|---|
+| `--nds-primary` #1f6fde | 4.79 | **4.42** | **4.24** | 4.5 (text) |
+| `--nds-text-3` #8a93a1 → **#7e8796** | 3.10 → 3.62 | **2.87** → 3.35 | **2.74** → 3.20 | 3 (icon) |
+| `--nds-text-muted` #667080 | 5.01 | 4.62 | **4.42** | 4.5 (text) |
+
+`--nds-text-3` is fixed (`5a56c3ee6`). `--nds-primary` is filed (`bce870746`).
+`--nds-text-muted` at 4.42 on sunken is the new one.
+
+The pattern is the finding, not any single number: **whatever check produced these pairs was run
+against white.** Every one of them clears on a card and misses on a ground the system ships. A
+token that is only correct on `#ffffff` is a token that is correct in the token file and wrong on
+the page.
+
+Two cautions for whoever picks this up, both of which cost me time:
+
+**Do not turn this into a count of broken text.** Checking every declaration against all three
+grounds reported 346 failures in my four stylesheets; the live probe, compositing the real
+background from the element outward, found **one per page**. Almost nothing that uses
+`--nds-text-muted` ever paints on a sunken surface. 4.42 is a fact about the token, not a defect
+count — worth fixing at the token, not worth chasing at call sites.
+
+**A rule that names a RAMP gets no benefit when you fix a ROLE.** When `--nds-text-3` was raised,
+three of my seven icon rules improved and four did not, because those four said
+`var(--nds-grey-500)` — the same hex, none of the meaning. The same mistake ran the other way
+earlier the same day: 137 text declarations naming grey ramp steps that should have been text
+roles. A `color:` pointing at `--nds-grey-*` is nearly always a role wearing the wrong name, and
+it is the kind of thing a ratchet could catch.
