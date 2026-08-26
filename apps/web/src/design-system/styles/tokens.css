@@ -130,9 +130,9 @@
   /* ── status pills (tone-named: success/warning/neutral/danger) ── */
   --nds-pill-success-fg: var(--nds-blue-900);
   --nds-pill-success-bg: #d2e6fc;
-  --nds-pill-warning-fg: var(--nds-amber-text);
+  --nds-pill-warning-fg: var(--nds-warning-text);
   --nds-pill-warning-bg: var(--nds-amber-soft);
-  --nds-pill-neutral-fg: #6b7480;
+  --nds-pill-neutral-fg: var(--nds-text-2);
   --nds-pill-neutral-bg: var(--nds-grey-100);
   --nds-pill-danger-fg: var(--nds-danger-text);
   --nds-wsgrid-head-fg: #475467;

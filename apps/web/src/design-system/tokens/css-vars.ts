@@ -255,9 +255,15 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
   { name: '--nds-pill-success-bg', value: pill.ok.bg },
-  { name: '--nds-pill-warning-fg', value: 'var(--nds-amber-text)' },
+  // --nds-warning-text, not --nds-amber-text: the amber text tier is #9a6700 and measures
+  // 4.39:1 on this pill's own background — under AA, on a pill whose entire job is to be read.
+  // The warning tier is 7.99:1 on it.
+  { name: '--nds-pill-warning-fg', value: 'var(--nds-warning-text)' },
   { name: '--nds-pill-warning-bg', value: 'var(--nds-amber-soft)' },
-  { name: '--nds-pill-neutral-fg', value: pill.arch.fg },
+  // --nds-text-2, not pill.arch.fg (#6b7480): that measures 4.18:1 on this pill's background,
+  // under AA. --nds-text-2 is 5.22:1 and is the tier the rest of the system already uses for
+  // secondary text.
+  { name: '--nds-pill-neutral-fg', value: 'var(--nds-text-2)' },
   { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
   // NOT --nds-danger-strong: `.dark` overrides that to #f79289 while --nds-danger-soft stays
   // light, so the dark danger pill was #f79289 on #fde8e8 — 1.9:1, illegible. --nds-danger-text

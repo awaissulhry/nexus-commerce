@@ -138,9 +138,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
   { name: '--nds-pill-success-bg', value: pill.ok.bg },
-  { name: '--nds-pill-warning-fg', value: 'var(--nds-amber-text)' },
+  { name: '--nds-pill-warning-fg', value: 'var(--nds-warning-text)' },
   { name: '--nds-pill-warning-bg', value: 'var(--nds-amber-soft)' },
-  { name: '--nds-pill-neutral-fg', value: pill.arch.fg },
+  { name: '--nds-pill-neutral-fg', value: 'var(--nds-text-2)' },
   { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
   { name: '--nds-danger-text', value: '#9c2f2a' },
   // NOT --nds-danger-strong: `.dark` overrides that to #f79289 while --nds-danger-soft stays

@@ -441,7 +441,7 @@
 /* inline 🔍 search next to the toolbar count (AdsDataGrid `searchable`) */
 .h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: var(--nds-text-muted); border-radius: 7px; cursor: pointer; }
 
-.h10-am-searchbtn:hover { background: var(--nds-grey-100); color: var(--nds-blue-600); }
+.h10-am-searchbtn:hover { background: var(--nds-grey-100); color: var(--nds-text-link); }
 
 .h10-am-searchbox { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--nds-grey-300); border-radius: 8px; background: var(--nds-white); }
 

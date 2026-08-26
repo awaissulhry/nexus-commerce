@@ -118,7 +118,7 @@
   --nds-fchip-on-border: var(--nds-tonal-border);
   --nds-fchip-on-fg: var(--nds-tonal-fg);
   --nds-pill-success-bg: #d2e6fc;
-  --nds-pill-warning-fg: var(--nds-amber-text);
+  --nds-pill-warning-fg: var(--nds-warning-text);
   --nds-pill-warning-bg: var(--nds-amber-soft);
   --nds-pill-neutral-fg: #6b7480;
   --nds-pill-neutral-bg: var(--nds-grey-100);

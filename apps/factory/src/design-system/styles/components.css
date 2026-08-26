@@ -1346,7 +1346,7 @@
 }
 .nds-tab.on .nds-tab-count {
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-tabs.lg .nds-tab-count {
   min-width: 0;
@@ -1358,7 +1358,7 @@
 }
 .nds-tabs.lg .nds-tab.on .nds-tab-count {
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-tab-badge {
   display: inline-flex;
@@ -1366,7 +1366,7 @@
   padding: 1px 8px;
   border-radius: var(--nds-radius-full);
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.5;

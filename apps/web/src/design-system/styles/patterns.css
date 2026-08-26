@@ -126,7 +126,7 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--nds-danger);
+  background: var(--nds-danger-strong);
   color: var(--nds-text-inverse);
   font-size: 10px;
   font-weight: 800;
@@ -723,7 +723,7 @@
 }
 .nds-builder-navitem.on {
   background: var(--nds-wash-primary);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-builder-content {
   position: relative;

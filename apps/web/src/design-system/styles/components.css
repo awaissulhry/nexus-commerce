@@ -201,7 +201,7 @@
 }
 .nds-tab.on .nds-tab-count {
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 
 /* size="lg" count pill — placed AFTER the base rules it overrides so the cascade reads top-down.
@@ -222,7 +222,7 @@
 }
 .nds-tabs.lg .nds-tab.on .nds-tab-count {
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-tab-badge {
   display: inline-flex;
@@ -230,7 +230,7 @@
   padding: 1px 8px;
   border-radius: var(--nds-radius-full);
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.5;
@@ -772,7 +772,7 @@
 }
 .nds-combo-pop button.on {
   background: var(--nds-wash-primary);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   font-weight: 600;
 }
 .nds-combo-empty {
@@ -1195,10 +1195,10 @@
 .nds-imgup-zone {
   width: 200px; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px; padding: 16px; border: 1.5px dashed var(--nds-border); border-radius: 10px; background: var(--nds-imgup-surface);
-  color: var(--nds-text-3); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
+  color: var(--nds-text-muted); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
 }
-.nds-imgup-zone:hover:not(:disabled) { border-color: var(--nds-primary); color: var(--nds-primary); background: var(--nds-imgup-hover); }
-.nds-imgup-zone.drag { border-color: var(--nds-primary); border-style: solid; background: var(--nds-imgup-drag); color: var(--nds-primary); }
+.nds-imgup-zone:hover:not(:disabled) { border-color: var(--nds-primary); color: var(--nds-text-link); background: var(--nds-imgup-hover); }
+.nds-imgup-zone.drag { border-color: var(--nds-primary); border-style: solid; background: var(--nds-imgup-drag); color: var(--nds-text-link); }
 .nds-imgup-zone:disabled { opacity: .6; cursor: not-allowed; }
 .nds-imgup-zone .t { font-size: 13px; font-weight: 600; }
 .nds-imgup-zone .d { font-size: 11.5px; }
@@ -1330,7 +1330,7 @@
   border-radius: var(--nds-radius-round);
   background: var(--nds-surface);
   border: 1.5px solid var(--nds-border-strong);
-  color: var(--nds-text-3);
+  color: var(--nds-text-muted);
   z-index: 1;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1397,14 +1397,14 @@
   border: 1.5px dashed var(--nds-border-strong);
   border-radius: var(--nds-radius-xl);
   background: var(--nds-surface-sunken);
-  color: var(--nds-text-3);
+  color: var(--nds-text-2);
   font: inherit;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .nds-dropzone:hover:not(:disabled) {
   border-color: var(--nds-primary);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
   background: var(--nds-primary-soft);
 }
 .nds-dropzone:focus-visible {
@@ -1417,7 +1417,7 @@
   border-color: var(--nds-primary);
   border-style: solid;
   background: var(--nds-primary-soft);
-  color: var(--nds-primary);
+  color: var(--nds-text-link);
 }
 .nds-dropzone:disabled {
   opacity: 0.6;
