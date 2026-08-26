@@ -17,15 +17,14 @@ import { LayoutGrid, Settings2 } from 'lucide-react'
 import { Button } from '@/design-system/primitives/Button'
 import { PreferencesModal } from '@/design-system/patterns/PreferencesModal'
 import {
-  defaultSectionLayout, writeSectionLayout,
+  defaultSectionLayout,
   type SectionLayoutValue, type SectionSpec,
 } from '@/design-system/patterns/SectionLayout'
 
 export function SectionControls({
-  sections, storageKey, value, onChange, arranging, onArrangingChange,
+  sections, value, onChange, arranging, onArrangingChange,
 }: {
   sections: readonly SectionSpec[]
-  storageKey: string
   value: SectionLayoutValue
   onChange: (v: SectionLayoutValue) => void
   arranging: boolean
@@ -42,11 +41,14 @@ export function SectionControls({
   const onConfirm = useCallback((next: { visibleColumns: string[] }) => {
     // The dialog returns the ORDER as well as the set, and it must be honoured — a drag handle
     // that did not move anything would be a control that lies.
-    const merged: SectionLayoutValue = { order: next.visibleColumns, widths: value.widths }
-    onChange(merged)
-    writeSectionLayout(storageKey, merged)
+    //
+    // `onChange` is the page's single writer: it sets the state the layout renders from AND
+    // persists it. This used to also call `writeSectionLayout` itself, which stored the choice
+    // while the mounted layout carried on rendering its own stale copy — the dialog saved, closed,
+    // and nothing moved until the next reload.
+    onChange({ order: next.visibleColumns, widths: value.widths })
     setOpen(false)
-  }, [value.widths, onChange, storageKey])
+  }, [value.widths, onChange])
 
   return (
     <>
@@ -76,6 +78,8 @@ export function SectionControls({
         pageSizeChoices={[]}
         sortFieldOptions={[]}
         showSticky={false}
+        listLabel="Sections"
+        listHint="Drag to reorder · toggle to show or hide. Some ship switched off."
       />
     </>
   )

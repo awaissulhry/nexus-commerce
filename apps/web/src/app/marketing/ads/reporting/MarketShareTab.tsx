@@ -287,7 +287,7 @@ export function MarketShareTab({ market }: { market: string }) {
       {!data.week ? (
         <Card><div className="rpx-empty"><b>No Search Query Performance held for {chosen}.</b> Amazon publishes this feed weekly, roughly ten days in arrears, for queries where our ASINs appeared.</div></Card>
       ) : (
-        <SectionLayout sections={SHARE_SECTIONS} storageKey={SECTION_KEY} editing={sections.arranging}>
+        <SectionLayout sections={SHARE_SECTIONS} value={sections.layout} onChange={sections.setLayout} editing={sections.arranging}>
           {nodes}
         </SectionLayout>
       )}

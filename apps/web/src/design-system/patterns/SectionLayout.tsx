@@ -31,7 +31,7 @@
  * dialog already uses — a second persistence model for the same gesture is the inconsistency
  * this pattern exists to avoid. (Neither is server-side yet; when one moves, both should.)
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives/Button'
 import { emitPrefsChanged } from './prefs-bus'
 
@@ -68,11 +68,19 @@ export interface SectionLayoutProps {
   sections: readonly SectionSpec[]
   /** Rendered content by section id. A section with no child is skipped rather than drawn empty. */
   children: Record<string, ReactNode>
-  storageKey: string
+  /**
+   * 🔴 CONTROLLED. The layout is owned by the page, not by this component.
+   *
+   * It held its own copy until GX.8, reading storage once at mount — which meant the Sections
+   * dialog, which writes storage from OUTSIDE this subtree, saved correctly, closed, and changed
+   * nothing on screen until the next reload. A control that reports success and does nothing is
+   * worse than one that fails: nobody goes looking for the bug. One owner, one value.
+   */
+  value: SectionLayoutValue
+  /** Width steps report here. The owner persists — this component never writes storage. */
+  onChange: (value: SectionLayoutValue) => void
   /** True while the operator is arranging: width controls appear on each section. */
   editing?: boolean
-  /** Notified whenever the layout changes, so a page can show its own Done affordance. */
-  onChange?: (value: SectionLayoutValue) => void
   className?: string
 }
 
@@ -129,28 +137,13 @@ export function writeSectionLayout(storageKey: string, value: SectionLayoutValue
 }
 
 export function SectionLayout({
-  sections, children, storageKey, editing = false, onChange, className,
+  sections, children, value, onChange, editing = false, className,
 }: SectionLayoutProps) {
-  const [value, setValue] = useState<SectionLayoutValue>(() => defaultSectionLayout(sections))
-
-  // Seeded from the defaults and read from storage on mount, not in the initializer: the
-  // initializer runs during render, where `localStorage` is not available on the server.
-  useEffect(() => {
-    setValue(readSectionLayout(storageKey, sections))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey])
-
-  const update = useCallback((next: SectionLayoutValue) => {
-    setValue(next)
-    writeSectionLayout(storageKey, next)
-    onChange?.(next)
-  }, [storageKey, onChange])
-
   const cycleWidth = useCallback((id: string) => {
     const cur = value.widths[id] ?? 'full'
     const next = WIDTH_ORDER[(WIDTH_ORDER.indexOf(cur) + 1) % WIDTH_ORDER.length]
-    update({ ...value, widths: { ...value.widths, [id]: next } })
-  }, [value, update])
+    onChange({ ...value, widths: { ...value.widths, [id]: next } })
+  }, [value, onChange])
 
   const specs = useMemo(() => new Map(sections.map((s) => [s.id, s])), [sections])
 

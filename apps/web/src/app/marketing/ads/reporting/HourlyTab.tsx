@@ -201,7 +201,7 @@ export function HourlyTab({ market }: { market: string }) {
         </Card>
       )}
 
-      <SectionLayout sections={HOURLY_SECTIONS} storageKey={SECTION_KEY} editing={sections.arranging}>
+      <SectionLayout sections={HOURLY_SECTIONS} value={sections.layout} onChange={sections.setLayout} editing={sections.arranging}>
         {{
           stats: (
             <div className="rpx-stats">

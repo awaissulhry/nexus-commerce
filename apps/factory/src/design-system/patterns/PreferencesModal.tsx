@@ -52,6 +52,16 @@ export interface PreferencesModalProps {
   showSticky?: boolean
   /** Modal title (default "Customise"). */
   title?: string
+  /**
+   * What the list is called. Default "Columns" — every grid keeps its wording unchanged.
+   *
+   * GX.7 opened this dialog for a page's SECTIONS, where a legend reading "Columns" describes
+   * something the reader is not looking at. Forking the dialog to fix a noun would give the
+   * platform two Customize dialogs, which is the thing it decided not to have.
+   */
+  listLabel?: string
+  /** The hint under the legend. Defaults to the column wording. */
+  listHint?: string
   /** Extra left-panel content (workspace-specific preferences). */
   workspaceSlot?: ReactNode
 }
@@ -77,6 +87,8 @@ export function PreferencesModal({
   pageSizeChoices = DEFAULT_PAGE_SIZE_CHOICES,
   showSticky = true,
   title = 'Customise',
+  listLabel = 'Columns',
+  listHint = 'Drag to reorder · toggle to show or hide.',
   workspaceSlot,
 }: PreferencesModalProps) {
   // Draft mirrors `value`; reset on every open so a prior Cancel can't leak.
@@ -136,12 +148,21 @@ export function PreferencesModal({
     })
   const handleConfirm = () => { onConfirm(draft); onClose() }
 
+  // Does the left panel have ANY section to show? `workspaceSlot` counts — a caller can fill it
+  // even when all three built-ins are off.
+  const hasLeftPanel =
+    pageSizeChoices.length > 0 || sortFieldOptions.length > 0 || showSticky || workspaceSlot != null
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={title}
-      size="xl"
+      // The width follows the LAYOUT. `xl` (920px) is sized for two panels side by side; with the
+      // left one collapsed it stretched a list of one-word column names to 884px, putting 748px
+      // of empty space between each label and its toggle. `md` (560px) puts the list back at
+      // roughly the width it had as a panel.
+      size={hasLeftPanel ? 'xl' : 'md'}
       footer={
         <>
           <Button variant="ghost" onClick={resetAll} className="nds-prefs-reset">Reset to default</Button>
@@ -151,8 +172,14 @@ export function PreferencesModal({
         </>
       }
     >
-      <div className="nds-prefs">
+      {/* Single column when the left panel would be EMPTY. All three of its sections are
+          optional — `pageSizeChoices=[]`, `sortFieldOptions=[]`, `showSticky={false}` — and a
+          grid that locks its edge columns with `prefsLocked` rather than `sticky` switches off
+          all three at once. The two-column grid then reserved half the dialog for nothing:
+          measured at 1512px, the columns list sat in the right 375px of an 800px body. */}
+      <div className={`nds-prefs${hasLeftPanel ? '' : ' single'}`}>
         {/* ── Left: page-level preferences ── */}
+        {hasLeftPanel && (
         <div className="nds-prefs-col">
           {pageSizeChoices.length > 0 && (
             <fieldset className="nds-prefs-set">
@@ -223,12 +250,13 @@ export function PreferencesModal({
             </fieldset>
           )}
         </div>
+        )}
 
         {/* ── Right: column visibility + drag-reorder ── */}
         <div className="nds-prefs-col">
           <div className="nds-prefs-set">
-            <legend>Columns</legend>
-            <p className="nds-prefs-help">Drag to reorder · toggle to show or hide.</p>
+            <legend>{listLabel}</legend>
+            <p className="nds-prefs-help">{listHint}</p>
           </div>
           <div className="nds-prefs-cols">
             {orderedForDisplay.map((c) => {

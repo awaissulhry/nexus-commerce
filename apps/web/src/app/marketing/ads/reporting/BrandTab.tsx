@@ -32,7 +32,7 @@ import {
   type BrandBenchmark, type BrandStrategy,
 } from './strategy-api'
 import { BlockedNote, Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
-import { useSections } from './useSections'
+import { useSections, type SectionsHandle } from './useSections'
 import {
   SectionLayout, type SectionSpec,
 } from '@/design-system/patterns/SectionLayout'
@@ -185,7 +185,7 @@ export function BrandTab({ market }: { market: string }) {
 
       {isAll
         ? <AllMarkets data={data} />
-        : <OneMarket data={data} chartData={chartData} plotted={plotted} setPlotted={setPlotted} arranging={sections.arranging} />}
+        : <OneMarket data={data} chartData={chartData} plotted={plotted} setPlotted={setPlotted} sections={sections} />}
 
       <Caveats items={data.caveats} />
     </div>
@@ -195,13 +195,13 @@ export function BrandTab({ market }: { market: string }) {
 // ── one market ────────────────────────────────────────────────────────────────
 
 function OneMarket({
-  data, chartData, plotted, setPlotted, arranging,
+  data, chartData, plotted, setPlotted, sections,
 }: {
   data: BrandStrategy
   chartData: Array<Record<string, string | number | null>>
   plotted: string[]
   setPlotted: (k: string[]) => void
-  arranging: boolean
+  sections: SectionsHandle
 }) {
   const ntb = data.benchmarks.find((b) => b.id === 'newToBrandCustomerRate') ?? null
   const band = data.bands[0] ?? null
@@ -392,7 +392,7 @@ function OneMarket({
   }
 
   return (
-    <SectionLayout sections={BRAND_SECTIONS} storageKey={SECTION_KEY} editing={arranging}>
+    <SectionLayout sections={BRAND_SECTIONS} value={sections.layout} onChange={sections.setLayout} editing={sections.arranging}>
       {nodes}
     </SectionLayout>
   )

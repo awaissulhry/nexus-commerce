@@ -356,7 +356,7 @@ export function BusinessTab({ market }: { market: string }) {
         )}
       />
 
-      <SectionLayout sections={BUSINESS_SECTIONS} storageKey={SECTION_KEY} editing={sections.arranging}>
+      <SectionLayout sections={BUSINESS_SECTIONS} value={sections.layout} onChange={sections.setLayout} editing={sections.arranging}>
         {nodes}
       </SectionLayout>
 
