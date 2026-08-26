@@ -46,6 +46,15 @@
    of their components portals, so all seven are inside the pin. An icon that ever renders in a
    Modal or Menu would need the ramp instead, for the reason above.
 
+   🔴 And the portal set itself has to come from the SOURCE, not from a list of class prefixes.
+   Mine was six patterns and missed most of it: resolving every `createPortal(` call and every
+   `<Modal>` / `<Drawer>` / `<Menu>` / `<HoverCard>` WITH CHILDREN found 16 sites and 28 classes
+   rendering outside `.h10-shell`. Self-closing tags must be skipped — `<Listbox … />` has no app
+   children, and treating it as an open tag swept in the surrounding page and reported 85 instead.
+   Of the 11 role-named declarations that scan surfaced, MEASURING them left 2: the `--nds-note-*`
+   family is byte-identical in both themes and never flips. Only `--nds-pill-neutral-fg` did
+   (#5b6573 → #aab6c2, 2.06:1 on a modal's white). Those two are `--nds-grey-600` now.
+
    Found by nexus-commerce-56, who corrected their own earlier advice; verified here independently
    against tokens.css, the theme hook, and the running page before acting. */
 
@@ -373,7 +382,7 @@
 .h10-rb-lbl-i:hover { color: var(--nds-pill-neutral-fg); }
 .h10-rb-lookback label .h10-hc-anchor { vertical-align: middle; }
 .h10-rb-theninfo { display: inline-flex; align-items: center; color: var(--nds-grey-600); }
-.h10-rb-theninfo:hover { color: var(--nds-pill-neutral-fg); }
+.h10-rb-theninfo:hover { color: var(--nds-grey-600); }
 /* Budget: Lookback relocated into the Advanced card (reuse the lbrow row) + B0 setup placeholder */
 .h10-rb-card.adv .advblock .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .h10-rb-card.adv .advblock .lbrow .exc { font-size: 13px; color: var(--nds-grey-600); }
@@ -1211,7 +1220,7 @@
 .h10-d2-diff .rows { max-height: 240px; overflow-y: auto; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-lg); }
 .h10-d2-diff .r { display: grid; grid-template-columns: 92px 1fr 18px 1fr; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--nds-grey-50); }
 .h10-d2-diff .r:last-child { border-bottom: 0; }
-.h10-d2-diff .r .t { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
+.h10-d2-diff .r .t { color: var(--nds-grey-600); white-space: nowrap; }
 .h10-d2-diff .r .f { color: var(--nds-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-d2-diff .r .a { color: var(--nds-grey-600); text-align: center; }
 .h10-d2-diff .r .v { color: var(--nds-grey-900); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
