@@ -9,6 +9,7 @@
  */
 
 import prisma from '../../db.js'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -45,7 +46,13 @@ export interface DaypartingIntel {
 export async function analyzeDayparting(opts: { windowDays?: number; campaignId?: string } = {}): Promise<DaypartingIntel> {
   const windowDays = opts.windowDays ?? 60
   const since = new Date(Date.now() - windowDays * 86_400_000)
-  const where: { entityType: string; date: { gte: Date }; localEntityId?: string } = { entityType: 'CAMPAIGN', date: { gte: since } }
+  // GX.5 — this aggregates the DAILY table at campaign grain, which is exactly what the AMS
+  // duplicates pollute, and it had no guard. Measured 2026-08-26 for Italy: at this function's
+  // 60-day default the 659 stream-written rows inflate spend by 5.6%, and at 90 days by 20.9%.
+  // A 30-day window is currently clean only because the duplicates end on 27 Jul.
+  const where: { entityType: string; date: { gte: Date }; localEntityId?: string } = {
+    entityType: 'CAMPAIGN', date: { gte: since }, ...EXCLUDE_AMS_DAILY,
+  }
   if (opts.campaignId) where.localEntityId = opts.campaignId
 
   const rows = await prisma.amazonAdsDailyPerformance.findMany({

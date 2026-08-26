@@ -23,6 +23,21 @@
 export const AMS_DAILY_MARKER = 'ams-stream'
 
 /**
+ * 🔴 DAILY TABLE ONLY. Applying this to `AmazonAdsHourlyPerformance` excludes EVERYTHING.
+ *
+ * The marker means "a row the stream wrote to the DAILY table", where it duplicates the report
+ * pipeline's own row for that campaign-day. The HOURLY table is the stream's own home: measured
+ * 2026-08-26, all 33,099 rows carry `reportRunId = 'ams-stream'`, so this filter matches every
+ * one of them.
+ *
+ * That is not hypothetical — `ads-detail-metrics.service.ts` spread it into its intraday hourly
+ * overlay, and the overlay summed nothing from the day it shipped. Today's campaign spend read
+ * €23.78 in the table and €0.00 through the filter, so "Today" on the campaign detail page showed
+ * no spend at all. Fixed in GX.5.
+ *
+ * The name is the contract: `EXCLUDE_AMS_DAILY`, not `EXCLUDE_AMS`. A guard that is correct on
+ * one table can be exactly inverted on another.
+ *
  * Spread into any `amazonAdsDailyPerformance` where-clause that aggregates.
  * Safe to apply everywhere: report rows carry a real report-run id, so this
  * only ever removes stream-written duplicates.

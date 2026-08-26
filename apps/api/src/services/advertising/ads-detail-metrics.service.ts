@@ -87,8 +87,17 @@ export async function computeCampaignDetailMetrics(opts: {
           { localEntityId: opts.campaignId },
           ...(opts.externalCampaignId ? [{ entityId: opts.externalCampaignId }] : []),
         ],
-        ...EXCLUDE_AMS_DAILY, // AX2.3
-
+        // 🔴 GX.5 — `EXCLUDE_AMS_DAILY` USED TO BE APPLIED HERE, AND IT EXCLUDED EVERYTHING.
+        //
+        // The marker means "a row the stream wrote to the DAILY table", where it is a duplicate of
+        // the report pipeline's own row. This is the stream's OWN table: measured 2026-08-26, all
+        // 33,099 rows carry `reportRunId = 'ams-stream'`, so the filter matched every one of them
+        // and the overlay summed nothing. Today's campaign spend read €23.78 in the table and
+        // €0.00 through the filter — the intraday overlay has never contributed a cent since it
+        // shipped, and "Today" on the campaign detail page showed no spend at all.
+        //
+        // The constant's name is the whole lesson: it is `EXCLUDE_AMS_DAILY`, not
+        // `EXCLUDE_AMS`. A guard that is correct on one table can be exactly inverted on another.
       },
       _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
     }).catch(() => null)
