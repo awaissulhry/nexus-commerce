@@ -672,6 +672,49 @@
 .nds-metric .dlt.down {
   color: var(--status-danger-strong);
 }
+/* Sub-line that says what the number COUNTS. Muted tier, not the icon tier: it is running text
+   at 11.5px, below the 18.66px where --nds-text-3 would clear AA. */
+.nds-metric .hint {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-muted);
+  margin-top: 2px;
+}
+/* Status key on the label. */
+.nds-metric .lbl .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--nds-radius-round);
+  flex: none;
+  display: inline-block;
+}
+.nds-metric .lbl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+/* A tile that filters. `btn` resets the button box so it still reads as a card, and restores the
+   left alignment a <button> centres by default. */
+.nds-metric.btn {
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.nds-metric.btn:hover {
+  border-color: var(--nds-border-strong);
+}
+.nds-metric.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+/* Engaged. The ring is what carries it — a border-colour change alone is a 1px cue that reads as
+   hover, and these tiles toggle a filter the rest of the page is then showing. */
+.nds-metric.btn.active {
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+}
+
 
 /* ── HoverCard (rich hover panel) ────────────────────────────────── */
 .nds-hovercard {
@@ -944,6 +987,16 @@
   padding: 10px 14px;
   white-space: nowrap;
 }
+/* ...EXCEPT the selection column. A row checkbox selects the WHOLE row, not its first line, so
+   pinning it to the top puts it out of alignment with everything it acts on the moment a row is
+   taller than 15px. Measured on a grid with 56px thumbnails: the checkbox sat 17px above the
+   row's centre (10.8px at the `xs` tier) — three different baselines in one row. Middle is the
+   only alignment a control-for-the-row can have; `top` remains right for every DATA cell, which
+   is what that rule above is about. */
+.nds-grid tbody td.ck {
+  vertical-align: middle;
+}
+
 .nds-grid tbody td {
   background: var(--surface-card);
   border-bottom: 1px solid var(--border-subtle);
@@ -1564,6 +1617,19 @@
   padding: 5px 9px;
   font-size: 11.5px;
 }
+/* Chips ride the density tier. `Pill` and `Tag` are fixed at 11px, so in a compacted grid they
+   stayed put while the text around them stepped down — leaving the chip the biggest thing in the
+   row. Scoped to the grid tiers, so a Pill anywhere else is untouched. */
+.nds-grid.xs tbody td .nds-pill,
+.nds-grid.xs tbody td .nds-tag {
+  font-size: var(--nds-font-size-micro);
+  padding: 1px 6px;
+}
+.nds-grid.sm tbody td .nds-pill,
+.nds-grid.sm tbody td .nds-tag {
+  font-size: var(--nds-font-size-micro);
+}
+
 
 /* A navigable step. The hit target is the badge AND the label together — clicking the number of a
    finished step is the gesture people reach for, and a label-only target misses it. Inherits the
@@ -1657,3 +1723,13 @@
 .nds-bmk.is-mute { background: var(--nds-surface-sunken); }
 .nds-bmk.is-mute .nds-bmk-label,
 .nds-bmk.is-mute .nds-bmk-value { color: var(--nds-text-2); }
+
+/* A cell with NO measurement, which is not the palest shade of the ramp. Hatched rather than
+   tinted, so absence reads as absence at a glance and in greyscale. */
+.nds-heat-cell.is-empty {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--nds-surface-sunken) 0 3px,
+    var(--nds-surface) 3px 6px
+  );
+}

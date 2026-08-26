@@ -2095,6 +2095,18 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  // GX.5 — the hourly pulse: today by hour against the same weekday last week, the weekday × hour
+  // grid, and which markets are live. UTC throughout, because Amazon's budget day is.
+  fastify.get('/advertising/reporting/hourly', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { hourlyPulse } = await import('../services/advertising/ads-hourly-pulse.service.js')
+    const market = (q.marketplace ?? 'IT').trim().toUpperCase()
+    if (!/^[A-Z]{2,12}$/.test(market)) { reply.code(400); return { error: 'marketplace must be a country code' } }
+    // Short cache only: this is the one surface whose whole value is being current.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return hourlyPulse({ marketplace: market, heatWindowDays: q.heatWindowDays ? Number(q.heatWindowDays) : undefined })
+  })
+
   // GX.2 — one level of the drill-down tree. Children of a node, over the caller's filters.
   // Lazy by design: a tree that fetched everything would be the search-terms report's 12,443 rows
   // in a browser, and expanding is a query rather than a slice.

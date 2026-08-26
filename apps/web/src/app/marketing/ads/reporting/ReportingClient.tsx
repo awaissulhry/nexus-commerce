@@ -34,6 +34,7 @@ import { BrandTab } from './BrandTab'
 import { MarketShareTab } from './MarketShareTab'
 import { BusinessTab } from './BusinessTab'
 import { ExplorerTab } from './ExplorerTab'
+import { HourlyTab } from './HourlyTab'
 import { LibraryTab } from './LibraryTab'
 import { TodayBand } from './TodayBand'
 import '@/design-system/styles/tokens.css'
@@ -50,6 +51,9 @@ const TABS = [
   // click through. (The Ad Manager also still renders its own <table>; adopting the shared grid
   // there is a data migration over two bespoke localStorage shapes, not a table swap.)
   { id: 'explorer', label: 'Explorer' },
+  // GX.5 — the only feed on this page that is current to this hour. It sits after the analysis
+  // tabs because "what is happening right now" is a different question from "how are we doing".
+  { id: 'hourly', label: 'Hourly' },
   { id: 'library', label: 'Library' },
 ] as const
 
@@ -59,6 +63,7 @@ const SUBTITLES: Record<TabId, string> = {
   brand: 'Brand penetration against the category. Weekly — Amazon publishes this feed about eleven days in arrears.',
   'market-share': 'Our slice of the whole market, query by query. Weekly, roughly ten days in arrears.',
   business: 'What advertising costs the whole business, not just the ad account.',
+  hourly: 'What is happening right now, and whether it is normal for this hour. UTC, because Amazon’s budget day is.',
   explorer: 'Where the money went — market to portfolio to campaign to product or target, every level adding up to the one above it.',
   library: 'Every ads number this console can produce.',
 }
@@ -110,6 +115,7 @@ export function ReportingClient() {
       case 'market-share': return <MarketShareTab key={`ms-${market}-${reloadKey}`} market={market} />
       case 'business': return <BusinessTab key={`bz-${market}-${reloadKey}`} market={market} />
       case 'explorer': return <ExplorerTab key={`ex-${market}-${reloadKey}`} market={market} />
+      case 'hourly': return <HourlyTab key={`hr-${market}-${reloadKey}`} market={market} />
       case 'library': return <LibraryTab reloadKey={reloadKey} />
       default: return <BrandTab key={`br-${market}-${reloadKey}`} market={market} />
     }
