@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, SegmentedControl, Textarea } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankGrid'
@@ -1105,10 +1105,17 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           <div className="az-guided">
             <div className="az-guided-head"><Sparkles size={14} /> Schedule your rank by time
               <span style={{ flex: 1 }} />
-              <span className="az-mode-seg" role="tablist" aria-label="Schedule mode">
-                <button type="button" role="tab" aria-selected={schedMode === 'guided'} className={schedMode === 'guided' ? 'on' : ''} onClick={() => setSchedMode('guided')}>Guided</button>
-                <button type="button" role="tab" aria-selected={schedMode === 'custom'} className={schedMode === 'custom' ? 'on' : ''} onClick={() => setSchedMode('custom')}>Custom by hour</button>
-              </span>
+              {/* Was a `role="tablist"` of two `role="tab"` buttons — but nothing in this file is a
+                  `tabpanel` and nothing carries `aria-controls`, so the tab role promised a
+                  relationship that did not exist. A radiogroup is what this actually is, and the
+                  DS control brings the roving tabindex and arrow-key movement the pair lacked. */}
+              <SegmentedControl
+                ariaLabel="Schedule mode"
+                size="sm"
+                value={schedMode}
+                onChange={(v) => setSchedMode(v as 'guided' | 'custom')}
+                options={[{ value: 'guided', label: 'Guided' }, { value: 'custom', label: 'Custom by hour' }]}
+              />
             </div>
 
             {schedMode === 'guided' ? (<>
@@ -1130,11 +1137,22 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
 
             {gridSummary.length > 0 && <div className="az-tr-summary"><span className="t">This applies</span>{gridSummary.map((s, i) => <div key={i} className="line">{s}</div>)}</div>}
             <div className="az-sched-actions">
+              {/* `.az-scope-seg` is dropped rather than passed through `className`: its only
+                  declaration is `align-self: center`, which `.az-sched-actions` already supplies
+                  with `align-items: center`. Passing it would also drag `.az-scope-seg button`
+                  (0,1,1) onto `.nds-seg-opt`, and amazon.css loads last — the page would re-style
+                  the DS control it was just converted to. */}
               {family.campaigns.length > 1 && (
-                <span className="az-mode-seg az-scope-seg" role="tablist" aria-label="Apply scope">
-                  <button type="button" role="tab" aria-selected={applyScope === 'campaign'} className={applyScope === 'campaign' ? 'on' : ''} onClick={() => setApplyScope('campaign')}>This campaign</button>
-                  <button type="button" role="tab" aria-selected={applyScope === 'family'} className={applyScope === 'family' ? 'on' : ''} onClick={() => setApplyScope('family')}>All {family.campaigns.length}</button>
-                </span>
+                <SegmentedControl
+                  ariaLabel="Apply scope"
+                  size="sm"
+                  value={applyScope}
+                  onChange={(v) => setApplyScope(v as 'family' | 'campaign')}
+                  options={[
+                    { value: 'campaign', label: 'This campaign' },
+                    { value: 'family', label: `All ${family.campaigns.length}` },
+                  ]}
+                />
               )}
               <Button variant="primary" disabled={gridSaving || !trGrid || scopedCampaigns.length === 0} onClick={() => void applyGrid()}>
                 {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Check size={14} /> Apply to {scopedCampaigns.length} campaign{scopedCampaigns.length === 1 ? '' : 's'}</>}

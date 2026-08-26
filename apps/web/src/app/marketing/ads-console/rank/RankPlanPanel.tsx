@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Save, UploadCloud, Undo2, Sparkles, Power, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DemandReadout, type DemandProfile, type DemandCell } from './DemandReadout'
 import { RankTimeGrid } from './RankTimeGrid'
@@ -183,10 +183,13 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
         {/* Target windows — "these hours, hold X" */}
         <div className="az-rp-sec">
           <div className="az-rp-lbl" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>During these windows, hold a different rank:<span className="grow" />
-            <span className="az-mode-seg az-scope-seg" role="tablist" aria-label="Window editor view" style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-              <button type="button" role="tab" aria-selected={winView === 'grid'} className={winView === 'grid' ? 'on' : ''} onClick={() => setWinView('grid')}>Grid</button>
-              <button type="button" role="tab" aria-selected={winView === 'list'} className={winView === 'list' ? 'on' : ''} onClick={() => setWinView('list')}>List</button>
-            </span>
+            <SegmentedControl
+              ariaLabel="Window editor view"
+              size="sm"
+              value={winView}
+              onChange={(v) => setWinView(v as 'grid' | 'list')}
+              options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]}
+            />
             {winView === 'list' && <Button variant="link" onClick={addWindow}><Plus size={12} /> Add window</Button>}
           </div>
           {winView === 'grid' ? (
