@@ -13,7 +13,7 @@
 .h10-scb-substeps .ss .dot { width: 6px; height: 6px; border-radius: 50%; background: #c2cdda; flex-shrink: 0; }
 .h10-scb-substeps .ss.done { color: var(--nds-grey-600); }
 .h10-scb-substeps .ss.done .dot { background: var(--nds-grey-900); }
-.h10-scb-substeps .ss.on { color: var(--nds-blue-600); }
+.h10-scb-substeps .ss.on { color: var(--nds-text-link); }
 .h10-scb-substeps .ss.on .dot { background: var(--nds-blue-600); }
 
 /* SB.2 — Campaign Details: stacked fields inside the card. */
@@ -25,7 +25,7 @@
 /* SB.2 — radio list (bidding strategy + sites): radio · bold title · description. */
 .h10-scb-radios { display: flex; flex-direction: column; gap: 16px; }
 .h10-scb-radio { display: grid; grid-template-columns: 16px 1fr; gap: 11px; cursor: pointer; align-items: start; }
-.h10-scb-radio input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: var(--nds-blue-600); cursor: pointer; }
+.h10-scb-radio input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: var(--nds-text-link); cursor: pointer; }
 .h10-scb-radio .rb { display: flex; flex-direction: column; gap: 3px; }
 .h10-scb-radio .rb b { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-scb-radio .rb .d { font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.45; max-width: 680px; }
@@ -40,9 +40,9 @@
 /* SB.4 — Product Selection "Sponsored Videos" column (shared ProductSelection right panel). */
 .h10-spw-ps-rcol.sv { display: flex; justify-content: space-between; }
 .h10-spw-ps-rcol.sv .svcol { display: inline-flex; align-items: center; gap: 5px; }
-.h10-spw-ps-rcol.sv .newtag { background: var(--nds-blue-100); color: var(--nds-blue-600); font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .3px; }
+.h10-spw-ps-rcol.sv .newtag { background: var(--nds-blue-100); color: var(--nds-text-link); font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .3px; }
 .h10-spw-ps-right .row .h10-spw-ps-sv { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 116px; }
-.h10-spw-ps-right .row .h10-spw-ps-sv input { width: 15px; height: 15px; accent-color: var(--nds-blue-600); cursor: pointer; }
+.h10-spw-ps-right .row .h10-spw-ps-sv input { width: 15px; height: 15px; accent-color: var(--nds-text-link); cursor: pointer; }
 
 /* SB.4 — Budget & Default Bid */
 .h10-scb-budget { display: flex; gap: 40px; flex-wrap: wrap; }
@@ -64,7 +64,7 @@
 .h10-scb-rules .addwrap { position: relative; }
 .h10-scb-rules .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 232px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); box-shadow: 0 12px 32px rgba(20,30,45,.16); padding: 6px; z-index: 30; }
 .h10-scb-rules .menu > button { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--nds-grey-800); background: none; border: none; border-radius: var(--nds-radius-md); padding: 9px 11px; cursor: pointer; }
-.h10-scb-rules .menu > button:hover { background: var(--nds-grey-75); color: var(--nds-blue-600); }
+.h10-scb-rules .menu > button:hover { background: var(--nds-grey-75); color: var(--nds-text-link); }
 .h10-scb-rules .picklist .ph { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--nds-text-2); padding: 6px 11px 4px; }
 .h10-scb-rules .picklist .pe { font-size: 12px; color: var(--nds-text-2); padding: 8px 11px; line-height: 1.4; }
 .h10-scb-rules .picklist button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; font: inherit; background: none; border: none; border-radius: var(--nds-radius-md); padding: 8px 11px; cursor: pointer; }
@@ -77,7 +77,7 @@
 .h10-scb-rules .trow { border-top: 1px solid var(--nds-grey-100); font-size: 13px; color: var(--nds-grey-900); }
 .h10-scb-rules .rname { display: inline-flex; align-items: center; gap: 6px; }
 .h10-scb-rules .rname .ic { display: inline-flex; padding: 4px; border: none; background: none; color: var(--nds-text-2); cursor: pointer; border-radius: 5px; }
-.h10-scb-rules .rname .ic:hover { color: var(--nds-blue-600); background: var(--nds-blue-50); }
+.h10-scb-rules .rname .ic:hover { color: var(--nds-text-link); background: var(--nds-blue-50); }
 .h10-scb-rules .rname .ic.del:hover { color: var(--nds-imgup-err); background: var(--nds-note-error-bg); }
 .h10-scb-rules .rtype { color: var(--nds-grey-600); }
 .h10-scb-rules .nodata { padding: 40px 16px; text-align: center; color: var(--nds-text-2); font-size: 13px; }
@@ -98,7 +98,7 @@
 @media (max-width: 1080px) { .h10-scb-review-grid { grid-template-columns: 1fr; } }
 .h10-scb-review-card .rvh { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .h10-scb-review-card .rvh h3 { font-size: 15px; font-weight: 700; color: var(--nds-grey-900); margin: 0; display: inline-flex; align-items: center; gap: 8px; }
-.h10-scb-review-card .rvh h3 .cnt { font-size: 11.5px; font-weight: 700; color: var(--nds-blue-600); background: var(--nds-blue-100); border-radius: 20px; padding: 1px 9px; }
+.h10-scb-review-card .rvh h3 .cnt { font-size: 11.5px; font-weight: 700; color: var(--nds-text-link); background: var(--nds-blue-100); border-radius: 20px; padding: 1px 9px; }
 .h10-scb-review-card .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 24px; }
 .h10-scb-review-card .f { display: flex; flex-direction: column; gap: 3px; }
 .h10-scb-review-card .f.wide { grid-column: 1 / -1; }
@@ -115,7 +115,7 @@
 .h10-scb-review-thumbs .more { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); padding: 0 6px; }
 .h10-scb-review-card .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .h10-scb-review-card .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-900); background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 16px; padding: 3px 10px; }
-.h10-scb-review-card .chip .mt { font-size: 9px; font-weight: 800; color: var(--nds-blue-600); background: var(--nds-white); border-radius: 4px; padding: 0 4px; }
+.h10-scb-review-card .chip .mt { font-size: 9px; font-weight: 800; color: var(--nds-text-link); background: var(--nds-white); border-radius: 4px; padding: 0 4px; }
 .h10-scb-review-card .chip.more { color: var(--nds-grey-600); font-weight: 700; }
 .h10-scb-launcherr { margin-top: 14px; padding: 11px 14px; border: 1px solid #f3c9c5; background: var(--nds-note-error-bg); border-radius: 9px; color: #b42318; font-size: 13px; font-weight: 500; }
 

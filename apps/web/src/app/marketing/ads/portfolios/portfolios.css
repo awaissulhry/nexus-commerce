@@ -27,7 +27,7 @@
 .pf-state--enabled { background: #e7f5ee; color: #067d62; }
 .pf-state--paused { background: #fff4e0; color: var(--nds-amber-600); }
 .pf-state--archived { background: var(--nds-grey-50); color: var(--nds-text-muted); }
-.pf-src { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-blue-50); color: var(--nds-blue-600); }
+.pf-src { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-blue-50); color: var(--nds-text-link); }
 .pf-src--local { background: var(--nds-grey-50); color: var(--nds-text-2); }
 .pf-mkts { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .pf-mkt { font-size: 10px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-50); border-radius: 5px; padding: 1px 6px; }
@@ -47,7 +47,7 @@
 .pf-fld { display: flex; flex-direction: column; gap: 4px; }
 .pf-fld span { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); }
 .pf-mode { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px; font-size: 12px; }
-.pf-mode--sandbox { background: var(--nds-blue-50); color: var(--nds-blue-600); border: 1px solid var(--nds-blue-200); }
+.pf-mode--sandbox { background: var(--nds-blue-50); color: var(--nds-text-link); border: 1px solid var(--nds-blue-200); }
 .pf-mode--live { background: var(--nds-blue-50); color: #1f4f9e; border: 1px solid var(--nds-blue-200); }
 .pf-mode b { font-weight: 800; }
 .pf-confirm-name { font-size: 13px; color: #37495b; }
@@ -70,7 +70,7 @@
 .pf-searchfield .ad.suf { background: none; border-left: 0; padding: 0 6px 0 0; }
 
 /* ACR.6 — the name is the door to the Family Cockpit. */
-.pf-name-link { color: var(--nds-blue-600); text-decoration: none; cursor: pointer; }
+.pf-name-link { color: var(--nds-text-link); text-decoration: none; cursor: pointer; }
 .pf-name-link:hover { text-decoration: underline; }
 
 /* ── ACR.7 — dock beside the list ────────────────────────────────────────── */

@@ -18,7 +18,7 @@
 .h10-gcb .h10-scb-substeps .ss .dot { width: 6px; height: 6px; border-radius: 50%; background: #c2cdda; flex-shrink: 0; }
 .h10-gcb .h10-scb-substeps .ss.done { color: var(--nds-grey-600); }
 .h10-gcb .h10-scb-substeps .ss.done .dot { background: var(--nds-grey-900); }
-.h10-gcb .h10-scb-substeps .ss.on { color: var(--nds-blue-600); }
+.h10-gcb .h10-scb-substeps .ss.on { color: var(--nds-text-link); }
 .h10-gcb .h10-scb-substeps .ss.on .dot { background: var(--nds-blue-600); }
 
 /* Bid Strategy — surface-local Target ACoS / Min-Max below the shared cards (mirrors Quick/Single). */

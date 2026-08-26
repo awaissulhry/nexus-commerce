@@ -39,7 +39,7 @@
 .cp-statusbtns button { border: none; background: var(--nds-white); font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--nds-grey-100); }
 .cp-statusbtns button:last-child { border-right: none; }
 .cp-statusbtns button:hover { background: var(--nds-grey-75); }
-.cp-statusbtns button.on { background: var(--nds-blue-50); color: var(--nds-blue-600); }
+.cp-statusbtns button.on { background: var(--nds-blue-50); color: var(--nds-text-link); }
 .cp-eurin.pct { width: 130px; }
 .cp-pl3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .cp-pl3 > label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
