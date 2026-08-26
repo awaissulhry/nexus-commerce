@@ -11,9 +11,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
+import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
 import { Button, ToolbarButton, Toggle } from '@/design-system/primitives'
-import { DataGrid, Listbox, type Column } from '@/design-system/components'
+import { DataGrid, Listbox, Pagination, type Column } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
@@ -505,13 +505,11 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           />
         </span>
         <span className="range">{firstRow}–{lastRow} of {filtered.length}</span>
-        <span className="nav">
-          <button onClick={() => setPage(1)} disabled={curPage <= 1} aria-label="First page"><ChevronsLeft size={16} /></button>
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
-          <span className="pg">{curPage} / {totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages} aria-label="Next page"><ChevronRight size={16} /></button>
-          <button onClick={() => setPage(totalPages)} disabled={curPage >= totalPages} aria-label="Last page"><ChevronsRight size={16} /></button>
-        </span>
+        {/* The DS `Pagination`. It drops the first/last jump buttons and the "N / M" readout, and
+            neither is a loss: `pageList` ALWAYS includes 1 and `pageCount`, so first and last are
+            still one click away, and nearby pages become directly reachable, which they were not.
+            Position is still stated by the `.range` span beside it. */}
+        <Pagination page={curPage} pageCount={totalPages} onPage={setPage} />
       </div>
 
       {menu && (() => {

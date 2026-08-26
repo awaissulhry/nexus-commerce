@@ -11,9 +11,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Search, ChevronDown, ChevronRight, RefreshCw, Download, Image as ImageIcon, ChevronLeft, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, RefreshCw, Download, Image as ImageIcon } from 'lucide-react'
 import { Button, Input, ToolbarButton } from '@/design-system/primitives'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, Listbox, Pagination, type Column } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
@@ -267,16 +267,21 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
       <div className="az-pager">
         <span className="count">{filtered.length} products · {mode} · last {days} days{loading ? ' · updating…' : ''}</span>
         <span className="rpp">Results per page
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Results per page">{[25, 50, 100, 200, 300].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+          <Listbox
+            size="sm"
+            width={78}
+            ariaLabel="Results per page"
+            value={String(pageSize)}
+            onChange={(v) => setPageSize(Number(v))}
+            options={[25, 50, 100, 200, 300].map((n) => ({ value: String(n), label: String(n) }))}
+          />
         </span>
         <span className="range">{firstRow}–{lastRow} of {filtered.length}</span>
-        <span className="nav">
-          <button onClick={() => setPage(1)} disabled={curPage <= 1} aria-label="First page"><ChevronsLeft size={16} /></button>
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
-          <span className="pg">{curPage} / {totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages} aria-label="Next page"><ChevronRight size={16} /></button>
-          <button onClick={() => setPage(totalPages)} disabled={curPage >= totalPages} aria-label="Last page"><ChevronsRight size={16} /></button>
-        </span>
+        {/* The DS `Pagination`. It drops the first/last jump buttons and the "N / M" readout, and
+            neither is a loss: `pageList` ALWAYS includes 1 and `pageCount`, so first and last are
+            still one click away, and nearby pages become directly reachable, which they were not.
+            Position is still stated by the `.range` span beside it. */}
+        <Pagination page={curPage} pageCount={totalPages} onPage={setPage} />
       </div>
     </div>
   )
