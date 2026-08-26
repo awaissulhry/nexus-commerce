@@ -529,3 +529,53 @@ export function BudgetRuleCell({ assigned, staged, ruleHref }: {
     </span>
   )
 }
+
+/**
+ * ADM-A4 — one vocabulary for "this column is empty, and here is exactly why".
+ *
+ * The Ad Manager grid, the Ad Groups tab and the Targets tab all render the same ~17 metric
+ * columns, and until now only the Ad Manager explained an absence: both tabs printed a bare `—`
+ * from a shared `const DASH = () => '—'`, which says "no data" for four different truths. Three
+ * surfaces inventing three explanations for one absence is the inconsistency this exists to end.
+ *
+ * Every sentence below is a MEASURED fact, verified against Amazon's own allowed-column lists on
+ * 2026-08-26 by probing the v3 report API with an invalid column name (it answers with what each
+ * report really offers). Nothing here is inferred from what the account happens to sell.
+ */
+export type ColumnAbsence =
+  /** Amazon publishes no such column on this ad product's report — nothing to ingest, ever. */
+  | 'not-offered-sp'
+  /** Offered by Amazon and now requested; nothing reported for this row in this window. */
+  | 'nothing-reported'
+  /** Not measured at this grain because the source has no rows at that level. */
+  | 'no-ad-group-grain'
+  /** Requested for the first time; the first ingest has not landed yet. */
+  | 'awaiting-first-ingest'
+
+const ABSENCE_TEXT: Record<ColumnAbsence, { label: string; why: string }> = {
+  'not-offered-sp': {
+    label: 'n/a — SP',
+    why: 'Amazon publishes no such column on the Sponsored Products reports. Verified against its own allowed-column lists on 2026-08-26: spCampaigns allows 52 columns and spTargeting 61, and neither includes a newToBrand or viewable-impression metric. There is nothing to ingest, so this is not a gap in our pipeline.',
+  },
+  'nothing-reported': {
+    label: 'unknown',
+    why: 'Amazon does publish this metric for this ad product and we request it — it reported no value for this row in the selected window. Not the same as zero.',
+  },
+  'no-ad-group-grain': {
+    label: 'not measured',
+    why: 'Not measured at ad-group level. Amazon’s daily performance feed carries campaign, targeting and advertised-product rows for this account and no ad-group rows at all, so an ad-group figure could only be invented by summing children — which double-counts wherever a product is advertised by more than one target.',
+  },
+  'awaiting-first-ingest': {
+    label: 'unknown',
+    why: 'This column was requested from Amazon for the first time on 2026-08-26. The nightly report that carries it has not landed yet, so there is genuinely nothing to show — it is not a zero.',
+  },
+}
+
+/** The single cell every grid uses for an explained absence. Italic muted token, never a bare dash. */
+export function ColumnNA({ absence }: { absence: ColumnAbsence }) {
+  const t = ABSENCE_TEXT[absence]
+  return <span className="h10-rc-unknown" title={t.why}>{t.label}</span>
+}
+
+/** Convenience for a column definition's `render`, which receives the row and ignores it. */
+export const naCell = (absence: ColumnAbsence) => () => <ColumnNA absence={absence} />

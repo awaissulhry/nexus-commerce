@@ -227,6 +227,16 @@ export const TARGETING_COLUMNS: string[] = [
   'date', 'campaignId', 'adGroupId', 'keywordId', 'keyword', 'keywordType', 'matchType',
   'impressions', 'clicks', 'cost',
   'sales7d', 'purchases7d', 'unitsSoldClicks7d',
+  // ADM-A4 — same-SKU at TARGET grain. The Targets tab renders SameSKU Sales / Sale Units /
+  // Orders and all three were hard-coded dashes, because these three columns were never asked for
+  // — not because the report withholds them: spTargeting allows 61 columns and 12 of them are
+  // *SameSku* (verified against Amazon's allowed list 2026-08-26). Same 7d window as `sales7d`
+  // above, so the halo subtraction downstream compares like with like.
+  'attributedSalesSameSku7d', 'purchasesSameSku7d', 'unitsSoldSameSku7d',
+  // spTargeting offers the same two KENP columns spCampaigns does. Requested here as well so the
+  // answer is uniform wherever Amazon publishes it, rather than a metric that exists on one grid
+  // and is silently unavailable on another.
+  'kindleEditionNormalizedPagesRead14d', 'kindleEditionNormalizedPagesRoyalties14d',
 ]
 
 // ── Stage 1: create a report job ─────────────────────────────────────
@@ -1038,6 +1048,12 @@ async function ingestTargetRows(
           impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
           costMicros: toMicros(r.cost), currencyCode,
           sales7dCents, orders7d: r.purchases7d ?? 0, units7d: r.unitsSoldClicks7d ?? 0,
+          // ADM-A4 — null, never 0, when the report did not carry it (see the campaign branch).
+          salesSameSku7dCents: centsOrNull(r.attributedSalesSameSku7d),
+          ordersSameSku7d: intOrNull(r.purchasesSameSku7d),
+          unitsSameSku7d: intOrNull(r.unitsSoldSameSku7d),
+          kenpRead14d: intOrNull(r.kindleEditionNormalizedPagesRead14d),
+          kenpRoyaltiesCents14d: centsOrNull(r.kindleEditionNormalizedPagesRoyalties14d),
           reportRunId: job.id, reportedAt: new Date(),
         },
         update: {
@@ -1045,6 +1061,12 @@ async function ingestTargetRows(
           impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
           costMicros: toMicros(r.cost), currencyCode,
           sales7dCents, orders7d: r.purchases7d ?? 0, units7d: r.unitsSoldClicks7d ?? 0,
+          // ADM-A4 — null, never 0, when the report did not carry it (see the campaign branch).
+          salesSameSku7dCents: centsOrNull(r.attributedSalesSameSku7d),
+          ordersSameSku7d: intOrNull(r.purchasesSameSku7d),
+          unitsSameSku7d: intOrNull(r.unitsSoldSameSku7d),
+          kenpRead14d: intOrNull(r.kindleEditionNormalizedPagesRead14d),
+          kenpRoyaltiesCents14d: centsOrNull(r.kindleEditionNormalizedPagesRoyalties14d),
           reportedAt: new Date(),
         },
       })

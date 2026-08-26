@@ -17,6 +17,7 @@ import { pickMetricFilters } from '../../_grid/filters'
 import { bulkPatch, AdjustBidModal } from '../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
+import { naCell } from '../../../_shared/RuleColumnCells'
 import { CreateAdGroupModal } from './CreateAdGroupModal'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { pillTone } from '../../../_shared/pillTone'
@@ -45,7 +46,6 @@ const roasOf = (r: AdGroupRow) => { const sp = spendOf(r); return sp ? salesOf(r
 const ctrOf = (r: AdGroupRow) => { const i = num(r.impressions); return i ? (num(r.clicks) / i) * 100 : 0 }
 const cpcOf = (r: AdGroupRow) => { const c = num(r.clicks); return c ? spendOf(r) / c : 0 }
 const cvrOf = (r: AdGroupRow) => { const c = num(r.clicks); return c ? (num(r.ordersCount) / c) * 100 : 0 }
-const DASH = () => '—'
 
 export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: CampaignDetailData | null; campaignId: string; onRefresh?: () => void }) {
   const rows = useMemo<AdGroupRow[]>(() => (campaign?.adGroups as AdGroupRow[] | undefined) ?? [], [campaign])
@@ -75,26 +75,26 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
     { key: 'ctr', label: 'CTR', tip: METRIC_TIPS.ctr, render: (r) => `${ctrOf(r).toFixed(2)}%`, sortValue: ctrOf, filterValue: ctrOf, total: (vr) => { const T = tot(vr); return `${(T.impr ? (T.clicks / T.impr) * 100 : 0).toFixed(2)}%` } },
     { key: 'cpc', label: 'CPC', tip: METRIC_TIPS.cpc, render: (r) => eur(cpcOf(r)), sortValue: cpcOf, filterValue: cpcOf, total: (vr) => { const T = tot(vr); return eur(T.clicks ? T.spend / T.clicks : 0) } },
     { key: 'ppcOrders', label: 'PPC Orders', tip: METRIC_TIPS.ppcOrders, render: (r) => int(r.ordersCount), sortValue: (r) => num(r.ordersCount), filterValue: (r) => num(r.ordersCount), total: (vr) => { const T = tot(vr); return int(T.orders) } },
-    { key: 'kindleReads', label: 'Kindle Reads', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'kindleRoyalties', label: 'Kindle Royalties', defaultHidden: true, sortable: false, render: DASH, total: '—' },
+    { key: 'kindleReads', label: 'Kindle Reads', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'kindleRoyalties', label: 'Kindle Royalties', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
     { key: 'cvr', label: 'CVR', tip: METRIC_TIPS.cvr, render: (r) => `${cvrOf(r).toFixed(2)}%`, sortValue: cvrOf, filterValue: cvrOf, total: (vr) => { const T = tot(vr); return `${(T.clicks ? (T.orders / T.clicks) * 100 : 0).toFixed(2)}%` } },
-    { key: 'saleUnits', label: 'Sale Units', defaultHidden: true, sortable: false, render: DASH, total: '—' },
+    { key: 'saleUnits', label: 'Sale Units', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
     { key: 'cpa', label: 'CPA', tip: 'Cost per acquisition = spend ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(spendOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? spendOf(r) / num(r.ordersCount) : 0), total: (vr) => { const T = tot(vr); return T.orders ? eur(T.spend / T.orders) : '—' } },
-    { key: 'viewImpr', label: 'View Impr.', defaultHidden: true, sortable: false, render: DASH, total: '—' },
+    { key: 'viewImpr', label: 'View Impr.', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
     { key: 'aov', label: 'AOV', tip: 'Average order value = sales ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(salesOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? salesOf(r) / num(r.ordersCount) : 0), total: (vr) => { const T = tot(vr); return T.orders ? eur(T.sales / T.orders) : '—' } },
-    { key: 'asp', label: 'ASP', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'otherSales', label: 'Other Sales', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'otherSalesPct', label: 'Other Sales %', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbOrders', label: 'NTB-Orders', tip: 'New-to-brand orders', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbOrdersPct', label: 'NTB-Orders%', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbOrderRate', label: 'NTB-OrderRate', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbSales', label: 'NTB-Sales', tip: 'New-to-brand sales', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbUnits', label: 'NTB-Units', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbSalesPct', label: 'NTB-Sales%', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'ntbUnitsPct', label: 'NTB-Units%', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'sameSkuSales', label: 'SameSKU Sales', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'sameSkuSaleUnits', label: 'SameSKU Sale Units', defaultHidden: true, sortable: false, render: DASH, total: '—' },
-    { key: 'sameSkuOrders', label: 'SameSKU Orders', defaultHidden: true, sortable: false, render: DASH, total: '—' },
+    { key: 'asp', label: 'ASP', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'otherSales', label: 'Other Sales', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'otherSalesPct', label: 'Other Sales %', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbOrders', label: 'NTB-Orders', tip: 'New-to-brand orders', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbOrdersPct', label: 'NTB-Orders%', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbOrderRate', label: 'NTB-OrderRate', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbSales', label: 'NTB-Sales', tip: 'New-to-brand sales', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbUnits', label: 'NTB-Units', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbSalesPct', label: 'NTB-Sales%', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'ntbUnitsPct', label: 'NTB-Units%', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'sameSkuSales', label: 'SameSKU Sales', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'sameSkuSaleUnits', label: 'SameSKU Sale Units', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
+    { key: 'sameSkuOrders', label: 'SameSKU Orders', defaultHidden: true, sortable: false, render: naCell('no-ad-group-grain'), total: '—' },
   ], [])
 
   const agNames = useMemo(() => Array.from(new Set(rows.map((r) => r.name))), [rows])

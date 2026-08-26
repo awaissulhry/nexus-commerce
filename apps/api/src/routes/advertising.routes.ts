@@ -5180,7 +5180,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const perf = ids.length ? await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
       where: { entityType: 'AD_TARGET', localEntityId: { in: ids }, date: { gte: range.since, lte: range.until } },
-      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
+      // ADM-A4 — `units7d` joins the sum so the Targets tab's Sale Units and ASP columns stop
+      // rendering a hard-coded dash. It is ALIVE at this grain: 13,055 AD_TARGET rows, 152 with a
+      // non-zero value (measured 2026-08-26). `_count` rides along for the same reason it does on
+      // the campaigns route — Prisma sums null as 0, and "Amazon reported no units" must not become
+      // a confident "0 units sold".
+      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true, units7d: true,
+        salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true },
+      _count: { units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true },
     }) : []
     const pmap = new Map(perf.map((p) => [p.localEntityId, p]))
     const rows = targets.map((t) => {
@@ -5190,6 +5197,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const impr = p ? (p._sum.impressions ?? 0) : t.impressions
       const clk = p ? (p._sum.clicks ?? 0) : t.clicks
       const ord = p ? (p._sum.orders7d ?? 0) : t.ordersCount
+      const units = p && p._count.units7d > 0 ? (p._sum.units7d ?? 0) : null
+      // ADM-A4 — same-SKU at target grain. Requested from Amazon for the first time 2026-08-26, so
+      // these read null (cell: "unknown") until the next nightly targeting ingest lands, which is
+      // the honest state rather than a zero.
+      const tgtSame = (f: 'salesSameSku7dCents' | 'ordersSameSku7d' | 'unitsSameSku7d') =>
+        p && p._count[f] > 0 ? (p._sum[f] ?? 0) : null
+      const sameSkuC = tgtSame('salesSameSku7dCents')
       return {
         id: t.id, text: t.expressionValue, kind: t.kind, matchType: t.expressionType, bidCents: t.bidCents, status: t.status,
         isNegative: t.isNegative, negativeLevel: t.negativeLevel, createdAt: t.createdAt,
@@ -5197,6 +5211,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         marketplace: t.adGroup.campaign.marketplace, adGroupId: t.adGroup.id, externalAdGroupId: t.adGroup.externalAdGroupId, adGroupName: t.adGroup.name,
         impressions: impr, clicks: clk, spendCents: spendC, salesCents: salesC, orders: ord,
         acos: salesC > 0 ? spendC / salesC : null, roas: spendC > 0 ? salesC / spendC : null,
+        // ADM-A4 — null when no row carried a units value, so the cell says "unknown" instead of
+        // "0". ASP is derived here (not in the cell) so the campaign grid and this tab compute an
+        // average selling price the same way; null when units are unknown OR zero, because
+        // dividing by an unsold target invents a price nobody paid.
+        saleUnits: units,
+        asp: units == null || units <= 0 ? null : salesC / 100 / units,
+        sameSkuSales: sameSkuC == null ? null : sameSkuC / 100,
+        sameSkuOrders: tgtSame('ordersSameSku7d'),
+        sameSkuSaleUnits: tgtSame('unitsSameSku7d'),
+        // Halo = total − same-SKU, clamped at 0 (attribution windows can make the parts exceed the
+        // whole) and null when the same-SKU half is unknown: a subtraction with an unknown operand
+        // is not zero.
+        otherSales: sameSkuC == null ? null : Math.max(0, salesC - sameSkuC) / 100,
+        otherSalesPct: sameSkuC == null || salesC <= 0 ? null : Math.max(0, salesC - sameSkuC) / salesC,
         windowed: !!p,
       }
     })
