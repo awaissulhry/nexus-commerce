@@ -15,7 +15,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Radio, ToolbarButton } from '@/design-system/primitives'
+import { Button, Radio, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
@@ -231,10 +231,21 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
       <div className="box az-rte" onClick={e => e.stopPropagation()} style={{ width: 'min(680px, 95vw)' }}>
         <div className="hd">Rank targets — what each paint colour does<span className="grow" /><ToolbarButton icon={<X size={14} />} label="Close" tooltip={false} className="az-tbtn-ink" onClick={() => onClose(changed)} /></div>
         <div className="az-rte-scope">
-          <span className="az-mode-seg az-scope-seg" role="tablist" style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-            <button type="button" role="tab" aria-selected={view === 'scope'} className={view === 'scope' ? 'on' : ''} disabled={!scopeAvailable} onClick={() => setView('scope')} title={scopeAvailable ? '' : `Save the ${scopeKind} first to set overrides here`}>{scopeKind === 'product' ? 'This product' : 'This campaign'}</button>
-            <button type="button" role="tab" aria-selected={view === 'global'} className={view === 'global' ? 'on' : ''} onClick={() => setView('global')}>Global defaults</button>
-          </span>
+          <SegmentedControl
+            ariaLabel="Target scope"
+            size="sm"
+            value={view}
+            onChange={(v) => setView(v as 'scope' | 'global')}
+            options={[
+              {
+                value: 'scope',
+                label: scopeKind === 'product' ? 'This product' : 'This campaign',
+                disabled: !scopeAvailable,
+                title: scopeAvailable ? undefined : `Save the ${scopeKind} first to set overrides here`,
+              },
+              { value: 'global', label: 'Global defaults' },
+            ]}
+          />
           <span className="az-rte-scopehint"><Info size={12} /> {view === 'scope' ? `Overrides apply only to ${scopeLabel}. Empty = use the global default.` : 'Editing the shared default — changes every product & campaign.'}</span>
         </div>
         <div className="list az-rte-list">

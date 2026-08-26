@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Check, FlaskConical, ShieldCheck, Wand2, Settings2, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { marketLabel } from '../_shared/amazonLinks'
 import {
@@ -185,10 +185,15 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
   return (
     <div className="az-bld" style={{ paddingTop: 4 }}>
       <div className="az-bld-head">
-        <div className="az-bld-seg" role="tablist" aria-label="Builder mode">
-          <button role="tab" aria-selected={mode === 'guided'} className={mode === 'guided' ? 'on' : ''} onClick={() => setMode('guided')}><Wand2 size={14} />Guided</button>
-          <button role="tab" aria-selected={mode === 'advanced'} className={mode === 'advanced' ? 'on' : ''} onClick={() => setMode('advanced')}><Settings2 size={14} />Advanced</button>
-        </div>
+        <SegmentedControl
+          ariaLabel="Builder mode"
+          value={mode}
+          onChange={(v) => setMode(v as 'guided' | 'advanced')}
+          options={[
+            { value: 'guided', label: 'Guided', icon: <Wand2 size={14} /> },
+            { value: 'advanced', label: 'Advanced', icon: <Settings2 size={14} /> },
+          ]}
+        />
         <span className="az-bld-sub">{mode === 'guided' ? 'Pick a goal, tune a couple of numbers, and ship.' : 'Full control: any trigger, AND/OR conditions, all 26 actions, caps & scope.'}</span>
       </div>
 
