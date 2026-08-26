@@ -31,6 +31,7 @@
  * carries both. If that grid ever gains a Customize dialog, giving it an `rpx-explorer-` key and
  * adding the prefix below is the whole change.
  */
+import { emitPrefsChanged } from '@/design-system/patterns/prefs-bus'
 
 /** Tab id → the prefix every one of its stored keys begins with. Must stay mutually disjoint. */
 export const TAB_PREFIX: Record<string, string> = {
@@ -81,10 +82,19 @@ export function captureKeys(tab: string): Record<string, string> {
   return out
 }
 
-/** Replace this tab's stored keys with the view's. Returns false if storage refused the write. */
+/**
+ * Replace this tab's stored keys with the view's. Returns false if storage refused the write.
+ *
+ * Announces every key it touches on `prefs-bus`, for the same reason the components that own
+ * those keys do: this is a preference write like any other, and the one listener that matters is
+ * the saved-view strip working out whether the screen still matches the view. Without the
+ * announcement it compared against a capture taken before the restore and reported "unsaved
+ * changes" on a view the operator had just that second applied.
+ */
 export function applyKeys(tab: string, keys: Record<string, string>): boolean {
   const prefix = TAB_PREFIX[tab]
   if (!prefix) return false
+  const touched = new Set<string>()
   try {
     // Collect first, delete second: removing while enumerating shifts the indices under us and
     // skips every other key.
@@ -93,13 +103,17 @@ export function applyKeys(tab: string, keys: Record<string, string>): boolean {
       const k = localStorage.key(i)
       if (k && k.startsWith(prefix)) existing.push(k)
     }
-    for (const k of existing) localStorage.removeItem(k)
+    for (const k of existing) { localStorage.removeItem(k); touched.add(k) }
     for (const [k, v] of Object.entries(keys)) {
-      if (k.startsWith(prefix)) localStorage.setItem(k, v)
+      if (k.startsWith(prefix)) { localStorage.setItem(k, v); touched.add(k) }
     }
     return true
   } catch {
     return false
+  } finally {
+    // In `finally` so a write that failed part-way still tells anyone listening that the store
+    // moved — a listener holding a capture of a half-restored tab is the worst of the three states.
+    for (const k of touched) emitPrefsChanged(k)
   }
 }
 
