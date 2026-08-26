@@ -17,6 +17,22 @@
   --green: #067d62; --green-bg: #e8f3ee; --amber: #b46f00; --orange: #ff9900;
   --blue: #1c89e3; --focus: #e77600;
   --radius: 8px;
+
+  /* 🔴 LIGHT PIN. This console fixes every colour it owns to a literal light value
+     (--ink, --bg, --border above), so it renders light whatever the app theme is. The DS
+     SEMANTIC tokens do not work that way: `.dark` on <html> — set by the tri-state toggle in
+     the nav rail — flips --nds-text-link #1a60c4 → #8ab6f0 and --nds-danger-text #9c2f2a →
+     #ef9c93, which on this console's still-white --bg is 2.09:1 and 2.13:1.
+     I introduced the first eleven of those tokens here while FIXING contrast, so without this
+     block the dark theme would be the price of the light-theme fix.
+     Pinned by referencing the RAMP, which `.dark` never overrides — 54 tokens redefined there,
+     zero of them ramp steps — the same strategy products-next-shell.css documents, and no raw
+     hex. Every value below is measured on this console's white ground. */
+  --nds-text-link: var(--nds-blue-700);      /* #1a60c4  5.98:1 */
+  --nds-warning-text: var(--nds-amber-700);  /* #c2410c  5.18:1 */
+  --nds-danger-text: var(--nds-red-700);     /* #c0392b  5.44:1 */
+  --nds-danger-strong: var(--nds-red-700);   /* #c0392b  5.44:1 */
+  --nds-success-text: var(--nds-green-700);  /* #15803d  5.02:1 */
   height: 100vh; overflow: hidden; display: flex; flex-direction: column;
   background: var(--bg); color: var(--ink);
   font-family: 'Amazon Ember', 'Helvetica Neue', Helvetica, Arial, sans-serif;
