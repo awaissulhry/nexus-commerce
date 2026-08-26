@@ -435,3 +435,71 @@ dragging to satisfy a metric.
 - `DataGrid`'s left-pinned columns get no edge shadow, though right-pinned ones do: `components.css:1143–1147` gives `.sticky-right` an `inset 1px 0 0`, and `.sticky` nothing. Every ads-console table that pins a column hand-rolls `box-shadow: 6px 0 8px -6px rgba(0,0,0,.18)` (`amazon.css:1399` and `:1426`) — the cue that tells you a column is pinned while you scroll sideways. Every conversion of those tables loses it silently — apps/web/src/design-system/styles/components.css:1143
 - ✅ RESOLVED (DS session) — **dark mode: 41 sub-AA pairs → 0, verified in the browser.** 14 dark values added, each measured against its ACTUAL usage. `--nds-primary` #6d9ee8 was the constrained one (a FILL under dark text AND text on the surface: 5.84 / 5.59) and deliberately NOT `#8ab6f0`, which is `--nds-text-link` — reusing it would make primary and link the same colour in dark and different in light. `--nds-pill-success-bg` is BLUE not green, because this console's success pill is blue ("ok = blue Enabled").
 - 🔴 NEW GUARD — `scripts/check-dark-alias-scope.mjs`, in pre-push. **A custom property whose value is `var(X)` resolves in the scope where it is DECLARED, not where it is used.** So `:root { --nds-pill-warning-fg: var(--nds-warning-text) }` computes on `:root` with the LIGHT value and inherits that literal into `.dark` — overriding `--nds-warning-text` in `.dark` never reaches it. Four tokens had this shape; three pills measured **1.50, 2.09 and 2.21** in the browser while my static resolver reported all three passing. The fix is to re-declare the alias inside `.dark` with the same `var(X)`.
+
+## A selectable card with a trailing badge has no DS answer
+*Session 5 · ROUND 2 · 2026-08-26 · found converting `recommendations/RecommendationsClient.tsx`*
+
+`.rec-strat` is the strategy rail: a bordered card per category, each carrying a colour dot, a
+label, a **right-aligned count badge**, and a blurb. Single-select, and disabled when its count is
+zero. Three DS components are close and each misses:
+
+- **`Card onClick`** — the shape is right, but `CardProps` has no `disabled` (it extends
+  `HTMLAttributes`, where `disabled` does not exist), and half these items are disabled at zero.
+  Already filed; this is a second surface blocked by it.
+- **`RadioCard`** — models the semantics exactly (single-select, `disabled` works, `title` +
+  `description`), but `.rc-body` is `flex-direction: column` with **no `flex: 1`**, so it sizes to
+  content. A title row with `justify-content: space-between` has no spare width and the count
+  lands next to the label instead of at the card's edge. Reaching in with
+  `.rc-body { flex: 1; min-width: 0 }` is overriding a DS component's internals, which is the
+  thing this programme is undoing.
+- **`FilterChip`** has `count` — the right idea, wrong shape: a capsule, not a card with a blurb.
+
+**The gap in one line:** `RadioCard` needs either `flex: 1` on `.rc-body` (harmless — it is a
+column in a flex row that currently cannot fill) or a `meta`/trailing slot like `FilterChip.count`.
+Either would unblock this rail. Left raw; converting it today means adding a visible radio to a
+surface that has none AND overriding the component's layout.
+
+## More `ads.css` rules went dead this session
+*Session 5 · ROUND 2 · 2026-08-26 · same disposition as `.h10-cd-subnav` above*
+
+Converting the last two `ai-advertising/new-goal` fields retired their hand-rolled CSS. Both had a
+single owner, both are now unreferenced in `apps/web/src`:
+
+- **`.h10-aig-enter`** — `ads.css:1308-1310`, 3 rules, raw hex `#9eaebd`
+- **`.h10-aig-money`** — `ads.css:1216-1220` + `1300-1302`, 8 rules, raw hexes `#667085`,
+  `#9eaebd`, `#e0322a`
+
+Together with `.h10-cd-subnav` (`661-664`, `#1b2230`) that is **15 dead rules and 5 raw hexes**
+the ratchet is still counting. Not removed here — `ads.css` is outside this session's scope.
+
+**Contrast note, filed rather than hidden:** `.h10-aig-enter::placeholder` was `#9eaebd`
+(**2.27:1**) and the DS `.nds-textarea::placeholder` is `--nds-text-disabled` (**2.04:1**), so
+this conversion *lowers* it. Both fail AA, and the DS value is already filed as a gap for
+`Input`. Taken deliberately on the precedent set for `Button variant="primary"` earlier in this
+document: overriding a DS token at one call site is how a console ends up with four spellings of
+it, and moving onto the token means the eventual fix reaches this surface too. It is the second
+conversion in ROUND 2 that goes down rather than up, and both are placeholders.
+
+## Correction — the density gap above is real, but SOFTER than I wrote it
+*Session 6 · ROUND 2 · 2026-08-26 · corrects my own entry two headings up*
+
+I wrote that a page "cannot reach it from outside either — not via `className` (that lands on
+`.nds-grid-wrap`)". **That is wrong.** Landing on the wrap is not the same as being out of reach:
+`.nds-grid-wrap.comfortable .nds-grid tbody td` scores (0,3,2) against the DS's (0,1,2), and
+`amazon.css` loads after `components.css`, so it wins on specificity and on source order both. The
+counter-example was already in the tree while I was writing the entry — `amazon.css:1629` reaches
+straight into `.nds-grid tbody tr.childrow td` to restore the parent/child tint that `.az-table`
+used to carry.
+
+So the gap is not "the console cannot have Comfortable/Spacious under `DataGrid`" — it converted
+fine. It is that every page wanting a tier above `md` must hand-roll the override, and each one
+hand-rolls it differently. That is an argument for `lg`/`xl` sizes or a `--nds-grid-cell-pad-y`,
+not a blocker, and `CampaignsTable`'s table should not have been left hand-rolled on my reading of
+it (another session converted it the same day and kept all three densities).
+
+One thing to carry over when converting a density-bearing table: `className={density}` puts the
+class on the wrap and **nothing styles it yet**. `.az-table.comfortable tbody td` and
+`.spacious` (`amazon.css:1392–1393`) both need `.az-table`, which the DS grid does not render, so
+the control goes silently inert the moment the table converts unless a matching
+`.nds-grid-wrap.<density>` pair lands with it. Check the class against the stylesheet in both
+directions, not just one.

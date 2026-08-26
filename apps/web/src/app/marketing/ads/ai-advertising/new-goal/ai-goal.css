@@ -114,3 +114,25 @@
    labels by cloning an id onto its child, which that component does not forward — the
    `htmlFor` would point at nothing, which is worse than the span it has now.) */
 .aig-fld { max-width: 430px; }
+
+/* The two keyword-entry boxes are the DS `Textarea` now. They were `.h10-aig-enter`
+   (ads.css:1308-1310, out of scope and now unreachable — three rules and the raw hex #9eaebd).
+   Only the height is the page's; the border, radius, padding, focus ring — and the hover and
+   disabled states they never had — are the DS's. Scoped `.nds-textarea.aig-enter` (0,2,0) rather
+   than a bare class so it wins on specificity and does not depend on stylesheet order.
+
+   One delta, deliberate and downward: the placeholder was #9eaebd (2.27:1) and becomes
+   `--nds-text-disabled` (2.04:1). Both fail AA. Taken anyway, on the precedent this file's
+   programme already set for `Button variant="primary"` — overriding a DS token at one call site
+   is how a console ends up with four spellings of it. Moving onto the token means the fix already
+   filed for `Input ::placeholder` reaches here too, instead of stranding a literal. */
+.nds-textarea.aig-enter { min-height: 150px; }
+
+/* The per-product budget field is the same `Input` as the four guardrail ones above — it was the
+   last `.h10-aig-money` site (ads.css:1216-1220,1300-1302, now unreachable). `narrow` for the
+   124px `.sm` width, for the reason given above. The invalid border is the one thing the DS has
+   no prop for: `Input` models no error state, so it rides on `fieldClassName`. `--nds-danger`
+   rather than the #e0322a the ads.css rule carried — new CSS here holds at zero raw literals.
+   0,3,0 so it also outranks `:focus-within` (0,2,0), which is what the original did by source
+   order: an invalid field stays red while you are typing in it. */
+.nds-field.aig-money.err { border-color: var(--nds-danger); }

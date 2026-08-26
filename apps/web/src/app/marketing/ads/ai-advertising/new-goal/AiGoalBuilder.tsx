@@ -342,7 +342,7 @@ export function AiGoalBuilder() {
                                 </span>
                               ) : '—'}
                             </span>
-                            <span className="c-bud"><span className={`h10-aig-money sm ${p.budget && Number(p.budget) < 1 ? 'err' : ''}`}><span className="pf">€</span><input inputMode="decimal" value={p.budget} onChange={(e) => setBudget(p.id, e.target.value)} placeholder="0" /></span></span>
+                            <span className="c-bud"><Input fieldClassName={`aig-money narrow${Boolean(p.budget) && Number(p.budget) < 1 ? ' err' : ''}`} aria-invalid={Boolean(p.budget) && Number(p.budget) < 1 ? true : undefined} prefix="€" inputMode="decimal" value={p.budget} onChange={(e) => setBudget(p.id, e.target.value)} placeholder="0" /></span>
                           </>}
                         </li>
                       )})}
@@ -564,7 +564,7 @@ function AddSeedKeywords({ suggest, loading, hasProducts, seeds, setSeeds, tab, 
               </div>
             )}
             {tab === 'enter' && (
-              <textarea className="h10-aig-enter" value={enter} onChange={(e) => setEnter(e.target.value)} onBlur={() => { enter.split(/[\n,]/).forEach(add); setEnter('') }} placeholder="Enter keywords, one per line" />
+              <Textarea className="aig-enter" value={enter} onChange={(e) => setEnter(e.target.value)} onBlur={() => { enter.split(/[\n,]/).forEach(add); setEnter('') }} placeholder="Enter keywords, one per line" />
             )}
           </div>
           <AddedPanel list={seeds} setList={setSeeds} max={10} />
@@ -580,7 +580,7 @@ function KeywordEntry({ placeholder, text, setText, list, setList, max }: { plac
   return (
     <div className="h10-aig-kwgrid">
       <div className="kw-left">
-        <textarea className="h10-aig-enter" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
+        <Textarea className="aig-enter" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
     <div className="h10-aig-kwbtn"><Button variant="primary" disabled={!text.trim() || list.length >= max} onClick={add}>Add Keywords</Button></div>
       </div>
       <AddedPanel list={list} setList={setList} max={max} />
