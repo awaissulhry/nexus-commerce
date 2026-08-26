@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Select, ToolbarButton } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
@@ -67,14 +67,14 @@ export function FilterPanel({
         <div className="az-fp-sec">
           <h4>Delivery status</h4>
           {STATUS_OPTS.map((o) => (
-            <label key={o.k} className="az-fp-opt"><input type="checkbox" checked={filters.statuses.includes(o.k)} onChange={() => setFilters({ ...filters, statuses: toggle(filters.statuses, o.k) })} />{o.label}</label>
+            <Checkbox key={o.k} className="az-fp-opt" label={o.label} checked={filters.statuses.includes(o.k)} onChange={() => setFilters({ ...filters, statuses: toggle(filters.statuses, o.k) })} />
           ))}
         </div>
 
         <div className="az-fp-sec">
           <h4>Targeting</h4>
           {TARGETING_OPTS.map((o) => (
-            <label key={o.k} className="az-fp-opt"><input type="checkbox" checked={filters.targeting.includes(o.k)} onChange={() => setFilters({ ...filters, targeting: toggle(filters.targeting, o.k) })} />{o.label}</label>
+            <Checkbox key={o.k} className="az-fp-opt" label={o.label} checked={filters.targeting.includes(o.k)} onChange={() => setFilters({ ...filters, targeting: toggle(filters.targeting, o.k) })} />
           ))}
         </div>
 
@@ -83,7 +83,7 @@ export function FilterPanel({
             <h4>Portfolio</h4>
             <div style={{ maxHeight: 168, overflowY: 'auto' }}>
               {portfolios.map((p) => (
-                <label key={p.id} className="az-fp-opt"><input type="checkbox" checked={filters.portfolios.includes(p.id)} onChange={() => setFilters({ ...filters, portfolios: toggle(filters.portfolios, p.id) })} />{p.label}<span className="ct">{p.count}</span></label>
+                <Checkbox key={p.id} className="az-fp-opt" label={<>{p.label}<span className="ct">{p.count}</span></>} checked={filters.portfolios.includes(p.id)} onChange={() => setFilters({ ...filters, portfolios: toggle(filters.portfolios, p.id) })} />
               ))}
             </div>
           </div>
@@ -94,24 +94,24 @@ export function FilterPanel({
           {filters.metrics.map((mf) => (
             <div key={mf.id} className="az-fp-mf">
               {METRIC_LABEL[mf.metric]} {opSym(mf.op)} {mf.value}{METRIC_UNIT[mf.metric]}
-              <button className="rm" onClick={() => setFilters({ ...filters, metrics: filters.metrics.filter((x) => x.id !== mf.id) })} aria-label="Remove metric filter"><X size={14} /></button>
+              <ToolbarButton icon={<X size={14} />} label="Remove metric filter" tooltip={false} size="sm" className="rm az-tbtn-ink" onClick={() => setFilters({ ...filters, metrics: filters.metrics.filter((x) => x.id !== mf.id) })} />
             </div>
           ))}
           <div className="az-fp-row">
-            <select value={m} onChange={(e) => setM(e.target.value)} aria-label="Metric">
+            <Select value={m} onChange={(e) => setM(e.target.value)} aria-label="Metric">
               {METRIC_OPTS.map((o) => <option key={o.k} value={o.k}>{o.label}</option>)}
-            </select>
-            <select value={op} onChange={(e) => setOp(e.target.value as 'gte' | 'lte')} aria-label="Operator">
+            </Select>
+            <Select value={op} onChange={(e) => setOp(e.target.value as 'gte' | 'lte')} aria-label="Operator">
               <option value="gte">≥</option><option value="lte">≤</option>
-            </select>
-            <input type="number" step="any" value={val} placeholder={METRIC_UNIT[m] || '0'} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addMetric() }} aria-label="Value" />
-            <button className="az-btn" onClick={addMetric} disabled={!val}><Plus size={14} /> Add</button>
+            </Select>
+            <Input type="number" step="any" fieldClassName="az-fp-val" value={val} placeholder={METRIC_UNIT[m] || '0'} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addMetric() }} aria-label="Value" />
+            <Button variant="secondary" onClick={addMetric} disabled={!val}><Plus size={14} /> Add</Button>
           </div>
         </div>
 
         <div className="az-fp-foot">
           <Button variant="link" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} disabled={countFilters(filters) === 0}>Clear all</Button>
-          <button className="az-btn dark" onClick={onClose}>Done</button>
+          <Button variant="primary" onClick={onClose}>Done</Button>
         </div>
       </div>
     </>

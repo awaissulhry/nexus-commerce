@@ -1325,11 +1325,14 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-fp-opt:hover { color: var(--link-hover); }
 .az-fp-opt .ct { margin-left: auto; color: var(--ink3); font-weight: 500; }
 .az-fp-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
-.az-fp-row select, .az-fp-row input { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; background: #fff; color: var(--ink); }
-.az-fp-row select { cursor: pointer; }
-.az-fp-row input { width: 84px; }
+/* The value field's 84px used to live on `.az-fp-row input`, which shadowed the DS primitive;
+   it now sits on the DS field wrapper, where the border-box width means the same thing. */
+.az-fp-val { width: 84px; }
+/* Checkbox renders its label inside ONE <span>, so the portfolio count is no longer a direct
+   flex child of `.az-fp-opt` and `margin-left: auto` had nothing to push against. */
+.az-fp-opt.nds-check > span { display: flex; flex: 1; align-items: center; }
 .az-fp-mf { display: flex; align-items: center; gap: 6px; background: var(--bg3); border-radius: 6px; padding: 5px 6px 5px 10px; margin-bottom: 5px; font-weight: 500; }
-.az-fp-mf .rm { margin-left: auto; background: none; border: 0; color: var(--ink2); cursor: pointer; display: grid; place-items: center; }
+.az-fp-mf .rm { margin-left: auto; }
 .az-fp-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; }
 
 /* ── PAGER (results-per-page + page nav) ───────────────────── */

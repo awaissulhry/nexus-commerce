@@ -156,8 +156,8 @@ export function CustomiseColumns({
         </div>
 
         <div className="az-modal-foot">
-          <button className="az-btn" onClick={onClose}>Cancel</button>
-          <button className="az-btn dark" onClick={() => onApply(draft)}><Check size={15} /> Apply</button>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={() => onApply(draft)}><Check size={15} /> Apply</Button>
         </div>
       </div>
     </div>
