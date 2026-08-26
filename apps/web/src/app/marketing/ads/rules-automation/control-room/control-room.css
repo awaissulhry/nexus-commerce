@@ -408,7 +408,7 @@
   background: var(--nds-grey-25); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md);
   padding: 9px 12px; margin: 0 0 10px; max-width: 92ch;
 }
-.acr-grad-rule svg { flex: none; margin-top: 2px; color: var(--nds-grey-500); }
+.acr-grad-rule svg { flex: none; margin-top: 2px; color: var(--nds-text-3); }
 .acr-grad-rule strong { color: var(--nds-grey-700); font-weight: 650; }
 
 .acr-grad-chip {
@@ -669,7 +669,7 @@
 .acr-digest.dry-run { border-color: #f0dcbb; background: #fdfaf4; }
 .acr-digest.live { border-color: #cfe8dc; background: #f6fcf9; }
 .acr-digest-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--nds-grey-700); margin: 0 0 5px; }
-.acr-digest-head svg { color: var(--nds-grey-500); }
+.acr-digest-head svg { color: var(--nds-text-3); }
 .acr-digest p { font-size: 12.5px; line-height: 1.55; color: #56637a; margin: 0 0 6px; max-width: 92ch; }
 .acr-digest-flags { font-size: 11.5px; color: var(--nds-grey-600); }
 .acr-digest-flags code {
@@ -989,7 +989,7 @@
 .acr-fl-checks li svg { flex: none; transform: translateY(1px); }
 .acr-fl-checks li.ck-pass svg { color: #1a9d6a; }
 .acr-fl-checks li.ck-fail svg { color: var(--nds-red-600); }
-.acr-fl-checks li.ck-na svg { color: var(--nds-grey-500); }
+.acr-fl-checks li.ck-na svg { color: var(--nds-text-3); }
 .acr-fl-checkq { color: #232c37; font-weight: 600; flex: none; }
 .acr-fl-checknote { color: var(--nds-grey-600); font-size: 11.5px; }
 

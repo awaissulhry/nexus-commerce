@@ -37,6 +37,15 @@
    --nds-amber-700 5.18. Both still clear AA, and on those surfaces they were 1.58 and 1.82 under
    `.dark`. --nds-pill-neutral-fg → --nds-grey-600 is byte-identical.
 
+   🔴 ICONS are the exception, and they go the OTHER way. `.h10-shell` pins `--nds-text-3` to the
+   literal #7e8796, which is a DARKER icon grey than the ramp step it used to alias. On the tinted
+   grounds these seven actually sit on — a chevron's own grey-25 hover, a grey-75 map row, the
+   graduation block — `--nds-grey-500` measures 2.94 / 2.81 / 2.74, all UNDER the 3:1 an icon
+   needs, while the pinned `--nds-text-3` is 3.43 / 3.29 / 3.20. So for in-shell icons the ROLE is
+   correct and the ramp is the one that fails. All seven checked for portal exposure first: none
+   of their components portals, so all seven are inside the pin. An icon that ever renders in a
+   Modal or Menu would need the ramp instead, for the reason above.
+
    Found by nexus-commerce-56, who corrected their own earlier advice; verified here independently
    against tokens.css, the theme hook, and the running page before acting. */
 
@@ -450,7 +459,7 @@
 .h10-rb-setuphd { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
 .h10-rb-setuphd h2 { margin: 0; }
 .h10-rb-setuphd .maprow { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.h10-rb-setuphd .maprow .chev { color: var(--nds-grey-500); cursor: pointer; }
+.h10-rb-setuphd .maprow .chev { color: var(--nds-text-3); cursor: pointer; }
 .h10-rb-banner { display: flex; align-items: flex-start; gap: 10px; background: var(--nds-blue-100); border-radius: var(--nds-radius-lg); padding: 12px 14px; margin-bottom: 16px; font-size: 13px; color: var(--nds-grey-800); line-height: 1.45; }
 .h10-rb-banner svg { color: var(--nds-blue-600); flex-shrink: 0; margin-top: 1px; }
 
@@ -630,7 +639,7 @@
 
 /* RGD.0 — placeholder for the rank-plan body (RankPlanPanel lands in RGD.1) */
 .h10-rgd-stub { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--nds-grey-600); border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-2xl); background: var(--nds-grey-25); }
-.h10-rgd-stub svg { color: var(--nds-grey-500); }
+.h10-rgd-stub svg { color: var(--nds-text-3); }
 .h10-rgd-stub b { font-size: 15px; color: var(--nds-grey-900); }
 .h10-rgd-stub span { font-size: 13px; max-width: 440px; line-height: 1.5; }
 
@@ -973,7 +982,7 @@
 .h10-cov-hd .bar span { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 3px; }
 .h10-cov.ok .h10-cov-hd .bar span { background: #0a7d48; }
 .h10-cov-hd .pct { font-weight: 700; color: var(--nds-grey-900); min-width: 34px; text-align: right; }
-.h10-cov-hd .chev { color: var(--nds-grey-500); transition: transform .12s; }
+.h10-cov-hd .chev { color: var(--nds-text-3); transition: transform .12s; }
 .h10-cov-hd .chev.on { transform: rotate(180deg); }
 .h10-cov-b { border-top: 1px solid var(--nds-grey-100); padding: 12px 16px 14px; }
 .h10-cov-note { font-size: 12px; color: var(--nds-grey-600); line-height: 1.5; margin-bottom: 10px; }
@@ -2204,7 +2213,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-sec { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); scroll-margin-top: 120px; }
 .nds-btn.h10-bsp-sechd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; font: inherit; text-align: left; }
 .nds-btn.h10-bsp-sechd:hover { background: var(--nds-grey-25); border-radius: 9px; }
-.h10-bsp-sechd .chev { flex: none; color: var(--nds-grey-500); transition: transform .15s ease; transform: rotate(-90deg); }
+.h10-bsp-sechd .chev { flex: none; color: var(--nds-text-3); transition: transform .15s ease; transform: rotate(-90deg); }
 .h10-bsp-sec.open .h10-bsp-sechd .chev { transform: rotate(0deg); }
 .h10-bsp-sechd .ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .h10-bsp-sechd .ttl b { font-size: 13.5px; font-weight: 800; color: var(--nds-grey-900); }
