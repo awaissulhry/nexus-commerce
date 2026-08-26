@@ -307,6 +307,12 @@ export function BusinessTab({ market }: { market: string }) {
         description="Every euro the account took, split into what advertising claimed and what it did not. One scale across all weeks, so the bars are comparable."
       >
         <div className="rpx-organic">
+          <div className="hd">
+            <span>Week</span>
+            <span>Claimed by advertising · the rest</span>
+            <span className="n">The rest</span>
+            <span className="n">Share</span>
+          </div>
           {organic.map((w) => (
             <div key={w.weekStart} className={`row${w.partial ? ' is-partial' : ''}${w.over ? ' is-over' : ''}`}>
               <span className="wk">{w.weekStart}{w.partial && <span className="tag">partial</span>}</span>

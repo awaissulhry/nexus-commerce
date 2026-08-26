@@ -1225,12 +1225,27 @@
 .rpx-pace .row.is-now .n { font-weight: 700; }
 .rpx-pace .row.is-now .bar i { background: var(--color-primary); }
 .rpx-pace .row.is-ghost .lbl, .rpx-pace .row.is-ghost .n { color: rgb(var(--text-tertiary)); }
-.rpx-pace .row.is-ghost .bar i { background: var(--color-primary-soft); }
+/* 🔴 Outlined, not filled — and measured, not judged by eye. `--color-primary-soft` is #e7f0fd,
+   which is 1.15:1 against this card's white: a fill nobody can see, on the one bar that is a
+   MARKER rather than a measurement. An outline says "reference line" and is visible saying it. */
+.rpx-pace .row.is-ghost .bar i {
+  background: transparent; box-sizing: border-box;
+  border: 1px solid rgb(var(--border-strong));
+}
 
 /* Sales advertising did not claim — two segments of one whole, so one hue at two
    intensities rather than two categorical hues, with a 2px gap between them so a
    boundary is never read as a colour change inside one fill. */
 .rpx-organic { display: flex; flex-direction: column; font-size: 13px; }
+/* The same header idiom as .rpx-weeks two panels up — without it the row shows a split bar and a
+   single euro figure, and nothing says which half of the bar that figure is. */
+.rpx-organic .hd {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: rgb(var(--text-tertiary)); padding-bottom: 8px;
+  border-bottom: 1px solid rgb(var(--border-default));
+}
+.rpx-organic .hd .n { text-align: right; }
 .rpx-organic .row {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px;
   align-items: center; padding: 8px 0; border-bottom: 1px solid rgb(var(--border-subtle));
@@ -1242,7 +1257,10 @@
 .rpx-organic .bar { display: flex; gap: 2px; height: 10px; }
 .rpx-organic .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); }
 .rpx-organic .bar i.ad { background: var(--color-primary); }
-.rpx-organic .bar i.or { background: var(--color-primary-soft); }
+/* Neutral, not a tint. Same reason as the pace marker above: the soft primary is 1.15:1 on this
+   card and disappears. Accent for the part in question, grey for the remainder, is also the
+   honest emphasis — the rest is usually the larger share and must not shout louder than it. */
+.rpx-organic .bar i.or { background: rgb(var(--border-strong)); }
 .rpx-organic .row.is-partial { color: rgb(var(--text-secondary)); }
 .rpx-organic .tag {
   margin-left: 8px; font-size: 10px; font-weight: 600; padding: 1px 6px;
@@ -1256,7 +1274,7 @@
 .rpx-key { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
 .rpx-key i { display: inline-block; width: 18px; height: 8px; border-radius: var(--nds-radius-pill); }
 .rpx-key i.ad { background: var(--color-primary); }
-.rpx-key i.or { background: var(--color-primary-soft); }
+.rpx-key i.or { background: rgb(var(--border-strong)); }
 
 /* Category nodes Amazon holds. */
 .rpx-nodes { display: flex; flex-direction: column; font-size: 13px; }
