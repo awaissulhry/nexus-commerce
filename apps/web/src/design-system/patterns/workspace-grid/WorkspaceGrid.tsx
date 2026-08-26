@@ -402,6 +402,53 @@ export function WorkspaceGrid<T>({
     setPrefs({ visible: columns.filter((c) => !c.defaultHidden).map((c) => c.key), stickyFirst: true, stickyLast: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
+  /**
+   * 🔴 RPX.0 — a grid whose columns ARRIVE LATER rendered ZERO columns.
+   *
+   * `prefs` is seeded by a `useState` initializer, which runs once at mount. A consumer that
+   * fetches its column definitions — the ads Reporting runner is the one in this codebase —
+   * mounts with `columns: []`, so it seeded `visible: []`. The effect above is the repair, but
+   * it opens with `if (!storageKey) return`, and the runner persists nothing. Nothing ever
+   * refilled the list, so `visibleCols` stayed empty for the life of the page and the table
+   * rendered its sticky first column and nothing else.
+   *
+   * Measured on prod 2026-08-26 before the fix: `/marketing/ads/reporting/campaign` had ONE
+   * `<th>` ("Campaign") while `GET /reporting/run` returned all seven columns and a full totals
+   * object. Every one of the twelve runnable reports was affected. The regression came in with
+   * the inversion of the model from a HIDE-list (`columns.filter(c => !hidden.has(c.key))`,
+   * where an empty set showed everything) to a SHOW-list (`prefs.visible.map(...)`, where an
+   * empty list shows nothing) — an empty default flipped from "all" to "none".
+   *
+   * The same omission had a second effect on those consumers: when the column SET changed
+   * (a different report, a different grouping), the stale visible list kept only the keys the
+   * two sets happened to share, so columns silently went missing on every re-query.
+   *
+   * So this re-seeds from THIS column set's own defaults whenever the set of column KEYS
+   * changes — keyed on the signature rather than the array, because a consumer that rebuilds
+   * its `columns` array on every fetch (the runner does) must not lose an in-session Customize
+   * choice to a re-render that changed nothing.
+   *
+   * A grid that DOES persist is covered as well, but only while nothing is stored for it: the
+   * same empty seed happens on a first visit to a persisted grid whose columns arrive late, and
+   * the effect above cannot repair it because `storageKey` never changes afterwards. Once a view
+   * is stored that view wins, which is exactly what the effect above already decides.
+   */
+  const colKeySig = useMemo(() => columns.map((c) => c.key).join(' '), [columns])
+  const lastColSig = useRef<string | null>(null)
+  useEffect(() => {
+    if (storageKey) {
+      try { if (localStorage.getItem(storageKey)) return } catch { /* unreadable - seed from defaults */ }
+    }
+    if (lastColSig.current === colKeySig) return
+    lastColSig.current = colKeySig
+    if (!columns.length) return
+    const next = columns.filter((c) => !c.defaultHidden).map((c) => c.key)
+    // A no-op set still re-renders, and this runs on every column change — compare first.
+    setPrefs((p) => (p.visible.length === next.length && p.visible.every((k, i) => k === next[i])
+      ? p
+      : { ...p, visible: next }))
+  }, [colKeySig, storageKey, columns])
+
   const persistPrefs = (p: GridPrefs) => { if (storageKey) { try { localStorage.setItem(storageKey, JSON.stringify(p)) } catch { /* ignore */ } } }
 
   /** The operator's order IS the render order — a drag handle that did not move a column would lie. */
