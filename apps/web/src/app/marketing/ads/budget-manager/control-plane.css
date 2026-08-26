@@ -89,10 +89,16 @@
 /* A token WITHOUT a × is 26px and one WITH is 32 — the remove button sets the height. The
    working set is the only chip here that cannot be deleted, so the row needs one floor. */
 .cp-scenbar .nds-token { min-height: 32px; }
-.cp-scenbar .nds-token.on { background: var(--nds-fchip-on-bg); border-color: var(--nds-fchip-on-border); }
+/* 🔴 RAMP, because this bar renders inside a `<Modal>` (ControlPlane.tsx:371–435), which
+   portals to document.body and out of reach of the `.h10-shell` pin. The fchip/tonal trio
+   has NO `.dark` override today, so the semantic spelling would render identically — but
+   on a portalled surface that is safety by accident, and the DS's own standing rule is
+   that adding a dark override means adding a pin. A pin cannot cross a portal. These are
+   the trio's own light values: tonal-bg IS blue-50, tonal-fg IS blue-900. */
+.cp-scenbar .nds-token.on { background: var(--nds-blue-50); border-color: var(--nds-blue-200); }
 /* the label is its own <button> and declares --nds-text-strong, so the wrapper's colour
    does not reach it — measured, not assumed. */
-.cp-scenbar .nds-token.on > .t { color: var(--nds-fchip-on-fg); }
+.cp-scenbar .nds-token.on > .t { color: var(--nds-blue-900); }
 
 .cp-compare { display: flex; flex-direction: column; gap: 12px; min-height: 420px; }
 .cp-compare-pick { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--nds-grey-600); }
