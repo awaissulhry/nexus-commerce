@@ -2071,7 +2071,45 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const to = q.to ?? new Date().toISOString().slice(0, 10)
     const from = q.from ?? (() => { const d = new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0, 10) })()
     reply.header('Cache-Control', 'private, max-age=300')
-    return businessContext({ from, to, minClicks: q.minClicks ? Number(q.minClicks) : undefined })
+    return businessContext({
+      from, to,
+      minClicks: q.minClicks ? Number(q.minClicks) : undefined,
+      // RPX — the Business tab reads one market at a time, because TACoS blended across
+      // markets hides exactly the market that moved.
+      marketplaces: q.marketplaces ? q.marketplaces.split(',').map((m) => m.trim()).filter(Boolean) : [],
+    })
+  })
+
+  // RPX.1 — the Brand tab. One market, ONE category node: Amazon returns the same brand-week at
+  // several tree depths and summing them overstated every count by about three times.
+  fastify.get('/advertising/reporting/brand', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { brandStrategy } = await import('../services/advertising/ads-brand-strategy.service.js')
+    const market = (q.marketplace ?? '').trim().toUpperCase()
+    reply.header('Cache-Control', 'private, max-age=300')
+    return brandStrategy({
+      // 'ALL' and an empty value both mean the ratio view; a bad code is not silently a market.
+      marketplace: market && market !== 'ALL' && /^[A-Z]{2,12}$/.test(market) ? market : null,
+      node: q.node ?? null,
+      weeks: q.weeks ? Number(q.weeks) : undefined,
+    })
+  })
+
+  // RPX.3 — the Market share tab: our slice of the whole market from Search Query Performance.
+  fastify.get('/advertising/reporting/market-share', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { marketShare } = await import('../services/advertising/ads-market-share.service.js')
+    const market = (q.marketplace ?? 'IT').trim().toUpperCase()
+    if (!/^[A-Z]{2,12}$/.test(market)) {
+      reply.code(400)
+      return { error: 'marketplace must be a country code' }
+    }
+    reply.header('Cache-Control', 'private, max-age=300')
+    return marketShare({
+      marketplace: market,
+      weeks: q.weeks ? Number(q.weeks) : undefined,
+      queryLimit: q.queryLimit ? Number(q.queryLimit) : undefined,
+    })
   })
 
   // RPT.10 — KPI totals, period comparison and the trend series for a report.

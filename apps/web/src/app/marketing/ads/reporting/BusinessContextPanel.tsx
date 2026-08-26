@@ -22,7 +22,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Info, TrendingDown } from 'lucide-react'
 import { DataGrid } from '@/design-system/components'
-import { fetchBusinessContext, money, money2, pct, type BusinessContext, type MarketContext } from './business-api'
+import { fetchBusinessContextDays, money, money2, pct, type BusinessContext, type MarketContext } from './business-api'
 
 export function BusinessContextPanel() {
   const [ctx, setCtx] = useState<BusinessContext | null>(null)
@@ -30,7 +30,7 @@ export function BusinessContextPanel() {
 
   useEffect(() => {
     const ac = new AbortController()
-    fetchBusinessContext(30, ac.signal)
+    fetchBusinessContextDays(30, ac.signal)
       .then(setCtx)
       .catch((e: unknown) => { if ((e as Error).name !== 'AbortError') setErr((e as Error).message) })
     return () => ac.abort()

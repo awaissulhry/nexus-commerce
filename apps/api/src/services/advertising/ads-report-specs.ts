@@ -17,7 +17,7 @@
  */
 
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
-import { AMS_DAILY_MARKER } from '../ads-core/ams-daily.js'
+import { excludeAmsDailySql } from '../ads-core/ams-daily.js'
 
 /** How the client should render a value. The server never formats. */
 export type ColumnFormat = 'text' | 'date' | 'int' | 'money' | 'pct' | 'ratio' | 'hour'
@@ -195,7 +195,7 @@ const bmJson = (key: string) => `(p."metrics"->>'${key}')::numeric`
  * 77), so a fabricated zero would be common rather than theoretical. Plain SUM
  * returns NULL, which the client renders as an em-dash.
  */
-interface BenchmarkTrio {
+export interface BenchmarkTrio {
   /** Metric id stem. The median and top get `<id>Median` and `<id>Top`. */
   id: string
   label: string
@@ -203,6 +203,17 @@ interface BenchmarkTrio {
   agg: 'sum' | 'avg'
   /** SQL for OUR value — a promoted column where one exists, else the payload. */
   own: string
+  /**
+   * The key OUR value lives under in Amazon's raw `metrics` payload.
+   *
+   * `own` is SQL and reads the promoted column where one exists, because a typed column beats
+   * a jsonb cast inside an aggregate. A consumer that already holds the row in JavaScript —
+   * the node-safe brand endpoint does — needs the payload key instead, and deriving it from the
+   * SQL string would be a second, guessable spelling of the same fact. Two of these keys break
+   * Amazon's own pattern (see the notes on `topKey` below), which is exactly why neither side
+   * may infer it.
+   */
+  ownKey: string
   /** Payload keys for the two benchmarks. */
   medianKey: string
   topKey: string
@@ -235,29 +246,33 @@ function benchmarkTrio(t: BenchmarkTrio): Metric[] {
  *     `viewedDetailPageROECategoryMedian` for the benchmark — the "Only" is
  *     dropped on the benchmark side.
  */
-const BRAND_BENCHMARKS: BenchmarkTrio[] = [
+export const BRAND_BENCHMARKS: BenchmarkTrio[] = [
   // ── engagement and conversion ───────────────────────────────────────────────
   {
     id: 'addToCarts', label: 'Add to carts', format: 'int', agg: 'sum',
     own: 'p."addToCarts"',
+    ownKey: 'addToCarts',
     medianKey: 'addToCartsCategoryMedian',
     topKey: 'addToCartsCategoryPerformers', // 🔴 not ...CategoryTopPerformers
   },
   {
     id: 'brandCustomers', label: 'Brand customers', format: 'int', agg: 'sum',
     own: 'p."brandCustomers"',
+    ownKey: 'brandCustomers',
     medianKey: 'brandCustomersCategoryMedian',
     topKey: 'brandCustomersCategoryTopPerformers',
   },
   {
     id: 'highValueCustomers', label: 'High-value customers', format: 'int', agg: 'sum',
     own: 'p."highValueCustomers"',
+    ownKey: 'highValueCustomers',
     medianKey: 'highValueCustomersCategoryMedian',
     topKey: 'highValueCustomersCategoryTopPerformers',
   },
   {
     id: 'viewedDetailPageOnly', label: 'Viewed detail page only', format: 'int', agg: 'sum',
     own: 'p."viewedDetailPageOnly"',
+    ownKey: 'viewedDetailPageOnly',
     medianKey: 'viewedDetailPageCategoryMedian',
     topKey: 'viewedDetailPageCategoryTopPerformers',
     help: 'Shoppers who reached the detail page and went no further. More of them is not automatically better — it is reach without conversion.',
@@ -265,6 +280,7 @@ const BRAND_BENCHMARKS: BenchmarkTrio[] = [
   {
     id: 'brandedSearchesOnly', label: 'Branded searches only', format: 'int', agg: 'sum',
     own: 'p."brandedSearchesOnly"',
+    ownKey: 'brandedSearchesOnly',
     medianKey: 'brandedSearchesCategoryMedian',
     topKey: 'brandedSearchesCategoryTopPerformers',
     help: 'Searched the brand and viewed nothing. Present on 22 of 117 rows — an em-dash here means Amazon sent no figure, not zero.',
@@ -272,18 +288,21 @@ const BRAND_BENCHMARKS: BenchmarkTrio[] = [
   {
     id: 'brandedSearchesAndDetailPageViews', label: 'Branded search + detail page', format: 'int', agg: 'sum',
     own: 'p."brandedSearchesAndDetailPageViews"',
+    ownKey: 'brandedSearchesAndDetailPageViews',
     medianKey: 'brandedSearchesAndDetailPageViewsCategoryMedian',
     topKey: 'brandedSearchesAndDetailPageViewsCategoryTopPerformers',
   },
   {
     id: 'customerConversionRate', label: 'Customer CVR', format: 'pct', agg: 'avg',
     own: 'p."customerConversionRate"',
+    ownKey: 'customerConversionRate',
     medianKey: 'customerConversionRateCategoryMedian',
     topKey: 'customerConversionRateCategoryTopPerformers',
   },
   {
     id: 'newToBrandCustomerRate', label: 'New-to-brand rate', format: 'pct', agg: 'avg',
     own: 'p."newToBrandCustomerRate"',
+    ownKey: 'newToBrandCustomerRate',
     medianKey: 'newToBrandCustomerRateCategoryMedian',
     topKey: 'newToBrandCustomerRateCategoryTopPerformers',
     help: 'Share of brand customers who had not bought from the brand before. Brand-level, and unrelated to the ad-level new-to-brand fields, which are Sponsored Brands and Display only.',
@@ -295,30 +314,35 @@ const BRAND_BENCHMARKS: BenchmarkTrio[] = [
   {
     id: 'roeAddToCarts', label: 'ROE · add to carts', format: 'ratio', agg: 'avg',
     own: bmJson('addToCartsReturnOnEngagement'),
+    ownKey: 'addToCartsReturnOnEngagement',
     medianKey: 'addToCartsROECategoryMedian',
     topKey: 'addToCartsROECategoryTopPerformers',
   },
   {
     id: 'roeBrandCustomers', label: 'ROE · brand customers', format: 'ratio', agg: 'avg',
     own: bmJson('brandCustomersReturnOnEngagement'),
+    ownKey: 'brandCustomersReturnOnEngagement',
     medianKey: 'brandCustomersROECategoryMedian',
     topKey: 'brandCustomersROECategoryTopPerformers',
   },
   {
     id: 'roeHighValueCustomers', label: 'ROE · high-value customers', format: 'ratio', agg: 'avg',
     own: bmJson('highValueCustomersReturnOnEngagement'),
+    ownKey: 'highValueCustomersReturnOnEngagement',
     medianKey: 'highValueCustomersROECategoryMedian',
     topKey: 'highValueCustomersROECategoryTopPerformers',
   },
   {
     id: 'roeViewedDetailPage', label: 'ROE · detail page views', format: 'ratio', agg: 'avg',
     own: bmJson('viewedDetailPageOnlyReturnOnEngagement'), // 🔴 "Only" on ours…
+    ownKey: 'viewedDetailPageOnlyReturnOnEngagement',
     medianKey: 'viewedDetailPageROECategoryMedian',        // …and not on the benchmark
     topKey: 'viewedDetailPageROECategoryTopPerformers',
   },
   {
     id: 'roeBrandedSearchesAndDetailPageViews', label: 'ROE · branded search + detail page', format: 'ratio', agg: 'avg',
     own: bmJson('brandedSearchesAndDetailPageViewsReturnOnEngagement'),
+    ownKey: 'brandedSearchesAndDetailPageViewsReturnOnEngagement',
     medianKey: 'brandedSearchesAndDetailPageViewsROECategoryMedian',
     topKey: 'brandedSearchesAndDetailPageViewsROECategoryTopPerformers',
   },
@@ -339,14 +363,19 @@ const BRAND_BENCHMARKS: BenchmarkTrio[] = [
  * Every other rate in this spec (CVR, new-to-brand) IS 0..1 and correctly uses
  * `pct`. The two live side by side, which is exactly how a unit bug gets shipped.
  */
-const ENGAGEMENT_BAND: Metric[] = ([
+export const BRAND_BAND_KEYS = [
   ['engagedShopperRateLow', 'Shopper engagement rate — low (%)', 'engagedShopperRateLowerBound'],
   ['engagedShopperRateHigh', 'Shopper engagement rate — high (%)', 'engagedShopperRateUpperBound'],
   ['engagedShopperRateMedianLow', 'Shopper engagement — category median low (%)', 'engagedShopperRateCategoryMedianLowerBound'],
   ['engagedShopperRateMedianHigh', 'Shopper engagement — category median high (%)', 'engagedShopperRateCategoryMedianUpperBound'],
   ['engagedShopperRateTopLow', 'Shopper engagement — category top low (%)', 'engagedShopperRateCategoryTopPerformersLowerBound'],
   ['engagedShopperRateTopHigh', 'Shopper engagement — category top high (%)', 'engagedShopperRateCategoryTopPerformersUpperBound'],
-] as const).map(([id, label, key]) => ({
+] as const
+
+/** The three composite scores Amazon publishes beside the benchmarks. Not percentiles — see BM.0. */
+export const BRAND_INDEX_KEYS = ['awarenessIndex', 'considerationIndex', 'salesIndex'] as const
+
+const ENGAGEMENT_BAND: Metric[] = (BRAND_BAND_KEYS).map(([id, label, key]) => ({
   id, label, kind: 'metric' as const, format: 'ratio' as const, align: 'right' as const,
   sql: `AVG(${bmJson(key)})`,
   help: 'Already a percentage — Amazon reports engagement as a bounded range, never a single figure.',
@@ -367,6 +396,15 @@ export interface ReportSpec {
   fixedWhere: string[]
   /** Columns the free-text search box matches against. */
   searchCols: string[]
+  /**
+   * RPX.1 — suppress the pinned Total row, with the reason stated in `noTotalsReason`.
+   *
+   * Only for grains where a whole-set aggregate is WRONG rather than merely coarse. Brand
+   * Metrics is the one: its rows repeat the same brand-week at several category depths, so
+   * every sum over them multiplies. Never set this to hide a slow query.
+   */
+  noTotals?: boolean
+  noTotalsReason?: string
   dimensions: Dimension[]
   metrics: Metric[]
   /** Dimension ids forming the natural grain — the default grouping. */
@@ -492,7 +530,7 @@ function spcCampaignMetrics(t: string): Metric[] {
  * `IS DISTINCT FROM`, not `<>`: `reportRunId` is nullable and `NULL <> 'x'` is NULL,
  * which would silently drop every legitimate row that has no run id.
  */
-const EXCLUDE_AMS_DAILY_SQL = `p."reportRunId" IS DISTINCT FROM '${AMS_DAILY_MARKER}'`
+const EXCLUDE_AMS_DAILY_SQL = excludeAmsDailySql('p')
 
 function dailyPerfSpec(
   id: string, title: string, fixedWhere: string[], extraDims: Dimension[] = [],
@@ -737,6 +775,8 @@ export const REPORT_SPECS: Record<string, ReportSpec> = {
     defaultColumns: ['computationDate', 'marketplace', 'categoryNodeName', 'awarenessIndex', 'considerationIndex', 'salesIndex', 'brandCustomers'],
     defaultSort: { col: 'computationDate', dir: 'desc' },
     currency: 'EUR',
+    noTotals: true,
+    noTotalsReason: 'Amazon reports the same brand-week at several category depths, so these rows cannot be added up — a total would count the same shoppers once per depth. Use the Brand tab, which reads one node at a time.',
   },
 
   economics: {

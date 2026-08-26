@@ -51,6 +51,8 @@ export interface ReportResult {
   rows: Array<Record<string, unknown>>
   /** Same shape as one row, computed over the WHOLE filtered set. */
   totals: Record<string, unknown> | null
+  /** Set when the spec refuses a totals row, so the grid can say why instead of showing a blank. */
+  noTotalsReason?: string
   /** Distinct groups matching the filter — the pagination denominator. */
   total: number
   page: number
@@ -188,9 +190,21 @@ export async function runReport(q: ReportQuery): Promise<ReportResult> {
   // Totals run the SAME metric expressions over the whole filtered set. They are
   // NOT a fold of the returned page: ACOS across 50 rows is not the average of
   // 50 ACOS values, and a page total would silently answer a different question.
-  const totalSelects = outCols
-    .filter((c) => c.kind === 'metric')
-    .map((c) => `${metricById.get(c.id)!.sql} AS ${alias(c.id)}`)
+  //
+  // 🔴 RPX.1 — and a spec may REFUSE a totals row, because for some grains the whole-set
+  // aggregate is not a smaller truth, it is a false one. Brand Metrics is the case that forced
+  // this: Amazon returns the same brand-week at several category-tree depths, so the rows are
+  // correct while their sum counts the same shoppers up to seven times. Measured on prod
+  // 2026-08-26 over 28 Jul – 26 Aug, all markets: brand customers totalled 276 against an honest
+  // 91, add to carts 1,248 against 410, detail page views 11,481 against 3,759. The column tip
+  // on `categoryNodeName` already warned that dropping the dimension double-counts; the totals
+  // row dropped it anyway. Suppressing it is the honest answer — the Brand tab is where a
+  // single-node figure belongs, and it reads one row rather than folding many.
+  const totalSelects = spec.noTotals
+    ? []
+    : outCols
+      .filter((c) => c.kind === 'metric')
+      .map((c) => `${metricById.get(c.id)!.sql} AS ${alias(c.id)}`)
   const totalsSql = totalSelects.length
     ? `SELECT ${totalSelects.join(', ')} FROM ${spec.from} ${whereSql}`
     : null
@@ -214,6 +228,7 @@ export async function runReport(q: ReportQuery): Promise<ReportResult> {
     columns: outCols,
     rows: rows.map(normalizeRow),
     totals: totalsRows[0] ? normalizeRow(totalsRows[0]) : null,
+    noTotalsReason: spec.noTotals ? spec.noTotalsReason : undefined,
     total: Number(countRows[0]?.n ?? 0),
     page,
     pageSize,

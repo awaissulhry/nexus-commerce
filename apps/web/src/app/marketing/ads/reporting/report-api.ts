@@ -24,6 +24,14 @@ export interface ReportResult {
   columns: ColumnMeta[]
   rows: Array<Record<string, unknown>>
   totals: Record<string, unknown> | null
+  /**
+   * Set when the report REFUSES a totals row rather than failing to compute one.
+   *
+   * Brand Metrics is the case: its rows repeat the same brand-week at several category depths,
+   * so a sum over them counts the same shoppers once per depth. A blank Total row would read as
+   * a bug; this says it was a decision, and why.
+   */
+  noTotalsReason?: string
   total: number
   page: number
   pageSize: number

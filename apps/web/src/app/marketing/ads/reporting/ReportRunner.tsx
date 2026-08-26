@@ -573,6 +573,16 @@ export function ReportRunner({ reportId }: { reportId: string }) {
         emptyLabel={emptyBecause}
       />
 
+      {/* RPX.1 — a report that REFUSES a totals row says so. `showTotal` above already hides the
+          pinned row when the server sends no totals, and a row that is simply absent reads as a
+          missing feature; this is the difference between "we could not" and "adding these up
+          would be wrong". Brand Metrics is the case that forced it. */}
+      {result?.noTotalsReason && (
+        <p className="rpt-nototals">
+          <Sigma size={13} aria-hidden /> <b>No total for this report.</b> {result.noTotalsReason}
+        </p>
+      )}
+
       {/* R1 — business context (TACoS, ad vs organic, wasted spend) and incrementality moved
           here from the library. They are analysis, not a report you pick, and on the landing
           page they were the two largest panels on a screen whose job is choosing one. They

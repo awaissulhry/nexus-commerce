@@ -1,7 +1,7 @@
 {
   "note": "Files the two DS copies already differ on. This list may only SHRINK. A shared file absent here must stay byte-identical in both apps.",
   "updatedAt": "2026-08-26",
-  "sharedFiles": 89,
+  "sharedFiles": 91,
   "differing": [
     "components/Drawer.tsx",
     "patterns/index.ts",

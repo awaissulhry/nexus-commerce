@@ -11,11 +11,28 @@ export interface MarketContext {
   adShare: number | null
 }
 
+/** One ISO week of the same four figures the totals are built from. */
+export interface BusinessWeek {
+  weekStart: string
+  adSpend: number
+  adSales: number
+  totalSales: number
+  tacos: number | null
+  adShare: number | null
+  /** Not covered by both feeds yet, or clipped by the window — never compared with a full week. */
+  partial: boolean
+}
+
 export interface BusinessContext {
   window: { from: string; to: string }
   currency: string
+  /** Markets the caller asked for; empty means every market. */
+  marketplaces: string[]
   totals: MarketContext
   byMarket: MarketContext[]
+  series: BusinessWeek[]
+  /** The last day BOTH feeds cover. Every week ending after it is partial. */
+  completeThrough: string | null
   wasted: {
     amount: number
     terms: number
@@ -28,16 +45,41 @@ export interface BusinessContext {
   elapsedMs: number
 }
 
-export async function fetchBusinessContext(days = 30, signal?: AbortSignal): Promise<BusinessContext> {
-  const to = new Date()
-  const from = new Date(to)
-  from.setUTCDate(from.getUTCDate() - (days - 1))
-  const qs = new URLSearchParams({ from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) })
+export interface BusinessContextQuery {
+  from: string
+  to: string
+  /** Restrict every figure to these markets. Empty = all of them. */
+  marketplaces?: string[]
+}
+
+/**
+ * RPX — takes an explicit window and an optional market.
+ *
+ * It used to take a day count and always covered every market, which is fine for the panel under
+ * the campaign report and wrong for a tab whose whole point is that a blended TACoS hides the
+ * market that moved. The day-count form is kept as a helper below so the existing caller is
+ * unchanged.
+ */
+export async function fetchBusinessContext(q: BusinessContextQuery, signal?: AbortSignal): Promise<BusinessContext> {
+  const qs = new URLSearchParams({ from: q.from, to: q.to })
+  if (q.marketplaces?.length) qs.set('marketplaces', q.marketplaces.join(','))
   const res = await fetch(`${getBackendUrl()}/api/advertising/reporting/business-context?${qs}`, {
-    credentials: 'include', signal,
+    credentials: 'include',
+    signal,
+    // The route caches for five minutes and Refresh re-requests the same URL; without this the
+    // button can hand back a stale answer and look like it worked.
+    cache: 'no-store',
   })
   if (!res.ok) throw new Error(`Business context unavailable (${res.status})`)
   return (await res.json()) as BusinessContext
+}
+
+/** The last N days, every market — the shape the campaign report's panel asks for. */
+export function fetchBusinessContextDays(days = 30, signal?: AbortSignal): Promise<BusinessContext> {
+  const to = new Date()
+  const from = new Date(to)
+  from.setUTCDate(from.getUTCDate() - (days - 1))
+  return fetchBusinessContext({ from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }, signal)
 }
 
 export const money = (v: number, c = 'EUR') =>

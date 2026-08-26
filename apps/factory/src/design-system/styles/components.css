@@ -1622,3 +1622,38 @@
 .nds-grid thead th {
   vertical-align: top;
 }
+
+/* ── BenchmarkBar (RPX) ──────────────────────────────────────────────────
+   A figure against a benchmark. ONE hue for the bar in both directions: ahead is not
+   automatically good, so direction is carried by the side of the median and by the verdict
+   text, which is where the status tokens are allowed. */
+.nds-bmk {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) minmax(60px, 0.6fr) minmax(60px, 0.6fr) minmax(180px, 3fr) minmax(92px, 0.9fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  font-size: 13px;
+}
+.nds-bmk:last-child { border-bottom: none; }
+.nds-bmk-label { font-weight: 600; color: var(--nds-text-strong); min-width: 0; }
+.nds-bmk-value { text-align: right; font-weight: 700; color: var(--nds-text); font-variant-numeric: tabular-nums; }
+.nds-bmk-median { text-align: right; font-weight: 500; color: var(--nds-text-3); font-variant-numeric: tabular-nums; }
+.nds-bmk-track { position: relative; height: 18px; }
+.nds-bmk-axis {
+  position: absolute; left: 50%; top: 0; width: 1px; height: 18px;
+  background: var(--nds-border-strong);
+}
+.nds-bmk-tick { position: absolute; top: 4px; width: 1px; height: 10px; background: var(--nds-border-subtle); }
+.nds-bmk-fill { position: absolute; top: 5px; height: 8px; background: var(--nds-primary); }
+.nds-bmk-note { font-size: 11.5px; color: var(--nds-text-3); line-height: 18px; }
+.nds-bmk-verdict { text-align: right; font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nds-bmk.is-ahead .nds-bmk-verdict { color: var(--nds-success-strong); }
+.nds-bmk.is-behind .nds-bmk-verdict { color: var(--nds-warning-strong); }
+.nds-bmk.is-level .nds-bmk-verdict,
+.nds-bmk.is-none .nds-bmk-verdict,
+.nds-bmk.is-mute .nds-bmk-verdict { color: var(--nds-text-2); font-weight: 600; }
+.nds-bmk.is-mute { background: var(--nds-surface-sunken); }
+.nds-bmk.is-mute .nds-bmk-label,
+.nds-bmk.is-mute .nds-bmk-value { color: var(--nds-text-2); }
