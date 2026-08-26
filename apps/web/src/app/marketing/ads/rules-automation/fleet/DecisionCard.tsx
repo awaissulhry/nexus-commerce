@@ -303,14 +303,15 @@ export function DecisionCard({
       {/* Low-risk reversible actions keep the facts one click away; heavy
           ones never hide them. */}
       {!heavy ? (
-        <button
+        <Button
+          variant="quiet" size="xs" inline
           className="acr-fl-checkstoggle"
           aria-expanded={showDetail}
           onClick={() => setShowDetail(!showDetail)}
         >
           {showDetail ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           {showDetail ? 'Hide the details' : 'Show what this means, and what it costs to be wrong'}
-        </button>
+        </Button>
       ) : null}
 
       {showDetail ? (
@@ -344,10 +345,10 @@ export function DecisionCard({
       ) : null}
 
       {plan ? (
-        <button className="acr-fl-dcard-plan" onClick={() => onOpenPlan(plan.id)}>
+        <Button variant="link" inline  className="acr-fl-dcard-plan" onClick={() => onOpenPlan(plan.id)}>
           <FileText size={12} /> From the plan “{plan.headline}” — see the full story and the
           critic&apos;s review
-        </button>
+        </Button>
       ) : null}
 
       {needsAck ? (

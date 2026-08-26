@@ -10,6 +10,7 @@
  */
 
 import { useMemo } from 'react'
+import { Button } from '@/design-system/primitives'
 import {
   Background,
   BackgroundVariant,
@@ -82,8 +83,8 @@ function WorkerNode({ data }: NodeProps) {
       <div className="acr-fln-top">
         <span className="acr-fln-name">{d.name}</span>
         {d.expandable ? (
-          <button
-            type="button"
+          <Button variant="secondary" size="xs"
+           
             className="acr-fln-expand nodrag"
             aria-label={d.expanded ? 'Collapse findings' : 'Show findings on the map'}
             title={d.expanded ? 'Collapse findings' : 'Show its findings on the map'}
@@ -93,7 +94,7 @@ function WorkerNode({ data }: NodeProps) {
             }}
           >
             {d.expanded ? '−' : '+'}
-          </button>
+          </Button>
         ) : null}
       </div>
       <div className="acr-fln-meta">

@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataGrid } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { Button, SegmentedControl } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { Bot, RefreshCw, ShieldAlert } from 'lucide-react'
 import {
@@ -510,24 +510,12 @@ export function FleetTab() {
             <Bot size={15} /> {mapView === 'workers' ? 'Fleet map' : 'Entity graph'}
           </h3>
           <div className="acr-fl-headright">
-            <div className="acr-eg-toggle" role="tablist" aria-label="Map view">
-              <button
-                role="tab"
-                aria-selected={mapView === 'workers'}
-                className={mapView === 'workers' ? 'on' : ''}
-                onClick={() => setMapView('workers')}
-              >
-                Workers
-              </button>
-              <button
-                role="tab"
-                aria-selected={mapView === 'entities'}
-                className={mapView === 'entities' ? 'on' : ''}
-                onClick={() => setMapView('entities')}
-              >
-                Entity graph
-              </button>
-            </div>
+            <SegmentedControl
+              ariaLabel="Map view" size="sm"
+              value={mapView}
+              onChange={(v) => setMapView(v as typeof mapView)}
+              options={[{ value: 'workers', label: 'Workers' }, { value: 'entities', label: 'Entity graph' }]}
+            />
             {fleetState?.halted ? (
               <Term k="running">
                 <span className="acr-fl-pill acr-fl-pill-halt">
@@ -562,9 +550,9 @@ export function FleetTab() {
               {entityGraph?.focus ? (
                 <>
                   Its direct relationships, grouped — click any card to explore that one next.{' '}
-                  <button className="acr-eg-link" onClick={() => void loadEntityGraph()}>
+                  <Button variant="link" inline className="acr-eg-link" onClick={() => void loadEntityGraph()}>
                     ← back to the whole picture
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
@@ -674,13 +662,13 @@ export function FleetTab() {
           </ul>
         )}
         <p className="acr-fl-schedule">
-          <button
-            type="button"
+          <Button
+            variant="link" inline
             className="acr-fl-dcard-plan"
             onClick={() => router.push('/fleet/activity')}
           >
             Open Activity — the whole record →
-          </button>
+          </Button>
         </p>
       </section>
 

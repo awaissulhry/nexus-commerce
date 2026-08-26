@@ -402,9 +402,11 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
               const order = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO']
               const overCap = order.indexOf(lv) > order.indexOf(charter.autonomyCap)
               return (
-                <button
+                <Button
                   key={lv}
-                  className={`acr-btn ${charter.autonomyLevel === lv ? 'on' : ''}`}
+                  size="sm"
+                  active={charter.autonomyLevel === lv}
+                  aria-pressed={charter.autonomyLevel === lv}
                   disabled={busy || overCap}
                   title={
                     overCap
@@ -414,7 +416,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
                   onClick={() => void patchCharter({ autonomyLevel: lv })}
                 >
                   {lv}
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -563,8 +565,10 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
         {lastTrace && (lastTrace.evidence?.length ?? 0) > 0 ? (
           (lastTrace.evidence ?? []).map((e) => (
             <div key={e.key} className="acr-flw-evidence">
-              <button
+              <Button
+                variant="quiet" size="xs" inline
                 className="acr-fl-checkstoggle"
+                aria-expanded={showEvidence === e.key}
                 onClick={() => setShowEvidence(showEvidence === e.key ? null : e.key)}
               >
                 {showEvidence === e.key ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -572,7 +576,7 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
                 {e.dataVintage ? (
                   <span className="acr-fl-sub">data as of {new Date(e.dataVintage).toLocaleString()}</span>
                 ) : null}
-              </button>
+              </Button>
               {showEvidence === e.key ? (
                 <pre className="acr-fl-raw">
                   {e.preview}
@@ -785,12 +789,12 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
         </header>
         {runs.map((r) => (
           <div key={r.id} className="acr-fl-run">
-            <button className="acr-fl-runhead" onClick={() => void loadTrace(r.id)}>
+            <Button variant="quiet" size="xs" inline  className="acr-fl-runhead" onClick={() => void loadTrace(r.id)}>
               {openRun === r.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
               <span className={`acr-dot ${r.ok ? 'ok' : 'bad'}`} />
               {ago(r.createdAt)} · {r.trigger} · {r.findingCount} finding{r.findingCount === 1 ? '' : 's'} · {usd(r.costUSD)}
               {r.haltedReason ? ` · stopped: ${r.haltedReason}` : ''}
-            </button>
+            </Button>
             {openRun === r.id ? (
               traces[r.id] ? (
                 <ol className="acr-flw-pipeline">

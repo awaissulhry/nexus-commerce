@@ -59,12 +59,12 @@
      `.stop` → `danger-outline` 6.06:1 → 7.36:1
    The dial below is the one exception: four labelled options in a shared track is a segmented
    control, not four buttons, so it keeps its own rules until the DS ships one. */
-.acr-dial .acr-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; font-weight: 550; border-radius: var(--nds-radius-sm); padding: 7px 13px; cursor: pointer;
-  border: 1px solid transparent; background: none; color: inherit;
-}
-.acr-dial .acr-btn:disabled { opacity: 0.55; cursor: default; }
+/* The four rungs are DS `Button size="sm"` with `active` and `aria-pressed`. The DS draws the
+   chrome, the active state and the disabled state, so the block that drew all three by hand is
+   gone. The rungs above a worker's cap stay VISIBLE and disabled on purpose: the cap is written
+   in code and the only way to see where it falls is to see the rungs you cannot reach.
+   `SegmentedOption` has no per-option `disabled` (DS-GAPS), which is why this is four buttons
+   and not one `SegmentedControl`. */
 /* NAF.AQ-S4R measured white on this button's original #1a9d6a at **3.46:1**, below the 4.5
    floor, and darkened it to #15804f (4.96:1). That fix now lives in the DS: `Button
    variant="success"` is `--nds-success-strong` at **5.02:1**, so the whole family moved there
@@ -821,12 +821,13 @@
 }
 .acr-fln-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .acr-fln-name { font-size: 13px; font-weight: 650; color: var(--nds-grey-900); letter-spacing: -0.005em; }
-.acr-fln-expand {
-  width: 20px; height: 20px; border-radius: var(--nds-radius-sm); border: 1px solid var(--nds-grey-150);
-  background: var(--nds-grey-50); color: var(--nds-blue-600); font-size: 13px; line-height: 1;
-  cursor: pointer; flex: none;
+/* The +/− on a map node. `Button variant="secondary" size="xs"` carries the border, the hover and
+   the focus ring; the square 20px and the blue glyph are this node's, and `flex: none` stops the
+   node's flex row from squeezing it. */
+.nds-btn.acr-fln-expand {
+  width: 20px; height: 20px; padding: 0; color: var(--nds-blue-600); font-size: 13px; line-height: 1;
+  flex: none;
 }
-.acr-fln-expand:hover { background: var(--nds-blue-100); border-color: var(--nds-blue-600); }
 .acr-fln-meta { display: flex; align-items: center; gap: 7px; }
 .acr-fln-level {
   font-size: 9.5px; font-weight: 750; letter-spacing: 0.08em; padding: 1.5px 7px;
@@ -863,17 +864,20 @@
 .acr-fl-dialrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .acr-fl-lbl { font-size: 11.5px; font-weight: 650; color: var(--nds-grey-600); }
 .acr-dial { display: inline-flex; gap: 4px; }
-.acr-dial .acr-btn.on { background: var(--nds-blue-600); color: var(--nds-white); border-color: var(--nds-blue-600); }
 .acr-fl-facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--nds-text-muted); margin-bottom: 10px; }
 .acr-fl-degraded { color: var(--nds-danger-text); font-weight: 650; }
 .acr-fl-runs { display: flex; flex-direction: column; gap: 4px; }
 .acr-fl-run { border-top: 1px solid var(--nds-grey-100); padding-top: 4px; }
-.acr-fl-runhead {
+/* These four are one control written four times: a text-and-chevron row that opens what sits
+   under it. All four are `Button variant="quiet" size="xs" inline` now — the DS brings the reset,
+   the hover wash, the focus ring and the disabled state. `.nds-btn` is on each selector because
+   `quiet` declares `color: inherit` deliberately (so a call site can tone it from its container),
+   and a bare class at (0,1,0) loses to it. */
+.nds-btn.acr-fl-runhead {
   display: flex; align-items: center; gap: 7px; width: 100%;
-  padding: 4px 2px; border: 0; background: none; cursor: pointer;
-  font-size: 12px; color: var(--nds-grey-700); text-align: left;
+  padding: 4px 2px; font-size: 12px; color: var(--nds-grey-700); text-align: left;
 }
-.acr-fl-runhead:hover { color: var(--nds-blue-600); }
+.nds-btn.acr-fl-runhead:hover { color: var(--nds-blue-600); }
 .acr-fl-steps { margin: 2px 0 6px 26px; padding: 0; font-size: 11.5px; color: var(--nds-grey-600); list-style: none; }
 .acr-fl-steps li { padding: 2px 0; font-variant-numeric: tabular-nums; }
 .acr-fl-steps li.bad { color: var(--nds-danger-text); }
@@ -974,11 +978,11 @@
 .acr-fl-dropped ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--nds-grey-600); }
 
 /* checks checklist */
-.acr-fl-checkstoggle {
-  display: flex; align-items: center; gap: 6px; border: 0; background: none;
-  padding: 0; cursor: pointer; font-size: 12.5px; font-weight: 650; color: var(--nds-grey-700);
+.nds-btn.acr-fl-checkstoggle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 650; color: var(--nds-grey-700);
 }
-.acr-fl-checkstoggle:hover { color: var(--nds-blue-600); }
+.nds-btn.acr-fl-checkstoggle:hover { color: var(--nds-blue-600); }
 .acr-fl-checks ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .acr-fl-checks li { display: flex; align-items: baseline; gap: 7px; font-size: 12.5px; }
 .acr-fl-checks li svg { flex: none; transform: translateY(1px); }
@@ -990,11 +994,15 @@
 
 .acr-fl-narrative p { margin: 8px 0 0; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.6; }
 
-.acr-fl-rawtoggle {
-  align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
-  font-size: 11px; color: var(--nds-grey-400); text-decoration: underline dotted;
+/* 🔴 --nds-grey-400 measures 2.04:1 on white — less than half the 4.5:1 floor, on the control
+   that opens a worker's raw output. The rule's own hover colour already cleared it, so the fix is
+   to use the hover value at rest: --nds-text-muted is 5.01:1. The dotted underline stays; it is
+   what separates this from the prose it sits under. */
+.nds-btn.acr-fl-rawtoggle {
+  align-self: flex-start;
+  font-size: 11px; color: var(--nds-text-muted); text-decoration: underline dotted;
 }
-.acr-fl-rawtoggle:hover { color: var(--nds-text-muted); }
+.nds-btn.acr-fl-rawtoggle:hover { color: var(--nds-grey-900); }
 .acr-fl-raw {
   margin: 0; padding: 10px; border-radius: var(--nds-radius-md); background: var(--nds-grey-25);
   border: 1px solid var(--nds-grey-100); font-size: 10.5px; overflow-x: auto; max-height: 380px;
@@ -1088,12 +1096,9 @@
 .acr-fl-dcard-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .acr-fl-dcard-facts dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--nds-grey-500); }
 .acr-fl-dcard-facts dd { margin: 1px 0 0; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.5; }
-.acr-fl-dcard-plan {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
-  border: 0; background: none; padding: 0; cursor: pointer;
-  font-size: 12px; color: var(--nds-blue-600);
-}
-.acr-fl-dcard-plan:hover { text-decoration: underline; }
+/* `Button variant="link" inline` — the DS owns the colour and the hover. The permanent underline
+   is this console's standing answer to --nds-text-link measuring 1.03:1 against body text. */
+.nds-btn.acr-fl-dcard-plan { align-self: flex-start; gap: 6px; font-size: 12px; text-decoration: underline; }
 .acr-fl-dcard-teach { margin: 0; font-size: 11.5px; color: var(--nds-grey-500); }
 
 /* ── FX.7 — money & report cards ─────────────────────────────────────── */
@@ -1144,15 +1149,9 @@
 .acr-fl-brief-hero { box-shadow: 0 8px 26px rgb(31 111 222 / 0.1); }
 
 /* ── FX.10 — the entity graph overlay ────────────────────────────────── */
-.acr-eg-toggle { display: inline-flex; padding: 2px; border-radius: var(--nds-radius-lg); background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); }
-.acr-eg-toggle button {
-  border: 0; background: none; padding: 4px 11px; border-radius: var(--nds-radius-sm); cursor: pointer;
-  font-size: 12px; font-weight: 600; color: var(--nds-text-muted);
-}
-.acr-eg-toggle button:hover { color: var(--nds-grey-700); }
-.acr-eg-toggle button.on { background: var(--nds-white); color: var(--nds-blue-600); box-shadow: 0 1px 2px rgb(20 28 38 / 0.08); }
-.acr-eg-link { border: 0; background: none; padding: 0; cursor: pointer; font-size: 12.5px; color: var(--nds-blue-600); }
-.acr-eg-link:hover { text-decoration: underline; }
+/* The map-view switch was a sixth spelling of the pill segmented control — grey track, white
+   active chip, blue-600 active label. It is the DS `SegmentedControl` and its four rules are gone. */
+.nds-btn.acr-eg-link { font-size: 12.5px; text-decoration: underline; }
 .acr-eg-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; }
 .acr-eg-legenditem { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--nds-grey-600); }
 .acr-eg-swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }

@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { Tabs } from '@/design-system/components'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
 import { DecisionCard, TOOL_CARDS, toolCardFor } from './DecisionCard'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
@@ -100,21 +101,21 @@ function ViewTabs({
     { key: 'decided', label: 'Decided', n: counts.decided, hint: 'Everything you have already answered, and the reason you gave.' },
     { key: 'expired', label: 'Expired', n: counts.expired, hint: 'Requests that ran out of time before anyone answered them.' },
   ]
+  /* The DS `Tabs` is this control — underline bar, count pills, the same roles. `TabItem` carries
+     no `title` (DS-GAPS), and these three hints are the only place the difference between the
+     views is written down. They move under the bar as visible text for the view you are on, which
+     is where they should have been: a hover tooltip is not reachable by keyboard or touch, and
+     hovering all three to learn what they hold is not how anyone reads a tab bar. */
+  const hint = tabs.find((t) => t.key === view)?.hint
   return (
-    <div className="ap-tabs" role="tablist" aria-label="Approval views">
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          role="tab"
-          aria-selected={view === t.key}
-          className={view === t.key ? 'on' : ''}
-          title={t.hint}
-          onClick={() => onChange(t.key)}
-        >
-          {t.label}
-          <span className="ap-tabcount">{t.n}</span>
-        </button>
-      ))}
+    <div className="ap-tabsblock">
+      <Tabs
+        ariaLabel="Approval views"
+        active={view}
+        onChange={(k) => onChange(k as InboxView)}
+        tabs={tabs.map((t) => ({ id: t.key, label: t.label, count: t.n }))}
+      />
+      {hint ? <p className="ap-tabhint">{hint}</p> : null}
     </div>
   )
 }
@@ -252,13 +253,13 @@ function PrecedentPanel({
   const [open, setOpen] = useState(false)
   return (
     <div className="ap-precedents">
-      <button className="acr-fl-checkstoggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Button variant="quiet" size="xs" inline  className="acr-fl-checkstoggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         <GraduationCap size={13} aria-hidden />
         {precedents.length === 0
           ? 'Your decisions have not taught the fleet anything yet'
           : `What your decisions have taught the fleet (${precedents.length})`}
-      </button>
+      </Button>
       {open ? (
         precedents.length === 0 ? (
           <p className="acr-fl-empty">

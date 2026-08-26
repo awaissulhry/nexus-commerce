@@ -315,13 +315,14 @@ function RollupRow({ group }: { group: Rollup }) {
             <span className="dt-count">{n}</span>
             <span>from {first.source}</span>
             <span className="dt-sep">·</span>
-            <button
+            <Button
+              variant="link" inline
               className="dt-rollupbtn"
               aria-expanded={open}
               onClick={() => setOpen(!open)}
             >
               {open ? 'collapse these' : `show all ${n}`}
-            </button>
+            </Button>
           </span>
           {!open && first.detail ? (
             <p className={`dt-detail${first.outcome === 'bad' ? ' bad' : ''}`}>{first.detail}</p>
@@ -368,7 +369,7 @@ function EpisodeCard({
 
   return (
     <div className={`dt-episode${open ? ' open' : ''}`}>
-      <button className="dt-ephead" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Button variant="quiet" size="xs" inline  className="dt-ephead" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Marker kind={episodeKind(episode.events)} outcome={worst as FleetEventOutcome} />
         <span>
           <span className="dt-eptitle">{title}</span>
@@ -388,7 +389,7 @@ function EpisodeCard({
           </time>
           {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
         </span>
-      </button>
+      </Button>
       {open ? (
         <div className="dt-epbody">
           <ol className="dt-stream">

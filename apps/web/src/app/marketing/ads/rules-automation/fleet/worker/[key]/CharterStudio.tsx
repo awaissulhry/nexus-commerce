@@ -282,10 +282,10 @@ export function CharterStudio({
       ) : null}
 
       <div className="acr-cs-history">
-        <button className="acr-fl-checkstoggle" onClick={() => setShowHistory(!showHistory)}>
+        <Button variant="quiet" size="xs" inline className="acr-fl-checkstoggle" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>
           <History size={13} /> {data.revisions.length} saved revision
           {data.revisions.length === 1 ? '' : 's'}
-        </button>
+        </Button>
         {showHistory ? (
           <ul className="acr-cs-revlist">
             {data.source === 'revision' ? (

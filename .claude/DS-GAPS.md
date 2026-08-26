@@ -257,3 +257,35 @@ better answer — that is what this call site did.
 - `Column.render` in `DataGrid` receives only `(row)` — no index — so an ordinal "#" column cannot be written. Numbering rows is a normal thing to want from a grid, and the workaround (an index Map built per render) exists only to avoid a quadratic `indexOf` per cell. Suggest `render: (row, index) => ReactNode`, which is additive and breaks no existing consumer — apps/web/src/design-system/components/DataGrid.tsx
 - ✅ SELF-AUDIT (DS session) — swept every DS rule that sets BOTH a token colour and a token background: 113 pairs, **16 were sub-AA**, now **0**. Not filed by anyone; found by auditing my own session's output after the Stepper regression showed I ship bugs too. Fixed at the TOKEN level where possible so every consumer moves at once: `--nds-pill-warning-fg` was `--nds-amber-text` (4.39 on its own pill) → `--nds-warning-text` (7.99); `--nds-pill-neutral-fg` 4.18 → `--nds-text-2` (5.22). Rule level: `--nds-primary` used as TEXT on its own washes (4.17–4.36, nine rules) → `--nds-text-link`; `--nds-text-3` as text (2.74–3.10, three rules) → `--nds-text-muted`/`-2`; `.nds-navbadge` white on `--nds-danger` 3.91 → on `--nds-danger-strong` 7.53. Exempt and left alone: `:disabled` text (WCAG-exempt) and `.nds-empty .ico` (an icon, 3:1).
 - `.az-bias-edit` (a joined −/number/+ stepper: one shared border, hairline dividers between three controls) → the DS has no numeric stepper, and building one from `Button` + `Input` + `Button` gives three separate boxes rather than one control. Left raw in the placement cockpit — apps/web/src/app/marketing/ads-console/amazon.css:230
+
+## No disclosure primitive, and `TabItem` has no `title`
+*Session 1 · ROUND 2 · 2026-08-26 · found converting `rules-automation/fleet/`*
+
+**1. Nothing in the DS opens what sits under it.** `primitives/` and `components/` hold no
+Disclosure, Accordion, Collapsible or Details. The Agent Fleet alone hand-rolled the same control
+**eight times** — `acr-fl-checkstoggle` (×4), `acr-fl-runhead`, `acr-fl-rawtoggle`, `dt-ephead`,
+`acr-fln-expand` — all a text-and-chevron row that toggles a block beneath it, all resetting
+`border`/`background`/`padding`/`cursor` by hand. `Button variant="quiet" inline` covers the
+chrome, which is what they are now, but nothing in the DS owns the *pattern*: the chevron
+direction, the `aria-expanded` wiring, or the id linking the trigger to the region. Measured while
+converting: **five of the eight had no `aria-expanded` at all**, so a reader was never told whether
+the section was open. A primitive would have made that impossible rather than a thing each call
+site remembers.
+
+**2. `.nds-btn.quiet` declares `color: inherit`,** deliberately and well documented — but it means
+any call site that *does* want its own colour must write `.nds-btn.my-class` rather than
+`.my-class`, because a bare class at (0,1,0) loses to (0,2,0). Worth one line in the docblock;
+five call sites here would have silently taken their container's colour otherwise.
+
+**3. `TabItem` has no `title`.** Converting `ApprovalInbox`'s view bar to `Tabs` would have dropped
+the only explanation of what each view holds ("Requests that ran out of time before anyone answered
+them"). Handled by moving the active view's hint under the bar as visible text — better than the
+tooltip it replaced, since a `title` reaches neither keyboard nor touch. Same shape of answer as
+the `SegmentedOption.disabled` gap above: the DS not having the prop pushed the call site toward
+visible text, which was the right place for it. That is worth saying in the `Tabs` docblock rather
+than adding the prop.
+
+**4. `Tabs` renders `role="tab"` with no way to name a panel.** No `aria-controls`, no
+`id`/`aria-labelledby` pairing with the region a tab switches. Every hand-rolled tablist in this
+console has the same hole and the DS inherits it. Low priority — but if `Tabs` is the console's
+answer for tab bars, the panel association belongs in it, not in each caller.

@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Minus, X } from 'lucide-react'
 
 /* ── shapes (mirror the API; loose where the payload is Json) ─────────── */
@@ -284,10 +285,10 @@ export function PlanStory({ plan, labels }: { plan: StoryPlan; labels: PlanLabel
       {/* the twelve checks */}
       {checks.length > 0 ? (
         <div className="acr-fl-checks">
-          <button className="acr-fl-checkstoggle" onClick={() => setOpenChecks(!openChecks)}>
+          <Button variant="quiet" size="xs" inline  className="acr-fl-checkstoggle" onClick={() => setOpenChecks(!openChecks)}>
             {openChecks ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             The critic ran {checks.length} checks — {failed.length} failed
-          </button>
+          </Button>
           {openChecks ? (
             <ul>
               {checks.map((c) => (
@@ -307,18 +308,18 @@ export function PlanStory({ plan, labels }: { plan: StoryPlan; labels: PlanLabel
       {/* the director's own words */}
       {narrativeParts.length > 0 ? (
         <div className="acr-fl-narrative">
-          <button className="acr-fl-checkstoggle" onClick={() => setOpenNarrative(!openNarrative)}>
+          <Button variant="quiet" size="xs" inline  className="acr-fl-checkstoggle" onClick={() => setOpenNarrative(!openNarrative)}>
             {openNarrative ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             The director&apos;s reasoning, in its own words
-          </button>
+          </Button>
           {openNarrative ? narrativeParts.map((p, i) => <p key={i}>{p}</p>) : null}
         </div>
       ) : null}
 
       {/* depth 3 — the raw row */}
-      <button className="acr-fl-rawtoggle" onClick={() => setOpenRaw(!openRaw)}>
+      <Button variant="quiet" size="xs" inline  className="acr-fl-rawtoggle" onClick={() => setOpenRaw(!openRaw)}>
         {openRaw ? 'hide' : 'show'} raw data
-      </button>
+      </Button>
       {openRaw ? (
         <pre className="acr-fl-raw">{JSON.stringify(plan, null, 2)}</pre>
       ) : null}
