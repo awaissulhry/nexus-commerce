@@ -118,7 +118,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // ── Tier 2: semantic roles (components consume these) ─────────────
   { section: 'Tier 2: semantic roles', name: '--nds-text', value: 'var(--nds-grey-900)' },
   { name: '--nds-text-2', value: 'var(--nds-grey-600)' },
-  { name: '--nds-text-3', value: 'var(--nds-grey-500)' },
+  // #7e8796, was #8a93a1. --nds-text-3 is the ICON tier, so its floor is 3:1 — and it cleared that
+  // on a white card (3.10) while missing it on the ads console's own ground (#f4f6f9, 2.87) and on
+  // --nds-surface-sunken (2.74). Same shape as --nds-primary being 4.79 on a card and 4.42 on the
+  // shell: one token, one ground either side of the line. #7e8796 is the SMALLEST move that clears
+  // 3:1 on all three (3.62 / 3.35 / 3.20), so nothing shifts more than it must. The dark override
+  // is untouched and already clears 4.62-5.20.
+  { name: '--nds-text-3', value: '#7e8796' },
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },

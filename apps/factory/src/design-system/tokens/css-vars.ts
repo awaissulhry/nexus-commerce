@@ -71,7 +71,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // ── Tier 2: semantic roles (components consume these) ─────────────
   { section: 'Tier 2: semantic roles', name: '--nds-text', value: 'var(--nds-grey-900)' },
   { name: '--nds-text-2', value: 'var(--nds-grey-600)' },
-  { name: '--nds-text-3', value: 'var(--nds-grey-500)' },
+  { name: '--nds-text-3', value: '#7e8796' },
   // 5.01:1 on --nds-surface. --nds-text-3 is 3.10:1 and fails AA as body text; muted is the
   // tier to use for secondary copy. Ported from apps/web 2026-08-25.
   { name: '--nds-text-muted', value: '#667080' },

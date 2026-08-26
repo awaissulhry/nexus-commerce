@@ -1985,6 +1985,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 /* Cells align to the TOP, not the middle. A row whose tallest cell wraps to two lines pushed
    every single-line neighbour to its vertical centre, so ten converted tables each carried a
    shared `vertical-align: top` override. Top is what a data grid wants. */
-.nds-grid tbody td {
+.nds-grid tbody td,
+.nds-grid thead th {
   vertical-align: top;
 }

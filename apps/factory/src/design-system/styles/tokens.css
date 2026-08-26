@@ -58,7 +58,7 @@
   /* ── Tier 2: semantic roles ── */
   --nds-text: var(--nds-grey-900);
   --nds-text-2: var(--nds-grey-600);
-  --nds-text-3: var(--nds-grey-500);
+  --nds-text-3: #7e8796;
   --nds-text-muted: #667080;
   --nds-text-strong: var(--nds-grey-700);
   --nds-text-disabled: var(--nds-grey-400);
