@@ -93,3 +93,22 @@ console.log(`IMMUNE (cannot see CAMPAIGN-only duplicates): ${immune.length}`)
 console.log(`EXPOSED: ${exposed.length}\n`)
 console.log('── exposed ──')
 exposed.forEach((h) => console.log(`   x ${h.at}`))
+
+/**
+ * Whether that exposure is currently REACHABLE.
+ *
+ * This is a code audit: it counts reads that would be wrong IF marked rows existed, and it will
+ * go on reporting 36 for as long as those reads are written that way. AX3 removed the rows, so
+ * the number to act on is this one — a standing check that nothing has put them back.
+ */
+const { default: prisma } = await import('../src/db.js')
+const live = Number((await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+  `SELECT COUNT(*)::int AS n FROM "AmazonAdsDailyPerformance" WHERE "reportRunId" = 'ams-stream'`))[0].n)
+await prisma.$disconnect()
+
+console.log(`\nmarked rows in the live table RIGHT NOW: ${live}`)
+console.log(live === 0
+  ? `   -> the ${exposed.length} exposed read(s) have nothing to over-count. AX3 archived them;\n` +
+    '      the guards stay as the defence if an ingest path ever writes this grain again.'
+  : `   -> 🔴 ${live} row(s) are back. ${exposed.length} read(s) are over-reporting NOW.\n` +
+    '      Find the writer before archiving again — a second cleanup without one is a treadmill.')
