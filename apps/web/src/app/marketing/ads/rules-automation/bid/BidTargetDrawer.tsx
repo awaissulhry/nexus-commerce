@@ -64,7 +64,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { BidSpark, type SparkPoint } from './BidSpark'
 import { resolveBidStates } from './bidState'
 import type { BidTargetRow } from './types'
-import { Checkbox } from '@/design-system/primitives'
+import { Checkbox, ToolbarButton } from '@/design-system/primitives'
 
 /** The subset of `ChangeRow` this drawer reads. Mirrors `ads-changes.service.ts`. */
 interface ChangeRow {
@@ -211,7 +211,7 @@ export function BidTargetDrawer({ targetId, row, loading = false, onClose }: {
                 : loading ? 'loading…' : 'outside the current view'}
             </span>
           </div>
-          <button type="button" data-autofocus onClick={close} aria-label="Close"><X size={18} aria-hidden /></button>
+          <ToolbarButton data-autofocus icon={<X size={18} aria-hidden />} label="Close" tooltip={false} onClick={close} />
         </div>
 
         <div className="h10-au-db">

@@ -27,6 +27,7 @@
  * the race, so the button stays until the row leaves the queue.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Clock, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -114,9 +115,9 @@ export function BidStagedTray() {
             <span className="t" title={it.campaignName ?? undefined}>{it.entityName}</span>
             <span className="nw">{eurFromCents(it.oldValue)} → <b>{eurFromCents(it.newValue)}</b></span>
             <span className="nw cd">{remaining(it.holdUntil)}</span>
-            <button type="button" disabled={busy === it.queueId} title="Discard before it reaches Amazon" onClick={() => void discard(it.queueId)}>
+            <Button variant="danger-outline" size="xs" disabled={busy === it.queueId} title="Discard before it reaches Amazon" onClick={() => void discard(it.queueId)}>
               <Trash2 size={12} aria-hidden /> Discard
-            </button>
+            </Button>
           </li>
         ))}
         {items.length > 8 && <li className="more">…and {items.length - 8} more in the hold</li>}

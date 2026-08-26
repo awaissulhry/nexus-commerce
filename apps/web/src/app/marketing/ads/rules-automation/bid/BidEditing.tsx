@@ -96,9 +96,9 @@ export function BidSelectionActions({ ids, clear, rows, reload }: {
     <>
       <span className="h10-bd4-bar">
         {(['set', 'boost', 'win'] as Mode[]).map((m) => (
-          <button key={m} type="button" className="h10-bd4-verb" onClick={() => setMode(m)}>
+          <Button key={m} variant="tonal" size="xs" onClick={() => setMode(m)}>
             <Pencil size={12} aria-hidden /> {MODE_LABEL[m]}
-          </button>
+          </Button>
         ))}
       </span>
       {mode != null && (

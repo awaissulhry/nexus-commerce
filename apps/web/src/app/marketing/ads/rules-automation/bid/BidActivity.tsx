@@ -34,6 +34,7 @@
  * `campaignId` param cannot express market/portfolio/line), and the count line names the window.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { FilterChip } from '@/design-system/primitives'
 import { DataGrid } from '@/design-system/components'
 import Link from 'next/link'
 import { Activity, AlertTriangle, ExternalLink, ShieldAlert } from 'lucide-react'
@@ -147,9 +148,13 @@ export function BidActivity({ scope, campaigns, loading }: BidSlotProps) {
         <>
           <div className="h10-bd8-chips" role="group" aria-label="Delivery state">
             {(['all', 'applied', 'failed', 'norecord'] as DeliveryChip[]).map((c) => (
-              <button key={c} type="button" className={`h10-bd8-chip${chip === c ? ' on' : ''}`} aria-pressed={chip === c} title={CHIP_TITLE[c]} onClick={() => setChip(c)}>
-                <b>{counts[c]}</b> {CHIP_LABEL[c]}
-              </button>
+              // The count is the DS `count` prop rather than a `<b>` inside the label, so it
+              // lands in the chip's own count slot and reads as a facet size, not as part of
+              // the words. It moves to the right of the label, which is where every other chip
+              // in the console puts it.
+              <FilterChip key={c} pressed={chip === c} count={counts[c]} title={CHIP_TITLE[c]} onClick={() => setChip(c)}>
+                {CHIP_LABEL[c]}
+              </FilterChip>
             ))}
             {feed != null && feed.length >= 80 && <span className="h10-bd8-cap">showing the latest 80 — older writes are in the change log</span>}
           </div>

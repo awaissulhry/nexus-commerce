@@ -51,7 +51,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
-import { Button, Input, SegmentedControl, Select } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -464,9 +464,13 @@ export function BidClient() {
         <span className="h10-bd6-cell">
           <BidderCell kind={r.bidder} name={r.bidderName} />
           {/* S6 — assignment lives at the grain the bidder is a fact of. */}
-          <button type="button" className="h10-bd6-edit" title={`Assign a bidder to ${r.name}`} onClick={() => setGoalFor(r)} aria-label={`Assign a bidder to ${r.name}`}>
-            <Pencil size={11} aria-hidden />
-          </button>
+          <ToolbarButton
+            size="sm" className="h10-bd6-edit"
+            icon={<Pencil size={11} aria-hidden />}
+            label={`Assign a bidder to ${r.name}`}
+            tooltip={false}
+            onClick={() => setGoalFor(r)}
+          />
         </span>
       ),
       sortValue: (r) => `${r.bidder}:${r.bidderName ?? ''}`,
@@ -744,10 +748,10 @@ export function BidClient() {
   const toolbarRight = (
     <span className="h10-bd-win">
       {refresh.stale && (
-        <button type="button" className="h10-bd-stale" onClick={() => setReloadTick((n) => n + 1)}
+        <Button variant="warning" size="xs" onClick={() => setReloadTick((n) => n + 1)}
           title="A bid, a target or a campaign changed since this view was loaded. Nothing has been reordered underneath you — click to pick it up.">
           <RefreshCw size={12} /> Changed since you loaded
-        </button>
+        </Button>
       )}
       <Select
         size="xs"
@@ -819,9 +823,9 @@ export function BidClient() {
           {strip.map((c) => (
             c.apply
               ? (
-                <button key={c.key} type="button" title={c.tip} className={`h10-bd-cell ${c.tone ?? ''} ${c.on ? 'on' : ''}`} onClick={c.apply}>
+                <Button key={c.key} title={c.tip} className={`h10-bd-cell ${c.tone ?? ''}`} active={c.on} aria-pressed={c.on} onClick={c.apply}>
                   <b>{c.n}</b><span>{c.label}</span>
-                </button>
+                </Button>
               )
               : (
                 <span key={c.key} title={c.tip} className={`h10-bd-cell flat ${c.tone ?? ''}`}>
