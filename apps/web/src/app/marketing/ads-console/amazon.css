@@ -1619,3 +1619,12 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-spend-grid tr.on td { background: var(--bg3); }
 .az-spend-chg { color: var(--navy); font-weight: 700; }
 .az-spend-was { display: block; font-size: 9.5px; color: var(--ink3); margin-top: 2px; }
+
+/* Child rows inside a DS `DataGrid`. Every `.childrow` rule in this file is scoped under
+   `.az-table` — the ninth class this session to die on contact with `.nds-grid`, and the one
+   that carries the whole parent/child distinction. `.nds-grid td` sets its own background, so
+   the sticky-cell variants collapse into one rule: the grid's sticky cells are `td.sticky`,
+   not `.az-cellsticky`/`.az-prodstick`.
+   `.childname` and `.childmsg` are UNSCOPED and carry the indent and the tree elbow unchanged. */
+.nds-grid tbody tr.childrow td { background: var(--bg3); padding-top: 9px; padding-bottom: 9px; }
+.nds-grid tbody tr.childrow:hover td { background: var(--bg2); }

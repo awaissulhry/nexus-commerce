@@ -10,9 +10,10 @@
  * Data: GET /advertising/by-product (+ /by-product/campaigns for expansion).
  */
 
-import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search, ChevronDown, ChevronRight, RefreshCw, Download, Image as ImageIcon, ChevronLeft, ChevronsLeft, ChevronsRight } from 'lucide-react'
-import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
@@ -26,6 +27,55 @@ interface Camp { id: string; name: string; marketplace: string | null; status: s
 
 const MODES = [{ k: 'advertised', label: 'Advertised products' }, { k: 'opportunity', label: 'Opportunities' }, { k: 'unmatched', label: 'Unmatched ASINs' }]
 const RANGES = [{ d: 1, label: 'Today' }, { d: 7, label: 'Last 7 days' }, { d: 14, label: 'Last 14 days' }, { d: 30, label: 'Last 30 days' }, { d: 60, label: 'Last 60 days' }, { d: 90, label: 'Last 90 days' }]
+
+/** A product row, or one of its campaign rows. They live in ONE array so the campaign metrics
+ *  stay under the same column headers as the product's — comparing a campaign's spend to its
+ *  product's, down the column, is the whole point of expanding. `DataGrid.renderExpanded`
+ *  cannot do that: it renders a single full-width `<td colSpan>`, which is a different feature. */
+type GridRow =
+  | { kind: 'product'; p: Prod }
+  | { kind: 'child'; parentId: string; c: Camp }
+  | { kind: 'note'; parentId: string; text: string }
+
+/** Sorting is the component's, so the spec only describes cells. `sortable` is still on every
+ *  column — the grid reports the click and the component re-sorts `filtered`, which keeps the
+ *  parent/child grouping intact. */
+const productColumns = (ctx: {
+  COLS: ReadonlyArray<{ key: string; label: string }>
+  cell: (key: string, p: Prod) => ReactNode
+  childCell: (key: string, c: Camp) => ReactNode
+  expanded: Set<string>
+  toggleExpand: (id: string) => void
+}): Array<Column<GridRow>> => [
+  { key: 'product', label: 'Product', sticky: true, width: 320, sortable: true, render: (r) => {
+    if (r.kind === 'note') return <span className="childmsg">{r.text}</span>
+    if (r.kind === 'child') return (
+      <span className="childname"><span className="gname">{r.c.name}</span>
+        {r.c.status === 'ENABLED' ? <span className="az-badge deliver">Delivering</span> : <span className="az-badge paused">{titlecase(r.c.status || 'Paused')}</span>}
+      </span>
+    )
+    const p = r.p
+    const isOpen = ctx.expanded.has(p.id)
+    const canExpand = (p.campaignCount ?? 0) > 0 && !p.unmatched
+    return (
+      <span className="az-prod">
+        {canExpand
+          ? <button type="button" className={`az-expand ${isOpen ? 'open' : ''}`} onClick={() => ctx.toggleExpand(p.id)} aria-label={isOpen ? 'Collapse campaigns' : 'Expand campaigns'} aria-expanded={isOpen}><ChevronRight size={15} /></button>
+          : <span style={{ width: 19, display: 'inline-block' }} />}
+        {p.photoUrl ? <img className="ph" src={p.photoUrl} alt="" /> : <span className="ph ph0"><ImageIcon size={16} /></span>}
+        <span className="meta">
+          {p.unmatched ? <span className="nm" style={{ color: 'var(--ink)' }}>{p.name}</span> : <a className="nm" href={`/products/${p.id}`} target="_blank" rel="noopener noreferrer">{p.name}</a>}
+          <span className="ids">{p.asin ? `ASIN ${p.asin}` : ''}{p.asin && p.sku ? ' · ' : ''}{p.sku ? `SKU ${p.sku}` : ''}{p.isParent && p.childCount ? ` · ${p.childCount} variants` : ''}</span>
+        </span>
+      </span>
+    )
+  } },
+  ...ctx.COLS.map((c): Column<GridRow> => ({
+    key: c.key, label: c.label, align: 'right', sortable: true,
+    render: (r) => (r.kind === 'product' ? ctx.cell(c.key, r.p) : r.kind === 'child' ? ctx.childCell(c.key, r.c) : null),
+  })),
+]
+
 const COLS = [
   { key: 'spend', label: 'Spend' }, { key: 'sales', label: 'Sales' }, { key: 'acos', label: 'ACOS' }, { key: 'roas', label: 'ROAS' },
   { key: 'units', label: 'Units' }, { key: 'tacos', label: 'TACOS' }, { key: 'trueProfit', label: 'True profit' }, { key: 'margin', label: 'Net margin' },
@@ -108,7 +158,6 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
   const lastRow = Math.min(curPage * pageSize, filtered.length)
 
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
-  const arrow = (k: string) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
 
   const cell = (key: string, p: Prod): ReactNode => {
     switch (key) {
@@ -148,7 +197,25 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
     const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); const a = document.createElement('a'); a.href = url; a.download = 'advertised-products.csv'; a.click(); URL.revokeObjectURL(url)
   }
 
-  const allChecked = paged.length > 0 && paged.every((p) => sel.has(p.id))
+  /** Parent rows with their expanded campaigns interleaved, in display order. Flattening here
+   *  rather than nesting is what keeps a campaign's metrics under the same column headers as its
+   *  product's. The four states the old `<tbody>` spelled out inline — loading, error, empty,
+   *  rows — become `note` rows, which occupy the product column and leave the metrics blank,
+   *  exactly as the `colSpan` version did. */
+  const gridRows = useMemo<GridRow[]>(() => {
+    const out: GridRow[] = []
+    for (const p of paged) {
+      out.push({ kind: 'product', p })
+      if (!expanded.has(p.id)) continue
+      const data = camps[`${p.id}:${days}`]
+      if (data === undefined || data === 'loading') out.push({ kind: 'note', parentId: p.id, text: 'Loading campaigns…' })
+      else if (data === 'error') out.push({ kind: 'note', parentId: p.id, text: 'Couldn’t load campaigns.' })
+      else if (data.length === 0) out.push({ kind: 'note', parentId: p.id, text: 'No campaigns advertise this product in range.' })
+      else for (const c of data) out.push({ kind: 'child', parentId: p.id, c })
+    }
+    return out
+  }, [paged, expanded, camps, days])
+
 
   return (
     <div className="az-wrap">
@@ -176,55 +243,26 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
         <Button variant="quiet" size="sm" onClick={exportCsv}><Download size={14} /> Export <ChevronDown size={14} /></Button>
       </div>
 
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead>
-            <tr>
-              <th className="l az-cellsticky"><Checkbox checked={allChecked} aria-label="Select all products on this page" onChange={(e) => setSel((s) => { const n = new Set(s); paged.forEach((p) => { if (e.target.checked) n.add(p.id); else n.delete(p.id) }); return n })} /></th>
-              <th className="l az-prodstick" onClick={() => toggleSort('product')}>Product{arrow('product')}</th>
-              {COLS.map((c) => <th key={c.key} onClick={() => toggleSort(c.key)}>{c.label}{arrow(c.key)}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && <tr><td className="az-empty" colSpan={2 + COLS.length}>{loading ? 'Loading…' : 'No products in this view.'}</td></tr>}
-            {paged.map((p) => {
-              const isOpen = expanded.has(p.id)
-              const data = isOpen ? camps[`${p.id}:${days}`] : undefined
-              const canExpand = (p.campaignCount ?? 0) > 0 && !p.unmatched
-              return (
-                <Fragment key={p.id}>
-                  <tr className={sel.has(p.id) ? 'sel' : ''}>
-                    <td className="l az-cellsticky"><Checkbox checked={sel.has(p.id)} aria-label={`Select ${p.name}`} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} /></td>
-                    <td className="l az-prodstick">
-                      <span className="az-prod">
-                        {canExpand
-                          ? <button className={`az-expand ${isOpen ? 'open' : ''}`} onClick={() => toggleExpand(p.id)} aria-label={isOpen ? 'Collapse campaigns' : 'Expand campaigns'} aria-expanded={isOpen}><ChevronRight size={15} /></button>
-                          : <span style={{ width: 19, display: 'inline-block' }} />}
-                        {p.photoUrl ? <img className="ph" src={p.photoUrl} alt="" /> : <span className="ph ph0"><ImageIcon size={16} /></span>}
-                        <span className="meta">
-                          {p.unmatched ? <span className="nm" style={{ color: 'var(--ink)' }}>{p.name}</span> : <a className="nm" href={`/products/${p.id}`} target="_blank" rel="noopener noreferrer">{p.name}</a>}
-                          <span className="ids">{p.asin ? `ASIN ${p.asin}` : ''}{p.asin && p.sku ? ' · ' : ''}{p.sku ? `SKU ${p.sku}` : ''}{p.isParent && p.childCount ? ` · ${p.childCount} variants` : ''}</span>
-                        </span>
-                      </span>
-                    </td>
-                    {COLS.map((c) => <td key={c.key} className="num">{cell(c.key, p)}</td>)}
-                  </tr>
-                  {isOpen && (data === undefined || data === 'loading') && <tr className="childrow"><td className="l az-cellsticky" /><td className="l az-prodstick" colSpan={1 + COLS.length}><span className="childmsg">Loading campaigns…</span></td></tr>}
-                  {isOpen && data === 'error' && <tr className="childrow"><td className="l az-cellsticky" /><td className="l az-prodstick" colSpan={1 + COLS.length}><span className="childmsg">Couldn’t load campaigns.</span></td></tr>}
-                  {isOpen && Array.isArray(data) && data.length === 0 && <tr className="childrow"><td className="l az-cellsticky" /><td className="l az-prodstick" colSpan={1 + COLS.length}><span className="childmsg">No campaigns advertise this product in range.</span></td></tr>}
-                  {isOpen && Array.isArray(data) && data.map((c) => (
-                    <tr key={c.id} className="childrow">
-                      <td className="l az-cellsticky" />
-                      <td className="l az-prodstick"><span className="childname"><span className="gname">{c.name}</span>{c.status === 'ENABLED' ? <span className="az-badge deliver">Delivering</span> : <span className="az-badge paused">{titlecase(c.status || 'Paused')}</span>}</span></td>
-                      {COLS.map((col) => <td key={col.key} className="num">{childCell(col.key, c)}</td>)}
-                    </tr>
-                  ))}
-                </Fragment>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<GridRow>
+        rows={gridRows}
+        rowKey={(r) => (r.kind === 'product' ? r.p.id : r.kind === 'child' ? `c:${r.parentId}:${r.c.id}` : `n:${r.parentId}`)}
+        columns={productColumns({ COLS, cell, childCell, expanded, toggleExpand })}
+        selectable
+        selected={sel}
+        onSelectedChange={setSel}
+        rowSelectable={(r) => r.kind === 'product'}
+        rowSelectableHint="Campaign rows are not selectable"
+        selectAllHint="Select every product on this page"
+        rowClassName={(r) => (r.kind === 'child' ? 'childrow' : undefined)}
+        /* CONTROLLED, and deliberately `null`. The rows array is parent-then-children, so
+           letting the grid sort it would tear children away from their parent. The component
+           sorts `filtered` and flattens afterwards; `null` means "controlled and currently
+           unsorted — render `rows` as given", which is exactly that contract. The headers stay
+           clickable through `onSortChange`. */
+        sort={null}
+        onSortChange={({ key }) => toggleSort(key)}
+        emptyState={loading ? 'Loading…' : 'No products in this view.'}
+      />
 
       <div className="az-pager">
         <span className="count">{filtered.length} products · {mode} · last {days} days{loading ? ' · updating…' : ''}</span>
