@@ -256,6 +256,11 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-surface-sunken', value: '#1a2330' },
   { name: '--nds-rail-bg', value: '#18263b' },
 
+  // Three tokens with no dark value kept their LIGHT one on a dark canvas — see apps/web.
+  { name: '--nds-surface-hover', value: 'var(--nds-surface-raised)' },
+  { name: '--nds-text-strong', value: 'var(--nds-text)' },
+  { name: '--nds-text-muted', value: 'var(--nds-text-2)' },
+
   { name: '--nds-border', value: '#2f3a4a' },
   { name: '--nds-border-subtle', value: '#26323f' },
   { name: '--nds-border-strong', value: '#46505f' },

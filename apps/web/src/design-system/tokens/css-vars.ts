@@ -440,6 +440,19 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-surface-sunken', value: '#1a2330' },
   { name: '--nds-rail-bg', value: '#18263b' },
 
+  // Three tokens that had NO dark value, so they kept their LIGHT one on a dark canvas.
+  // Measured 2026-08-26 across every DS rule setting both a token colour and a token background:
+  //
+  //   --nds-surface-hover   stayed #f1f4f8, so `--nds-text` on it was 1.08:1 in EIGHT rules —
+  //                         a hover state that erases its own label. → surface-raised, 11.81:1
+  //   --nds-text-strong     stayed #3a4452 on a dark surface: 1.54:1  → --nds-text, 12.73:1
+  //   --nds-text-muted      stayed #667080: 3.04:1                    → --nds-text-2, 7.38:1
+  //
+  // Aliases to values this block already chose, not new colours — nothing is invented here.
+  { name: '--nds-surface-hover', value: 'var(--nds-surface-raised)' },
+  { name: '--nds-text-strong', value: 'var(--nds-text)' },
+  { name: '--nds-text-muted', value: 'var(--nds-text-2)' },
+
   { name: '--nds-border', value: '#2f3a4a' },
   { name: '--nds-border-subtle', value: '#26323f' },
   { name: '--nds-border-strong', value: '#46505f' },

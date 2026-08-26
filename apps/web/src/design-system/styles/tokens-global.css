@@ -279,6 +279,9 @@
   --nds-surface-raised: #1f2c3d;
   --nds-surface-sunken: #1a2330;
   --nds-rail-bg: #18263b;
+  --nds-surface-hover: var(--nds-surface-raised);
+  --nds-text-strong: var(--nds-text);
+  --nds-text-muted: var(--nds-text-2);
   --nds-border: #2f3a4a;
   --nds-border-subtle: #26323f;
   --nds-border-strong: #46505f;
