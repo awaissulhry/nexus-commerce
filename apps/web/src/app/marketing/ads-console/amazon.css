@@ -28,11 +28,17 @@
      Pinned by referencing the RAMP, which `.dark` never overrides — 54 tokens redefined there,
      zero of them ramp steps — the same strategy products-next-shell.css documents, and no raw
      hex. Every value below is measured on this console's white ground. */
-  --nds-text-link: var(--nds-blue-700);      /* #1a60c4  5.98:1 */
-  --nds-warning-text: var(--nds-amber-700);  /* #c2410c  5.18:1 */
-  --nds-danger-text: var(--nds-red-700);     /* #c0392b  5.44:1 */
-  --nds-danger-strong: var(--nds-red-700);   /* #c0392b  5.44:1 */
-  --nds-success-text: var(--nds-green-700);  /* #15803d  5.02:1 */
+  --nds-text-link: var(--nds-blue-700);      /* #1a60c4  5.98:1 — exact ramp match */
+  /* The other four are the LITERAL light values, not ramp steps, and that is deliberate.
+     Pinning them through the ramp cost contrast, because no ramp step is dark enough:
+     danger 7.36 → 5.44, warning 8.87 → 5.18, success 7.63 → 5.02. All still AA, all still a
+     LOWERING — and the rule these fixes exist to serve says a substitution may only ever raise.
+     Four literal hex against the raw-hex ratchet's 23 remaining headroom in this file is the
+     cheaper price. The ratchet guards against drift; it does not outrank the thing it protects. */
+  --nds-warning-text: #6d3f10;   /* 8.87:1 */
+  --nds-danger-text: #9c2f2a;    /* 7.36:1 */
+  --nds-danger-strong: #a3211a;  /* 7.53:1 */
+  --nds-success-text: #146034;   /* 7.63:1 */
   height: 100vh; overflow: hidden; display: flex; flex-direction: column;
   background: var(--bg); color: var(--ink);
   font-family: 'Amazon Ember', 'Helvetica Neue', Helvetica, Arial, sans-serif;
