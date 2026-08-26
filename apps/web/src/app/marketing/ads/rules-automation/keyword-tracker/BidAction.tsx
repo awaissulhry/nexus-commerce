@@ -295,9 +295,9 @@ export function BidAction({
 
           {p.highestUniformAllowedCents != null && p.excludedByReason.over_campaign_ceiling > 0 && (
             <p className="h10-kt6-hint">
-              <button type="button" onClick={() => setBidEuros((p.highestUniformAllowedCents! / 100).toFixed(2))}>
+              <Button variant="link" inline onClick={() => setBidEuros((p.highestUniformAllowedCents! / 100).toFixed(2))}>
                 Use {eur(p.highestUniformAllowedCents)} instead
-              </button>{' '}
+              </Button>{' '}
               — the highest bid every campaign here would accept.
             </p>
           )}
@@ -380,29 +380,30 @@ export function BidAction({
                   action for 24 hours afterwards.
                 </p>
                 <div className="h10-kt6-cbtns">
-                  <button type="button" className="yes" onClick={() => void apply()} disabled={loading}>
+                  <Button variant="warning" size="xs" className="yes" onClick={() => void apply()} disabled={loading}>
                     {loading ? 'Writing…' : 'Yes, write it'}
-                  </button>
+                  </Button>
                   <Button size="xs" onClick={() => setApplyConfirm(false)}>
                     <X size={12} /> Cancel
                   </Button>
                 </div>
               </div>
             ) : (
-              <button type="button" className="h10-kt7-go" onClick={() => setApplyConfirm(true)} disabled={loading}>
+              /* Amber, not blue: this is the one control on the page that reaches Amazon. */
+              <Button variant="warning" block className="h10-kt7-go" onClick={() => setApplyConfirm(true)} disabled={loading}>
                 Apply this proposal — writes to Amazon
-              </button>
+              </Button>
             )
           )}
 
           {!confirming ? (
-            <button
-              type="button" className="h10-kt6-go"
+            <Button
+              variant="primary" block className="h10-kt6-go"
               disabled={!p.canPropose || loading}
               onClick={() => { setConfirming(true); setResult(null) }}
             >
               {refused ? 'Refused by the ceiling' : p.changing.targets === 0 ? 'Nothing to propose' : `Propose this change to ${p.changing.targets} target${p.changing.targets === 1 ? '' : 's'}`}
-            </button>
+            </Button>
           ) : (
             /* A confirm step, positioned INSIDE the drawer's own flow rather than fixed — KT.4 paid
                for this: a fixed overlay inside a portalled drawer renders behind it. */
@@ -415,9 +416,9 @@ export function BidAction({
                 anything is written.
               </p>
               <div className="h10-kt6-cbtns">
-                <button type="button" className="yes" onClick={() => void propose()} disabled={loading}>
+                <Button variant="warning" size="xs" className="yes" onClick={() => void propose()} disabled={loading}>
                   {loading ? 'Raising…' : 'Yes, raise the proposal'}
-                </button>
+                </Button>
                 <Button size="xs" onClick={() => setConfirming(false)}>
                   <X size={12} /> Cancel
                 </Button>

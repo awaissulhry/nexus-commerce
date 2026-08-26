@@ -292,3 +292,24 @@ answer for tab bars, the panel association belongs in it, not in each caller.
 - 🔴 OPEN — **dark mode is substantially broken, and it is LIVE.** `use-theme.ts:36` does `root.classList.add('dark')` and the nav rail has a light/dark/system toggle, so this ships. Audited the same 113 DS pairs against the `.dark` block: **41 were sub-AA**, some at **1.08:1** — a hover state that erases its own label. Fixed 13 by aliasing to values the dark block already chose (`--nds-surface-hover` → `surface-raised` 11.81, `--nds-text-strong` → `text` 12.73, `--nds-text-muted` → `text-2` 7.38); **28 remain**. Those need COLOURS CHOSEN, not aliased — the dark block overrides 29 tokens out of ~240, and `--nds-primary` (10 rules), `--nds-primary-soft` (5), `--nds-wash-primary` (2) and every tone wash have no dark value at all. **This is a design decision, not a mechanical fix, so it is left for the user.**
 - 🔴 OPEN — `design-system/styles/workspace-grid.css` is built on RAMP tokens (`--nds-white`, `--nds-grey-25/100/700/900`) rather than semantic ones, which is why it fails in dark mode. The token-guard's ramp rule covers components/primitives/patterns but **not this file**, which is how they survived. Converting it is a prerequisite for dark mode there; adding it to `RAMP_FILES` afterwards would keep it converted.
 - `Listbox` / `DateField` placeholder (`.nds-listbox-btn .ph`) is `--nds-text-3` (#8a93a1) — **3.10:1 at 13px on white**, under AA. Distinct from the `Input ::placeholder` case filed above (that one is `--nds-text-disabled` at 2.04:1 and a pseudo-element; this is a real span in a different component pair). Measured 2026-08-26 on /marketing/ads/campaigns/<id> with the empty states of both: "Select a Portfolio" 3.10, "Enter a Date" 3.10. When a field is empty that string is the control's only visible text, so it is informative, not decorative. The whole rest of that form measures 4.79–15.5. — apps/web/src/design-system/styles/components.css `.nds-listbox-btn .ph`
+
+## `Button variant="primary"` is 4.79:1 — the console's hand-rolled CTAs were higher
+*Session 1 · ROUND 2 · 2026-08-26 · found converting `keyword-tracker/BidAction.tsx`*
+
+`.nds-btn.primary` is `--nds-text-inverse` on `--nds-primary` → white on `--nds-blue-600`
+**#1f6fde**, which measures **4.79:1**. It clears the 4.5:1 floor for normal-size text, so nothing
+here fails — but it is the tightest margin in the system, and it is on the most-used control.
+
+It came up because the Keyword Tracker's Propose button drew white on **#1a5fbe (6.13:1)** by
+hand, and converting it to `primary` *lowers* the ratio. That is the only conversion in this
+half's ~130 that goes down rather than up; every other substitution raised its number, several
+of them off failing values (2.04:1, 3.49:1). Two more hand-rolled CTAs measured in the same pass:
+white on #b45309 (5.02:1) and white on #1a5fbe again.
+
+Worth knowing rather than acting on immediately: three independent authors picked a darker blue
+than the token when they needed white text on it. If `--nds-blue-600` ever moves, it should move
+down. Anything that raises it — a lighter hover, a lighter disabled fill, a `lg` size with the
+same pair — starts from 4.79 and has no room.
+
+Not fixed locally: overriding the brand blue at one call site is how a console ends up with four
+different primary buttons, which is the thing this whole exercise is undoing.

@@ -1411,9 +1411,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* Toolbar: the share-data filter and the brand-term toggle. */
 .h10-kt-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.h10-kt-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 11px; cursor: pointer; }
-.h10-kt-toggle:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
-.h10-kt-toggle.on { color: var(--nds-blue-600); background: var(--nds-blue-100); }
+/* The brand-terms switch is the DS `FilterChip` (pressed state and all) and the Watchlist opener
+   is a plain `Button size="xs"`. Three rules gone — they were two different controls sharing one
+   class, which is how a toggle and a button end up looking identical. */
 .h10-kt-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--nds-text-muted); }
 .h10-kt-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-weight: 700; }
 
@@ -1596,7 +1596,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-wllists { display: flex; flex-direction: column; gap: 5px; width: 100%; }
 .h10-kt-wlrow { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: var(--nds-radius-lg); background: var(--nds-grey-25); font-size: 11.5px; }
 .h10-kt-wlrow.on { background: var(--nds-blue-100); }
-.h10-kt-wlrow .nm { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-grey-900); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.h10-kt-wlrow .nds-btn.nm { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-grey-900); text-align: left; }
 /* #667080 measures 4.95 on white and 4.39 on this row's #f8fafc — a fail. The same token passing
    in one place and failing in another is why contrast is measured against the COMPOSITED
    background rather than the palette. */
@@ -3190,8 +3190,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* the campaign list — collapsed, because `giacca moto` has 53 campaigns and 73 ad groups */
 .h10-kt-drcamps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .h10-kt-drcamps > li { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); overflow: hidden; }
-.h10-kt-drcamps .row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border: 0; background: var(--nds-white); font: inherit; font-size: 11.5px; color: var(--nds-grey-900); cursor: pointer; text-align: left; }
-.h10-kt-drcamps .row:hover { background: var(--nds-grey-25); }
+/* A campaign row that opens its ad groups. `Button variant="quiet" inline` brings the reset and
+   the focus ring; `display: flex` and the row's own padding beat the DS `inline-flex` from
+   `.nds-btn`, so the selector carries it. */
+.h10-kt-drcamps .nds-btn.row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; background: var(--nds-white); font: inherit; font-size: 11.5px; color: var(--nds-grey-900); text-align: left; }
+.h10-kt-drcamps .nds-btn.row:hover { background: var(--nds-grey-25); }
 .h10-kt-drcamps .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .h10-kt-drcamps .st { flex-shrink: 0; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-grey-600); background: var(--nds-grey-75); padding: 1px 6px; border-radius: 5px; }
 .h10-kt-drcamps .st[data-s="ENABLED"] { color: var(--nds-success-text); background: #e7f5ed; }
@@ -3976,7 +3979,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt6-reasons b { color: var(--nds-grey-900); }
 
 .h10-kt6-hint { margin: 0 0 10px; font-size: 11px; color: var(--nds-grey-600); }
-.h10-kt6-hint button { font: inherit; font-weight: 700; color: #1a5fbe; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+/* `Button variant="link" inline`, mid-sentence, so `font: inherit` and the permanent underline —
+   the console's standing answer to --nds-text-link measuring 1.03:1 against body text. */
+.h10-kt6-hint .nds-btn { font: inherit; font-weight: 700; text-decoration: underline; }
 
 /* three states, three colours — a refusal must not look like a note */
 .h10-kt6-blind, .h10-kt6-note, .h10-kt6-ok {
@@ -4012,8 +4017,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt6-confirm { padding: 11px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--nds-radius-sm); }
 .h10-kt6-confirm p { margin: 0 0 9px; font-size: 11.5px; line-height: 1.65; color: var(--nds-grey-900); }
 .h10-kt6-cbtns { display: flex; gap: 7px; }
-.h10-kt6-cbtns .yes { padding: 7px 12px; font-size: 11.5px; font-weight: 800; color: var(--nds-white); background: #b45309; border: 1px solid #b45309; border-radius: 5px; cursor: pointer; }
-.h10-kt6-cbtns .yes:disabled { opacity: .6; cursor: not-allowed; }
+/* Both confirm buttons are `Button variant="warning" size="xs"`; the DS carries the fill and the
+   disabled state. `.yes` keeps its weight — this is the irreversible half of a confirm pair and
+   it should not read the same as Cancel beside it. */
+.h10-kt6-cbtns .nds-btn.yes { font-weight: 800; }
 /* DS-ALIGN — the decline half of each confirm is the DS `Button` at `xs`. The COMMIT half is
    not: its #b45309 amber fill is a deliberate caution and the DS `warning` variant is a TINT. */
 .h10-kt6-foot { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: var(--nds-grey-600); }
@@ -4022,11 +4029,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    Same discipline as KT.6: every colour DECLARED (the drawer portals to body and escapes the light
    pin), the confirm sits in the drawer's own flow rather than fixed, no transitions on anything a
    probe measures, and appended at EOF so source order carries the override. */
-.h10-kt7-go {
-  width: 100%; margin-top: 8px; padding: 9px 12px; font-size: 12px; font-weight: 800; cursor: pointer;
-  color: var(--nds-white); background: #b45309; border: 1px solid #b45309; border-radius: var(--nds-radius-sm);
-}
-.h10-kt7-go:disabled { color: #495260; background: var(--nds-grey-100); border-color: #dde4ec; cursor: not-allowed; }
+/* Apply — `Button variant="warning" block`. The amber pair was white on #b45309 (5.02:1) and the
+   DS warning pair clears it; the disabled treatment came free with the primitive. Amber rather
+   than the page's blue on purpose: this is the one control here that reaches Amazon. */
+.h10-kt7-go { margin-top: 8px; }
 .h10-kt7-apply { margin-top: 8px; padding: 11px 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: var(--nds-radius-sm); }
 .h10-kt7-apply p { margin: 0 0 9px; font-size: 11.5px; line-height: 1.65; color: var(--nds-grey-900); }
 .h10-kt7-done {

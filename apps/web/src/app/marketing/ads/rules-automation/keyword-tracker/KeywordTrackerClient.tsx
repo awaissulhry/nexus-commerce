@@ -44,7 +44,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, SegmentedControl, Select } from '@/design-system/primitives'
+import { Button, FilterChip, SegmentedControl, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -870,14 +870,13 @@ export function KeywordTrackerClient() {
                     { value: 'no', label: 'Not measured' },
                   ]}
                 />
-                <button
-                  type="button"
-                  className={`h10-kt-toggle ${branded ? 'on' : ''}`}
+                <FilterChip
+                  pressed={branded}
                   onClick={() => push({ branded: branded ? '0' : '1' })}
                   title="Our own brand terms flatter every share number on this page, so they are excluded by default"
                 >
                   Brand terms: {branded ? 'included' : 'excluded'}
-                </button>
+                </FilterChip>
                 {/* KT.2 — a real picker, driving ?list=. Rendered as a select only when this market
                     actually has a choice: a one-option dropdown is a control where nothing moves. */}
                 {(data?.lists.length ?? 0) > 1 && (
@@ -892,9 +891,9 @@ export function KeywordTrackerClient() {
                     ))}
                   </Select>
                 )}
-                <button type="button" className="h10-kt-toggle" onClick={() => setEditing(true)}>
+                <Button size="xs" onClick={() => setEditing(true)}>
                   <ListPlus size={12} /> Watchlist
-                </button>
+                </Button>
               </span>
             )}
             toolbarRight={data?.window ? (

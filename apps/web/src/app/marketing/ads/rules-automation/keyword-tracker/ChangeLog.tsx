@@ -43,6 +43,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Bot, Check, Info, Loader2, RotateCcw, User } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
@@ -214,10 +215,10 @@ export function ChangeLog({
                   {/* absent, not greyed, once the window has closed — a disabled button invites a
                       click and then explains nothing */}
                   {it.undo?.eligible && it.undoActionLogId ? (
-                    <button type="button" className="u" disabled={busy === it.id} onClick={() => void undo(it)}>
+                    <Button variant="secondary" size="xs" className="u" disabled={busy === it.id} onClick={() => void undo(it)}>
                       {busy === it.id ? <Loader2 size={11} /> : <RotateCcw size={11} />}
                       {it.undo.groupedWith > 1 ? `Undo all ${it.undo.groupedWith}` : 'Undo'}
-                    </button>
+                    </Button>
                   ) : (
                     <span className="ux" title={it.undo?.reason ?? undefined}>{it.undo?.reason ? shortWhy(it.undo.reason) : '—'}</span>
                   )}

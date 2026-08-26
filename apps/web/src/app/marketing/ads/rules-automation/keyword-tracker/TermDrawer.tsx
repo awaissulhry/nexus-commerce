@@ -32,7 +32,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { DataGrid } from '@/design-system/components'
-import { ToolbarButton } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -121,6 +121,11 @@ export function TermDrawer({
 
   const body = (
     <>
+      {/* DS-ALIGN — the one raw <button> left in keyword-tracker, and deliberately so. This is the
+          drawer's scrim: a full-viewport click-catcher that happens to be focusable, which is how
+          a keyboard user closes the drawer without hunting for the X. Every DS button variant
+          paints a background, a border and a radius; a scrim wants none of those and is not a
+          button in any sense the design system means. */}
       <button type="button" className="h10-kt-dr-back" aria-label="Close" onClick={onClose} />
       <aside className="h10-kt-dr" role="dialog" aria-label={`${term} — detail`}>
         <header className="h10-kt-drhead">
@@ -233,14 +238,14 @@ export function TermDrawer({
                     const isOpen = open.has(c.id)
                     return (
                       <li key={c.id}>
-                        <button type="button" className="row" aria-expanded={isOpen}
+                        <Button variant="quiet" inline className="row" aria-expanded={isOpen}
                           onClick={() => setOpen((prev) => { const n = new Set(prev); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })}>
                           {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                           <span className="nm" title={c.name}>{c.name}</span>
                           <span className="st" data-s={c.status}>{c.status.toLowerCase()}</span>
                           <span className="ct">{c.adGroupCount} ad group{c.adGroupCount === 1 ? '' : 's'}</span>
                           <span className="mt">{c.matchTypes.join('/')}</span>
-                        </button>
+                        </Button>
                         {isOpen && (
                           <ul className="groups">
                             {c.adGroups.map((g) => (

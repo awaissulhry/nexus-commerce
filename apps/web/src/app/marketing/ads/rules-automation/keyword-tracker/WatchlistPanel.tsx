@@ -261,7 +261,7 @@ export function WatchlistPanel({
           <div className="h10-kt-wllists">
             {lists.map((l) => (
               <span key={l.id} className={`h10-kt-wlrow ${l.id === activeId ? 'on' : ''}`}>
-                <button type="button" className="nm" onClick={() => onChanged(l.id)}>{l.name}</button>
+                <Button variant="quiet" size="xs" inline className="nm" onClick={() => onChanged(l.id)}>{l.name}</Button>
                 <span className="ct">{num(l.terms)} terms</span>
                 {l.isDefault && <span className="df"><Star size={10} /> default</span>}
               </span>
