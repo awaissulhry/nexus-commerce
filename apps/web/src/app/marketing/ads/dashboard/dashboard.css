@@ -6,23 +6,23 @@
 @media (max-width: 1180px) { .dash-kpis { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 640px) { .dash-kpis { grid-template-columns: repeat(2, 1fr); } }
 .dash-kpi { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 11px 13px; }
-.dash-kpi-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); display: flex; align-items: center; gap: 5px; }
+.dash-kpi-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); display: flex; align-items: center; gap: 5px; }
 /* ACR.0.5 — a dashed '—' needs to say why. Marks a KPI whose value is absent, not zero. */
 .dash-kpi-why {
   display: inline-flex; align-items: center; justify-content: center;
   width: 12px; height: 12px; border-radius: 50%;
-  border: 1px solid var(--nds-grey-300); color: var(--nds-grey-500);
+  border: 1px solid var(--nds-grey-300); color: var(--nds-text-2);
   font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: 0;
 }
 .dash-kpi-v { font-weight: 800; font-size: 19px; color: var(--nds-grey-900); margin-top: 4px; display: flex; align-items: baseline; gap: 7px; }
 .dd { font-size: 10.5px; font-weight: 800; }
-.dd.up { color: #067d62; } .dd.down { color: var(--nds-red-500); } .dd.flat { color: var(--nds-grey-450); }
+.dd.up { color: #067d62; } .dd.down { color: var(--nds-red-500); } .dd.flat { color: var(--nds-text-muted); }
 
 /* cards */
 .dash-card { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px 16px; }
 .dash-card-h { font-size: 12px; font-weight: 800; color: var(--nds-grey-900); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
 .dash-chart { width: 100%; }
-.dash-empty { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--nds-grey-500); font-size: 13px; }
+.dash-empty { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--nds-text-2); font-size: 13px; }
 .dash-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 1080px) { .dash-row2 { grid-template-columns: 1fr; } }
 
@@ -52,21 +52,21 @@
 .dash-momv { flex-shrink: 0; color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
 .dash-place { margin-top: 12px; border-top: 1px solid var(--nds-grey-100); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .dash-pl { display: flex; align-items: center; gap: 8px; font-size: 10.5px; }
-.dash-pl-k { width: 96px; color: var(--nds-grey-500); font-weight: 700; text-transform: capitalize; }
+.dash-pl-k { width: 96px; color: var(--nds-text-2); font-weight: 700; text-transform: capitalize; }
 .dash-pl-bar { flex: 1; height: 7px; background: var(--nds-grey-100); border-radius: 4px; overflow: hidden; }
 .dash-pl-bar > span { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 4px; }
 .dash-pl-v { width: 34px; text-align: right; font-weight: 700; color: var(--nds-grey-600); }
 
 /* ── ACR.6 (R5) — true-profit ledger: the rows behind the margin KPI ────────── */
-.dash-pnl-count { font-size: 10.5px; font-weight: 700; color: var(--nds-grey-500); }
+.dash-pnl-count { font-size: 10.5px; font-weight: 700; color: var(--nds-text-2); }
 .dash-pnl-tot { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 12px; }
 .dash-pnl-t { background: var(--nds-grey-25); border: 1px solid var(--nds-grey-100); border-radius: 9px; padding: 8px 11px; }
-.dash-pnl-t .k { display: block; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+.dash-pnl-t .k { display: block; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .dash-pnl-t .v { display: block; margin-top: 3px; font-size: 15px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .dash-pnl-t .v.b-good { color: #067d62; } .dash-pnl-t .v.b-warn { color: var(--nds-amber-600); } .dash-pnl-t .v.b-bad { color: var(--nds-red-500); }
 /* The coverage caption under a total — a margin over 40% of revenue and one over
    all of it must not read the same. Mirrors the KPI strip's own explainer. */
-.dash-pnl-t .s { display: block; margin-top: 2px; font-size: 10px; line-height: 1.35; color: var(--nds-grey-500); }
+.dash-pnl-t .s { display: block; margin-top: 2px; font-size: 10px; line-height: 1.35; color: var(--nds-text-2); }
 
 /* The per-SKU table is the DS `DataGrid`: it owns the scroll box, the sticky header, the cell
    padding, the hover and the right-alignment, and `maxHeight` replaces `.dash-pnl-scroll`. Only
@@ -74,7 +74,7 @@
    — they were always descendant selectors, and the cells are spans now rather than `<td>`s. */
 .dash-pnl .nds-grid { font-variant-numeric: tabular-nums; }
 .dash-pnl .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.dash-pnl .dim { color: var(--nds-grey-450); }
+.dash-pnl .dim { color: var(--nds-text-muted); }
 .dash-pnl .pos { color: #067d62; font-weight: 700; }
 .dash-pnl .neg { color: var(--nds-red-500); font-weight: 700; }
 .dash-pnl-sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-blue-600); text-decoration: none; font-weight: 700; }
@@ -86,4 +86,4 @@
 .dash-pnl-cov { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; }
 .dash-pnl-cov.ok { background: #e6f4ef; color: #067d62; }
 .dash-pnl-cov.part { background: #fff4e0; color: var(--nds-amber-600); }
-.dash-pnl-cov.thin { background: var(--nds-grey-100); color: var(--nds-grey-500); }
+.dash-pnl-cov.thin { background: var(--nds-grey-100); color: var(--nds-text-2); }

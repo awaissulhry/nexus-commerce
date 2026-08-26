@@ -81,7 +81,7 @@
 /* `--nds-text-strong`, not the #37495b the ads.css rule carried: the raw-hex ratchet holds new
    CSS at zero literals, and the token is a straight improvement here — 9.27:1 → 9.87:1. */
 .aig-adv-f .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-text-strong); }
-.aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-grey-500); }
+.aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-text-2); }
 .aig-adv-f .nds-textarea { min-height: 120px; }
 
 /* The keyword-source picker is the DS `Tabs` now (it was an underline bar hand-rolled at

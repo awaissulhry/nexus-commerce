@@ -501,7 +501,7 @@
 /* Fields inside the console filter panel: same label treatment as .ffield. */
 
 /* Secondary info in the toolbar — recessive beside the row count. */
-.h10-am-toolbar .rpt-meta-note { font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-am-toolbar .rpt-meta-note { font-size: 11.5px; color: var(--nds-text-2); }
 
 /* Column picker: a console menu, not a DS dropdown, so it matches Customize. */
 .rpt-colmenu { max-height: 340px; overflow-y: auto; min-width: 210px; }

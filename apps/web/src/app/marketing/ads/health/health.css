@@ -8,7 +8,7 @@
 .hl-hero { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-3xl); padding: 18px 22px; }
 .hl-score { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 148px; }
 .hl-score-num { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
-.hl-score-num small { font-size: 18px; font-weight: 700; color: var(--nds-grey-400); }
+.hl-score-num small { font-size: 18px; font-weight: 700; color: var(--nds-text-muted); }
 .hl-score-lbl { margin-top: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 10px; border-radius: var(--nds-radius-full); }
 .hl-good { color: #067d62; } .hl-good.bg { background: #e7f5ee; }
 .hl-fair { color: var(--nds-amber-600); } .hl-fair.bg { background: #fff4e0; }
@@ -16,9 +16,9 @@
 /* The fourth band: no reading. Deliberately colourless — a grey dash cannot be mistaken for a
    verdict the way a green 100 could. Without it the em dash inherited body ink and rendered as a
    52px black bar that read like a redaction. */
-.hl-none { color: var(--nds-grey-400); } .hl-none.bg { background: var(--nds-grey-75); color: var(--nds-grey-600); }
+.hl-none { color: var(--nds-text-muted); } .hl-none.bg { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .hl-factors { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.hl-factors-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+.hl-factors-h { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .hl-factor { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .hl-factor-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .hl-factor-txt { color: #37495b; flex: 1; min-width: 0; }
@@ -33,17 +33,17 @@
    All that is left is the tile's compact inset — `padded` is 18px and would deepen the strip.
    Written at 0,2,0 so it beats `.nds-card` outright, not by stylesheet order. */
 .nds-card.hl-tile { padding: 12px 14px; }
-.hl-tile-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+.hl-tile-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .hl-tile-v { font-weight: 800; font-size: 22px; color: var(--nds-grey-900); margin-top: 4px; display: flex; align-items: baseline; gap: 8px; }
 .hl-tile-sub { font-size: 11px; font-weight: 700; margin-top: 2px; }
-.hl-tile-sub.danger { color: var(--nds-red-500); } .hl-tile-sub.warn { color: var(--nds-amber-600); } .hl-tile-sub.ok { color: #067d62; } .hl-tile-sub.muted { color: var(--nds-grey-500); }
+.hl-tile-sub.danger { color: var(--nds-red-500); } .hl-tile-sub.warn { color: var(--nds-amber-600); } .hl-tile-sub.ok { color: #067d62; } .hl-tile-sub.muted { color: var(--nds-text-2); }
 
 /* sections */
 .hl-section { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px 16px; }
 .hl-sec-h { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 800; color: var(--nds-grey-900); margin-bottom: 10px; }
 .hl-sec-h .grow { flex: 1; }
 .hl-chip { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: var(--nds-radius-full); background: var(--nds-grey-100); color: var(--nds-grey-600); }
-.hl-empty { color: var(--nds-grey-500); font-size: 13px; padding: 16px 0; text-align: center; }
+.hl-empty { color: var(--nds-text-2); font-size: 13px; padding: 16px 0; text-align: center; }
 
 /* alert filters */
 .hl-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -65,13 +65,16 @@
 .hl-name { font-weight: 700; color: var(--nds-grey-900); flex-shrink: 0; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hl-mkt { font-size: 10px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-50); border-radius: 5px; padding: 1px 6px; flex-shrink: 0; }
 .hl-msg { color: var(--nds-grey-600); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hl-arrow { color: var(--nds-grey-300); flex-shrink: 0; }
+/* A ChevronRight, so it answers to the 3:1 non-text floor, not 4.5 — grey-300 was under
+   even that. `--nds-grey-500` (3.10:1) rather than `--nds-text-3`, which is the same colour
+   here but drops to 2.70 on a tinted ground in dark; the ramp step is theme-invariant. */
+.hl-arrow { color: var(--nds-grey-500); flex-shrink: 0; }
 
 /* automation health */
 .hl-auto { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 @media (max-width: 780px) { .hl-auto { grid-template-columns: repeat(2, 1fr); } }
 .hl-metric { border: 1px solid var(--nds-grey-100); border-radius: 9px; padding: 9px 11px; }
-.hl-metric-k { font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-450); }
+.hl-metric-k { font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-muted); }
 .hl-metric-v { font-weight: 800; font-size: 17px; color: var(--nds-grey-900); margin-top: 2px; }
 .hl-metric-v.danger { color: var(--nds-red-500); } .hl-metric-v.ok { color: #067d62; }
 .hl-risk { margin-top: 10px; display: flex; align-items: flex-start; gap: 8px; background: #fdf4f4; border: 1px solid #f3c0c2; border-radius: 9px; padding: 9px 12px; font-size: 12px; color: var(--nds-note-error-icon); }
@@ -94,7 +97,7 @@
 @keyframes hl-pb-rot { to { transform: rotate(360deg); } }
 .hl-pb-err { margin-bottom: 11px; padding: 9px 12px; border-radius: var(--nds-radius-lg); background: #fdeaea; color: var(--nds-note-error-icon); font-size: 12px; line-height: 1.55; }
 .hl-pb-err pre { margin: 8px 0 0; padding: 8px; border-radius: var(--nds-radius-sm); background: #fbdcdc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-.hl-pb-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 9px; font-size: 11.5px; color: var(--nds-grey-500); }
+.hl-pb-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 9px; font-size: 11.5px; color: var(--nds-text-2); }
 .hl-pb-meta b { color: #37495b; }
 .hl-pb-meta b.ok { color: #067d62; } .hl-pb-meta b.bad { color: var(--nds-red-500); }
 .hl-pb-meta .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -106,12 +109,12 @@
    `.nds-grid-sub`, so the inks below hang off that instead of the old `.hl-pb-d`. */
 .hl-pb-r { cursor: pointer; }
 .hl-pb .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.hl-pb .dim { color: var(--nds-grey-500); }
+.hl-pb .dim { color: var(--nds-text-2); }
 .hl-pb .st { font-weight: 800; font-variant-numeric: tabular-nums; }
 .hl-pb .st.ok { color: #067d62; } .hl-pb .st.bad { color: var(--nds-note-error-icon); }
 .hl-pb .st.warn { color: var(--nds-amber-600); } .hl-pb .st.them { color: #7c3aed; }
 .hl-pb .nds-grid-sub > td { padding: 10px 14px 12px 32px; background: var(--nds-grey-25); }
-.hl-pb-k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); margin: 8px 0 3px; }
+.hl-pb-k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); margin: 8px 0 3px; }
 .hl-pb-k:first-child { margin-top: 0; }
 .hl-pb .nds-grid-sub pre { margin: 0; padding: 8px 10px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }
 .hl-pb .nds-grid-sub pre.wrap { white-space: pre-wrap; word-break: break-all; }
