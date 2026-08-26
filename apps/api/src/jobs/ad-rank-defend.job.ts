@@ -21,7 +21,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { computeStep, resolveActiveTargetKey, isRankLoss, cpcCapPct, strategyHeadroom, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
 import { sqpShareForAsins, SQP_STALL_DAYS } from '../services/advertising/sqp.service.js'
-import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 
@@ -285,10 +285,17 @@ async function decideAndMaybeApply(
   if (ctx.write && camp.bidsSuppressedAt && spec.bidMode !== 'suppress') {
     try { applied += await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }) } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
-  // Defend semantics: resume only if something ELSE left it paused (we never pause). Never touch ARCHIVED.
-  if (ctx.write && camp.status === 'PAUSED') {
-    try { await updateCampaignWithSync({ campaignId: camp.id, patch: { status: 'ENABLED' }, actor: ctx.actor as AdsActor, reason: 'rank defend — resume to hold the slot', applyImmediately: true } as never); applied++ } catch (e) { logger.warn('[rank-defend] resume failed', { campaignId: camp.id, error: (e as Error).message }) }
-  }
+  // SYNC.1 — a PAUSED campaign is left PAUSED. This used to read "resume only if something ELSE
+  // left it paused (we never pause)" and push status=ENABLED to Amazon. Since NP the engine
+  // suppresses with a bid floor and never pauses a campaign, so there was nothing of ours left to
+  // resume — the only pauses it ever undid were somebody else's. On 2026-08-21 that was the
+  // operator's, in Seller Central: 20 campaigns re-enabled 10 minutes after the settings sync had
+  // correctly pulled their pause down. Serving the slot is not worth overriding a human's decision
+  // about whether a campaign should run at all. `updateCampaignWithSync` now refuses this write for
+  // engine actors, so re-adding it here fails loudly rather than silently working again.
+  //
+  // Bid suppression above is still restored on a serve target — that IS ours, and it is the lever
+  // the engine is meant to pull.
   const loss = ctx.lossByCampaign.get(camp.id) ?? false
   // MB.4 — the campaign's CPC ceiling, expressed as the highest placement % that still
   // respects it. Computed once here and applied to every path below, so a blend cannot

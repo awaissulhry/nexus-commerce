@@ -11,7 +11,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { updateCampaignWithSync, bulkUpdateAdTargetBids, type AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { bulkUpdateAdTargetBids, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { isGoalMode } from './ad-rank-defend.job.js'
 
@@ -189,10 +189,12 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
     if (!inWindow && !campaign.bidsSuppressedAt) {
       try { await suppressCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window closed → bids floored (no-pause)' }); changed++ } catch (e) { logger.warn('[dayparting] suppress failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
-    // Resume only if something ELSE left it paused (we never pause). Never touch ARCHIVED.
-    if (campaign.status === 'PAUSED') {
-      try { await updateCampaignWithSync({ campaignId: s.campaignId, patch: { status: 'ENABLED' }, actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: no-pause policy — resume', applyImmediately: true } as never); changed++ } catch (e) { logger.warn('[dayparting] resume failed', { scheduleId: s.id, error: (e as Error).message }) }
-    }
+    // SYNC.1 — a PAUSED campaign is left PAUSED. Twin of the block removed from ad-rank-defend:
+    // it re-enabled any paused campaign under a schedule and pushed that to Amazon, which meant an
+    // operator pausing in Seller Central was overridden within a tick. Worse here than there — it
+    // sat outside the `inWindow` check, so it resumed a campaign even while the window was CLOSED
+    // and this job had just floored its bids. Dayparting expresses "off" as a bid floor (the
+    // suppress call above); campaign state is not its lever.
 
     await prisma.adSchedule.update({ where: { id: s.id }, data: { lastApplied: desired, lastEvaluatedAt: new Date() } })
   }

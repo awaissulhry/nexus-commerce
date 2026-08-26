@@ -35,6 +35,60 @@ const GRACE_PERIOD_MS = Number(process.env.NEXUS_ADS_GRACE_MS ?? 5 * 60 * 1000)
 
 export type AdsActor = `user:${string}` | `automation:${string}`
 
+/**
+ * SYNC.1 — the scheduling engines may never write `Campaign.status`.
+ *
+ * The no-pause policy says the engine suppresses with a ~2¢ bid floor and leaves the campaign
+ * ENABLED, because a real pause resets Amazon's optimisation. Both engines honour that on the way
+ * DOWN. Neither honoured it on the way back UP: each carried a block reading
+ *
+ *     // Resume only if something ELSE left it paused (we never pause).
+ *     if (camp.status === 'PAUSED') → patch { status: 'ENABLED' }, applyImmediately
+ *
+ * "Something ELSE" includes the operator in Seller Central, and the engine cannot tell the two
+ * apart. Measured on prod 2026-08-21: the operator paused campaigns on Amazon, the settings sync
+ * pulled PAUSED down correctly at 19:20, and at 19:30 rank-defend pushed ENABLED back up on 20 of
+ * them (`AD_ENTITY_STATE_UPDATE`, amz=SUCCESS). The next read then saw Amazon agreeing with us and
+ * closed the drift row as resolved — the account had converged in the wrong direction, silently.
+ *
+ * The resume blocks are deleted. This guard is the reason it cannot come back: the engines suppress
+ * through bids, so they have no legitimate campaign-state write, and the ban is enforced where every
+ * write path already passes rather than by remembering not to re-add four lines.
+ *
+ * Scope is deliberately the two CRON actors only. It matches the policy's stated exceptions exactly:
+ *   · `user:*`                    — a human clicking Pause/Enable does a real status write.
+ *   · `automation:<ruleId>`       — an operator-authored rule (`pause_campaign`, `enable_campaign`,
+ *                                   `pause_all_campaigns`) is the operator acting through a rule.
+ *   · `automation:rank-defend-*`  — REFUSED. Nobody asked for this campaign specifically.
+ *   · `automation:dayparting-*`   — REFUSED. Same.
+ *
+ * Only `status` is refused. These actors legitimately write bids, budgets and placement.
+ *
+ * ── The two exempt actors, and why they are NOT the same thing ──────────────────────────────────
+ *
+ * `automation:dayparting-disable` / `-delete` share the prefix but are not ticks: they are one-shot
+ * handlers for an operator PATCHing or DELETEing a schedule (advertising.routes.ts), and each is
+ * gated on `AdSchedule.lastApplied === 'PAUSED'` — dayparting's own bookkeeping saying dayparting
+ * paused this campaign. That is precisely the ownership check the cron blocks lacked, so they resume
+ * only what they themselves paused, at a human's request. Refusing them would strand a campaign
+ * paused by a legacy schedule with no way back, which is a worse failure than the one being fixed.
+ *
+ * The cron actors always end in an `AdSchedule` cuid; these end in a literal verb. Listing them
+ * explicitly keeps the audit vocabulary in AdvertisingActionLog unchanged.
+ */
+const ENGINE_CRON_ACTOR_PREFIXES = ['automation:rank-defend-', 'automation:dayparting-'] as const
+
+/** Operator-initiated, ownership-checked, one-shot — not a tick. See above. */
+const ENGINE_ACTOR_EXEMPTIONS = new Set<string>([
+  'automation:dayparting-disable',
+  'automation:dayparting-delete',
+])
+
+export function isSchedulingEngineActor(actor: string): boolean {
+  if (ENGINE_ACTOR_EXEMPTIONS.has(actor)) return false
+  return ENGINE_CRON_ACTOR_PREFIXES.some((p) => actor.startsWith(p))
+}
+
 export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
 
 export type AdSyncType =
@@ -616,6 +670,21 @@ export async function updateCampaignWithSync(args: {
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  }
+
+  // SYNC.1 — see isSchedulingEngineActor. Refuse before the diff, so the refusal does not depend on
+  // whether the status happens to differ this tick: an engine asking for a campaign state at all is
+  // the thing that is wrong. Refused loudly, because a silent no-op here would look like the write
+  // landed and put us straight back to guessing.
+  if (args.patch.status != null && isSchedulingEngineActor(args.actor)) {
+    logger.warn('[ads-mutation] refused engine campaign-status write', {
+      campaignId: args.campaignId, actor: args.actor,
+      from: existing.status, to: args.patch.status, reason: args.reason ?? null,
+    })
+    return {
+      ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
+      error: 'engine_may_not_set_campaign_status',
+    }
   }
 
   // Diff: only audit fields the patch actually changes.
