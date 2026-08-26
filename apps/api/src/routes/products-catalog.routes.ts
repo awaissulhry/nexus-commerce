@@ -1023,7 +1023,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post('/products/bulk-status', async (request, reply) => {
     try {
-      const body = request.body as { productIds?: string[]; status?: string }
+      const body = request.body as { productIds?: string[]; status?: string; includeChildren?: boolean }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
       const status = (body.status ?? '').toUpperCase() as
         | 'ACTIVE'
@@ -1051,8 +1051,18 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      // A parent whose variations keep their old status is a contradiction, not a preference:
+      // measured on this database, AIR-MESH-JACKET-MEN is INACTIVE while all 6 of its variations
+      // differ. The status cascaded to ChannelListing but never to the child PRODUCTS.
+      const targetIds = await expandToFamily(productIds, body.includeChildren)
+      if (targetIds.length > FAMILY_MAX) {
+        return reply.code(400).send({
+          error: `that selection expands to ${targetIds.length} products — work in smaller batches`,
+        })
+      }
+
       await prisma.$transaction(async (tx) => {
-        for (const id of productIds) {
+        for (const id of targetIds) {
           try {
             const r = await masterStatusService.update(id, status, {
               tx,
@@ -1079,7 +1089,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // is the source of truth for retries anyway.
       // Cache mirror — refresh every id we touched (errors[] is small).
       await refreshCacheRows(
-        productIds.filter((id) => !errors.some((e) => e.id === id)),
+        targetIds.filter((id) => !errors.some((e) => e.id === id)),
       )
       return {
         ok: errors.length === 0,
@@ -1095,32 +1105,59 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/products/bulk-duplicate', async (request, reply) => {
     try {
-      const body = request.body as { productIds?: string[] }
+      const body = request.body as { productIds?: string[]; includeChildren?: boolean }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
       if (productIds.length === 0) return reply.code(400).send({ error: 'productIds[] required' })
-      if (productIds.length > 50) return reply.code(400).send({ error: 'Max 50 duplicates per call' })
+
       const sources = await prisma.product.findMany({ where: { id: { in: productIds } } })
+      // Children of the selected PARENTS, so a family can be cloned as a family. Fetched up
+      // front so the cap below counts what will actually be written, not what was selected.
+      const kids = body.includeChildren
+        ? await prisma.product.findMany({
+            where: { parentId: { in: sources.filter((p) => p.parentId === null).map((p) => p.id) }, deletedAt: null },
+          })
+        : []
+      if (sources.length + kids.length > 50) {
+        return reply.code(400).send({
+          error: `that would create ${sources.length + kids.length} products — max 50 per call`,
+        })
+      }
+
+      const stampFor = () => `${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 4)}`
+      // One shape for both passes, so a clone of a variation and a clone of a parent cannot
+      // drift apart in what they carry.
+      const cloneData = (src: typeof sources[number], parentId: string | null) => ({
+        sku: `${src.sku}-COPY-${stampFor()}`,
+        name: `${src.name} (copy)`,
+        basePrice: src.basePrice,
+        totalStock: 0,
+        status: 'DRAFT' as const,
+        brand: src.brand,
+        productType: src.productType,
+        fulfillmentMethod: src.fulfillmentMethod,
+        description: src.description,
+        bulletPoints: src.bulletPoints,
+        keywords: src.keywords,
+        categoryAttributes: (src.categoryAttributes as any) ?? null,
+        // Both were dropped before, so duplicating a parent produced a standalone product that
+        // was not even flagged as a parent — the copy could never hold variations, and a copied
+        // VARIATION was silently promoted out of its family.
+        isParent: src.isParent,
+        parentId,
+      })
+
       const cloned = []
+      const newIdBySourceParent = new Map<string, string>()
+      // Parents first: a child clone needs its new parent's id to point at.
       for (const src of sources) {
-        const stamp = `${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 4)}`
-        cloned.push(
-          await prisma.product.create({
-            data: {
-              sku: `${src.sku}-COPY-${stamp}`,
-              name: `${src.name} (copy)`,
-              basePrice: src.basePrice,
-              totalStock: 0,
-              status: 'DRAFT',
-              brand: src.brand,
-              productType: src.productType,
-              fulfillmentMethod: src.fulfillmentMethod,
-              description: src.description,
-              bulletPoints: src.bulletPoints,
-              keywords: src.keywords,
-              categoryAttributes: (src.categoryAttributes as any) ?? null,
-            },
-          }),
-        )
+        const row = await prisma.product.create({ data: cloneData(src, src.parentId) })
+        if (src.parentId === null) newIdBySourceParent.set(src.id, row.id)
+        cloned.push(row)
+      }
+      for (const kid of kids) {
+        const newParent = newIdBySourceParent.get(kid.parentId as string)
+        if (!newParent) continue
+        cloned.push(await prisma.product.create({ data: cloneData(kid, newParent) }))
       }
       // F.1 — keep ProductReadCache in sync so the new rows appear
       // on /products immediately. Without this the create commits but
@@ -1598,6 +1635,29 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // Cap: 200 ids per call, mirroring bulk-status.
   // ═══════════════════════════════════════════════════════════════════
+  /**
+   * Expand parents to include their variations.
+   *
+   * The grid selects a parent as ONE row — the checkbox answers "which rows", not "how deep" —
+   * so the reach of an action is declared by the action, not by the selection. Every bulk route
+   * that can sensibly apply to a family takes `includeChildren` and calls this.
+   *
+   * Measured on this catalogue: 14 parents expand to 315 products, so the expansion is routinely
+   * larger than the 200-id input cap and needs its own, larger ceiling rather than the same one.
+   */
+  const expandToFamily = async (productIds: string[], includeChildren?: boolean) => {
+    if (!includeChildren) return productIds
+    const kids = await prisma.product.findMany({
+      where: { parentId: { in: productIds }, deletedAt: null },
+      select: { id: true },
+    })
+    return [...new Set([...productIds, ...kids.map((k) => k.id)])]
+  }
+
+  /** Ceiling for the EXPANDED set. One transaction of this size is comfortable; beyond it the
+   *  caller should work in batches rather than have us silently do a partial job. */
+  const FAMILY_MAX = 1000
+
   const flipDeletedAt = async (
     productIds: string[],
     target: Date | null,
@@ -1656,13 +1716,22 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     preHandler: allowApiKeyScope('products:write'),
   }, async (request, reply) => {
     try {
-      const body = request.body as { productIds?: string[] }
+      const body = request.body as { productIds?: string[]; includeChildren?: boolean }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
-      const r = await flipDeletedAt(productIds, new Date(), request, reply)
+      // Without this a soft-deleted parent leaves its variations alive but unreachable: the grid
+      // lists `parentId: null` only, so they vanish from view while still existing, still
+      // counted, still syncing. Zero such rows exist today, which is luck rather than design.
+      const targetIds = await expandToFamily(productIds, body.includeChildren)
+      if (targetIds.length > FAMILY_MAX) {
+        return reply.code(400).send({
+          error: `that selection expands to ${targetIds.length} products — work in smaller batches`,
+        })
+      }
+      const r = await flipDeletedAt(targetIds, new Date(), request, reply)
       // The helper sends its own 400 on validation; if we got here with
       // an undefined return, the reply is already mailed.
       if (r === undefined) return
-      await refreshCacheRows(productIds)
+      await refreshCacheRows(targetIds)
       return { ok: true, ...r }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
