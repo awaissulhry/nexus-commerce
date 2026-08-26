@@ -19,9 +19,10 @@
    carrying text at 1.50 to 4.47 to one, in this file and the three beside it. All → --nds-text-muted
    (5.01:1), except two that are not muted greys at all:
 
-   · `.dt-meta .dt-sep` (#ccd4de, 1.50:1) is a "·" between two metadata items — decoration, not
-     content, so it goes to --nds-text-3 (3.10:1). Visible as a divider without shouting as loudly
-     as the words it divides. Raising it to text-muted would have made the punctuation compete.
+   · `.dt-meta .dt-sep` (#ccd4de, 1.50:1) is a "·" between two metadata items. I first called it
+     pure decoration and gave it the ICON token; that was wrong and it is --nds-text-muted now.
+     It is the only thing separating two facts on one line — structure, by the same argument that
+     makes `.acr-gg-dash` text because the em-dash IS the answer.
    · `.acr-gg-dash` (#b6bfcb, 1.86:1) is an em-dash, and it IS the answer — "no bound rules". That
      is text and takes the text token.
    · Four greens at #1f8a4c (4.38:1) → --nds-success-text (7.63:1).
@@ -91,7 +92,7 @@
 .h10-rb-step:hover,
 .nds-btn.h10-rb-step:hover { color: #1b2230; background: var(--nds-grey-50); }
 .h10-rb-step.on,
-.nds-btn.h10-rb-step.on { color: var(--nds-blue-600); font-weight: 700; background: var(--nds-blue-100); }
+.nds-btn.h10-rb-step.on { color: var(--nds-text-link); font-weight: 700; background: var(--nds-blue-100); }
 
 .h10-rb-main { flex: 1; min-width: 0; }
 .h10-rb-wrap { max-width: 1200px; padding: 72px 36px 90px 12px; }
@@ -108,7 +109,7 @@
 .h10-rb-pfscope > label .opt { font-weight: 400; color: var(--nds-text-2); }
 .h10-rb-pfscope select { height: 36px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 30px 0 11px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); min-width: 260px; cursor: pointer; }
 .h10-rb-pfscope select:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
-.h10-rb-pfscope .hint { font-size: 12.5px; color: var(--nds-blue-600); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: var(--nds-radius-sm); padding: 5px 10px; }
+.h10-rb-pfscope .hint { font-size: 12.5px; color: var(--nds-text-link); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: var(--nds-radius-sm); padding: 5px 10px; }
 
 /* Phase 6 — conflict warning (a selected campaign is already in another schedule) */
 .h10-rb-conflict { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; padding: 11px 13px; background: #fff8ec; border: 1px solid #f2d59a; border-radius: 9px; color: #7a5a12; }
@@ -153,7 +154,7 @@
 .h10-rb-conds .pill { position: relative; font-size: 11px; font-weight: 800; border-radius: var(--nds-radius-sm); padding: 5px 9px; letter-spacing: .3px; flex-shrink: 0; min-width: 38px; text-align: center; }
 .h10-rb-conds .pill.if { background: #efe7fd; color: #7c3aed; }
 .h10-rb-conds .pill.and { background: var(--nds-grey-100); color: var(--nds-grey-600); }
-.h10-rb-conds .pill.then { background: var(--nds-blue-100); color: var(--nds-blue-600); }
+.h10-rb-conds .pill.then { background: var(--nds-blue-100); color: var(--nds-text-link); }
 /* B2: budget THEN action row — dashed connector links the IF pill down to THEN through the column */
 .h10-rb-conds:has(.cond.then) { position: relative; }
 .h10-rb-conds:has(.cond.then)::before { content: ''; position: absolute; left: 19px; top: 30px; bottom: 27px; border-left: 1.5px dashed var(--nds-grey-300); }
@@ -167,7 +168,7 @@
 /* DS-ALIGN — the row's remove is `ToolbarButton tone="danger"`, whose red HOVER is the cue
    that it destroys something. The pair these rules used measured 5.94:1; the DS note-error
    pair is 9.23:1. */
-.h10-rb-addand { border: 0; background: none; color: var(--nds-blue-600); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; margin: 2px 0 14px 50px; }
+.h10-rb-addand { border: 0; background: none; color: var(--nds-text-link); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; margin: 2px 0 14px 50px; }
 .h10-rb-conds .cond.then { margin-top: 2px; margin-bottom: 0; }
 .h10-rb-conds .thentext { font-size: 13.5px; color: var(--nds-grey-700); }
 .h10-rb-lookback { padding: 0 18px 18px; }
@@ -233,7 +234,7 @@
 .h10-rb-agpop .srch { display: flex; margin-bottom: 13px; }
 .h10-rb-agpop .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--nds-grey-150); margin-bottom: 14px; }
 .h10-rb-agpop .tabs button { border: 0; background: none; padding: 0 0 9px; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-600); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.h10-rb-agpop .tabs button.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
+.h10-rb-agpop .tabs button.on { color: var(--nds-text-link); border-bottom-color: var(--nds-blue-600); }
 .h10-rb-agpop .filters { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
 .h10-rb-agpop .filters .f { display: flex; flex-direction: column; gap: 5px; }
 .h10-rb-agpop .filters label { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
@@ -261,7 +262,7 @@
 .h10-rtm-f .grow { flex: 1; }
 
 /* ============================ Negative Targeting tab ======================= */
-.h10-nt-name { color: var(--nds-blue-600); font-weight: 600; font-size: 13px; text-decoration: none; }
+.h10-nt-name { color: var(--nds-text-link); font-weight: 600; font-size: 13px; text-decoration: none; }
 .h10-nt-name:hover { text-decoration: underline; }
 .h10-nt-crit { font-size: 12.5px; color: var(--nds-grey-700); }
 .h10-nt-freq { display: inline-flex; flex-direction: column; line-height: 1.3; }
@@ -288,7 +289,7 @@
 .h10-hist-r { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--nds-grey-75); font-size: 12.5px; }
 .h10-hist-r .st { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 3px 8px; border-radius: var(--nds-radius-sm); text-align: center; }
 .h10-hist-r .st.ok { background: #dcfce7; color: var(--nds-green-700); }
-.h10-hist-r .st.dry { background: var(--nds-blue-100); color: var(--nds-blue-600); }
+.h10-hist-r .st.dry { background: var(--nds-blue-100); color: var(--nds-text-link); }
 .h10-hist-r .st.warn { background: #fff3e6; color: var(--nds-amber-700); }
 .h10-hist-r .st.bad { background: #fde8e8; color: var(--nds-red-700); }
 .h10-hist-r .st.muted { background: var(--nds-grey-100); color: var(--nds-pill-neutral-fg); }
@@ -351,11 +352,11 @@
 .cp-status { font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 20px; flex-shrink: 0; }
 .cp-status.on { background: #d8eafc; color: var(--nds-text-link); }
 .cp-status.off { background: var(--nds-grey-100); color: var(--nds-pill-neutral-fg); }
-.cp-add { display: inline-flex; align-items: center; gap: 4px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); color: var(--nds-blue-600); border-radius: var(--nds-radius-lg); padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.cp-add { display: inline-flex; align-items: center; gap: 4px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); color: var(--nds-text-link); border-radius: var(--nds-radius-lg); padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
 .cp-add:hover { background: var(--nds-blue-50); }
 .cp-add.added { background: var(--nds-grey-75); border-color: var(--nds-grey-150); color: var(--nds-text-2); cursor: default; }
 .cp-pager { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--nds-grey-100); }
-.cp-pager .pgn { min-width: 28px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); color: var(--nds-blue-600); font-size: 13px; font-weight: 600; padding: 0 8px; }
+.cp-pager .pgn { min-width: 28px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); color: var(--nds-text-link); font-size: 13px; font-weight: 600; padding: 0 8px; }
 .cp-pager .pp { margin-left: auto; }
 .cp-rhead { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; }
 .cp-rhead b { font-size: 15px; font-weight: 800; color: #2b3a4f; }
@@ -369,7 +370,7 @@
 /* B3: rule templates — Apply Template (Criteria header) + Save Template (footer) + modal */
 .h10-rb-crit-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .h10-rb-crit-hd .t h2 { margin: 0; }
-.h10-rb-tmpl { display: inline-flex; align-items: center; gap: 7px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); color: var(--nds-blue-600); border-radius: var(--nds-radius-lg); padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.h10-rb-tmpl { display: inline-flex; align-items: center; gap: 7px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); color: var(--nds-text-link); border-radius: var(--nds-radius-lg); padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
 .h10-rb-tmpl:hover { background: var(--nds-blue-50); }
 .h10-rb-tmpl-modal { width: 460px; max-width: calc(100vw - 40px); max-height: 80vh; background: var(--nds-white); border-radius: var(--nds-radius-3xl); display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(20,28,38,.3); overflow: hidden; }
 .h10-rb-tmpl-modal .ph { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 12px; }
@@ -448,7 +449,7 @@
 /* ── H3: multiple "Ad Group Mapping" blocks (Harvest) + collapse chevron ── */
 .h10-rb-card.mapblock { margin-bottom: 16px; }
 .h10-rb-card.mapblock:last-of-type { margin-bottom: 0; }
-.h10-rb-card-h .mblabel { font-size: 13px; font-weight: 700; color: var(--nds-blue-600); margin-right: 14px; padding-right: 14px; border-right: 1px solid var(--nds-grey-150); }
+.h10-rb-card-h .mblabel { font-size: 13px; font-weight: 700; color: var(--nds-text-link); margin-right: 14px; padding-right: 14px; border-right: 1px solid var(--nds-grey-150); }
 .h10-rb-card-h .grow { flex: 1; }
 .h10-rb-card-h .mbrm { margin-left: 6px; }
 .h10-rb-setuphd .maprow .chevbtn { border: 0; background: none; cursor: pointer; padding: 4px; display: inline-flex; border-radius: var(--nds-radius-sm); }
@@ -500,7 +501,7 @@
 .h10-sb-cptabs { display: flex; gap: 4px; padding: 4px 12px 0; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-sb-cptabs button { appearance: none; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-600); padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .h10-sb-cptabs button:hover { color: var(--nds-grey-900); }
-.h10-sb-cptabs button.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
+.h10-sb-cptabs button.on { color: var(--nds-text-link); border-bottom-color: var(--nds-blue-600); }
 /* portfolio groups in the picker list */
 .cp-grp { border-bottom: 1px solid var(--nds-grey-75); }
 .cp-grph { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--nds-grey-25); }
@@ -539,7 +540,7 @@
 .h10-sb-chart-toggle { display: inline-flex; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); overflow: hidden; }
 .h10-sb-chart-toggle button { border: 0; background: var(--nds-white); color: var(--nds-text-2); padding: 8px 10px; cursor: pointer; display: inline-flex; }
 .h10-sb-chart-toggle button + button { border-left: 1px solid var(--nds-grey-200); }
-.h10-sb-chart-toggle button.on { background: var(--nds-blue-100); color: var(--nds-blue-600); }
+.h10-sb-chart-toggle button.on { background: var(--nds-blue-100); color: var(--nds-text-link); }
 .h10-sb-chart-body { padding: 18px; }
 .h10-sb-nodata { background: var(--nds-grey-25); border-radius: var(--nds-radius-lg); min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .h10-sb-nodata .ill { width: 54px; height: 54px; border-radius: 50%; background: var(--nds-grey-100); color: var(--nds-text-2); display: inline-flex; align-items: center; justify-content: center; }
@@ -670,7 +671,7 @@
 /* 🔴 --nds-grey-400 measures 2.04:1 on white; this arrow is the only affordance saying an hour
    column can be painted, and 1.4.11 asks 3:1 of it. --nds-text-muted is 5.01:1. */
 .nds-btn.h10-tr-collbl { font-size: 10px; color: var(--nds-text-muted); padding: 0; }
-.nds-btn.h10-tr-collbl:hover { color: var(--nds-blue-600); background: none; }
+.nds-btn.h10-tr-collbl:hover { color: var(--nds-text-link); background: none; }
 .h10-trgrid-legend { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--nds-grey-600); }
 .h10-trgrid-legend .it { display: inline-flex; align-items: center; gap: 5px; }
 .h10-trgrid-legend .it i { width: 10px; height: 10px; border-radius: 3px; }
@@ -681,7 +682,7 @@
 .h10-tr-summary .line { line-height: 1.55; }
 
 /* RGD.3 — demand controls */
-.h10-rp-sample { color: var(--nds-blue-600); font-weight: 700; }
+.h10-rp-sample { color: var(--nds-text-link); font-weight: 700; }
 /* DS-ALIGN — the DS `Select` at `xs`; only the cap on a long option list is ours. */
 .h10-rp-tf { max-width: 220px; }
 .h10-rp-smooth { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--nds-grey-600); cursor: pointer; }
@@ -806,7 +807,7 @@
 .nds-wsgrid td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nds-wsgrid td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
 /* Phase 5 — portfolio-scoped schedules get a sublabel under the name. */
-.nds-wsgrid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-600); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-text-link); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
 .h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
@@ -954,7 +955,7 @@
 .h10-act-tabs { display: flex; gap: 2px; padding: 10px 20px 0; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-act-tabs button { border: 0; background: none; font-size: 12.5px; font-weight: 700; color: var(--nds-pill-neutral-fg); padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; }
 .h10-act-tabs button:hover { color: var(--nds-grey-900); }
-.h10-act-tabs button.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
+.h10-act-tabs button.on { color: var(--nds-text-link); border-bottom-color: var(--nds-blue-600); }
 .h10-ver { padding: 14px 20px 18px; }
 .h10-ver.compact { padding: 0; }
 .h10-ver-r { display: grid; grid-template-columns: 16px 1fr; gap: 12px; }
@@ -972,7 +973,7 @@
 .h10-ver-r .diff li { list-style: disc; }
 /* HX.5 — the quiet way through to the account-wide change log. Understated on purpose: this is a
    secondary path out of a drawer, not a call to action. */
-.h10-act-all { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--nds-blue-600); text-decoration: none; white-space: nowrap; }
+.h10-act-all { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--nds-text-link); text-decoration: none; white-space: nowrap; }
 .h10-act-all:hover { text-decoration: underline; }
 /* The history tabs inside the builder sit in a section rather than a drawer, so they lose the
    drawer's page-edge padding and gain a rule to sit on. */
@@ -1247,7 +1248,7 @@
 .h10-imp-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-left: auto; }
 .h10-imp-top .lbl { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .h10-imp-r { display: inline-flex; align-items: center; gap: 5px; max-width: 190px; padding: 3px 8px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-imp-r em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--nds-blue-600); }
+.h10-imp-r em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--nds-text-link); }
 /* A failed load says so in one muted line rather than vanishing — hiding it is what
    kept a 500 on this endpoint invisible on prod. */
 .h10-imp-off { display: block; font-size: 11.5px; color: var(--nds-text-2); }
@@ -1306,7 +1307,7 @@
    prefixing this rule alone dropped all three from it and a long actor name overflowed the cell. */
 .h10-au-name,
 .nds-btn.h10-au-name { display: block; text-align: left; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nds-btn.h10-au-name:hover { color: var(--nds-blue-600); text-decoration: underline; background: none; }
+.nds-btn.h10-au-name:hover { color: var(--nds-text-link); text-decoration: underline; background: none; }
 .h10-au-nm em { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-au-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-au-badge.writes { background: #fdf0e3; color: #a34909; }
@@ -1319,7 +1320,7 @@
    to the GRID, not the button. */
 .h10-au-open { flex-shrink: 0; margin-left: auto; opacity: 0; transition: opacity .12s; }
 tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
-.h10-au-open:hover { border-color: var(--nds-blue-600); color: var(--nds-blue-600); }
+.h10-au-open:hover { border-color: var(--nds-blue-600); color: var(--nds-text-link); }
 
 /* ── The mode dial ───────────────────────────────────────────────────────────────────── */
 .h10-au-dial { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; background: var(--nds-white); }
@@ -1739,7 +1740,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-mt, .h10-bd-kind { font-size: 11.5px; color: var(--nds-grey-600); text-transform: capitalize; }
 .h10-bd-ag { display: inline-block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--nds-grey-600); }
 .h10-bd-camp { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 260px; }
-.h10-bd-camp a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 700; color: var(--nds-blue-600); text-decoration: none; }
+.h10-bd-camp a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 700; color: var(--nds-text-link); text-decoration: none; }
 .h10-bd-camp a:hover { text-decoration: underline; }
 /* The campaign is paused or archived, so nothing on this row is bidding for anything. */
 .h10-bd-camp i.off { flex: none; font-style: normal; padding: 1px 5px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
@@ -1832,7 +1833,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-lede .caveat { display: flex; align-items: flex-start; gap: 7px; padding: 8px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: var(--nds-radius-lg); font-size: 12px; color: var(--nds-warning-text); }
 .h10-hv-lede .caveat svg { flex: none; margin-top: 3px; }
 .h10-hv-lede .caveat b { color: #7a4812; }
-.h10-hv-lede .lnk { display: inline-flex; align-items: center; gap: 2px; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
+.h10-hv-lede .lnk { display: inline-flex; align-items: center; gap: 2px; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-text-link); text-decoration: underline; cursor: pointer; }
 
 /* ── the census strip: five counts, each one a filter that reproduces its own number ─────────── */
 .h10-hv-census { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 0; }
@@ -2206,7 +2207,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    affordance comes back as an underline on hover rather than as a colour that reads as a link at
    rest. Matched at (0,4,1) to beat `.nds-wsgrid td.nm .t` at (0,3,1). */
 .nds-wsgrid td.nm .h10-ng-term .t.as-btn { color: var(--nds-grey-900); font-weight: 700; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
-.nds-wsgrid td.nm .h10-ng-term .t.as-btn:hover { color: var(--nds-blue-600); text-decoration: underline; }
+.nds-wsgrid td.nm .h10-ng-term .t.as-btn:hover { color: var(--nds-text-link); text-decoration: underline; }
 
 /* ── the shell ──────────────────────────────────────────────────────────────────────────────── */
 .h10-ngd-back { position: fixed; inset: 0; z-index: 1200; background: rgba(28, 37, 48, .34); border: 0; padding: 0; cursor: pointer; }
@@ -2352,7 +2353,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: var(--nds-radius-lg); background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; }
 .h10-sov-blind svg { flex-shrink: 0; margin-top: 2px; }
 .h10-sov-blind b { font-weight: 800; color: #7a4512; }
-.h10-sov-note .lnk, .h10-sov-blind .lnk, .h10-sov-empty .lnk { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.h10-sov-note .lnk, .h10-sov-blind .lnk, .h10-sov-empty .lnk { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-text-link); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .h10-sov-blind .lnk { color: #7a4512; }
 
 /* ── the "pick one market" panel ────────────────────────────────────────────────────────────── */
@@ -2387,7 +2388,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    at the END of the file, because source order beats specificity in this stylesheet. */
 .h10-sov-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 11px; cursor: pointer; }
 .h10-sov-toggle:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
-.h10-sov-toggle.on { color: var(--nds-blue-600); background: var(--nds-blue-100); }
+.h10-sov-toggle.on { color: var(--nds-text-link); background: var(--nds-blue-100); }
 .h10-sov-listsel { max-width: 260px; }
 .h10-sov-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--nds-text-muted); }
 .h10-sov-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -2550,7 +2551,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-gate.on { color: var(--nds-success-text); }
 .h10-bud-gate.off { color: var(--nds-warning-text); }
 
-.h10-bud-rules { background: none; border: 0; padding: 0; font: inherit; font-weight: 800; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; font-variant-numeric: tabular-nums; }
+.h10-bud-rules { background: none; border: 0; padding: 0; font: inherit; font-weight: 800; color: var(--nds-text-link); text-decoration: underline; cursor: pointer; font-variant-numeric: tabular-nums; }
 
 /* ── rule row cells ────────────────────────────────────────────────────────────────────────── */
 .h10-bud-lvl { display: inline-block; padding: 2px 7px; border-radius: var(--nds-radius-sm); font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
@@ -3447,7 +3448,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-nga-rows li { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 9px; }
 .h10-nga-rows .t { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .h10-nga-rows .lnk { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; font-weight: 800; color: var(--nds-grey-900); cursor: pointer; }
-.h10-nga-rows .lnk:hover { color: var(--nds-blue-600); text-decoration: underline; }
+.h10-nga-rows .lnk:hover { color: var(--nds-text-link); text-decoration: underline; }
 .h10-nga-rows .t em { font-style: normal; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; }
 .h10-nga-rows .t em.mk { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-nga-rows .t em.thin { background: #fff6e8; color: var(--nds-warning-text); }
@@ -4485,7 +4486,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* engine drawer additions (EngineDetail rides RuleDetail's shell classes) */
 .h10-au-runsum { font-style: normal; color: var(--nds-text-muted); }
 .h10-au-enginenote { margin: 14px 0 0; font-size: 12.5px; color: #4b5563; }
-.h10-au-enginenote a { color: var(--nds-blue-600); display: inline-flex; align-items: center; gap: 3px; }
+.h10-au-enginenote a { color: var(--nds-text-link); display: inline-flex; align-items: center; gap: 3px; }
 
 /* AUTO.A1 — band tiles that filter. A button-tile keeps the stat card's look; the pressed state
    is a visible ring, not colour alone. */
@@ -4506,7 +4507,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-posture { margin: 0; font-size: 13px; color: var(--nds-grey-900); }
 .h10-au-posture em.bad { font-style: normal; color: #b42318; font-weight: 700; }
 .h10-au-posture .sub, .h10-au-refusals .sub { display: block; margin-top: 4px; font-size: 12px; color: var(--nds-text-muted); }
-.h10-au-posture a, .h10-au-refusals a { color: var(--nds-blue-600); }
+.h10-au-posture a, .h10-au-refusals a { color: var(--nds-text-link); }
 .h10-au-posture.muted, .h10-au-refusals.muted { color: var(--nds-text-muted); }
 .h10-au-limiterr { display: flex; align-items: center; gap: 6px; color: #b42318; font-size: 12.5px; }
 .h10-au-limitempty { margin: 0 0 10px; font-size: 12.5px; color: var(--nds-text-muted); }
@@ -4555,7 +4556,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-qlist .qe { flex: 1; min-width: 0; font-size: 13px; color: var(--nds-grey-900); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .h10-au-qlist .qe em { font-style: normal; color: var(--nds-text-muted); font-size: 12px; }
 .h10-au-qlist .qe em.qw { color: var(--nds-grey-700); }
-.h10-au-qlist .qe a { color: var(--nds-blue-600); display: inline-flex; }
+.h10-au-qlist .qe a { color: var(--nds-text-link); display: inline-flex; }
 .h10-au-qlist .qacts { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 /* DS-ALIGN — the DS `Input` at `sm`. */
 .h10-au-qlist .qedit { width: 90px; }
@@ -4581,7 +4582,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* BUD.3/BUD.6 — selection acts, the footer, the transfer dialog */
 .h10-bud-selrow { display: inline-flex; gap: 6px; }
 .h10-bud-foot { display: flex; align-items: center; gap: 14px; margin: 14px 0 0; }
-.h10-bud-foot .nds-btn.link { color: var(--nds-blue-600); font-size: 12.5px; }
+.h10-bud-foot .nds-btn.link { color: var(--nds-text-link); font-size: 12.5px; }
 .h10-bud-xferrow { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13px; color: var(--nds-grey-700); }
 .h10-bud-xferrow > span:first-child { width: 60px; }
 .h10-bud-xferto { margin: 0 0 10px 70px; font-size: 13px; color: var(--nds-grey-900); }
@@ -4640,7 +4641,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd8-reflist .nw { white-space: nowrap; color: var(--nds-text-muted); }
 .h10-bd8-reflist .t { display: inline-block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .h10-bd8-foot { margin: 0; font-size: 12px; color: var(--nds-text-muted); }
-.h10-bd8-foot a { color: var(--nds-blue-600); }
+.h10-bd8-foot a { color: var(--nds-text-link); }
 
 /* BID.S4 — editing: the selection verbs, the confirm dialog, the staged tray. */
 .h10-bd4-bar { display: inline-flex; gap: 6px; }
@@ -4688,7 +4689,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd6-path { border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-lg); padding: 10px 12px; margin: 0 0 10px; }
 .h10-bd6-path h4 { margin: 0 0 4px; font-size: 12.5px; color: var(--nds-grey-900); }
 .h10-bd6-path p { margin: 0 0 6px; font-size: 12px; color: var(--nds-grey-700); line-height: 1.5; }
-.h10-bd6-path a { color: var(--nds-blue-600); }
+.h10-bd6-path a { color: var(--nds-text-link); }
 .h10-bd6-goalrow { display: flex; align-items: flex-end; gap: 8px; }
 .h10-bd6-goalrow .h10-bd4-field { margin: 0; flex: 0 0 140px; }
 .h10-bd6-derived { margin: 2px 0 8px; font-size: 11.5px; color: var(--nds-text-muted); line-height: 1.5; }
@@ -4697,7 +4698,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd7 { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 14px 16px; margin-top: 16px; }
 .h10-bd7 h3 { margin: 0 0 10px; font-size: 13.5px; color: var(--nds-grey-900); display: flex; align-items: center; gap: 6px; }
 
-.h10-bd7-name { color: var(--nds-blue-600); text-decoration: none; }
+.h10-bd7-name { color: var(--nds-text-link); text-decoration: none; }
 .h10-bd7-name:hover { text-decoration: underline; }
 .h10-bd7-posture { display: inline-block; padding: 2px 8px; border-radius: var(--nds-radius-full); font-size: 11px; font-weight: 700; }
 /* 🔴 P3a: #6b7585 measured 4.19:1 on this chip's OWN #f1f3f6 ground — below AA for 11px text, and
@@ -4723,7 +4724,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    un-link rule on span.t no longer applies); lanes + owner + the ledger inside the shared drawer. */
 .h10-plc-camp button.t {
   appearance: none; background: none; border: 0; padding: 0; font: inherit; text-align: left;
-  color: var(--nds-blue-600); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--nds-text-link); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .h10-plc-camp button.t:hover { text-decoration: underline; }
 .h10-plc2-lanes { margin: 0 0 14px; }
@@ -4732,7 +4733,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc2-lane b { font-size: 13.5px; color: #16202b; font-variant-numeric: tabular-nums; }
 .h10-plc2-lane .v { color: var(--nds-text-muted); }
 .h10-plc2-owner { margin: 10px 0 0; font-size: 12.5px; color: var(--nds-grey-700); line-height: 1.5; }
-.h10-plc2-owner a { color: var(--nds-blue-600); white-space: nowrap; }
+.h10-plc2-owner a { color: var(--nds-text-link); white-space: nowrap; }
 .h10-plc2-ledger h4 { margin: 0 0 8px; font-size: 12.5px; color: var(--nds-grey-900); }
 .h10-plc2-ledger ul { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .h10-plc2-ledger li { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--nds-grey-700); flex-wrap: wrap; }
@@ -4749,7 +4750,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    BUTTON now (the P0 un-link rules above are deleted, as their own comments promised). */
 .h10-sov-q button.t {
   appearance: none; background: none; border: 0; padding: 0; font: inherit; font-weight: 600;
-  text-align: left; color: var(--nds-blue-600); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left; color: var(--nds-text-link); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .h10-sov-q button.t:hover { text-decoration: underline; }
 .h10-sov-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
@@ -4787,7 +4788,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov5-funnel b { font-variant-numeric: tabular-nums; color: #16202b; }
 .h10-sov5-holders { margin-bottom: 14px; }
 .h10-sov5-holders ul, .h10-sov5-buying ul { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--nds-grey-700); }
-.h10-sov5-buying a { color: var(--nds-blue-600); white-space: nowrap; }
+.h10-sov5-buying a { color: var(--nds-text-link); white-space: nowrap; }
 
 /* AR.S1 — the connected columns: the gate verdict, the editable band, strategy, target ACoS. */
 .h10-ar-pill.mg-on { background: #e9f7ef; color: #116b3a; }
@@ -5318,7 +5319,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    exactly what it was built to do and that turns out to be nothing. Same tone the ceiling banner
    uses. Contrast measured against each cell's own ground; figures in the B4 commit. */
 .h10-rg-act { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #16202b; text-decoration: none; }
-.h10-rg-act.waiting { color: var(--nds-blue-600); }
+.h10-rg-act.waiting { color: var(--nds-text-link); }
 .h10-rg-act.waiting:hover, .h10-rg-act.wrote:hover { text-decoration: underline; }
 .h10-rg-act.wrote { color: #16202b; font-weight: 500; }
 .h10-rg-act.wrote em { font-style: normal; font-weight: 500; color: var(--nds-text-2); }
@@ -5673,7 +5674,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-page-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
 .h10-page-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-page-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-page-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
+.h10-page-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-text-link); text-decoration: underline; cursor: pointer; }
 .h10-page-empty.bad b { color: var(--nds-warning-text); }
 .h10-page-empty.refused b { color: #414a7a; }
 

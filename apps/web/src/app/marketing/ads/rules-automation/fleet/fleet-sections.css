@@ -89,7 +89,12 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
   font-size: 11px; color: var(--nds-text-2);
 }
-.dt-meta .dt-sep { color: var(--nds-text-3); }
+/* Correcting myself. I first called this "·" pure decoration and gave it --nds-text-3, the icon
+   token. It is not: it is the only thing separating two facts on one line, and if it disappears
+   they run together — that is structure, which is the same argument I used to call `.acr-gg-dash`
+   text because the em-dash IS the answer. A separator matching the muted items either side of it
+   is ordinary typography, not competition. --nds-text-muted, and no audit exception left. */
+.dt-meta .dt-sep { color: var(--nds-text-muted); }
 
 .dt-detail {
   font-size: 11.5px; color: #616d7c; line-height: 1.5;

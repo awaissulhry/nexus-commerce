@@ -134,7 +134,7 @@
   padding: 9px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .acr-tab:hover { color: var(--nds-grey-700); }
-.acr-tab.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
+.acr-tab.on { color: var(--nds-text-link); border-bottom-color: var(--nds-blue-600); }
 
 /* ── guardrails ──────────────────────────────────────────────────────────── */
 .acr-card { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); padding: 15px 16px; }
@@ -233,7 +233,7 @@
 /* A decision resting on 3 days of data must not look identical to one resting on 56. */
 .acr-ev .thin { color: #8a6320; }
 
-.acr-link { color: var(--nds-blue-600); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+.acr-link { color: var(--nds-text-link); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
 .acr-link:hover { text-decoration: underline; }
 
 /* ── Today: the priced exception board ───────────────────────────────────── */
@@ -314,7 +314,7 @@
 .acr-exc-age { font-size: 11px; color: var(--nds-text-muted); margin-top: 2px; }
 .acr-exc-go {
   display: inline-flex; align-items: center; gap: 4px; margin-top: 6px;
-  font-size: 12.5px; font-weight: 550; color: var(--nds-blue-600); text-decoration: none; white-space: nowrap;
+  font-size: 12.5px; font-weight: 550; color: var(--nds-text-link); text-decoration: none; white-space: nowrap;
 }
 .acr-exc-go:hover { text-decoration: underline; }
 
@@ -826,7 +826,7 @@
    the focus ring; the square 20px and the blue glyph are this node's, and `flex: none` stops the
    node's flex row from squeezing it. */
 .nds-btn.acr-fln-expand {
-  width: 20px; height: 20px; padding: 0; color: var(--nds-blue-600); font-size: 13px; line-height: 1;
+  width: 20px; height: 20px; padding: 0; color: var(--nds-text-link); font-size: 13px; line-height: 1;
   flex: none;
 }
 .acr-fln-meta { display: flex; align-items: center; gap: 7px; }
@@ -834,14 +834,14 @@
   font-size: 9.5px; font-weight: 750; letter-spacing: 0.08em; padding: 1.5px 7px;
   border-radius: var(--nds-radius-full); background: var(--nds-grey-75); color: var(--nds-text-muted);
 }
-.acr-fln-level.lv-observe { color: var(--nds-blue-600); background: var(--nds-blue-100); }
+.acr-fln-level.lv-observe { color: var(--nds-text-link); background: var(--nds-blue-100); }
 .acr-fln-level.lv-propose { color: #8a6320; background: #fff8ec; }
 .acr-fln-level.lv-auto { color: var(--nds-success-text); background: #f1faf5; }
 .acr-fln-open { font-size: 10.5px; color: #8a6320; font-weight: 650; font-variant-numeric: tabular-nums; }
 .acr-fln-open.muted { color: var(--nds-text-muted); font-weight: 500; }
 .acr-fln-degraded { font-size: 10.5px; color: var(--nds-danger-text); font-weight: 650; }
 .acr-fln-run { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
-.acr-fln-working { color: var(--nds-blue-600); font-weight: 650; }
+.acr-fln-working { color: var(--nds-text-link); font-weight: 650; }
 .acr-fln-never { color: var(--nds-text-muted); }
 .acr-fln-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .acr-fln-dot.ok { background: #1a9d6a; box-shadow: 0 0 0 2px rgb(26 157 106 / 0.15); }
@@ -878,7 +878,7 @@
   display: flex; align-items: center; gap: 7px; width: 100%;
   padding: 4px 2px; font-size: 12px; color: var(--nds-grey-700); text-align: left;
 }
-.nds-btn.acr-fl-runhead:hover { color: var(--nds-blue-600); }
+.nds-btn.acr-fl-runhead:hover { color: var(--nds-text-link); }
 .acr-fl-steps { margin: 2px 0 6px 26px; padding: 0; font-size: 11.5px; color: var(--nds-grey-600); list-style: none; }
 .acr-fl-steps li { padding: 2px 0; font-variant-numeric: tabular-nums; }
 .acr-fl-steps li.bad { color: var(--nds-danger-text); }
@@ -893,7 +893,7 @@
   padding: 8px 2px; border: 0; background: none; cursor: pointer;
   font-size: 12.5px; color: #232c37; text-align: left;
 }
-.acr-fl-planhead:hover strong { color: var(--nds-blue-600); }
+.acr-fl-planhead:hover strong { color: var(--nds-text-link); }
 .acr-fl-planbody { padding: 0 2px 10px 22px; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.55; }
 .acr-fl-planbody ul { margin: 6px 0; padding-left: 18px; }
 .acr-fl-planbody li { padding: 1px 0; }
@@ -983,7 +983,7 @@
   display: flex; align-items: center; gap: 6px;
   font-size: 12.5px; font-weight: 650; color: var(--nds-grey-700);
 }
-.nds-btn.acr-fl-checkstoggle:hover { color: var(--nds-blue-600); }
+.nds-btn.acr-fl-checkstoggle:hover { color: var(--nds-text-link); }
 .acr-fl-checks ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .acr-fl-checks li { display: flex; align-items: baseline; gap: 7px; font-size: 12.5px; }
 .acr-fl-checks li svg { flex: none; transform: translateY(1px); }
@@ -1011,7 +1011,7 @@
 
 /* ── FX.3 — worker profile pages ─────────────────────────────────────── */
 .acr-flw-back { display: inline-flex; align-items: center; margin-right: 6px; color: var(--nds-text-muted); }
-.acr-flw-back:hover { color: var(--nds-blue-600); }
+.acr-flw-back:hover { color: var(--nds-text-link); }
 .acr-flw-plain { margin: 6px 0 0; font-size: 13px; color: var(--nds-grey-700); line-height: 1.6; }
 .acr-flw-pipeline { margin: 4px 0; padding: 0 0 0 4px; list-style: none; display: flex; flex-direction: column; gap: 0; }
 .acr-flw-pipeline li { display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 18px; position: relative; }
