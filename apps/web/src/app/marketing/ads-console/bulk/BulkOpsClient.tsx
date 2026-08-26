@@ -17,11 +17,62 @@ import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Info, Ext
 import Link from 'next/link'
 import { validateRow as validateBulksheetRow } from '@nexus/shared/ads-bulksheet'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DataGrid, type Column } from '@/design-system/components'
 import { campaignHref } from '../automation/useCampaignMap'
 import { useAmazonLinks, buildAmazonCampaignHref } from '../automation/useAmazonLinks'
 
 type Row = Record<string, string>
 interface VRow { r: Row; ok: boolean; op: string; msg: string }
+
+/** Two grids here, and both column specs are FACTORIES for different reasons: `diffColumns`
+ *  needs `profileMap` (component state), and `previewColumns` needs the row ORDER.
+ *
+ *  🔴 `Column.render` receives only the row — no index — so an ordinal "#" column cannot be
+ *  written directly. The index map is built once per render (O(n)) and read O(1), rather than
+ *  an `indexOf` per cell, which would be quadratic on a bulksheet of thousands of rows.
+ *
+ *  Alignment inverts between `.az-table` and `.nds-grid`: the columns that carried no `.l` are
+ *  the only right-aligned ones. Every `.sub` becomes `.az-cell-sub`. `.az-pill` and
+ *  `.az-rowstat` are UNSCOPED and survive the move — checked in amazon.css, not assumed. */
+const diffColumns = (profileMap: Record<string, string>): Array<Column<BidHistoryItem>> => [
+  { key: 'rule', label: 'Rule', render: (item) => <span className="az-cell-sub" style={{ fontSize: 10.5 }}>{item.changedBy?.replace('automation:', '')?.slice(0, 12)}...</span> },
+  { key: 'campaign', label: 'Campaign', render: (item) => {
+    const c = item.campaign
+    const mkt = c?.marketplace
+    const amzHref = c?.externalCampaignId && mkt ? buildAmazonCampaignHref(c.externalCampaignId, mkt, profileMap) : null
+    return (<>
+      {c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="az-cell-sub">{item.campaignId ?? item.entityId.slice(0, 12)}</span>}
+      {amzHref && <><br /><a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--link)', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>Amazon <ExternalLink size={9} /></a></>}
+      {mkt && <span className="az-badge" style={{ marginLeft: 4 }}>{mkt}</span>}
+    </>)
+  } },
+  { key: 'field', label: 'Field', render: (item) => <span style={{ fontWeight: 600 }}>{item.field}</span> },
+  { key: 'before', label: 'Before', align: 'right', render: (item) => <span style={{ color: 'var(--ink2)' }}>{isBidField(item.field) ? eur(item.oldValue) : item.oldValue ?? '—'}</span> },
+  { key: 'after', label: 'After', align: 'right', render: (item) => <span style={{ fontWeight: 700, color: 'var(--green)' }}>{isBidField(item.field) ? eur(item.newValue) : item.newValue ?? '—'}</span> },
+  { key: 'reason', label: 'Reason', render: (item) => <span className="az-cell-sub">{item.reason ?? '—'}</span> },
+  { key: 'when', label: 'When', render: (item) => <span className="az-cell-sub" title={new Date(item.changedAt).toLocaleString()}>{relTime(item.changedAt)}</span> },
+]
+
+/** `isBid` was recomputed inline on every row; it is a property of the FIELD, so it lives here. */
+const isBidField = (f: string) => f === 'bid' || f === 'dailyBudget' || f === 'defaultBid'
+
+/** Pure in its argument, so it is hoisted out of the component — the preview column spec is
+ *  module-level and cannot reach a closure. */
+const keyField = (r: Row) => r['Campaign name'] || r['Ad group name'] || r['Keyword text'] || r['Product targeting expression'] || r['Portfolio name'] || r['Campaign ID'] || '—'
+
+const previewColumns = (all: VRow[]): Array<Column<VRow>> => {
+  const ordinal = new Map(all.map((v, i) => [v, i + 1]))
+  return [
+    { key: 'n', label: '#', width: 44, render: (v) => <span className="az-cell-sub">{ordinal.get(v)}</span> },
+    { key: 'product', label: 'Product', render: (v) => v.r['Product'] || '—' },
+    { key: 'entity', label: 'Entity', render: (v) => <span className="az-pill">{v.r['Entity'] || '—'}</span> },
+    { key: 'operation', label: 'Operation', render: (v) => (v.r['Operation'] ? <span className="az-pill">{v.r['Operation']}</span> : <span className="az-cell-sub">read</span>) },
+    { key: 'item', label: 'Campaign / item', render: (v) => keyField(v.r) },
+    { key: 'match', label: 'Match', render: (v) => v.r['Match type'] || '—' },
+    { key: 'bid', label: 'Bid / Budget', align: 'right', render: (v) => v.r['Bid'] || v.r['Daily budget'] || v.r['Budget'] || '—' },
+    { key: 'status', label: 'Status', render: (v) => (v.ok ? <span className="az-rowstat ok"><CheckCircle2 size={14} />{v.msg}</span> : <span className="az-rowstat err"><AlertCircle size={14} />{v.msg}</span>) },
+  ]
+}
 
 // AX-IE.11 — the entity and operation lists that used to live here are gone.
 // They were the second grammar the shared schema was built to end, and they had
@@ -142,7 +193,6 @@ export function BulkOpsClient() {
     } catch (e) { setErr((e as Error)?.message ?? 'Could not parse file') } finally { setParsing(false) }
   }, [])
 
-  const keyField = (r: Row) => r['Campaign name'] || r['Ad group name'] || r['Keyword text'] || r['Product targeting expression'] || r['Portfolio name'] || r['Campaign ID'] || '—'
   const exportHref = `${getBackendUrl()}/api/advertising/bulk/export?limit=500`
 
   const counts = { Create: 0, Update: 0, Archive: 0, Read: 0, errors: 0 }
@@ -164,37 +214,12 @@ export function BulkOpsClient() {
           {diffLoading && <div className="az-empty">Loading automation changes...</div>}
           {!diffLoading && diffItems?.length === 0 && <div className="az-empty" style={{ border: '1px solid var(--divider)', borderRadius: 10 }}>No automation-driven changes yet. Enable a rule and let it fire.</div>}
           {!diffLoading && (diffItems ?? []).length > 0 && (
-            <div className="az-tablewrap">
-              <table className="az-table">
-                <thead><tr>
-                  <th className="l">Rule</th><th className="l">Campaign</th><th className="l">Field</th><th>Before</th><th>After</th><th className="l">Reason</th><th className="l">When</th>
-                </tr></thead>
-                <tbody>
-                  {(diffItems ?? []).map(item => {
-                    const c = item.campaign
-                    const mkt = c?.marketplace
-                    const amzHref = c?.externalCampaignId && mkt ? buildAmazonCampaignHref(c.externalCampaignId, mkt, profileMap) : null
-                    const ruleId = item.changedBy?.replace('automation:', '')
-                    const isBid = item.field === 'bid' || item.field === 'dailyBudget' || item.field === 'defaultBid'
-                    return (
-                      <tr key={item.id}>
-                        <td className="l"><span className="sub" style={{ fontSize: 10.5 }}>{ruleId?.slice(0, 12)}...</span></td>
-                        <td className="l">
-                          {c ? <a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a> : <span className="sub">{item.campaignId ?? item.entityId.slice(0, 12)}</span>}
-                          {amzHref && <><br /><a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--link)', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>Amazon <ExternalLink size={9} /></a></>}
-                          {mkt && <span className="az-badge" style={{ marginLeft: 4 }}>{mkt}</span>}
-                        </td>
-                        <td className="l" style={{ fontWeight: 600 }}>{item.field}</td>
-                        <td className="num" style={{ color: 'var(--ink2)' }}>{isBid ? eur(item.oldValue) : item.oldValue ?? '—'}</td>
-                        <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{isBid ? eur(item.newValue) : item.newValue ?? '—'}</td>
-                        <td className="l"><span className="sub">{item.reason ?? '—'}</span></td>
-                        <td className="l"><span className="sub" title={new Date(item.changedAt).toLocaleString()}>{relTime(item.changedAt)}</span></td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataGrid<BidHistoryItem>
+                rows={diffItems ?? []}
+                rowKey={(item) => item.id}
+                columns={diffColumns(profileMap)}
+                emptyState="No changes in this window."
+              />
           )}
         </div>
       )}
@@ -256,30 +281,12 @@ export function BulkOpsClient() {
             )
           })()}
 
-          <div className="az-tablewrap">
-            <table className="az-table">
-              <thead><tr>
-                <th className="l" style={{ width: 44 }}>#</th>
-                <th className="l">Product</th><th className="l">Entity</th><th className="l">Operation</th>
-                <th className="l">Campaign / item</th><th className="l">Match</th><th>Bid / Budget</th>
-                <th className="l">Status</th>
-              </tr></thead>
-              <tbody>
-                {rows.map((v, i) => (
-                  <tr key={i}>
-                    <td className="l sub">{i + 1}</td>
-                    <td className="l">{v.r['Product'] || '—'}</td>
-                    <td className="l"><span className="az-pill">{v.r['Entity'] || '—'}</span></td>
-                    <td className="l">{v.r['Operation'] ? <span className="az-pill">{v.r['Operation']}</span> : <span className="sub">read</span>}</td>
-                    <td className="l">{keyField(v.r)}</td>
-                    <td className="l">{v.r['Match type'] || '—'}</td>
-                    <td className="num">{v.r['Bid'] || v.r['Daily budget'] || v.r['Budget'] || '—'}</td>
-                    <td className="l">{v.ok ? <span className="az-rowstat ok"><CheckCircle2 size={14} />{v.msg}</span> : <span className="az-rowstat err"><AlertCircle size={14} />{v.msg}</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid<VRow>
+              rows={rows}
+              rowKey={(v) => `${v.op}:${v.r['Product'] ?? ''}:${keyField(v.r)}`}
+              columns={previewColumns(rows)}
+              emptyState="Nothing to preview yet — upload a sheet above."
+            />
         </>
       )}
       </>)}
