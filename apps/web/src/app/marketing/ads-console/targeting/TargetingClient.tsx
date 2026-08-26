@@ -17,6 +17,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
 
@@ -31,12 +32,84 @@ interface ST {
   impressions: number; clicks: number; costUnits: number; salesCents: number; orders: number; acos: number | null; roas: number | null; ctr: number | null; cpc: number | null; isCandidate: boolean
 }
 
+/** Both specs are factories — every cell that edits or acts needs component state.
+ *
+ *  The SORT lives here now, as `sortValue` per column. It used to be a 12-case `switch` in a
+ *  `useMemo` that had to be kept in step with fourteen `onClick={() => toggleSort('...')}`
+ *  handlers by hand; a key typo'd in one place and not the other would sort by the wrong column
+ *  silently. `sortable` + `sortValue` puts each column's ordering rule on the column.
+ *
+ *  Alignment inverts between `.az-table` and `.nds-grid`: the ten columns that carried no `.l`
+ *  are the right-aligned ones. `.sub` → `.az-cell-sub`; `.az-badge` is unscoped and survives. */
+const targetColumns = (ctx: {
+  edit: Record<string, string>
+  setEdit: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  saveBid: (t: Targ) => void | Promise<void>
+  busy: string | null
+}): Array<Column<Targ>> => [
+  { key: 'text', label: 'Keyword / target', sortable: true, sortValue: (t) => t.text,
+    render: (t) => (<><div style={{ fontWeight: 500 }}>{t.text}</div><div className="az-cell-sub">{MATCH_LABEL[t.kind] ?? t.kind}</div></>) },
+  { key: 'match', label: 'Match', sortable: true, sortValue: (t) => t.matchType,
+    render: (t) => <span className="az-badge paused">{MATCH_LABEL[t.matchType] ?? t.matchType}</span> },
+  { key: 'campaign', label: 'Campaign', sortable: true, sortValue: (t) => t.campaignName,
+    render: (t) => (<>{t.campaignName}<div className="az-cell-sub">{marketplaceCountryName(t.marketplace) || ''}</div></>) },
+  { key: 'status', label: 'Status', sortable: true, sortValue: (t) => t.status, render: (t) => statusBadge(t.status) },
+  { key: 'bidCents', label: 'Bid', align: 'right', sortable: true, sortValue: (t) => t.bidCents, render: (t) => (
+    ctx.edit[t.id] != null
+      ? <Input autoFocus aria-label="Bid" type="number" step="0.01" prefix="€" style={{ width: 62, textAlign: 'right' }} value={ctx.edit[t.id]}
+          onChange={(e) => ctx.setEdit((x) => ({ ...x, [t.id]: e.target.value }))}
+          onKeyDown={(e) => { if (e.key === 'Enter') void ctx.saveBid(t); if (e.key === 'Escape') ctx.setEdit((x) => { const y = { ...x }; delete y[t.id]; return y }) }}
+          onBlur={() => void ctx.saveBid(t)} disabled={ctx.busy === t.id} />
+      : <Button variant="quiet" size="sm" onClick={() => ctx.setEdit((x) => ({ ...x, [t.id]: (t.bidCents / 100).toFixed(2) }))}>{eur(t.bidCents)}</Button>
+  ) },
+  { key: 'impressions', label: 'Impressions', align: 'right', sortable: true, sortValue: (t) => t.impressions, render: (t) => num(t.impressions) },
+  { key: 'clicks', label: 'Clicks', align: 'right', sortable: true, sortValue: (t) => t.clicks, render: (t) => num(t.clicks) },
+  { key: 'ctr', label: 'CTR', align: 'right', sortable: true, sortValue: (t) => (t.impressions > 0 ? t.clicks / t.impressions : -1),
+    render: (t) => pct(t.impressions > 0 ? t.clicks / t.impressions : null, 2) },
+  { key: 'spendCents', label: 'Spend', align: 'right', sortable: true, sortValue: (t) => t.spendCents, render: (t) => eur(t.spendCents) },
+  { key: 'cpc', label: 'CPC', align: 'right', sortable: true, sortValue: (t) => (t.clicks > 0 ? t.spendCents / t.clicks : -1),
+    render: (t) => eur(t.clicks > 0 ? t.spendCents / t.clicks : null) },
+  { key: 'orders', label: 'Orders', align: 'right', sortable: true, sortValue: (t) => t.orders, render: (t) => num(t.orders) },
+  { key: 'salesCents', label: 'Sales', align: 'right', sortable: true, sortValue: (t) => t.salesCents, render: (t) => eur(t.salesCents) },
+  { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (t) => t.acos ?? -1, render: (t) => pct(t.acos) },
+  { key: 'roas', label: 'ROAS', align: 'right', sortable: true, sortValue: (t) => t.roas ?? -1, render: (t) => (t.roas == null ? '—' : `${t.roas.toFixed(1)}×`) },
+]
+
+const searchTermColumns = (ctx: {
+  campMap: Record<string, string>
+  done: Record<string, string>
+  busy: string | null
+  promote: (r: ST, m: 'EXACT' | 'PHRASE') => void | Promise<void>
+  negate: (r: ST) => void | Promise<void>
+}): Array<Column<ST>> => [
+  { key: 'query', label: 'Search term', render: (r) => (<><span style={{ fontWeight: 500 }}>{r.query}</span>{r.isCandidate && <span className="az-badge warn" style={{ marginLeft: 8 }}>waste</span>}</>) },
+  { key: 'match', label: 'Match', render: (r) => (r.matchType ? <span className="az-badge paused">{MATCH_LABEL[r.matchType] ?? r.matchType}</span> : '—') },
+  { key: 'campaign', label: 'Campaign', render: (r) => (<>{ctx.campMap[r.campaignId] ?? <span className="az-cell-sub">{r.campaignId}</span>}<div className="az-cell-sub">{marketplaceCountryName(r.marketplace) || ''}</div></>) },
+  { key: 'impressions', label: 'Impressions', align: 'right', render: (r) => num(r.impressions) },
+  { key: 'clicks', label: 'Clicks', align: 'right', render: (r) => num(r.clicks) },
+  { key: 'spend', label: 'Spend', align: 'right', render: (r) => eur(Math.round(r.costUnits * 100)) },
+  { key: 'orders', label: 'Orders', align: 'right', render: (r) => num(r.orders) },
+  { key: 'sales', label: 'Sales', align: 'right', render: (r) => eur(r.salesCents) },
+  { key: 'acos', label: 'ACOS', align: 'right', render: (r) => pct(r.acos) },
+  { key: 'harvest', label: 'Harvest', width: 230, render: (r) => {
+    const k = `${r.query}:${r.campaignId}`; const d = ctx.done[k]; const b = ctx.busy === k
+    return d
+      ? <span className="az-badge deliver"><Check size={12} /> {d === 'neg' ? 'Negated' : d === 'exact' ? 'Added exact' : 'Added phrase'}</span>
+      : (<span style={{ display: 'inline-flex', gap: 6 }}>
+          <Button size="sm" disabled={b} onClick={() => void ctx.promote(r, 'EXACT')} title="Add as exact keyword"><Plus size={13} />Exact</Button>
+          <Button size="sm" disabled={b} onClick={() => void ctx.promote(r, 'PHRASE')} title="Add as phrase keyword"><Plus size={13} />Phrase</Button>
+          <Button size="sm" disabled={b} onClick={() => void ctx.negate(r)} title="Add as negative exact"><Ban size={13} />Negate</Button>
+        </span>)
+  } },
+]
+
 const TABS = [{ k: 'targeting', label: 'Keywords & targets' }, { k: 'searchterms', label: 'Search terms' }]
 const RANGES = [{ d: 7, label: 'Last 7 days' }, { d: 14, label: 'Last 14 days' }, { d: 30, label: 'Last 30 days' }, { d: 60, label: 'Last 60 days' }, { d: 90, label: 'Last 90 days' }]
 const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
 const num = (n: number | null | undefined) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(Math.round(n)))
 const pct = (v: number | null | undefined, dp = 1) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
-const x2 = (v: number | null | undefined) => (v == null ? '—' : v.toFixed(2))
+/** Pure in its argument; hoisted so the module-level column spec can reach it. */
+const statusBadge = (s: string) => s === 'ENABLED' ? <span className="az-badge deliver">Delivering</span> : <span className="az-badge paused">{s.charAt(0) + s.slice(1).toLowerCase()}</span>
 const MATCH_LABEL: Record<string, string> = { EXACT: 'Exact', PHRASE: 'Phrase', BROAD: 'Broad', ASIN: 'Product', CATEGORY_REFINEMENT: 'Category', CATEGORY: 'Category', AUTO: 'Auto' }
 
 export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) {
@@ -48,8 +121,6 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
   const [targets, setTargets] = useState<Targ[]>(initialTargets)
   const [tLoading, setTLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState('spendCents')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [edit, setEdit] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -63,23 +134,14 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
   useEffect(() => { void refetchTargets() }, [refetchTargets])
   useMarketingEvents(useCallback(() => { if (tab === 'targeting') void refetchTargets() }, [tab, refetchTargets]))
 
-  const tSorted = useMemo(() => {
-    let r = targets
-    if (search.trim()) { const q = search.toLowerCase(); r = r.filter((t) => t.text.toLowerCase().includes(q) || t.campaignName.toLowerCase().includes(q)) }
-    const dir = sortDir === 'asc' ? 1 : -1
-    const val = (t: Targ): number | string => {
-      switch (sortKey) {
-        case 'text': return t.text; case 'match': return t.matchType; case 'campaign': return t.campaignName; case 'status': return t.status
-        case 'bidCents': return t.bidCents; case 'impressions': return t.impressions; case 'clicks': return t.clicks
-        case 'ctr': return t.impressions > 0 ? t.clicks / t.impressions : -1; case 'spendCents': return t.spendCents
-        case 'cpc': return t.clicks > 0 ? t.spendCents / t.clicks : -1; case 'orders': return t.orders; case 'salesCents': return t.salesCents
-        case 'acos': return t.acos ?? -1; case 'roas': return t.roas ?? -1; default: return t.spendCents
-      }
-    }
-    return [...r].sort((a, b) => { const av = val(a), bv = val(b); return typeof av === 'string' && typeof bv === 'string' ? av.localeCompare(bv) * dir : ((av as number) - (bv as number)) * dir })
-  }, [targets, search, sortKey, sortDir])
-  const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
-  const arrow = (k: string) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
+  /** Filter only. The SORT moved into the column spec as `sortValue` per column, which is where
+   *  a column's own ordering rule belongs — it replaces a 12-case `switch` that had to be kept
+   *  in step with the header row by hand. `DataGrid` owns the sort state from `initialSort`. */
+  const tFiltered = useMemo(() => {
+    if (!search.trim()) return targets
+    const q = search.toLowerCase()
+    return targets.filter((t) => t.text.toLowerCase().includes(q) || t.campaignName.toLowerCase().includes(q))
+  }, [targets, search])
 
   const saveBid = async (t: Targ) => {
     const v = edit[t.id]; if (v == null) return
@@ -137,7 +199,6 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
     } finally { setBusy(null) }
   }
 
-  const statusBadge = (s: string) => s === 'ENABLED' ? <span className="az-badge deliver">Delivering</span> : <span className="az-badge paused">{s.charAt(0) + s.slice(1).toLowerCase()}</span>
 
   return (
     <div className="az-wrap">
@@ -177,95 +238,24 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
       </div>
 
       {tab === 'targeting' ? (
-        <div className="az-tablewrap">
-          <table className="az-table">
-            <thead><tr>
-              <th className="l" onClick={() => toggleSort('text')}>Keyword / target{arrow('text')}</th>
-              <th className="l" onClick={() => toggleSort('match')}>Match{arrow('match')}</th>
-              <th className="l" onClick={() => toggleSort('campaign')}>Campaign{arrow('campaign')}</th>
-              <th className="l" onClick={() => toggleSort('status')}>Status{arrow('status')}</th>
-              <th onClick={() => toggleSort('bidCents')}>Bid{arrow('bidCents')}</th>
-              <th onClick={() => toggleSort('impressions')}>Impressions{arrow('impressions')}</th>
-              <th onClick={() => toggleSort('clicks')}>Clicks{arrow('clicks')}</th>
-              <th onClick={() => toggleSort('ctr')}>CTR{arrow('ctr')}</th>
-              <th onClick={() => toggleSort('spendCents')}>Spend{arrow('spendCents')}</th>
-              <th onClick={() => toggleSort('cpc')}>CPC{arrow('cpc')}</th>
-              <th onClick={() => toggleSort('orders')}>Orders{arrow('orders')}</th>
-              <th onClick={() => toggleSort('salesCents')}>Sales{arrow('salesCents')}</th>
-              <th onClick={() => toggleSort('acos')}>ACOS{arrow('acos')}</th>
-              <th onClick={() => toggleSort('roas')}>ROAS{arrow('roas')}</th>
-            </tr></thead>
-            <tbody>
-              {tSorted.length === 0 && <tr><td className="az-empty" colSpan={14}>{tLoading ? 'Loading…' : 'No keywords or targets yet.'}</td></tr>}
-              {tSorted.map((t) => {
-                const ctr = t.impressions > 0 ? t.clicks / t.impressions : null, cpc = t.clicks > 0 ? t.spendCents / t.clicks : null
-                return (
-                  <tr key={t.id}>
-                    <td className="l"><div style={{ fontWeight: 500 }}>{t.text}</div><div className="sub">{MATCH_LABEL[t.kind] ?? t.kind}</div></td>
-                    <td className="l"><span className="az-badge paused">{MATCH_LABEL[t.matchType] ?? t.matchType}</span></td>
-                    <td className="l">{t.campaignName}<div className="sub">{marketplaceCountryName(t.marketplace) || ''}</div></td>
-                    <td className="l">{statusBadge(t.status)}</td>
-                    <td className="num">{edit[t.id] != null
-                      ? <Input autoFocus aria-label="Bid" type="number" step="0.01" prefix="€" style={{ width: 62, textAlign: 'right' }} value={edit[t.id]} onChange={(e) => setEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBid(t); if (e.key === 'Escape') setEdit((s) => { const x = { ...s }; delete x[t.id]; return x }) }} onBlur={() => void saveBid(t)} disabled={busy === t.id} />
-                      : <Button variant="quiet" size="sm" onClick={() => setEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))}>{eur(t.bidCents)}</Button>}</td>
-                    <td className="num">{num(t.impressions)}</td>
-                    <td className="num">{num(t.clicks)}</td>
-                    <td className="num">{pct(ctr, 2)}</td>
-                    <td className="num">{eur(t.spendCents)}</td>
-                    <td className="num">{eur(cpc)}</td>
-                    <td className="num">{num(t.orders)}</td>
-                    <td className="num">{eur(t.salesCents)}</td>
-                    <td className="num">{pct(t.acos)}</td>
-                    <td className="num">{x2(t.roas)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<Targ>
+            rows={tFiltered}
+            rowKey={(t) => t.id}
+            columns={targetColumns({ edit, setEdit, saveBid, busy })}
+            initialSort={{ key: 'spendCents', dir: 'desc' }}
+            emptyState={tLoading ? 'Loading…' : 'No keywords or targets yet.'}
+          />
       ) : (
-        <div className="az-tablewrap">
-          <table className="az-table">
-            <thead><tr>
-              <th className="l">Search term</th>
-              <th className="l">Match</th>
-              <th className="l">Campaign</th>
-              <th>Impressions</th><th>Clicks</th><th>Spend</th><th>Orders</th><th>Sales</th><th>ACOS</th>
-              <th className="l" style={{ minWidth: 230 }}>Harvest</th>
-            </tr></thead>
-            <tbody>
-              {st.length === 0 && <tr><td className="az-empty" colSpan={10}>{stLoading ? 'Loading search terms…' : stLoaded ? 'No search terms match these filters.' : 'Loading…'}</td></tr>}
-              {st.map((r, i) => {
-                const key = `${r.query}:${r.campaignId}`; const d = done[key]; const b = busy === key
-                return (
-                  <tr key={`${key}:${i}`}>
-                    <td className="l"><span style={{ fontWeight: 500 }}>{r.query}</span>{r.isCandidate && <span className="az-badge warn" style={{ marginLeft: 8 }}>waste</span>}</td>
-                    <td className="l">{r.matchType ? <span className="az-badge paused">{MATCH_LABEL[r.matchType] ?? r.matchType}</span> : '—'}</td>
-                    <td className="l">{campMap[r.campaignId] ?? <span className="sub">{r.campaignId}</span>}<div className="sub">{marketplaceCountryName(r.marketplace) || ''}</div></td>
-                    <td className="num">{num(r.impressions)}</td>
-                    <td className="num">{num(r.clicks)}</td>
-                    <td className="num">{eur(Math.round(r.costUnits * 100))}</td>
-                    <td className="num">{num(r.orders)}</td>
-                    <td className="num">{eur(r.salesCents)}</td>
-                    <td className="num">{pct(r.acos)}</td>
-                    <td className="l">
-                      {d ? <span className="az-badge deliver"><Check size={12} /> {d === 'neg' ? 'Negated' : d === 'exact' ? 'Added exact' : 'Added phrase'}</span>
-                        : <span style={{ display: 'inline-flex', gap: 6 }}>
-                          <Button size="sm" disabled={b} onClick={() => void promote(r, 'EXACT')} title="Add as exact keyword"><Plus size={13} />Exact</Button>
-                          <Button size="sm" disabled={b} onClick={() => void promote(r, 'PHRASE')} title="Add as phrase keyword"><Plus size={13} />Phrase</Button>
-                          <Button size="sm" disabled={b} onClick={() => void negate(r)} title="Add as negative exact"><Ban size={13} />Negate</Button>
-                        </span>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<ST>
+            rows={st}
+            rowKey={(r) => `${r.query}:${r.campaignId}`}
+            columns={searchTermColumns({ campMap, done, busy, promote, negate })}
+            emptyState={stLoading ? 'Loading search terms…' : stLoaded ? 'No search terms match these filters.' : 'Loading…'}
+          />
       )}
 
       <div className="az-pager">
-        <span className="count">{tab === 'targeting' ? `${tSorted.length} keywords & targets` : `${st.length} search terms`} · last {days} days{(tab === 'targeting' ? tLoading : stLoading) ? ' · updating…' : ''}</span>
+        <span className="count">{tab === 'targeting' ? `${tFiltered.length} keywords & targets` : `${st.length} search terms`} · last {days} days{(tab === 'targeting' ? tLoading : stLoading) ? ' · updating…' : ''}</span>
       </div>
     </div>
   )
