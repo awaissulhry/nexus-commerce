@@ -19,7 +19,7 @@ import { pickMetricFilters } from '../../../../_grid/filters'
 import { bulkPatch, AdjustBidModal } from '../../../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
-import { naCell } from '../../../../../_shared/RuleColumnCells'
+import { ColumnNA, naCell } from '../../../../../_shared/RuleColumnCells'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
 import { Listbox } from '@/design-system/components'
@@ -48,6 +48,18 @@ interface TargetRow {
   otherSales?: number | null
   otherSalesPct?: number | null
   lastSyncedAt?: string | null
+}
+
+
+/**
+ * ADM-A4 — a total over a column that can be null per row. Sums only the rows that reported, and
+ * when NONE did it repeats the cell's own explanation rather than printing 0 — a total of nothing
+ * measured is not zero, and the Total row is exactly where that lie would look most authoritative.
+ */
+function naTotal(rows: TargetRow[], pick: (r: TargetRow) => number | null | undefined,
+                 absence: Parameters<typeof naCell>[0], fmt: (n: number) => string) {
+  const vals = rows.map(pick).filter((v): v is number => v != null)
+  return vals.length ? fmt(vals.reduce((a, b) => a + b, 0)) : <ColumnNA absence={absence} />
 }
 
 const spendOf = (r: TargetRow) => num(r.spendCents) / 100
@@ -81,25 +93,25 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
     { key: 'cpc', label: 'CPC', tip: METRIC_TIPS.cpc, render: (r) => eur(cpcOf(r)), sortValue: cpcOf, filterValue: cpcOf, total: (vr) => { const T = tot(vr); return eur(T.clicks ? T.spend / T.clicks : 0) } },
     { key: 'ppcOrders', label: 'PPC Orders', tip: METRIC_TIPS.ppcOrders, render: (r) => int(r.ordersCount), sortValue: (r) => num(r.ordersCount), filterValue: (r) => num(r.ordersCount), total: (vr) => { const T = tot(vr); return int(T.orders) } },
     { key: 'cvr', label: 'CVR', tip: METRIC_TIPS.cvr, render: (r) => `${cvrOf(r).toFixed(2)}%`, sortValue: cvrOf, filterValue: cvrOf, total: (vr) => { const T = tot(vr); return `${(T.clicks ? (T.orders / T.clicks) * 100 : 0).toFixed(2)}%` } },
-    { key: 'kindleReads', label: 'Kindle Reads', defaultHidden: true, sortable: false, render: naCell('awaiting-first-ingest'), total: '—' },
-    { key: 'kindleRoyalties', label: 'Kindle Royalties', defaultHidden: true, sortable: false, render: naCell('awaiting-first-ingest'), total: '—' },
+    { key: 'kindleReads', label: 'Kindle Reads', defaultHidden: true, sortable: false, render: naCell('awaiting-first-ingest'), total: <ColumnNA absence="awaiting-first-ingest" /> },
+    { key: 'kindleRoyalties', label: 'Kindle Royalties', defaultHidden: true, sortable: false, render: naCell('awaiting-first-ingest'), total: <ColumnNA absence="awaiting-first-ingest" /> },
     { key: 'saleUnits', label: 'Sale Units', defaultHidden: true, render: (r) => (r.saleUnits == null ? naCell('nothing-reported')() : int(r.saleUnits)), sortValue: (r) => num(r.saleUnits), total: (vr) => int(vr.reduce((n, r) => n + num(r.saleUnits), 0)) },
     { key: 'cpa', label: 'CPA', tip: 'Cost per acquisition = spend ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(spendOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? spendOf(r) / num(r.ordersCount) : 0), total: (vr) => { const T = tot(vr); return T.orders ? eur(T.spend / T.orders) : '—' } },
-    { key: 'viewImpr', label: 'View Impr.', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
+    { key: 'viewImpr', label: 'View Impr.', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
     { key: 'aov', label: 'AOV', tip: 'Average order value = sales ÷ orders', defaultHidden: true, render: (r) => (num(r.ordersCount) ? eur(salesOf(r) / num(r.ordersCount)) : '—'), sortValue: (r) => (num(r.ordersCount) ? salesOf(r) / num(r.ordersCount) : 0), total: (vr) => { const T = tot(vr); return T.orders ? eur(T.sales / T.orders) : '—' } },
-    { key: 'asp', label: 'ASP', defaultHidden: true, render: (r) => (r.asp == null ? naCell('nothing-reported')() : eur(r.asp)), sortValue: (r) => num(r.asp), total: '—' },
-    { key: 'otherSales', label: 'Other Sales', defaultHidden: true, render: (r) => (r.otherSales == null ? naCell('awaiting-first-ingest')() : eur(r.otherSales)), sortValue: (r) => num(r.otherSales), total: '—' },
-    { key: 'otherSalesPct', label: 'Other Sales %', defaultHidden: true, render: (r) => (r.otherSalesPct == null ? naCell('awaiting-first-ingest')() : `${(r.otherSalesPct * 100).toFixed(2)}%`), sortValue: (r) => num(r.otherSalesPct), total: '—' },
-    { key: 'ntbOrders', label: 'NTB-Orders', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'ntbOrdersPct', label: 'NTB-Orders%', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'ntbOrderRate', label: 'NTB-OrderRate', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'ntbSales', label: 'NTB-Sales', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'ntbSalesPct', label: 'NTB-Sales%', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'ntbUnits', label: 'NTB-Units', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'ntbUnitsPct', label: 'NTB-Units%', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: '—' },
-    { key: 'sameSkuSales', label: 'SameSKU Sales', defaultHidden: true, render: (r) => (r.sameSkuSales == null ? naCell('awaiting-first-ingest')() : eur(r.sameSkuSales)), sortValue: (r) => num(r.sameSkuSales), total: '—' },
-    { key: 'sameSkuSaleUnits', label: 'SameSKU Sale Units', defaultHidden: true, render: (r) => (r.sameSkuSaleUnits == null ? naCell('awaiting-first-ingest')() : int(r.sameSkuSaleUnits)), sortValue: (r) => num(r.sameSkuSaleUnits), total: '—' },
-    { key: 'sameSkuOrders', label: 'SameSKU Orders', defaultHidden: true, render: (r) => (r.sameSkuOrders == null ? naCell('awaiting-first-ingest')() : int(r.sameSkuOrders)), sortValue: (r) => num(r.sameSkuOrders), total: '—' },
+    { key: 'asp', label: 'ASP', defaultHidden: true, render: (r) => (r.asp == null ? naCell('nothing-reported')() : eur(r.asp)), sortValue: (r) => num(r.asp), total: (vr) => { const u = vr.map((r) => r.saleUnits).filter((v): v is number => v != null).reduce((a, b) => a + b, 0); const sa = vr.reduce((n, r) => n + salesOf(r), 0); return u > 0 ? eur(sa / u) : <ColumnNA absence="nothing-reported" /> } },
+    { key: 'otherSales', label: 'Other Sales', defaultHidden: true, render: (r) => (r.otherSales == null ? naCell('awaiting-first-ingest')() : eur(r.otherSales)), sortValue: (r) => num(r.otherSales), total: (vr) => naTotal(vr, (r) => r.otherSales, 'awaiting-first-ingest', eur) },
+    { key: 'otherSalesPct', label: 'Other Sales %', defaultHidden: true, render: (r) => (r.otherSalesPct == null ? naCell('awaiting-first-ingest')() : `${(r.otherSalesPct * 100).toFixed(2)}%`), sortValue: (r) => num(r.otherSalesPct), total: (vr) => { const o = vr.map((r) => r.otherSales).filter((v): v is number => v != null); const sa = vr.reduce((n, r) => n + salesOf(r), 0); return o.length && sa > 0 ? `${((o.reduce((a, b) => a + b, 0) / sa) * 100).toFixed(2)}%` : <ColumnNA absence="awaiting-first-ingest" /> } },
+    { key: 'ntbOrders', label: 'NTB-Orders', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'ntbOrdersPct', label: 'NTB-Orders%', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'ntbOrderRate', label: 'NTB-OrderRate', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'ntbSales', label: 'NTB-Sales', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'ntbSalesPct', label: 'NTB-Sales%', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'ntbUnits', label: 'NTB-Units', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'ntbUnitsPct', label: 'NTB-Units%', defaultHidden: true, sortable: false, render: naCell('not-offered-sp'), total: <ColumnNA absence="not-offered-sp" /> },
+    { key: 'sameSkuSales', label: 'SameSKU Sales', defaultHidden: true, render: (r) => (r.sameSkuSales == null ? naCell('awaiting-first-ingest')() : eur(r.sameSkuSales)), sortValue: (r) => num(r.sameSkuSales), total: (vr) => naTotal(vr, (r) => r.sameSkuSales, 'awaiting-first-ingest', eur) },
+    { key: 'sameSkuSaleUnits', label: 'SameSKU Sale Units', defaultHidden: true, render: (r) => (r.sameSkuSaleUnits == null ? naCell('awaiting-first-ingest')() : int(r.sameSkuSaleUnits)), sortValue: (r) => num(r.sameSkuSaleUnits), total: (vr) => naTotal(vr, (r) => r.sameSkuSaleUnits, 'awaiting-first-ingest', int) },
+    { key: 'sameSkuOrders', label: 'SameSKU Orders', defaultHidden: true, render: (r) => (r.sameSkuOrders == null ? naCell('awaiting-first-ingest')() : int(r.sameSkuOrders)), sortValue: (r) => num(r.sameSkuOrders), total: (vr) => naTotal(vr, (r) => r.sameSkuOrders, 'awaiting-first-ingest', int) },
   ], [])
 
   const tgtNames = useMemo(() => Array.from(new Set(rows.map((r) => r.expressionValue))), [rows])
