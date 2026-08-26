@@ -25,6 +25,14 @@ import { fetchBusinessContext, type BusinessContext } from './business-api'
 import { fmtCount, fmtMoney, fmtShare } from './strategy-api'
 import { BlockedNote, Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
 
+/** Amazon's own names, so a reader is not left to expand SP/SB/SD themselves. */
+const AD_PRODUCT_NAME: Record<string, string> = {
+  SP: 'Sponsored Products',
+  SB: 'Sponsored Brands',
+  SD: 'Sponsored Display',
+  ST: 'Sponsored TV',
+}
+
 const CHART_METRICS: ChartMetric[] = [
   { key: 'tacos', label: 'TACoS', unit: 'pct' },
   { key: 'adShare', label: 'Ad-attributed share of sales', unit: 'pct' },
@@ -181,6 +189,37 @@ export function BusinessTab({ market }: { market: string }) {
             </div>
           ))}
         </div>
+      </Card>
+
+      <Card
+        header="Where the spend goes by ad type"
+        description="Every campaign on the account, whether or not it ran in this window."
+      >
+        <div className="rpx-mix">
+          {data.adMix.map((m) => {
+            const top = data.adMix[0]?.spend ?? 0
+            return (
+              <div key={m.adProduct} className={`row${m.enabled === 0 ? ' is-idle' : ''}`}>
+                <span className="n">{AD_PRODUCT_NAME[m.adProduct] ?? m.adProduct}</span>
+                <span className="c">
+                  {m.enabled === 0
+                    ? <Pill tone="neutral">{m.campaigns} {m.campaigns === 1 ? 'campaign' : 'campaigns'}, all paused</Pill>
+                    : <>{m.enabled} of {m.campaigns} running</>}
+                </span>
+                <span className="bar"><i style={{ width: `${top > 0 ? Math.round((m.spend / top) * 100) : 0}%` }} /></span>
+                {/* A zero here is a real zero: the campaigns exist and did not run. */}
+                <span className="s">{m.spend === 0 && m.enabled === 0 ? '—' : fmtMoney(m.spend)}</span>
+              </div>
+            )
+          })}
+        </div>
+        {data.adMix.filter((m) => m.enabled > 0).length === 1 && (
+          <BlockedNote title="This is also why cross-ad attribution is empty" tone="neutral">
+            Every Amazon Marketing Cloud view compares ad types against each other, and one type is
+            running. An instance granted tomorrow would draw a diagram of one circle — and none is
+            provisioned for this account either, so AMC is blocked twice over.
+          </BlockedNote>
+        )}
       </Card>
 
       <div className="rpx-two">

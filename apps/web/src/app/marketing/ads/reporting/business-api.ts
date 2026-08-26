@@ -23,6 +23,14 @@ export interface BusinessWeek {
   partial: boolean
 }
 
+/** Spend and campaign counts per ad product — and the measured reason AMC is empty. */
+export interface AdProductMix {
+  adProduct: string
+  campaigns: number
+  enabled: number
+  spend: number
+}
+
 export interface BusinessContext {
   window: { from: string; to: string }
   currency: string
@@ -33,6 +41,7 @@ export interface BusinessContext {
   series: BusinessWeek[]
   /** The last day BOTH feeds cover. Every week ending after it is partial. */
   completeThrough: string | null
+  adMix: AdProductMix[]
   wasted: {
     amount: number
     terms: number

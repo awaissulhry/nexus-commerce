@@ -82,6 +82,23 @@ export interface BusinessWeek {
   partial: boolean
 }
 
+/**
+ * Where the ad money goes by ad PRODUCT — and, from the same rows, why cross-ad attribution is
+ * empty on this account.
+ *
+ * Every Amazon Marketing Cloud view compares ad types against each other. An account running one
+ * type would get a diagram of one circle, so the mix is the honest place to say so: it is the
+ * same fact, measured, rather than a separate claim in a footnote.
+ */
+export interface AdProductMix {
+  /** SP | SB | SD, as the Campaign table spells it. */
+  adProduct: string
+  campaigns: number
+  enabled: number
+  /** Spend in the window. A zero here is real — the campaigns exist and did not run. */
+  spend: number
+}
+
 export interface BusinessContext {
   window: { from: string; to: string }
   currency: string
@@ -96,6 +113,8 @@ export interface BusinessContext {
    * date the client names when it says so.
    */
   completeThrough: string | null
+  /** Spend and campaign counts per ad product, ordered by spend. */
+  adMix: AdProductMix[]
   wasted: {
     amount: number
     terms: number
@@ -233,7 +252,7 @@ export async function businessContext(opts: {
    * understates what the platform can now do. So the coverage is counted per request and the
    * sentence is built from what came back.
    */
-  const [weekRows, boundsRow, cogsRow] = await Promise.all([
+  const [weekRows, boundsRow, cogsRow, mixRows] = await Promise.all([
     prisma.$queryRawUnsafe<Array<{ week: string; spend: number; sales: number; total: number }>>(`
       WITH ad AS (
         SELECT DATE_TRUNC('week', p."date")::date AS wk,
@@ -268,6 +287,20 @@ export async function businessContext(opts: {
       SELECT COUNT(*)::int AS rows,
              COUNT(*) FILTER (WHERE "cogsCents" IS NOT NULL AND "cogsCents" <> 0)::int AS with_cogs
       FROM "ProductProfitDaily"`),
+
+    // LEFT JOIN, not INNER: an ad type with no spend in the window is exactly the finding here.
+    prisma.$queryRawUnsafe<Array<{ ad_product: string; campaigns: number; enabled: number; spend: number }>>(`
+      SELECT c."type"::text AS ad_product,
+             COUNT(DISTINCT c."id")::int AS campaigns,
+             COUNT(DISTINCT c."id") FILTER (WHERE c."status"::text = 'ENABLED')::int AS enabled,
+             COALESCE(SUM(p."costMicros"), 0)::numeric / 1000000.0 AS spend
+      FROM "Campaign" c
+      LEFT JOIN "AmazonAdsDailyPerformance" p
+        ON p."localEntityId" = c."id" AND p."entityType" = 'CAMPAIGN'
+       AND p."date" >= $1::date AND p."date" <= $2::date
+       AND ${excludeAmsDailySql('p')}
+      WHERE c."status"::text <> 'ARCHIVED'${marketIn('c')}
+      GROUP BY 1 ORDER BY 4 DESC`, opts.from, opts.to),
   ])
 
   const adMax = boundsRow[0]?.ad_max ?? null
@@ -321,6 +354,18 @@ export async function businessContext(opts: {
     caveats.push(`Weeks not yet covered by both feeds are marked partial and drawn hollow${completeThrough ? ` — both reach ${completeThrough}` : ''}.`)
   }
 
+  const adMix: AdProductMix[] = mixRows.map((r) => ({
+    adProduct: r.ad_product,
+    campaigns: num(r.campaigns),
+    enabled: num(r.enabled),
+    spend: num(r.spend),
+  }))
+  const running = adMix.filter((m) => m.enabled > 0)
+  const idle = adMix.filter((m) => m.enabled === 0 && m.campaigns > 0)
+  if (running.length === 1 && idle.length > 0) {
+    caveats.push(`Only ${running[0].adProduct} campaigns are running — ${idle.map((m) => `${m.campaigns} ${m.adProduct}`).join(' and ')} exist and none are enabled. Cross-ad attribution has nothing to compare, so an Amazon Marketing Cloud view of this account would draw one circle.`)
+  }
+
   return {
     window: { from: opts.from, to: opts.to },
     currency: 'EUR',
@@ -329,6 +374,7 @@ export async function businessContext(opts: {
     byMarket,
     series,
     completeThrough,
+    adMix,
     wasted: {
       amount: wastedAmount,
       terms: num(w?.terms),
