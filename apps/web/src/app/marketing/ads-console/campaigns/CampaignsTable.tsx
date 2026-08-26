@@ -11,8 +11,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
-import { Button, ToolbarButton, Toggle } from '@/design-system/primitives'
+import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, ChevronRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
+import { Button, FilterChip, TokenChip, ToolbarButton, Toggle } from '@/design-system/primitives'
 import { DataGrid, Listbox, Pagination, type Column } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -467,10 +467,10 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
 
       <div className="az-chips">
         <span className="ql">Quick filters</span>
-        {QUICK.map((q) => <button key={q.label} className={`az-chip quick ${q.on ? 'on' : ''}`} onClick={q.toggle}>{q.label}</button>)}
+        {QUICK.map((q) => <FilterChip key={q.label} pressed={q.on} onClick={q.toggle}>{q.label}</FilterChip>)}
         {chips.length > 0 && <span style={{ width: 1, height: 18, background: 'var(--divider)', margin: '0 4px' }} />}
-        {chips.map((c) => <span key={c.id} className="az-chip">{c.label}<button className="rm" onClick={c.remove} aria-label="Remove filter"><X size={13} /></button></span>)}
-        {chips.length > 0 && <span className="clear" onClick={() => setFilters(EMPTY_FILTERS)}>Clear all</span>}
+        {chips.map((c) => <TokenChip key={c.id} onRemove={c.remove} removeLabel={`Remove filter: ${c.label}`}>{c.label}</TokenChip>)}
+        {chips.length > 0 && <Button variant="link" inline onClick={() => setFilters(EMPTY_FILTERS)}>Clear all</Button>}
       </div>
 
       {/* Density is the DS `size` tier, NOT a className. `className` lands on `.nds-grid-wrap`,

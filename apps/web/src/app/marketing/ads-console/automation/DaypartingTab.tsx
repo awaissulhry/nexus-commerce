@@ -13,9 +13,9 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Clock, Search, X, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
+import { Clock, Search, TrendingUp, TrendingDown, Package, Zap, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, FilterChip, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input, Toggle, TokenChip, ToolbarButton } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DateField } from '@/design-system/components/DateField'
 import { useCampaignMap, type CampRef } from './useCampaignMap'
@@ -190,11 +190,12 @@ export function DaypartingTab() {
         {/* product typeahead */}
         <div ref={pickRef} style={{ position: 'relative' }}>
           {product ? (
-            <span className="az-chip quick on" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 280 }} title={product.name}>
-              <Package size={12} /><b style={{ fontWeight: 700 }}>{product.sku}</b>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink2)', fontWeight: 500 }}>{product.name}</span>
-              <X size={13} style={{ cursor: 'pointer' }} onClick={() => setProduct(null)} aria-label="Clear product filter" />
-            </span>
+            <TokenChip removeLabel={`Clear product filter: ${product.sku}`} onRemove={() => setProduct(null)}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 280 }} title={product.name}>
+                <Package size={12} /><b style={{ fontWeight: 700 }}>{product.sku}</b>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink2)', fontWeight: 500 }}>{product.name}</span>
+              </span>
+            </TokenChip>
           ) : (
             <Input leadingIcon={<Search size={14} />} aria-label="Filter to one SKU" placeholder="All products — filter to one SKU…" value={pq} onFocus={() => setShowHits(true)} onChange={(e) => { setPq(e.target.value); setShowHits(true) }} style={{ width: 210 }} />
           )}
