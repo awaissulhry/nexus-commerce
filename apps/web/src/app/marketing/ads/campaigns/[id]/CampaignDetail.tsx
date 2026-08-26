@@ -81,9 +81,30 @@ export function CampaignDetail({ id }: { id: string }) {
   const [camp, setCamp] = useState<CampaignDetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * GX.4 — the window comes from the URL when the caller sent one.
+   *
+   * It always seeded a hardcoded last-30-days, which quietly broke every trace INTO this page:
+   * open a campaign from a grid filtered to 1–25 July and the figure you clicked changed under
+   * you on arrival, with nothing to say why. The Explorer, the report runner and any future link
+   * pass `startDate`/`endDate`, and this honours them.
+   *
+   * Parsed to LOCAL midnight, matching the default below — `new Date('2026-07-01')` is UTC
+   * midnight, which is the previous day in Rome and would shift the range by one.
+   */
   const [dateRange, setDateRange] = useState(() => {
     const e = new Date(); e.setHours(0, 0, 0, 0)
     const s = new Date(e); s.setDate(s.getDate() - 29)
+    const day = (v: string | null): Date | null => {
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
+      const [y, m, d] = v.split('-').map(Number)
+      const dt = new Date(y, m - 1, d)
+      return Number.isNaN(dt.getTime()) ? null : dt
+    }
+    const qsStart = day(search.get('startDate'))
+    const qsEnd = day(search.get('endDate'))
+    // Both or neither: half a range is worse than none, because it looks deliberate.
+    if (qsStart && qsEnd && qsStart <= qsEnd) return { start: qsStart, end: qsEnd }
     return { start: s, end: e }
   })
   const [market, setMarket] = useState('all')

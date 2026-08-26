@@ -221,7 +221,10 @@ export async function hierarchyChildren(q: Query): Promise<HierarchyResult> {
         sub: String(r.status ?? ''),
         kind: 'campaign' as NodeKind,
         expandable: true,
-        href: `/marketing/ads/campaigns/${r.id}`,
+        // GX.4 — the window travels with the link. Without it the campaign page seeds its own
+        // last-30-days and the figure you clicked changes on arrival, which breaks the trace at
+        // the first hop.
+        href: `/marketing/ads/campaigns/${r.id}?startDate=${q.from}&endDate=${q.to}`,
         metrics: readMetrics(r),
       })),
       parentMetrics: parent, remainder: null, columns, caveats,
@@ -259,7 +262,7 @@ export async function hierarchyChildren(q: Query): Promise<HierarchyResult> {
     sub: String(r.sub || '') || null,
     kind: (product ? 'product' : 'target') as NodeKind,
     expandable: false,
-    href: product ? `/products?q=${encodeURIComponent(String(r.name))}` : `/marketing/ads/campaigns/${campaignId}`,
+    href: `/marketing/ads/campaigns/${campaignId}?startDate=${q.from}&endDate=${q.to}&tab=${product ? 'ads' : 'ad-groups'}`,
     metrics: readMetrics(r),
   }))
 
@@ -291,6 +294,14 @@ export async function hierarchyChildren(q: Query): Promise<HierarchyResult> {
         metrics: deriveMetrics(additive),
       })
       caveats.push(`${(remainder.pctOfParent * 100).toFixed(1)}% of this campaign’s spend has no ${q.decompose} attribution in this window and is shown as its own row rather than left for the eye to subtract.`)
+      // 🔴 The two surfaces reconcile differently, and a reader who clicks through deserves to
+      // know before the number changes. The campaign detail page ALLOCATES the campaign total
+      // down by product-ad share so its children always sum to the parent; this reports what
+      // Amazon actually reported per child and names the shortfall. Measured 2026-08-26: on a
+      // window where the product feed is complete the two agree to the cent (€0.00 apart on
+      // three campaigns), so this is not two definitions fighting — the remainder IS the measure
+      // of where the feed is incomplete, and it shrinks to nothing as those days are recovered.
+      caveats.push('Opening this campaign shows the same total, with these figures scaled up to fill the gap — that page allocates the campaign total across its children, while this one reports what Amazon reported for each and names the difference. Where the feed is complete the two agree exactly.')
     }
   }
 
