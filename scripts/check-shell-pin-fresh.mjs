@@ -88,14 +88,27 @@ for (const m of shell.matchAll(/(?:^|,|\s)(?:body:has\(\.h10-shell\)|\.h10-shell
   for (const d of m[1].matchAll(/(--nds-[a-z0-9-]+):\s*([^;]+);/g)) pins.set(d[1], d[2].trim()) // later wins
 }
 
-// 3. SCOPE — the portal-covering form must survive. A portal's target IS `body`, so a pin scoped
-// to `.h10-shell` alone cannot reach it, and neither of the other two checks can tell.
-// Comments are STRIPPED first. The block above this rule explains itself using the very string
-// being searched for, so testing the raw file made the check unfailable — narrowing the selector
-// left the prose behind and the guard stayed green. A guard that cannot fail is not a guard.
+// 3. SCOPE — every flipped token must be pinned by a PORTAL-REACHING block.
+// Comments are STRIPPED first. The block above the portal rule explains itself using the very
+// string being searched for, so testing the raw file made the check unfailable — narrowing the
+// selector left the prose behind and the guard stayed green.
 const shellCode = shell.replace(/\/\*[\s\S]*?\*\//g, ' ')
-const PORTAL_SCOPE = /body:has\(\.h10-shell\)\s*(?:,|\{)/
-const scopeLost = !PORTAL_SCOPE.test(shellCode)
+const PORTAL_SCOPE = /body:has\(\.h10-shell\)/
+
+// Per-BLOCK, not per-file. There are three `.h10-shell` pin blocks; testing whether the portal
+// form exists anywhere meant narrowing one block still passed, because the other two matched.
+// What we actually want is stronger and just as static: every token `.dark` flips must be pinned
+// by a block whose OWN selector reaches portals. A token pinned only shell-side is unreachable
+// inside a Listbox or a Modal, and nothing else here can see that.
+const portalPinned = new Set()
+for (const m of shellCode.matchAll(/([^{}]*?)\{([^{}]*)\}/g)) {
+  const selector = m[1]
+  if (!/\.h10-shell/.test(selector)) continue
+  if (!PORTAL_SCOPE.test(selector)) continue
+  for (const d of m[2].matchAll(/(--nds-[a-z0-9-]+):/g)) portalPinned.add(d[1])
+}
+const notPortalScoped = [...flips].filter((t) => !portalPinned.has(t)).sort()
+const scopeLost = notPortalScoped.length > 0
 
 const missing = [...flips].filter((t) => !pins.has(t)).sort()
 const stale = []
@@ -109,7 +122,8 @@ for (const [tok, expr] of pins) {
 
 if (missing.length || stale.length || scopeLost) {
   if (scopeLost) {
-    console.error(`❌ shell-pin SCOPE: the pin no longer matches \`body:has(.h10-shell)\`.`)
+    console.error(`❌ shell-pin SCOPE: ${notPortalScoped.length} flipped token(s) are pinned only shell-side,`)
+    console.error(`   so they are unreachable inside a portal: ${notPortalScoped.slice(0, 6).join(', ')}`)
     console.error(`   Eight DS components portal into document.body — Listbox, Menu, Combobox,`)
     console.error(`   MultiSelect, HoverCard, Modal, Drawer, Toast. Scoped to \`.h10-shell\` alone the`)
     console.error(`   pin cannot reach them, and the console renders light with dark dropdowns.`)
