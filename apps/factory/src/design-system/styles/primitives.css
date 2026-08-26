@@ -1050,3 +1050,88 @@ button.nds-token > .t,
   cursor: default;
   opacity: 0.55;
 }
+
+/* ── NumberStepper ─────────────────────────────────────────────────────────
+   ONE bordered track with hairline dividers, not three boxes. Built from Button + Input + Button
+   it would carry three borders and three radii and read as three controls. Geometry is the
+   plurality of the two it replaces: 24px buttons, a 48px field, 12.5px/700 figures. */
+.nds-nstep {
+  display: inline-flex;
+  align-items: stretch;
+  /* Load-bearing: with `align-items: stretch` and no height the track collapses to its content
+     and lands at 18.5px — measured — against the 26px of the two controls it replaces. */
+  min-height: 26px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
+.nds-nstep > button {
+  width: 24px;
+  border: none;
+  background: var(--nds-surface-hover);
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+.nds-nstep > button:hover:not(:disabled) {
+  background: var(--nds-tonal-bg);
+  color: var(--nds-tonal-fg);
+}
+.nds-nstep > button:disabled {
+  color: var(--nds-text-disabled);
+  cursor: default;
+}
+.nds-nstep > button:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+/* The dividers live on the INPUT, so they sit between the three parts without adding a border to
+   the buttons — which would double up against the track's own. */
+.nds-nstep > input {
+  width: 48px;
+  min-width: 0;
+  border: none;
+  border-left: 1px solid var(--nds-border-subtle);
+  border-right: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--nds-text);
+  outline: none;
+}
+.nds-nstep > input:focus-visible {
+  box-shadow: var(--nds-focus-ring);
+}
+/* The native spinner is ~13px, hover-only and unusable on touch — the ± buttons replace it. */
+.nds-nstep > input::-webkit-outer-spin-button,
+.nds-nstep > input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.nds-nstep > input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.nds-nstep > .suf {
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  border-right: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nds-text-muted);
+}
+.nds-nstep.muted > input {
+  color: var(--nds-text-3);
+}
+.nds-nstep.sm { min-height: 24px; }
+.nds-nstep.sm > button { width: 22px; font-size: 13px; }
+.nds-nstep.sm > input  { width: 42px; font-size: 11.5px; }

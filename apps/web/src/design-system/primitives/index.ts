@@ -4,6 +4,7 @@ export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from '.
 export { FilterChip, type FilterChipProps } from './FilterChip'
 export { CheckboxCard, type CheckboxCardProps } from './CheckboxCard'
 export { TokenChip, type TokenChipProps } from './TokenChip'
+export { NumberStepper, type NumberStepperProps } from './NumberStepper'
 export { Pill, type PillProps } from './Pill'
 export { Badge, type BadgeProps, type AdProgram } from './Badge'
 export { Tag, type TagProps, type TagTone, type LegacyTagTone } from './Tag'
