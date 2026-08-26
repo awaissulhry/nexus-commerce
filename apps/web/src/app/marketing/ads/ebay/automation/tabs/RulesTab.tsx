@@ -77,11 +77,15 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
                 onChange={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { enabled: !r.enabled }))}
               />
               <Button variant="link" inline className="eb-rule-name" onClick={() => router.push(`/marketing/ads/ebay/automation/rules/${r.id}`)} title="Edit rule">{r.name}</Button>
-              <button type="button" className={`h10-pill ${r.mode === 'AUTOPILOT' ? 'ok' : 'arch'}`} style={{ cursor: 'pointer', border: 'none' }} disabled={busy}
+              <Pill
+                tone={r.mode === 'AUTOPILOT' ? 'success' : 'neutral'}
+                pressed={r.mode === 'AUTOPILOT'}
+                disabled={busy}
                 title="Click to toggle PROPOSE ↔ AUTOPILOT (autopilot applies within guardrails when the dial is on Auto)"
-                onClick={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { mode: r.mode === 'AUTOPILOT' ? 'PROPOSE' : 'AUTOPILOT' }))}>
+                onClick={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { mode: r.mode === 'AUTOPILOT' ? 'PROPOSE' : 'AUTOPILOT' }))}
+              >
                 {r.mode}
-              </button>
+              </Pill>
               <Pill tone="neutral" title={r.scope?.campaignIds?.length ? 'Evaluates only the campaigns bound to this rule' : 'Evaluates every eligible campaign on the marketplace'}>{scopeLabel(r)}</Pill>
               <span className="eb-chip">{r.trigger.scope === 'CPS_AD' ? 'CPS ads' : 'CPC keywords'}</span>
               {r.version != null && <span className="eb-chip" title="Config version — every definition edit snapshots immutably; restore any prior version from the editor's History">v{r.version}</span>}

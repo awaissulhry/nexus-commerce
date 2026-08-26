@@ -313,3 +313,53 @@ same pair — starts from 4.79 and has no room.
 
 Not fixed locally: overriding the brand blue at one call site is how a console ends up with four
 different primary buttons, which is the thing this whole exercise is undoing.
+
+## `Menu` cannot express a destructive item, or explain a disabled one
+*Session 5 · ROUND 2 · 2026-08-26 · found auditing the last raw buttons in `ads/ebay`*
+
+`MenuItemDef` is `{ id, label, icon, disabled, onSelect, separator }`. Two things the console's
+hand-rolled menus say and this cannot:
+
+**1. No destructive item.** Every hand-rolled row menu ends in `<button className="danger">Delete…</button>`.
+There is no `tone` on `MenuItemDef` and **no `.nds-menu` danger rule in any stylesheet** — checked
+both the type and `styles/*.css`. Converting drops the red entirely, so Delete reads exactly like
+Edit. Passing `label={<span className="danger">…</span>}` does not work either: the existing rule
+is `button.danger`, so the class would land on a child and match nothing.
+
+**2. No per-item `title`.** `RulesTab`'s "Run now" is `disabled={busy || !rule.enabled}` and
+carries `title="Enable the rule first — disabled rules don't evaluate"`. `Menu` has `triggerProps`
+but no per-item props, so the item goes disabled and silent — the failure mode already filed as
+"a disabled control cannot explain itself".
+
+Blocks **14 raw buttons across 3 files** that are otherwise a clean `Menu`: `ebay/automation/tabs/RulesTab.tsx`,
+`ebay/campaigns/EbayCampaignsGrid.tsx`, `ebay/automation/tabs/SuggestionsTab.tsx`. All three share
+`.h10-statusmenu` with `_shared/CampaignRowCells.tsx`, so this wants doing in one pass, not three.
+
+## The last raw controls in `ads/ebay` are shared anatomies with out-of-scope twins
+*Session 5 · ROUND 2 · 2026-08-26 · not a gap in the DS — a note on where the seam falls*
+
+After converting the one genuinely eBay-local control left (the PROPOSE↔AUTOPILOT pill, below),
+`ads/ebay` still greps **44 `<button>`, 4 `<input>`, 1 `<textarea>`, 1 `<select>`**. Every one of
+them is styled by a class whose *other* call sites are outside a single session's scope, so
+converting eBay's copy forks the anatomy rather than aligning it:
+
+| class | eBay files | twin(s) outside `ads/ebay` |
+|---|---|---|
+| `.h10-spw-ps` (16 controls) | `campaigns/new/_wizard/steps/ListingsStep.tsx` | `_shared/KeywordTargetingPanel.tsx`, `campaign-builder/sp-super-wizard/ProductSelection.tsx` |
+| `.h10-statusmenu` (14) | RulesTab, EbayCampaignsGrid, SuggestionsTab | `_shared/CampaignRowCells.tsx` |
+| `.h10-open` (6) | 6 files under `campaigns/` | `_shared/CampaignRowCells.tsx`, `campaigns/CampaignsGrid.tsx` |
+| `.h10-cb-card` (3) | EbayCampaignChooser, TargetingStepGen, RatesStep | `campaign-builder/CampaignBuilder.tsx` |
+| `.h10-edit-in` (3 inputs) | KeywordsTab, AdsTab, AgKeywordsTab | `campaigns/[id]/tabs/AdGroupsTab.tsx` |
+
+`.h10-spw-ps` is the sharpest case: `ads.css:1757–1861` styles its controls as **bare descendant
+tags** — `.h10-spw-ps-tabs button`, `.h10-spw-ps-search input`, `.h10-spw-ps-pager button`,
+`.h10-spw-ps-enter textarea` — at a specificity that beats the DS's own single-class rules. A
+`<Button>` dropped in there is painted by `.addall` if it keeps the class and loses its layout if
+it does not. The file's own docstring says it was built on "the FULL Amazon ProductSelection
+anatomy", which is exactly the thing that must not drift.
+
+The remaining 5 are `_lib/EbDateField.tsx` — a bespoke calendar popover (month nav + day cells),
+which is a `DateField` question, not a button question.
+
+**The unit of work here is the class, not the directory.** Each row above wants one pass that
+touches every twin at once.
