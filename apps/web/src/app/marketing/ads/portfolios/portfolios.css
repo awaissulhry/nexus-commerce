@@ -1,12 +1,15 @@
 /* Portfolios P1 — see + create. Light H10, design-system tokens, image-free.
    Aesthetic matches dashboard.css / recommendations.css. */
 
-/* 🔴 RAMP steps on purpose, not an oversight. `.dark` (set on <html> whenever the OS is
-   dark, since 'system' is the default) redefines 54 SEMANTIC tokens and zero ramp steps —
-   and this console pins its ground light (`.h10-shell` sets color-scheme: light). So
-   `--nds-text-2` flips to #aab6c2 while the ground stays #f4f6f9: measured 5.91 → 2.06.
-   `--nds-text-2` IS `var(--nds-grey-600)` in light, so this renders identically and does
-   not flip. Do not "modernise" these back to the semantic tokens until the shell pins them. */
+/* RAMP steps here, and the honest reason is smaller than the one this comment used to
+   give. `.h10-shell` pins the DS text tokens to their light values — it always did for
+   `--nds-text-2`/`-3`, and since `8fa177e6c` for all 54 — so a semantic token does NOT
+   flip inside it. My original measurement said otherwise because the probe was appended
+   to `main`, and `.h10-shell` sits INSIDE `main`, not around it: I measured the unpinned
+   zone and attributed it to the shell.
+   These stay because `--nds-text-2` IS `var(--nds-grey-600)`, so they render identically
+   and cannot drift if a future `.dark` override outruns the pin. Either spelling is
+   correct now; this one needs no pin to be safe. */
 
 .pf { display: flex; flex-direction: column; gap: 14px; }
 .pf-banner { background: #fff4e0; border: 1px solid #f0d9a8; color: #8a5a00; border-radius: 9px; padding: 9px 14px; font-size: 12px; font-weight: 600; }
