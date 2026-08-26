@@ -36,14 +36,14 @@
 .pf-state { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-100); color: var(--nds-grey-600); }
 .pf-state--enabled { background: #e7f5ee; color: #067d62; }
 .pf-state--paused { background: #fff4e0; color: var(--nds-amber-600); }
-.pf-state--archived { background: var(--nds-grey-50); color: var(--nds-grey-600); }
+.pf-state--archived { background: var(--nds-grey-50); color: var(--nds-text-muted); }
 .pf-src { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-blue-50); color: var(--nds-blue-700); }
 .pf-src--local { background: var(--nds-grey-50); color: var(--nds-grey-600); }
 .pf-mkts { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .pf-mkt { font-size: 10px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-50); border-radius: 5px; padding: 1px 6px; }
 /* the em-dash IS the answer here ("no markets"), so it is text, not decoration.
    grey-300 measured 1.67:1 on white — effectively invisible. */
-.pf-mkt-none { color: var(--nds-grey-600); }
+.pf-mkt-none { color: var(--nds-text-muted); }
 .pf-acos { font-weight: 700; }
 
 /* empty state */
@@ -95,4 +95,4 @@
 .pf-grid td.num { font-weight: 700; }
 /* “No cap” is real text and was grey-400 — 2.36:1 on white, under even the 3:1
    non-text floor. The DS muted tier is 5.01:1. A conversion may only ever raise it. */
-.pf-grid .pf-nocap { color: var(--nds-grey-600); font-weight: 600; }
+.pf-grid .pf-nocap { color: var(--nds-text-muted); font-weight: 600; }

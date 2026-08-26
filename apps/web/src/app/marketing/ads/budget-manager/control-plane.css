@@ -7,7 +7,7 @@
    All that is left is the staged-changes dot the chip has no notion of. */
 .cp-tab .dot { color: #7c3aed; font-style: normal; }
 .cp-tabs .grow { flex: 1; }
-.cp-hint { font-size: 11.5px; color: var(--nds-grey-600); }
+.cp-hint { font-size: 11.5px; color: var(--nds-text-muted); }
 
 /* inspector */
 .cp-insp { width: 300px; flex-shrink: 0; height: 540px; overflow-y: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); padding: 14px; display: flex; flex-direction: column; gap: 16px; }
@@ -57,7 +57,7 @@
 .cp-prov-row .f { font-weight: 700; color: var(--nds-grey-800); }
 .cp-prov-row .v { color: var(--nds-grey-900); }
 .cp-prov-row .m { color: var(--nds-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-prov-load, .cp-prov-empty { font-size: 12px; color: var(--nds-grey-600); padding: 6px 0; }
+.cp-prov-load, .cp-prov-empty { font-size: 12px; color: var(--nds-text-muted); padding: 6px 0; }
 
 /* review bar (modal footer) */
 .cp-review { display: flex; align-items: center; gap: 10px; width: 100%; }
@@ -97,7 +97,7 @@
 .cp-compare-col .hd b { font-size: 13.5px; color: var(--nds-grey-900); }
 .cp-compare-col .hd .st { font-size: 11.5px; color: var(--nds-grey-600); }
 .cp-compare-col .rows { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
-.cp-compare-col .rows .empty { font-size: 12.5px; color: var(--nds-grey-600); padding: 10px 0; }
+.cp-compare-col .rows .empty { font-size: 12.5px; color: var(--nds-text-muted); padding: 10px 0; }
 .cp-compare-col .row { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-bottom: 1px solid var(--nds-grey-50); }
 .cp-compare-col .row .nm { font-size: 12px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-compare-col .row .ch { font-size: 11.5px; color: #7c3aed; }
@@ -109,7 +109,7 @@
 .cp-bulk-row { display: flex; align-items: center; gap: 7px; }
 .cp-bulk-row > span:first-child { font-size: 12px; font-weight: 600; color: var(--nds-grey-600); min-width: 48px; }
 .cp-bulk-row .cp-eurin.pct { width: 80px; }
-.cp-bulk-hint { font-size: 11px; color: var(--nds-grey-600); line-height: 1.5; margin-top: auto; }
+.cp-bulk-hint { font-size: 11px; color: var(--nds-text-muted); line-height: 1.5; margin-top: auto; }
 
 /* P5 — live SSE indicator + canvas flash */
 .cp-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); margin-right: 4px; }

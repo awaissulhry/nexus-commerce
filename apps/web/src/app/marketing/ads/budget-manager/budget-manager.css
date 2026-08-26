@@ -62,14 +62,14 @@
 .bm-cellv i.st-on-track { color: #1f7a44; }
 .bm-cellv i.st-over { color: #d9534f; }
 .bm-cellv i.st-under { color: var(--nds-blue-700); }
-.bm-cellv i.st-no-budget { color: var(--nds-grey-600); }
+.bm-cellv i.st-no-budget { color: var(--nds-text-muted); }
 
 /* next month budget editable cell */
 /* an inline value-edit trigger: DS `Button variant="quiet" size="xs"` owns the
    borderless-until-hover box; these are the cell type and the two muted marks. */
 .bm-nextbtn { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
 .bm-nextbtn svg { color: var(--nds-grey-500); }
-.bm-nextbtn .ph { color: var(--nds-grey-600); font-weight: 500; }
+.bm-nextbtn .ph { color: var(--nds-text-muted); font-weight: 500; }
 .bm-nextedit { width: 116px; min-width: 0; }
 
 /* Settings modal */
@@ -188,7 +188,7 @@
 .bp-item-h .nm { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
 .bp-item-h .bd, .bp-item-h .al { font-size: 11px; color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; }
 .bp-item-h .al { margin-left: auto; }
-.bp-item-h .chev { color: var(--nds-grey-600); transition: transform 0.15s; }
+.bp-item-h .chev { color: var(--nds-text-muted); transition: transform 0.15s; }
 .bp-item-h .chev.open { transform: rotate(180deg); }
 .tag { font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 800; padding: 2px 6px; border-radius: 5px; }
 .tag.ok { background: #e6f4ef; color: #067d62; }
