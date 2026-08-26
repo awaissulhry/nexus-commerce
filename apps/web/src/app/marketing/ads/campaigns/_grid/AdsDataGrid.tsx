@@ -17,6 +17,7 @@ export {
 export type {
   GridPrefs,
   GridColumn,
+  GridHierarchy,
   GridRangeFilter,
   GridSelectFilter,
   GridMultiSelectFilter,

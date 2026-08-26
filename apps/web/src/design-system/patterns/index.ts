@@ -24,6 +24,6 @@ export { Builder, type BuilderProps, type BuilderSection } from './Builder'
 export { ColumnCustomizer, type ColumnCustomizerProps, type CustomizableColumn } from './ColumnCustomizer'
 export { WorkspaceGrid, AdsFilterBar, stripServerKeys, isServerKey, enabledRank } from './workspace-grid/WorkspaceGrid'
 export type {
-  GridPrefs, GridColumn, GridRangeFilter, GridSelectFilter, GridMultiSelectFilter, GridFilter,
+  GridPrefs, GridColumn, GridHierarchy, GridRangeFilter, GridSelectFilter, GridMultiSelectFilter, GridFilter,
   GridEditField, GridEditMode, RangeVal, FilterState, WorkspaceGridProps,
 } from './workspace-grid/WorkspaceGrid'

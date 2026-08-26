@@ -452,3 +452,39 @@
 .h10-am-searchbox .x { display: inline-flex; align-items: center; border: none; background: none; color: var(--nds-grey-450); cursor: pointer; padding: 2px; border-radius: 5px; }
 
 .h10-am-searchbox .x:hover { color: var(--nds-grey-600); background: var(--nds-grey-100); }
+
+/* ── GX.2 · drill-down mode ──────────────────────────────────────────────
+   The chevron sits INSIDE the identity cell so the hierarchy travels with the thing it
+   belongs to. The indent is a spacer on an inner element, never padding on the cell —
+   the cell is the frozen column and its padding is what keeps that column together. */
+.nds-wsgrid td.nm.nds-tree-cell { padding-block: 8px; }
+.nds-tree-lead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nds-tree-label { min-width: 0; display: flex; align-items: center; gap: 8px; }
+
+.nds-tree-chev {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0;
+  border: 0; background: none; cursor: pointer; border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-3);
+  transition: transform .12s ease, color .12s ease, background .12s ease;
+  transform: rotate(-90deg);
+}
+.nds-tree-chev:hover { color: var(--nds-primary); background: var(--nds-surface-hover); }
+.nds-tree-chev:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); color: var(--nds-primary); }
+.nds-tree-chev.on { transform: rotate(0deg); color: var(--nds-text-2); }
+/* A leaf keeps the chevron's footprint so labels line up down the level. */
+.nds-tree-chev.is-leaf { cursor: default; pointer-events: none; }
+
+/* In flight: the control says so rather than looking inert while a query runs. */
+.nds-tree-chev.busy { color: var(--nds-primary); animation: nds-tree-spin .9s linear infinite; }
+@keyframes nds-tree-spin { to { transform: rotate(315deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .nds-tree-chev { transition: none; }
+  .nds-tree-chev.busy { animation: none; opacity: .6; }
+}
+
+/* A remainder is arithmetic, not an entity — it reads as a note, and it is not selectable. */
+.nds-wsgrid tbody tr.nds-tree-remainder td { background: var(--nds-surface-sunken); font-style: italic; }
+.nds-wsgrid tbody tr.nds-tree-remainder:hover td { background: var(--nds-surface-sunken); }
+.nds-wsgrid tbody tr.nds-tree-remainder td.nm { color: var(--nds-warning-strong); font-style: normal; font-weight: 600; }

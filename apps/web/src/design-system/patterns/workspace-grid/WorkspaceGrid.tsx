@@ -117,6 +117,21 @@ export interface GridEditMode<T> {
 export type RangeVal = { min: string; max: string }
 export type FilterState = Record<string, RangeVal | string | string[]>
 
+/** GX.2 — what the grid needs in order to draw a tree it does not own. */
+export interface GridHierarchy<T> {
+  /** 0 for a root row; each level down adds one. Drives the indent. */
+  depthOf: (row: T) => number
+  /** False on a leaf — the grid must never draw a chevron that opens nothing. */
+  expandableOf: (row: T) => boolean
+  /** Row ids currently open, by the same `rowId` the grid uses everywhere else. */
+  expanded: Set<string>
+  /** Row ids whose children are in flight, so the chevron can say so instead of looking inert. */
+  loading?: Set<string>
+  onToggle: (row: T, next: boolean) => void
+  /** Marks a row as a computed remainder so it can be styled and made unselectable. */
+  isRemainder?: (row: T) => boolean
+}
+
 export interface WorkspaceGridProps<T> {
   rows: T[]
   loading?: boolean
@@ -139,6 +154,24 @@ export interface WorkspaceGridProps<T> {
   customizable?: boolean
   /** localStorage key for column visibility; omit ⇒ not persisted */
   storageKey?: string
+  /**
+   * GX.2 — DRILL-DOWN MODE. Additive: omit it and every existing consumer is byte-identical.
+   *
+   * Rows arrive FLAT, with parents and their loaded children already interleaved in tree order,
+   * and each row reporting its own depth. The grid stays dumb about the hierarchy — it draws the
+   * chevron and the indent and tells you what was clicked; the consumer owns which nodes are open
+   * and fetches their children.
+   *
+   * That split is deliberate. A grid that owned the tree would have to own the fetching too, and
+   * expanding here is a QUERY, not a slice of rows already in the browser — the search-terms
+   * report alone is 12,443 rows.
+   *
+   * 🔴 Tree order is the ONLY order. Client sort, filter, search and paging are bypassed exactly
+   * as they are in `server` mode: re-sorting a flat tree by Spend would tear children away from
+   * their parents and produce a list that still looks plausible. Sort by asking the server for a
+   * different order instead.
+   */
+  hierarchy?: GridHierarchy<T>
   /** selection */
   selectable?: boolean
   selected?: Set<string>
@@ -295,7 +328,7 @@ export function WorkspaceGrid<T>({
   rows, loading, rowId, noun,
   firstColLabel, renderFirst, firstSortValue,
   columns, filters, filterPresetsKey,
-  toolbarLeft, toolbarRight, exportable, onExport, customizable = true, storageKey,
+  toolbarLeft, toolbarRight, exportable, onExport, customizable = true, storageKey, hierarchy,
   selectable = true, selected, onSelectedChange,
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, enabledFirst, editMode, selectionActions,
@@ -510,8 +543,14 @@ export function WorkspaceGrid<T>({
   // happened in SQL over the whole result, and redoing any of them here would narrow a page
   // that is already the correct page.
   const serverMode = server != null
+  /**
+   * Tree order is the only order, so the client pipeline is bypassed for the same reason server
+   * mode bypasses it: the rows arrived in a deliberate sequence and re-deriving one would lie.
+   */
+  const treeMode = hierarchy != null
+  const rawOrder = serverMode || treeMode
   const filtered = useMemo(() => {
-    if (serverMode) return rows
+    if (rawOrder) return rows
     if (!filters?.length) return rows
     return rows.filter((row) => {
       for (const f of filters) {
@@ -544,21 +583,21 @@ export function WorkspaceGrid<T>({
       }
       return true
     })
-  }, [rows, filters, fstate, filterAccessor, serverMode])
+  }, [rows, filters, fstate, filterAccessor, rawOrder])
 
   // ── search (H10 inline 🔍) — narrows on the first-column text by default ──
   const searched = useMemo(() => {
-    if (serverMode) return filtered
+    if (rawOrder) return filtered
     const q = search.trim().toLowerCase()
     if (!searchable || !q) return filtered
     const acc = searchValue ?? firstSortValue
     if (!acc) return filtered
     return filtered.filter((r) => String(acc(r) ?? '').toLowerCase().includes(q))
-  }, [filtered, search, searchable, searchValue, firstSortValue, serverMode])
+  }, [filtered, search, searchable, searchValue, firstSortValue, rawOrder])
 
   // ── sorting ──
   const sorted = useMemo(() => {
-    if (serverMode) return searched
+    if (rawOrder) return searched
     // SF.1 — enabled-first governs the DEFAULT view only. Once a header is clicked that column
     // owns the order outright (sorting by Spend must really mean Spend, even if the top spender is
     // paused); clearing the sort restores this banding.
@@ -598,7 +637,7 @@ export function WorkspaceGrid<T>({
       return sort.dir === 'asc' ? cmp : -cmp
     })
     return arr
-  }, [searched, sort, columns, firstSortValue, groupBy, enabledFirst, userSorted, serverMode])
+  }, [searched, sort, columns, firstSortValue, groupBy, enabledFirst, userSorted, rawOrder])
 
   // group row counts (for the group-header labels), computed over the full sorted set
   const groupCounts = useMemo(() => {
@@ -614,7 +653,7 @@ export function WorkspaceGrid<T>({
   const totalCount = server ? server.total : sorted.length
   const pageCount = Math.max(1, Math.ceil(totalCount / perPage))
   const safePage = Math.min(page, pageCount)
-  const paged = server ? sorted : sorted.slice((safePage - 1) * perPage, safePage * perPage)
+  const paged = (server || treeMode) ? sorted : sorted.slice((safePage - 1) * perPage, safePage * perPage)
   const viewStart = totalCount === 0 ? 0 : (safePage - 1) * perPage + 1
   const viewEnd = Math.min(safePage * perPage, totalCount)
 
@@ -976,11 +1015,45 @@ export function WorkspaceGrid<T>({
                         <tr className="h10-am-grp"><td colSpan={visibleCols.length + (selectable ? 2 : 1)}><span className="gl">{grp.label}</span><span className="gc">{groupCounts?.get(grp.key) ?? 0} {pluralize(noun, groupCounts?.get(grp.key) ?? 0)}</span></td></tr>
                       )}
                       <tr
-                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}${keyboardNav && idx === focusIdx ? ' kbd-focus' : ''}${rowClassName?.(row) ? ` ${rowClassName(row)}` : ''}`}
+                        className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}${keyboardNav && idx === focusIdx ? ' kbd-focus' : ''}${rowClassName?.(row) ? ` ${rowClassName(row)}` : ''}${hierarchy?.isRemainder?.(row) ? ' nds-tree-remainder' : ''}`}
                         onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
                       >
-                        {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}
-                        <td className={`nm${fzFirst}${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
+                        {selectable && (
+                          <td className="ck">
+                            {/* A remainder is arithmetic, not a thing you can act on. Rendering a
+                                checkbox beside it would offer a bulk action on a row that has no
+                                entity behind it. */}
+                            {hierarchy?.isRemainder?.(row)
+                              ? null
+                              : <input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" />}
+                          </td>
+                        )}
+                        <td className={`nm${fzFirst}${ef ? ' editing' : ''}${hierarchy ? ' nds-tree-cell' : ''}`}>
+                          {hierarchy ? (
+                            /* The chevron lives INSIDE the identity cell, so the hierarchy travels
+                               with the thing it belongs to instead of costing a column. The indent
+                               is a spacer element rather than padding on the cell, because the cell
+                               is sticky and its padding is what holds the frozen column together. */
+                            <span className="nds-tree-lead" style={{ paddingInlineStart: `${hierarchy.depthOf(row) * 18}px` }}>
+                              {hierarchy.expandableOf(row) ? (
+                                <button
+                                  type="button"
+                                  className={`nds-tree-chev${hierarchy.expanded.has(id) ? ' on' : ''}${hierarchy.loading?.has(id) ? ' busy' : ''}`}
+                                  aria-expanded={hierarchy.expanded.has(id)}
+                                  aria-label={`${hierarchy.expanded.has(id) ? 'Collapse' : 'Expand'} ${String(firstSortValue?.(row) ?? '')}`.trim()}
+                                  onClick={(e) => { e.stopPropagation(); hierarchy.onToggle(row, !hierarchy.expanded.has(id)) }}
+                                >
+                                  <ChevronDown size={13} aria-hidden />
+                                </button>
+                              ) : (
+                                /* A leaf keeps the chevron's width so its label lines up with its
+                                   siblings' — a ragged left edge reads as a broken indent. */
+                                <span className="nds-tree-chev is-leaf" aria-hidden />
+                              )}
+                              <span className="nds-tree-label">{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</span>
+                            </span>
+                          ) : (ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row)))}
+                        </td>
                         {visibleCols.map((c) => {
                           const cf = editing ? editByKey.get(c.key) : undefined
                           return <td key={c.key} className={`${alignClass(c)}${cf ? ' editing' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
