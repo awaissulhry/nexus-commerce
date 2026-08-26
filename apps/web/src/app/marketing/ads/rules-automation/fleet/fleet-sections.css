@@ -89,7 +89,7 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
   font-size: 11px; color: var(--nds-text-2);
 }
-.dt-meta .dt-sep { color: #ccd4de; }
+.dt-meta .dt-sep { color: var(--nds-text-3); }
 
 .dt-detail {
   font-size: 11.5px; color: #616d7c; line-height: 1.5;
@@ -379,7 +379,7 @@
 .ap-prefleet {
   display: inline-flex; align-items: center; padding: 1px 6px;
   border-radius: 4px; font-size: 10px; font-weight: 650;
-  border: 1px dashed #ccd4de; background: var(--nds-grey-25); color: #77828f;
+  border: 1px dashed #ccd4de; background: var(--nds-grey-25); color: var(--nds-text-muted);
   white-space: nowrap;
 }
 

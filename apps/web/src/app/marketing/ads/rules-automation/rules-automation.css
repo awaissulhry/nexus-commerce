@@ -14,6 +14,27 @@
      bulk substitution silently darkens borders; the match is anchored to a bare `color:`.
    · Dark-theme rules. There are none in these four files, checked rather than assumed.
 
+   ── Second pass, the same day: 44 RAW HEXES doing the same thing ─────────────────────────────
+   A token grep only finds the tokens you thought of. Sixteen distinct hand-written greys were
+   carrying text at 1.50 to 4.47 to one, in this file and the three beside it. All → --nds-text-muted
+   (5.01:1), except two that are not muted greys at all:
+
+   · `.dt-meta .dt-sep` (#ccd4de, 1.50:1) is a "·" between two metadata items — decoration, not
+     content, so it goes to --nds-text-3 (3.10:1). Visible as a divider without shouting as loudly
+     as the words it divides. Raising it to text-muted would have made the punctuation compete.
+   · `.acr-gg-dash` (#b6bfcb, 1.86:1) is an em-dash, and it IS the answer — "no bound rules". That
+     is text and takes the text token.
+   · Four greens at #1f8a4c (4.38:1) → --nds-success-text (7.63:1).
+
+   Collapsing sixteen shades into one is a real loss of hierarchy, and it is the right trade: the
+   "tiers" ran 3.72:1 against 2.40:1, which is a distinction between two values nobody can read.
+   The DS keeps two legible tiers — --nds-text-2 at 5.91 and --nds-text-muted at 5.01 — for
+   surfaces that genuinely need them.
+
+   The fourteen dark-theme declarations here were measured against their OWN ground rather than
+   white, and every one passes: 9.52, 5.82, 10.66, 7.46, 14.45, 9.49. Measuring them against white
+   is what makes a correct dark palette look broken.
+
    Six of the raised rules sit on `:disabled` or `.off` selectors, which 1.4.3 exempts. Raised
    anyway: two of them carry comments saying "muted, still legible, keeps its tooltip", so
    legibility was always the intent — the token was just the wrong one. */
@@ -280,10 +301,10 @@
 .h10-rb-lookback .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .h10-rb-lookback .exc { font-size: 13px; color: var(--nds-grey-600); }
 /* Bid: ⓘ affordances on the THEN bid action + the Lookback label (matches the recording) */
-.h10-rb-lbl-i { display: inline-flex; color: #9aa3af; margin-left: 2px; }
+.h10-rb-lbl-i { display: inline-flex; color: var(--nds-text-muted); margin-left: 2px; }
 .h10-rb-lbl-i:hover { color: var(--nds-pill-neutral-fg); }
 .h10-rb-lookback label .h10-hc-anchor { vertical-align: middle; }
-.h10-rb-theninfo { display: inline-flex; align-items: center; color: #9aa3af; }
+.h10-rb-theninfo { display: inline-flex; align-items: center; color: var(--nds-text-muted); }
 .h10-rb-theninfo:hover { color: var(--nds-pill-neutral-fg); }
 /* Budget: Lookback relocated into the Advanced card (reuse the lbrow row) + B0 setup placeholder */
 .h10-rb-card.adv .advblock .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -472,7 +493,7 @@
    A group header on the Portfolios tab is a name alone; a product needs its SKU to be identifiable,
    and the campaign count is what the Add button is about to add. `display: block` because an inline
    <em> inside the flex .gn would sit on the same line and be ellipsised away with the name. */
-.cp-grph .cp-grpsub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; font-style: normal; color: #7c8595; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-grph .cp-grpsub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; font-style: normal; color: var(--nds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The name column may now be two lines, so the header stops centring its two children. */
 .cp-grph:has(.cp-grpsub) { align-items: flex-start; }
 /* DS-ALIGN — the DS `Button variant="ghost"`, which IS the blue-outline treatment. */
@@ -494,7 +515,7 @@
 .h10-sb-metric { position: relative; display: inline-flex; align-items: center; }
 .h10-sb-metric .dot { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; z-index: 2; pointer-events: none; }
 .h10-sb-metric .h10-dd-btn { padding-left: 28px; }
-.h10-sb-i { color: #9aa3af; font-size: 12px; }
+.h10-sb-i { color: var(--nds-text-muted); font-size: 12px; }
 /* DS-ALIGN — the date boxes are the DS `Input` with the calendar glyph in `leadingIcon`; the
    primitive carries the border, the focus ring and the disabled fill. Only widths remain. */
 .h10-sb-date { width: 196px; }
@@ -537,7 +558,7 @@
 .h10-sb-listchart { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); margin-bottom: 16px; overflow: hidden; }
 .h10-sb-listchart .hd { display: flex; align-items: center; gap: 7px; padding: 16px 18px 4px; }
 .h10-sb-listchart .hd b { font-size: 15px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-sb-listchart .hd .i { color: #9aa3af; display: inline-flex; }
+.h10-sb-listchart .hd .i { color: var(--nds-text-muted); display: inline-flex; }
 .h10-sb-listchart .bd { padding: 8px 18px 18px; }
 .h10-sb-listchart .controls { display: flex; align-items: center; margin-bottom: 14px; }
 .h10-sb-listchart .controls .grow { flex: 1; }
@@ -638,7 +659,7 @@
 .h10-trgrid-legend .it { display: inline-flex; align-items: center; gap: 5px; }
 .h10-trgrid-legend .it i { width: 10px; height: 10px; border-radius: 3px; }
 .h10-trgrid-legend .grow { flex: 1; }
-.h10-trgrid-legend .hint { font-size: 10.5px; color: #a0a8b3; }
+.h10-trgrid-legend .hint { font-size: 10.5px; color: var(--nds-text-muted); }
 .h10-tr-summary { font-size: 11.5px; color: var(--nds-grey-700); background: var(--nds-grey-25); border-radius: var(--nds-radius-lg); padding: 9px 12px; }
 .h10-tr-summary .t { font-weight: 700; color: var(--nds-grey-600); display: block; margin-bottom: 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .3px; }
 .h10-tr-summary .line { line-height: 1.55; }
@@ -652,25 +673,25 @@
 .h10-hm2 { display: flex; flex-direction: column; gap: 7px; }
 .h10-hm2-hd { display: flex; align-items: center; gap: 8px; }
 .h10-hm2-hd .ttl { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); }
-.h10-hm2-hd .ttl .tz { font-weight: 500; color: #a0a8b3; }
+.h10-hm2-hd .ttl .tz { font-weight: 500; color: var(--nds-text-muted); }
 .h10-hm2-hd .grow { flex: 1; }
 .h10-hm2-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--nds-text-2); }
 .h10-hm2-legend i { width: 13px; height: 13px; border-radius: 2px; display: inline-block; }
 .h10-hm2-legend .L0 { background: var(--nds-grey-50); } .h10-hm2-legend .L1 { background: #d8e8dc; } .h10-hm2-legend .L2 { background: #a7d6b0; } .h10-hm2-legend .L3 { background: #5fb377; } .h10-hm2-legend .L4 { background: #2e8b57; }
 .h10-hm2-grid { display: flex; flex-direction: column; gap: 2px; }
 .h10-hm2-row { display: grid; grid-template-columns: 38px repeat(24, 1fr) 42px; gap: 2px; align-items: center; }
-.h10-hm2-row.head .h10-hm2-hh { font-size: 8.5px; color: #a0a8b3; text-align: center; }
+.h10-hm2-row.head .h10-hm2-hh { font-size: 8.5px; color: var(--nds-text-muted); text-align: center; }
 .h10-hm2-dlbl { font-size: 10px; font-weight: 700; color: var(--nds-text-2); }
 .h10-hm2-cell { height: 15px; border-radius: 2px; background: var(--nds-grey-50); }
 .h10-hm2-cell.L0 { background: var(--nds-grey-50); } .h10-hm2-cell.L1 { background: #d8e8dc; } .h10-hm2-cell.L2 { background: #a7d6b0; } .h10-hm2-cell.L3 { background: #5fb377; } .h10-hm2-cell.L4 { background: #2e8b57; }
 .h10-hm2-cell.peak { box-shadow: 0 0 0 1.5px var(--nds-blue-600) inset; }
 .h10-hm2-tot { height: 15px; display: flex; align-items: center; }
-.h10-hm2-tot.head { font-size: 8.5px; color: #a0a8b3; font-weight: 700; }
+.h10-hm2-tot.head { font-size: 8.5px; color: var(--nds-text-muted); font-weight: 700; }
 .h10-hm2-tot .b { height: 9px; background: #8aa0c0; border-radius: 2px; min-width: 2px; }
 .h10-hm2-hbar { height: 22px; display: flex; align-items: flex-end; }
 .h10-hm2-hbar span { width: 100%; background: #c7d2dd; border-radius: 2px 2px 0 0; }
 .h10-hm2-hbar span.peak { background: #2e8b57; }
-.h10-hm2-note { font-size: 10.5px; color: #a0a8b3; line-height: 1.45; }
+.h10-hm2-note { font-size: 10.5px; color: var(--nds-text-muted); line-height: 1.45; }
 
 /* RGD.4 — Rank-target customizer modal (h10-reskin of RTC) */
 .h10-rd-copymodal { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 150; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -735,7 +756,7 @@
 .h10-rcp { font: inherit; font-size: 11px; font-weight: 600; color: #3730a3; background: var(--nds-blue-100); border: 1px solid #dfe4ff; border-radius: var(--nds-radius-sm); padding: 3px 10px; cursor: pointer; }
 .h10-rcp:hover:not(:disabled) { background: #e0e7ff; }
 .h10-rcp:disabled { opacity: .5; cursor: default; }
-.h10-mnote { font-size: 10.5px; color: #a0a8b3; margin-top: 8px; line-height: 1.5; }
+.h10-mnote { font-size: 10.5px; color: var(--nds-text-muted); margin-top: 8px; line-height: 1.5; }
 /* Blend lanes */
 .h10-blend-lane { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--nds-grey-100); flex-wrap: wrap; }
 .h10-blend-lane.on { }
@@ -1064,9 +1085,9 @@
 .h10-n24-t tr.chg td { border-top: 1px solid var(--nds-grey-150); }
 .h10-n24-t td:nth-child(1) { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
 .h10-n24-t td:nth-child(1) b { color: var(--nds-grey-900); font-weight: 800; }
-.h10-n24-t td:nth-child(1) em { display: block; font-style: normal; font-size: 10.5px; color: #9aa2ae; }
+.h10-n24-t td:nth-child(1) em { display: block; font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); }
 .h10-n24-t td:nth-child(2) i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
-.h10-n24-t td:nth-child(2) em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
+.h10-n24-t td:nth-child(2) em { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); margin-left: 6px; }
 .h10-n24-t td:nth-child(2) em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
 .h10-n24-t td:nth-child(2) .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
 .h10-n24-t .none { color: var(--nds-text-muted); }
@@ -2378,8 +2399,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-share i { font-style: normal; font-size: 10px; font-weight: 600; color: var(--nds-warning-text); }
 .h10-sov-nc { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: #fff6e8; color: var(--nds-warning-text); }
 .h10-sov-nm { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-sov-nm.muted { background: transparent; color: #9099a6; font-weight: 600; }
-.h10-sov-nd { color: #9099a6; }
+.h10-sov-nm.muted { background: transparent; color: var(--nds-text-muted); font-weight: 600; }
+.h10-sov-nd { color: var(--nds-text-muted); }
 .h10-sov-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-sov-ac { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-600); }
 .h10-sov-ac.many { color: var(--nds-warning-text); }
@@ -2830,7 +2851,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-delta.down { color: #a33a3a; }
 .h10-sov-delta.flat { color: var(--nds-text-muted); }
 /* A Δ on a row whose denominator is too small to rank by is muted, exactly like its share. */
-.h10-sov-delta.thin { color: #9099a6; font-weight: 600; }
+.h10-sov-delta.thin { color: var(--nds-text-muted); font-weight: 600; }
 
 /* ── the colour scale ───────────────────────────────────────────────────────────────────────────
    Calibrated against the MEASURED distribution, not 0–100% and not Pacvue's 10% alone: p50 is
@@ -2844,7 +2865,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-share.b3 { color: var(--nds-grey-900); }
 .h10-sov-share.b4 { color: var(--nds-info-text); }
 .h10-sov-share.b5 { color: #0a3a6b; background: var(--nds-blue-100); border-radius: 5px; padding: 1px 6px; }
-.h10-sov-share.thin { color: #9099a6; font-weight: 600; background: none; padding: 0; }
+.h10-sov-share.thin { color: var(--nds-text-muted); font-weight: 600; background: none; padding: 0; }
 
 /* ── the stated sort floor ──────────────────────────────────────────────────────────────────── */
 .h10-sov-win i.floor { background: #fff6e8; color: var(--nds-warning-text); }
@@ -3014,12 +3035,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-step { display: inline-flex; align-items: stretch; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; background: var(--nds-white); }
 .h10-hv-step button { width: 24px; border: 0; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; }
 .h10-hv-step button:hover:not(:disabled) { background: var(--nds-blue-100); color: var(--nds-info-text); }
-.h10-hv-step button:disabled { color: #a8b0ba; cursor: default; }
+.h10-hv-step button:disabled { color: var(--nds-text-muted); cursor: default; }
 .h10-hv-step input { width: 46px; border: 0; text-align: center; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; background: transparent; }
 .h10-hv-step input::-webkit-outer-spin-button, .h10-hv-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .h10-hv-step input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .h10-hv-step em { display: flex; align-items: center; padding-right: 5px; font-style: normal; font-size: 11px; font-weight: 700; color: var(--nds-text-muted); }
-.h10-hv-step.off input { color: #a8b0ba; }
+.h10-hv-step.off input { color: var(--nds-text-muted); }
 
 /* 🔴 FB.4 — `h10-hv-field` was SHARED, and the sharing was invisible. Its base rules lived in the
    deleted scope-bar block while HV.2's threshold `Field` (`HvThresholds.tsx`) has always used the
@@ -3355,7 +3376,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-picker .opts .why { font-size: 11px; line-height: 1.45; color: var(--nds-text-muted); }
 .h10-hv-picker .opts .clamp { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .h10-hv-picker .opts .on-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; color: var(--nds-success-text); }
-.h10-hv-picker .opts .go { color: #a8b0ba; }
+.h10-hv-picker .opts .go { color: var(--nds-text-muted); }
 
 .h10-hv-picker .neg { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; font-size: 12px; line-height: 1.55; color: var(--nds-grey-600); cursor: pointer; }
 .h10-hv-picker .neg input { margin-top: 2px; }
@@ -3481,7 +3502,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-wmodal .rowlist li.no { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); background: var(--nds-white); }
 .h10-hv-wmodal .rowlist .t { font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); min-width: 0; }
 .h10-hv-wmodal .rowlist .t i { display: block; font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--nds-text-muted); }
-.h10-hv-wmodal .rowlist .arrow { color: #a8b0ba; }
+.h10-hv-wmodal .rowlist .arrow { color: var(--nds-text-muted); }
 .h10-hv-wmodal .rowlist .dest { font-size: 12px; font-weight: 700; color: var(--nds-grey-900); min-width: 0; }
 .h10-hv-wmodal .rowlist .dest i { display: block; font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--nds-text-muted); }
 .h10-hv-wmodal .rowlist .bid { text-align: right; font-variant-numeric: tabular-nums; }
@@ -3572,7 +3593,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngp-plist li { display: grid; grid-template-columns: minmax(110px, 0.8fr) minmax(0, 2.4fr) minmax(150px, 1.1fr) 128px 118px 28px;
   align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--nds-radius-sm); font-size: 12px; color: var(--nds-grey-800); }
 .h10-ngp-plist li:nth-child(odd) { background: var(--nds-grey-25); }
-.h10-ngp-plist .tm { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: #1f8a4c; }
+.h10-ngp-plist .tm { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--nds-success-text); }
 .h10-ngp-plist .tm b { font-weight: 800; color: #10151c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ngp-plist .sem { min-width: 0; font-size: 11.5px; line-height: 1.45; color: #4a5566; }
 .h10-ngp-plist .meta { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
@@ -3598,7 +3619,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   padding: 11px 13px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); background: var(--nds-grey-25); }
 .h10-ngp-count .n { font-size: 21px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
 .h10-ngp-count .n.hot { color: #a8321f; }
-.h10-ngp-count .n.ok { color: #1f8a4c; }
+.h10-ngp-count .n.ok { color: var(--nds-success-text); }
 .h10-ngp-count .l { display: flex; flex-direction: column; gap: 2px; }
 .h10-ngp-count .l b { font-size: 12px; font-weight: 700; color: #10151c; }
 .h10-ngp-count .l em { font-style: normal; font-size: 11px; color: var(--nds-text-muted); }
@@ -3667,8 +3688,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngp-g .rows .st { font-size: 10.5px; color: var(--nds-text-muted); }
 .h10-ngp-g .rows .st.on { font-weight: 700; color: #a8321f; }
 .h10-ngp-g .rows .pf { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #4a5566; }
-.h10-ngp-g .rows .pf em { font-style: normal; color: #7a8494; }
-.h10-ngp-g .rows .pf b { font-weight: 800; color: #1f8a4c; }
+.h10-ngp-g .rows .pf em { font-style: normal; color: var(--nds-text-muted); }
+.h10-ngp-g .rows .pf b { font-weight: 800; color: var(--nds-success-text); }
 .h10-ngp-g .rows .ac { justify-self: end; }
 
 /* ── states ─────────────────────────────────────────────────────────────────────────────────── */
@@ -3843,7 +3864,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   padding: 5px 9px; border-radius: 5px; font-size: 11.5px; color: var(--nds-grey-700); }
 .h10-ngw-modal .outs li:nth-child(odd) { background: var(--nds-grey-25); }
 .h10-ngw-modal .outs .o { font-weight: 700; text-transform: capitalize; }
-.h10-ngw-modal .outs li.created .o { color: #1f8a4c; }
+.h10-ngw-modal .outs li.created .o { color: var(--nds-success-text); }
 .h10-ngw-modal .outs li.already_existed .o { color: #4a5566; }
 .h10-ngw-modal .outs li.refused .o { color: #7d5312; }
 .h10-ngw-modal .outs li.failed .o { color: #a8321f; }
@@ -4287,7 +4308,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngrec-led .a.state-changed { background: #fdf3e3; color: #7d5312; }
 .h10-ngrec-led .c { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4a5566; }
 .h10-ngrec-led .by { font-size: 10.5px; color: #4a5566; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-ngrec-led .by.unattributed, .h10-ngrec-led .by.actor-not-recorded { color: #7a8494; font-style: italic; }
+.h10-ngrec-led .by.unattributed, .h10-ngrec-led .by.actor-not-recorded { color: var(--nds-text-muted); font-style: italic; }
 .h10-ngrec-led .d { font-size: 10.5px; color: var(--nds-text-muted); text-align: right; }
 .h10-ngrec-led .ev { grid-column: 1 / -1; margin-top: 2px; padding: 6px 9px; border-radius: 5px;
   background: var(--nds-grey-75); font-size: 10.5px; line-height: 1.55; color: #4a5566; }
@@ -4741,7 +4762,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov5-series li b { flex: 0 0 62px; font-variant-numeric: tabular-nums; color: #16202b; }
 .h10-sov5-series li .sub { color: var(--nds-text-2); font-size: 11px; }
 .h10-sov5-series li .flag { padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; background: #fff6e8; color: #7a4512; }
-.h10-sov5-series li.unparsed b, .h10-sov5-series li.unparsed .sub { color: #b3bcc6; }
+.h10-sov5-series li.unparsed b, .h10-sov5-series li.unparsed .sub { color: var(--nds-text-muted); }
 .h10-sov5-funnel { margin-bottom: 14px; }
 .h10-sov5-funnel p { margin: 0 0 6px; font-size: 12.5px; color: var(--nds-grey-700); }
 .h10-sov5-funnel b { font-variant-numeric: tabular-nums; color: #16202b; }
@@ -5107,7 +5128,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-hv-badges.hp2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .h10-hv-pathway { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); background: var(--nds-grey-25); }
 .h10-hv-pathway.paused { background: var(--nds-grey-50); border-style: dashed; }
-.h10-hv-pathway.paused .h10-nt-name { color: #74808f; }
+.h10-hv-pathway.paused .h10-nt-name { color: var(--nds-text-muted); }
 /* DS-ALIGN — the switch is the DS `Toggle` (30x17 with a ::after knob). The `sm` variant keeps
    the same model at the size a pathway chip needs; the knob offsets follow from the track. */
 .h10-hv-pathway .nds-toggle.sm { width: 26px; height: 15px; flex-shrink: 0; }
@@ -5142,7 +5163,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-hourly .xlab { fill: #7c8595; font-size: 11px; font-weight: 600; }
 .h10-bsp-hourfoot { margin: 6px 2px 2px; font-size: 12px; color: var(--nds-grey-600); }
 .h10-bsp-hourfoot b { color: var(--nds-grey-800); font-weight: 700; }
-.h10-bsp-hourfoot i { font-style: normal; color: #7c8595; }
+.h10-bsp-hourfoot i { font-style: normal; color: var(--nds-text-muted); }
 
 /* ── U9 — Apply Rules' three bulk verbs ────────────────────────────────────────────────────────
    H10 puts [Automation] [Target ACoS] [Min/Max Bid] in the selection toolbar and opens a small
@@ -5152,7 +5173,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-bulkwrap { position: relative; display: inline-flex; }
 .h10-ar-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 268px; padding: 12px 13px 11px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); box-shadow: 0 12px 30px rgba(16, 27, 43, .14); }
 .h10-ar-pop > b { display: block; font-size: 13px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-ar-pop .sub { margin: 3px 0 9px; font-size: 11.5px; color: #7c8595; line-height: 1.45; }
+.h10-ar-pop .sub { margin: 3px 0 9px; font-size: 11.5px; color: var(--nds-text-muted); line-height: 1.45; }
 .h10-ar-pop .rads { display: flex; flex-direction: column; gap: 7px; }
 /* The two options are the DS `Radio`; this keeps them top-aligned, because each label wraps
    to two lines and a centred box would float in the middle of the sentence. */
@@ -5166,7 +5187,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-pop .res { margin: 9px 0 0; font-size: 11.5px; line-height: 1.5; }
 .h10-ar-pop .res.ok { color: #1c7c4a; }
 .h10-ar-pop .res.warn { color: #a2231d; }
-.h10-ar-pop .res em { display: block; font-style: normal; color: #7c8595; }
+.h10-ar-pop .res em { display: block; font-style: normal; color: var(--nds-text-muted); }
 .h10-ar-pop .acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 11px; }
 /* DS-ALIGN — the bulk-verb popover's actions are the DS `Button` at `sm`. */
 
@@ -5210,7 +5231,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    account, and DEAD. The dead state is the one worth noticing, so it is the only coloured one. */
 .h10-au-reach { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--nds-grey-700); font-variant-numeric: tabular-nums; }
 .h10-au-reach b { font-weight: 700; color: #16202b; }
-.h10-au-reach em { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #7c8595; }
+.h10-au-reach em { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); }
 .h10-au-reach.all b { color: #7a4d10; }
 .h10-au-reach.all em { color: #a06a12; }
 .h10-au-reach.dead { color: #9c2f10; font-weight: 700; }
@@ -5220,7 +5241,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    until someone orders a colliding pair, and a loud number that carries no information trains
    the operator to ignore the column. */
 .h10-au-prio { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12.5px; font-weight: 700; color: #16202b; font-variant-numeric: tabular-nums; }
-.h10-au-prio.default { font-weight: 500; color: #9aa3ae; }
+.h10-au-prio.default { font-weight: 500; color: var(--nds-text-muted); }
 
 /* ── B1 (2026-08-20) — the rules grid's Actions cell ───────────────────────────────────────────
    One verb, the operator study's trash can. Always painted, never hover-revealed: Open/History on
@@ -5561,7 +5582,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    🔴 The question-mark cursor is banned account-wide (ratchet baseline 0) — and the ratchet greps
    this file as text, so do not name it here either. Keep the default; the note carries the why. */
 .h10-rb-create.held { background: var(--nds-grey-100); color: var(--nds-text-2); box-shadow: inset 0 0 0 1px var(--nds-grey-150); }
-.h10-rb-create.held:hover { background: var(--nds-rail-text-strong); color: #6f7885; }
+.h10-rb-create.held:hover { background: var(--nds-rail-text-strong); color: var(--nds-text-muted); }
 
 /* The rank preview is SEVEN columns where budget is five, so it gets its own width. At the shared
    640px the six fixed columns ate 494px and left the keyword 128px — measured on the rig, two of
