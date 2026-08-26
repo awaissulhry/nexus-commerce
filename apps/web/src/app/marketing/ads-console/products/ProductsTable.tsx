@@ -202,19 +202,18 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
    *  product's. The four states the old `<tbody>` spelled out inline — loading, error, empty,
    *  rows — become `note` rows, which occupy the product column and leave the metrics blank,
    *  exactly as the `colSpan` version did. */
-  const gridRows = useMemo<GridRow[]>(() => {
-    const out: GridRow[] = []
-    for (const p of paged) {
-      out.push({ kind: 'product', p })
-      if (!expanded.has(p.id)) continue
-      const data = camps[`${p.id}:${days}`]
-      if (data === undefined || data === 'loading') out.push({ kind: 'note', parentId: p.id, text: 'Loading campaigns…' })
-      else if (data === 'error') out.push({ kind: 'note', parentId: p.id, text: 'Couldn’t load campaigns.' })
-      else if (data.length === 0) out.push({ kind: 'note', parentId: p.id, text: 'No campaigns advertise this product in range.' })
-      else for (const c of data) out.push({ kind: 'child', parentId: p.id, c })
-    }
-    return out
-  }, [paged, expanded, camps, days])
+  /** Parents only. `getSubRows` supplies the children, which `DataGrid` renders as real rows
+   *  through the same columns — so a campaign's spend stays under the Spend header without the
+   *  manual flattening this used to need. */
+  const parentRows = useMemo<GridRow[]>(() => paged.map((p) => ({ kind: 'product' as const, p })), [paged])
+  const subRowsFor = useCallback((r: GridRow): GridRow[] | undefined => {
+    if (r.kind !== 'product') return undefined
+    const data = camps[`${r.p.id}:${days}`]
+    if (data === undefined || data === 'loading') return [{ kind: 'note', parentId: r.p.id, text: 'Loading campaigns…' }]
+    if (data === 'error') return [{ kind: 'note', parentId: r.p.id, text: 'Couldn’t load campaigns.' }]
+    if (data.length === 0) return [{ kind: 'note', parentId: r.p.id, text: 'No campaigns advertise this product in range.' }]
+    return data.map((c) => ({ kind: 'child' as const, parentId: r.p.id, c }))
+  }, [camps, days])
 
 
   return (
@@ -244,7 +243,9 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
       </div>
 
       <DataGrid<GridRow>
-        rows={gridRows}
+        rows={parentRows}
+        getSubRows={subRowsFor}
+        expanded={expanded}
         rowKey={(r) => (r.kind === 'product' ? r.p.id : r.kind === 'child' ? `c:${r.parentId}:${r.c.id}` : `n:${r.parentId}`)}
         columns={productColumns({ COLS, cell, childCell, expanded, toggleExpand })}
         selectable
@@ -254,12 +255,12 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
         rowSelectableHint="Campaign rows are not selectable"
         selectAllHint="Select every product on this page"
         rowClassName={(r) => (r.kind === 'child' ? 'childrow' : undefined)}
-        /* CONTROLLED, and deliberately `null`. The rows array is parent-then-children, so
-           letting the grid sort it would tear children away from their parent. The component
-           sorts `filtered` and flattens afterwards; `null` means "controlled and currently
-           unsorted — render `rows` as given", which is exactly that contract. The headers stay
-           clickable through `onSortChange`. */
-        sort={null}
+        /* Controlled with the REAL key/dir, not `null`. `null` renders rows as given but also
+           makes `sort?.key === key` false for every header, so the grid draws its neutral
+           icon on all of them and the active column stops showing its direction — which is
+           what my first pass shipped. The component still owns the ordering; this only tells
+           the grid what to draw. */
+        sort={{ key: sortKey, dir: sortDir }}
         onSortChange={({ key }) => toggleSort(key)}
         emptyState={loading ? 'Loading…' : 'No products in this view.'}
       />

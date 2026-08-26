@@ -405,19 +405,19 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   }
 
   /** Campaigns with their expanded ad groups interleaved, in display order. */
-  const campRows = useMemo<CampRow[]>(() => {
-    const out: CampRow[] = []
-    for (const r of paged) {
-      out.push({ kind: 'campaign', r })
-      if (!expanded.has(r.b.id)) continue
-      const data = groups[`${r.b.id}:${days}`]
-      if (data === undefined || data === 'loading') out.push({ kind: 'note', parentId: r.b.id, text: 'Loading ad groups…' })
-      else if (data === 'error') out.push({ kind: 'note', parentId: r.b.id, text: 'Couldn’t load ad groups.' })
-      else if (data.length === 0) out.push({ kind: 'note', parentId: r.b.id, text: 'No ad groups in this campaign.' })
-      else for (const g of data) out.push({ kind: 'child', parentId: r.b.id, g })
-    }
-    return out
-  }, [paged, expanded, groups, days])
+  /** Parents only; `getSubRows` supplies the ad groups, and `DataGrid` renders them as real
+   *  rows through the same columns — so the manual flattening is gone and the grid can sort
+   *  parents without tearing children off them. */
+  const parentRows = useMemo<CampRow[]>(() => paged.map((r) => ({ kind: 'campaign' as const, r })), [paged])
+  const subRowsFor = useCallback((row: CampRow): CampRow[] | undefined => {
+    if (row.kind !== 'campaign') return undefined
+    const id = row.r.b.id
+    const data = groups[`${id}:${days}`]
+    if (data === undefined || data === 'loading') return [{ kind: 'note', parentId: id, text: 'Loading ad groups…' }]
+    if (data === 'error') return [{ kind: 'note', parentId: id, text: 'Couldn’t load ad groups.' }]
+    if (data.length === 0) return [{ kind: 'note', parentId: id, text: 'No ad groups in this campaign.' }]
+    return data.map((g) => ({ kind: 'child' as const, parentId: id, g }))
+  }, [groups, days])
 
 
   return (
@@ -479,7 +479,9 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
           could never match, so the View menu's two looser steps did nothing. `lg`/`xl` are 14px
           and 19px, the exact values `.az-table.comfortable`/`.spacious` carried. */}
       <DataGrid<CampRow>
-        rows={campRows}
+        rows={parentRows}
+        getSubRows={subRowsFor}
+        expanded={expanded}
         rowKey={(r) => (r.kind === 'campaign' ? r.r.b.id : r.kind === 'child' ? `g:${r.parentId}:${r.g.id}` : `n:${r.parentId}`)}
         columns={campaignColumns({ order, cell, childCell })}
         size={density === 'comfortable' ? 'lg' : density === 'spacious' ? 'xl' : 'md'}
@@ -490,7 +492,11 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
         rowSelectableHint="Ad-group rows are not selectable"
         selectAllHint="Select every campaign on this page"
         rowClassName={(r) => (r.kind === 'campaign' ? undefined : 'childrow')}
-        sort={null}
+        /* The real key/dir, not `null`. `null` renders rows as given but also makes
+           `sort?.key === key` false for EVERY header, so the grid draws its neutral icon on
+           all of them and the active column stops showing its direction — which is what my
+           first pass shipped here and in ProductsTable. */
+        sort={{ key: sortKey, dir: sortDir }}
         onSortChange={({ key }) => toggleSort(key)}
         emptyState={loading ? 'Loading…' : 'No campaigns match your filters.'}
       />

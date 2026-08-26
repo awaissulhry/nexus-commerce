@@ -218,14 +218,6 @@
 .az-spend-head { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 10px; }
 .az-spend-head .cn { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 .az-budget-chip { font-size: 11px; font-weight: 700; color: var(--ink2); background: var(--bg2); border: 1px solid var(--divider); border-radius: 6px; padding: 3px 8px; }
-.az-spend-tablewrap { overflow-x: auto; }
-.az-spend-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.az-spend-table th { text-align: right; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--ink3); padding: 6px 10px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
-.az-spend-table th.l, .az-spend-table td.l { text-align: left; }
-.az-spend-table td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--bg3); color: var(--ink); white-space: nowrap; }
-.az-spend-table tr.on td { background: var(--bg3); }
-.az-spend-table td.chg { color: var(--navy); font-weight: 700; }
-.az-spend-table tr.tot td { border-top: 2px solid var(--divider); border-bottom: none; font-weight: 700; }
 /* Editable bias cell = the multi-placement mixer (R7) */
 .az-bias-edit { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .az-bias-edit button { border: none; background: #fff; width: 22px; height: 26px; font-size: 14px; line-height: 1; cursor: pointer; color: var(--ink); font-family: inherit; }
@@ -233,7 +225,6 @@
 .az-bias-edit button:disabled { opacity: .4; cursor: default; }
 .az-bias-edit input { width: 48px; border: none; border-left: 1px solid var(--divider); border-right: 1px solid var(--divider); padding: 4px 4px; font: inherit; font-size: 12px; font-weight: 700; text-align: center; -moz-appearance: textfield; }
 .az-bias-edit input::-webkit-outer-spin-button, .az-bias-edit input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.az-spend-table td .was { display: block; font-size: 9.5px; color: var(--ink3); margin-top: 2px; }
 .az-spend-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .az-spend-actions .az-cockpit-sub { margin: 0; }
 
@@ -986,17 +977,6 @@
 .az-kwb-push .lbl { font-size: 11px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: .3px; }
 .az-kwb-push label { font-size: 12px; color: var(--ink2); display: inline-flex; align-items: center; gap: 4px; }
 .az-kwb-push label input { width: 58px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; font-weight: 700; text-align: right; }
-.az-kwb-tablewrap { margin-top: 10px; max-height: 340px; overflow-y: auto; border: 1px solid var(--divider); border-radius: 9px; }
-.az-kwb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.az-kwb-table th { position: sticky; top: 0; background: var(--bg2); text-align: right; font-size: 10px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: .3px; padding: 7px 9px; border-bottom: 1px solid var(--divider); }
-.az-kwb-table th.l, .az-kwb-table td.l { text-align: left; }
-.az-kwb-table td { text-align: right; padding: 6px 9px; border-bottom: 1px solid var(--divider); color: var(--ink2); }
-.az-kwb-table tr.on td { background: var(--bg2); }
-.az-kwb-table td.l { color: var(--ink); font-weight: 500; }
-.az-kwb-table td.up { color: #1e7a4f; font-weight: 700; }
-.az-kwb-table td.e { text-align: center; color: var(--ink3); padding: 14px; }
-.az-kwb-table .sub2 { font-size: 10.5px; color: var(--ink3); text-transform: capitalize; }
-.az-kwb-table td .dim { color: var(--ink3); }
 /* RC4.14 — add-keyword sub-section */
 .az-kwb-add { border: 1px solid var(--divider); border-radius: 9px; background: var(--bg2); padding: 12px; margin-bottom: 14px; }
 .az-kwb-addhd { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--navy); margin-bottom: 8px; }
@@ -1178,20 +1158,6 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-tbar2 .ctl:hover { color: var(--link-hover); }
 
 /* ── TABLE (Balham-faithful) ───────────────────────────────── */
-.az-tablewrap { border: 1px solid var(--divider); border-radius: 2px; overflow-x: auto; }
-.az-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; min-width: max-content; }
-.az-table thead th { position: sticky; top: 0; z-index: 2; background: #fff; text-align: right; color: var(--ink); font-weight: 700; font-size: 12px; padding: 12px 14px; border-bottom: 2px solid var(--border); cursor: pointer; user-select: none; vertical-align: bottom; }
-.az-table thead th.l { text-align: left; }
-.az-table thead th .info { color: var(--ink3); margin-left: 4px; }
-.az-table thead th.sorted { color: var(--ink); }
-.az-table tbody td { padding: 11px 14px; border-bottom: 1px solid var(--divider); text-align: right; vertical-align: middle; color: var(--ink); }
-.az-table tbody td.l { text-align: left; }
-.az-table tbody tr:hover { background: #f7fafa; }
-.az-table tbody tr.sel { background: #e3f3ff; }
-.az-table .num { font-variant-numeric: tabular-nums; }
-.az-table .cn { color: var(--link); font-weight: 500; cursor: pointer; }
-.az-table .cn:hover { color: var(--link-hover); text-decoration: underline; }
-.az-table .sub { color: var(--ink2); font-size: 11.5px; }
 /* `.az-table .num` carried `tabular-nums` and is scoped, so a converted grid loses digit
    alignment and numeric columns jitter down the page. `DataGrid` sets `font-variant-numeric` on
    NO selector (checked by walking every declaration in components.css), so there is nothing to
@@ -1209,8 +1175,6 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
    silently returns to 13px `--nds-text`. Same colour as the row above (--ink2, 7.07:1), so a
    converted grid reads identically to the table it replaced. */
 .az-cell-sub { color: var(--ink2); font-size: 11.5px; }
-.az-cellsticky { position: sticky; left: 0; background: #fff; z-index: 1; }
-.az-table tbody tr:hover .az-cellsticky { background: #f7fafa; }
 .az-check { width: 16px; height: 16px; accent-color: var(--blue); cursor: pointer; }
 .az-kebab { color: var(--ink2); cursor: pointer; padding: 2px; border-radius: 4px; background: none; border: 0; }
 .az-kebab:hover { background: var(--bg2); }
@@ -1367,10 +1331,6 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-expand { background: none; border: 0; color: var(--ink2); cursor: pointer; padding: 2px; margin-right: 2px; display: inline-grid; place-items: center; border-radius: 4px; transition: transform .12s; flex: none; }
 .az-expand:hover { background: var(--bg2); color: var(--ink); }
 .az-expand.open { transform: rotate(90deg); }
-.az-table tbody tr.childrow td { background: #fbfcfc; border-bottom: 1px solid var(--divider); padding-top: 9px; padding-bottom: 9px; }
-.az-table tbody tr.childrow:hover td { background: #f3f6f6; }
-.az-table tbody tr.childrow .az-cellsticky { background: #fbfcfc; }
-.az-table tbody tr.childrow:hover .az-cellsticky { background: #f3f6f6; }
 .childname { display: inline-flex; align-items: center; gap: 7px; padding-left: 32px; position: relative; font-weight: 500; }
 .childname::before { content: ''; position: absolute; left: 15px; top: 50%; width: 11px; height: 1px; background: var(--border); }
 .childname::after { content: ''; position: absolute; left: 15px; top: -10px; bottom: 50%; width: 1px; background: var(--border); }
@@ -1389,20 +1349,8 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-rowmenu button.danger:hover { background: #fdeceb; }
 .az-rowmenu .sep { height: 1px; background: var(--divider); margin: 5px 4px; }
 
-.az-table.comfortable tbody td { padding-top: 14px; padding-bottom: 14px; }
-.az-table.spacious tbody td { padding-top: 19px; padding-bottom: 19px; }
-
 /* ── PINNED-LEFT COLUMNS (checkbox + Active + Campaign name) ── */
 /* These stay put on horizontal scroll so the campaign name never leaves view. */
-.az-cellsticky { width: 46px; min-width: 46px; }
-.az-table .az-stick1 { position: sticky; left: 46px; background: #fff; z-index: 1; width: 78px; min-width: 78px; }
-.az-table .az-stick2 { position: sticky; left: 124px; background: #fff; z-index: 1; box-shadow: 6px 0 8px -6px rgba(0,0,0,.18); }
-.az-table .az-stick2 .cn { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-.az-table thead th.az-cellsticky, .az-table thead th.az-stick1, .az-table thead th.az-stick2 { z-index: 3; }
-.az-table tbody tr:hover .az-stick1, .az-table tbody tr:hover .az-stick2 { background: #f7fafa; }
-.az-table tbody tr.sel .az-stick1, .az-table tbody tr.sel .az-stick2 { background: #e3f3ff; }
-.az-table tbody tr.childrow .az-stick1, .az-table tbody tr.childrow .az-stick2 { background: #fbfcfc; }
-.az-table tbody tr.childrow:hover .az-stick1, .az-table tbody tr.childrow:hover .az-stick2 { background: #f3f6f6; }
 
 /* ── BULK ACTION BAR (floats up when rows are selected) ────── */
 .az-bulkbar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; background: var(--navy); color: #fff; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.34); display: flex; align-items: center; gap: 10px; padding: 10px 14px; animation: az-rise .16s ease; }
@@ -1423,12 +1371,6 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-prod .nm:hover { color: var(--link-hover); text-decoration: underline; }
 .az-prod .ids { color: var(--ink2); font-size: 11px; }
 /* product-name column pins right after the checkbox */
-.az-table .az-prodstick { position: sticky; left: 46px; background: #fff; z-index: 1; box-shadow: 6px 0 8px -6px rgba(0,0,0,.18); }
-.az-table thead th.az-prodstick { z-index: 3; }
-.az-table tbody tr:hover .az-prodstick { background: #f7fafa; }
-.az-table tbody tr.sel .az-prodstick { background: #e3f3ff; }
-.az-table tbody tr.childrow .az-prodstick { background: #fbfcfc; }
-.az-table tbody tr.childrow:hover .az-prodstick { background: #f3f6f6; }
 
 /* ── BULK OPERATIONS (download / upload-validate) ──────────── */
 .az-bulk { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 6px 0 18px; }
@@ -1628,11 +1570,3 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
    `.childname` and `.childmsg` are UNSCOPED and carry the indent and the tree elbow unchanged. */
 .nds-grid tbody tr.childrow td { background: var(--bg3); padding-top: 9px; padding-bottom: 9px; }
 .nds-grid tbody tr.childrow:hover td { background: var(--bg2); }
-
-/* The campaigns grid's density control ("View: Compact / Comfortable / Spacious"). `DataGrid`'s
-   `size` scale only goes DOWN from md — md/sm/xs — so compact maps onto the default and the two
-   looser settings have no DS equivalent. These are the page's own two steps, re-homed onto
-   `.nds-grid` so all three settings survive the conversion rather than two of them vanishing.
-   Filed upstream: a grid with no density above its default cannot host a density control. */
-.nds-grid.comfortable tbody td { padding-top: 14px; padding-bottom: 14px; }
-.nds-grid.spacious tbody td { padding-top: 19px; padding-bottom: 19px; }
