@@ -1179,3 +1179,19 @@
 .rpx-mix .bar i { display: block; height: 10px; border-radius: var(--nds-radius-pill); background: var(--color-primary); }
 .rpx-mix .s { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rpx-mix .row.is-idle .n, .rpx-mix .row.is-idle .s { color: rgb(var(--text-secondary)); }
+
+/* ── GX.3 · Explorer node cell ───────────────────────────────────────────── */
+.gx-node { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.gx-open { font-weight: 600; color: var(--color-primary); text-decoration: none; }
+.gx-open:hover { text-decoration: underline; }
+.gx-plain { font-weight: 600; color: rgb(var(--text-primary)); }
+.gx-rem { font-weight: 600; color: var(--status-warning-strong); }
+.gx-sub {
+  font-size: 11px; color: rgb(var(--text-tertiary)); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+/* The affordance only appears on hover: a row of permanent chevrons reads as clutter, and the
+   link itself already says the label is clickable. */
+.gx-go { color: rgb(var(--text-tertiary)); opacity: 0; transition: opacity .12s ease; flex: none; }
+.nds-wsgrid tbody tr:hover .gx-go { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .gx-go { transition: none; } }

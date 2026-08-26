@@ -33,6 +33,7 @@ import { Tabs } from '@/design-system/components/Tabs'
 import { BrandTab } from './BrandTab'
 import { MarketShareTab } from './MarketShareTab'
 import { BusinessTab } from './BusinessTab'
+import { ExplorerTab } from './ExplorerTab'
 import { LibraryTab } from './LibraryTab'
 import { TodayBand } from './TodayBand'
 import '@/design-system/styles/tokens.css'
@@ -44,6 +45,11 @@ const TABS = [
   { id: 'brand', label: 'Brand' },
   { id: 'market-share', label: 'Market share' },
   { id: 'business', label: 'Business' },
+  // GX.3 — the drill-down. It sits with the analysis tabs rather than in the Ad Manager, which is
+  // the EXECUTION grid: its rows are things you change in bulk, these are things you read and
+  // click through. (The Ad Manager also still renders its own <table>; adopting the shared grid
+  // there is a data migration over two bespoke localStorage shapes, not a table swap.)
+  { id: 'explorer', label: 'Explorer' },
   { id: 'library', label: 'Library' },
 ] as const
 
@@ -53,6 +59,7 @@ const SUBTITLES: Record<TabId, string> = {
   brand: 'Brand penetration against the category. Weekly — Amazon publishes this feed about eleven days in arrears.',
   'market-share': 'Our slice of the whole market, query by query. Weekly, roughly ten days in arrears.',
   business: 'What advertising costs the whole business, not just the ad account.',
+  explorer: 'Where the money went — market to portfolio to campaign to product or target, every level adding up to the one above it.',
   library: 'Every ads number this console can produce.',
 }
 
@@ -102,6 +109,7 @@ export function ReportingClient() {
     switch (tab) {
       case 'market-share': return <MarketShareTab key={`ms-${market}-${reloadKey}`} market={market} />
       case 'business': return <BusinessTab key={`bz-${market}-${reloadKey}`} market={market} />
+      case 'explorer': return <ExplorerTab key={`ex-${market}-${reloadKey}`} market={market} />
       case 'library': return <LibraryTab reloadKey={reloadKey} />
       default: return <BrandTab key={`br-${market}-${reloadKey}`} market={market} />
     }
