@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
 import { Button, Checkbox, ToolbarButton, Toggle } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
@@ -472,9 +473,17 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       <div className="az-pager">
         <span className="count">{filtered.length} campaigns · {order.length} columns · last {days} days{loading ? ' · updating…' : ''}</span>
         <span className="rpp">Results per page
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Results per page">
-            {[25, 50, 100, 200, 300].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          {/* `.az-pager select` (amazon.css) styled the native control it replaced; the DS Listbox
+              renders a <button>, so that rule simply stops matching rather than fighting it — the
+              other two pagers on this console still use it, so it is not dead yet. */}
+          <Listbox
+            size="sm"
+            width={78}
+            ariaLabel="Results per page"
+            value={String(pageSize)}
+            onChange={(v) => setPageSize(Number(v))}
+            options={[25, 50, 100, 200, 300].map((n) => ({ value: String(n), label: String(n) }))}
+          />
         </span>
         <span className="range">{firstRow}–{lastRow} of {filtered.length}</span>
         <span className="nav">
