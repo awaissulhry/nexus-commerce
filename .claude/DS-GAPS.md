@@ -694,3 +694,24 @@ the rendered value on a real element, not the token name on a synthetic one.
 - ✅ RESOLVED (DS session) — `.h10-sug-buf`, the last genuinely-open gap. `Input` takes `affix?: 'inside' | 'outside'`. The filer's diagnosis was right and their self-correction was the useful half: the blocker is ANATOMY, not specificity. `inside` (default, unchanged) is the shaded adornment `[€|12.50]`; `outside` puts the mark beside the box as plain text `€ [12.50]`. **Not two anatomies** — the border stays on `.nds-field` either way, only the MARK moves, so a caller's `on`/`edited` tints still ring the input alone. Justified by count, not by one site: 26 rules in this console put the border on the input for exactly this reason, and `prefix=` already has 83 call sites. Verified live: `inside` unchanged (mark shaded, inside the border); `outside` mark unshaded, fully outside, row carries no border, field keeps its 1px.
 - `.az-kebab` motion/blend disclosures → `ToolbarButton` has ONE engaged colour, and these two need two — `rank/RankTargetEditor.tsx:276,277`. Corroborates the `tone` gap Session 5 filed from `suggestions/` (DS-SPEC #2) with a second page and a second shape: not staged states but two sibling DISCLOSURES, indigo `#3730a3` (Motion, 9.93:1) and violet `#7c3aed` (Blend, 5.70:1), whose panels open in the same place. `[aria-expanded='true']` renders both at `--nds-text` 15.48:1 — contrast RISES, and the operator loses which of the two is open. Left hand-rolled; a `tone` that applies to the expanded state would close it.
 - ✅ RESOLVED — 🔴 **the other half of the shell pin: portals escaped it.** Found by nexus-commerce-c4. Eight DS components portal into `document.body` (Listbox, Menu, Combobox, MultiSelect, HoverCard, Modal, Drawer, Toast), so they render OUTSIDE `.h10-shell` and a pin scoped to that selector never reached them. On a dark OS the console was light and every dropdown was dark. **No per-surface contrast probe can see this** — each popover is internally coherent and above AA in both themes; it is a COHERENCE failure, not a contrast one. Fixed by widening the pin to `body:has(.h10-shell)`, which covers every portal without any component needing to know about themes. Verified live with a popover rendered as a SIBLING of the shell inside `html.dark`: background white, selected option 5.45, plain option 9.87. Also removed a stale `--nds-text-3: var(--nds-grey-500)` pin from an earlier block in the same file — it silently undid the icon-tier darkening inside the console (2.74 vs 3.20 on tinted grounds), and only source order was saving it.
+
+## `SegmentedOption` has no per-option `disabled` — it blocks the fourth call site
+*Session 2 · ROUND 2 · 2026-08-26 · found converting the `.az-mode-seg` fake tablists*
+
+`SegmentedControl` takes `disabled`, but it disables the WHOLE control; `SegmentedOption` carries
+only `value`, `label`, `icon` and `title`. That is enough for three of the four `.az-mode-seg`
+call sites, which converted cleanly (`ba0f3e2b4`). The fourth cannot:
+
+`ads-console/rank/RankTargetEditor.tsx:234` offers "This product / This campaign" against "Global
+defaults", and the scope option is `disabled={!scopeAvailable}` until the thing is saved, with
+`title="Save the … first to set overrides here"`. Converting today would drop the `disabled` and
+let an operator select a scope that does not exist yet — a real behaviour regression in exchange
+for a conversion count, so it stays hand-rolled.
+
+`title` already survives (`SegmentedOption.title` exists, added for exactly this kind of per-option
+explanation), so the pairing is half there: the control can explain why an option is unavailable
+but cannot make it unavailable. A `disabled?: boolean` on `SegmentedOption`, skipped by the
+arrow-key `move()` the same way a roving-tabindex group skips a disabled radio, closes it.
+
+Worth checking the same shape elsewhere before adding it: a segmented control whose options are a
+SCOPE almost always has one that is conditionally unreachable.
