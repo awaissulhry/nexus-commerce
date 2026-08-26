@@ -57,6 +57,18 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    */
   block?: boolean
   /**
+   * Hold a secondary action at the SECONDARY text tier instead of inheriting.
+   *
+   * `quiet` inherits its context's colour on purpose — the 25 `.acr-btn` sites needed that. But
+   * inheriting is not always right: inside a container computing `--nds-grey-900`, an inherited
+   * `quiet` renders near-black and a muted action is promoted to full emphasis. Raising contrast
+   * is not the same as preserving hierarchy, and there was no way to ask for the second.
+   *
+   * Pins to `--nds-text-2` (5.91:1 on white, 5.46 on the console ground) — quieter than the body
+   * it sits in, and still comfortably above AA.
+   */
+  muted?: boolean
+  /**
    * Render the single child element instead of a `<button>`, giving it this Button's classes.
    *
    * For a control that must be a link — `<Button asChild><Link href="…">Refresh</Link></Button>`.
@@ -96,10 +108,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, asChild, className, children, ...rest },
+  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, muted, asChild, className, children, ...rest },
   ref,
 ) {
-  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', active && tone && tone !== 'neutral' ? tone : '', block ? 'block' : '', inline ? 'inline' : '', className ?? '']
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', active && tone && tone !== 'neutral' ? tone : '', block ? 'block' : '', muted ? 'muted' : '', inline ? 'inline' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   if (asChild && isValidElement(children)) {

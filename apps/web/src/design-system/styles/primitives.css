@@ -1207,3 +1207,27 @@ button.nds-token > .t,
 .nds-nstep.sm { min-height: 24px; }
 .nds-nstep.sm > button { width: 22px; font-size: 13px; }
 .nds-nstep.sm > input  { width: 42px; font-size: 11.5px; }
+
+/* A secondary action held at the secondary tier. `quiet` inherits by design, which is right for
+   the 25 sites that needed it and wrong inside a container computing near-black: a muted action
+   should not be promoted to full emphasis just because its neighbour is dark. */
+.nds-btn.muted {
+  color: var(--nds-text-2);
+}
+
+/* Revealed on row hover. The row carries `nds-reveal-row`; the button fades in.
+   🔴 `opacity: 0` does NOT remove a button from the tab order, so it stays visible on
+   :focus-visible — an icon a keyboard user can reach and cannot see is worse than one that is
+   always there. */
+.nds-tbtn.reveal {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.nds-reveal-row:hover .nds-tbtn.reveal,
+.nds-reveal-row:focus-within .nds-tbtn.reveal,
+.nds-tbtn.reveal:focus-visible {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nds-tbtn.reveal { transition: none; }
+}

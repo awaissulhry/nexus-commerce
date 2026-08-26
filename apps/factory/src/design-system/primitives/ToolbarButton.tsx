@@ -67,6 +67,19 @@ export interface ToolbarButtonProps
    */
   tone?: 'neutral' | 'danger'
   /**
+   * Hidden until its row is hovered — a per-row edit affordance that must not put an icon on
+   * every row of a grid.
+   *
+   * Put `nds-reveal-row` on the row; this button then fades in on hover. It stays visible on
+   * `:focus-visible` regardless, because an icon a keyboard user can reach and cannot see is
+   * worse than one that is always there — and `opacity: 0` alone leaves it focusable.
+   *
+   * Exists because `.h10-editpen` is #b6bdc8 on white — **1.89:1**, under even the 3:1 non-text
+   * floor — and was one of the sites the brief most wants converted and one of the few that
+   * could not be.
+   */
+  revealOnRowHover?: boolean
+  /**
    * Wrap in a `Tooltip`. Default true, matching every existing call site.
    *
    * Pass `false` for an icon button whose meaning is already obvious (a `x` close, a `-` remove).
@@ -93,6 +106,7 @@ export function ToolbarButton({
   variant = 'bare',
   size = 'md',
   tone = 'neutral',
+  revealOnRowHover,
   tooltip = true,
   ...rest
 }: ToolbarButtonProps) {
@@ -117,7 +131,7 @@ export function ToolbarButton({
       disabled={disabled}
       aria-label={label}
       {...(active !== undefined && !isDisclosure ? { 'aria-pressed': active } : {})}
-      className={cx('nds-tbtn', variant === 'boxed' && 'boxed', size === 'sm' && 'sm', tone === 'danger' && 'danger', className)}
+      className={cx('nds-tbtn', variant === 'boxed' && 'boxed', size === 'sm' && 'sm', tone === 'danger' && 'danger', revealOnRowHover && 'reveal', className)}
       {...rest}
     >
       {icon}
