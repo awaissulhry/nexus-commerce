@@ -25,6 +25,7 @@ import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent,
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankGrid'
 import { DemandHeatmap } from './DemandHeatmap'
@@ -39,6 +40,76 @@ interface TosRow { campaignId: string; name: string; marketplace: string | null;
 interface Target { id: string; text: string; matchType: string; bidCents: number; status: string; adGroupId: string; impressions: number; clicks: number; spendCents: number; salesCents: number; acos: number | null }
 interface ParsedKw { keyword: string; bidCents: number; basis: string; exists: boolean }
 interface PlacementRow { placement: PlacementKey; impressions: number; clicks: number; costCents: number; salesCents: number; orders: number; adjustmentPct: number }
+
+/** `spendRows` was an inferred `.map()` result with no name. A module-level column spec needs
+ *  one, so the shape is declared rather than reached for with `typeof x[number]` — which would
+ *  have made the spec depend on a local in another scope. */
+interface SpendRow {
+  key: PlacementKey
+  row: PlacementRow | undefined
+  costCents: number
+  curBias: number
+  newBias: number
+  perDay: number
+  projPerDay: number
+  changed: boolean
+}
+
+/** `size="sm"` because `.az-spend-table` is 12.5px / 8px 10px, not the roomy `.az-table`; the
+ *  DS `sm` tier is 12.5px / 7px 10px — the near match.
+ *
+ *  The hand-rolled `<tr className="tot">` becomes `showTotals` + a `total` per column, which is
+ *  what `DataGrid` has for exactly this. Alignment inverts between the two grids: only
+ *  Placement carried `.l`, so every other column is right-aligned.
+ *
+ *  `.chg`, `.was` and `tr.on` were scoped under `.az-spend-table` and die in a `.nds-grid` —
+ *  the sixth, seventh and eighth such class this session. They move to `.az-spend-grid`
+ *  equivalents in amazon.css.
+ *
+ *  The +/− bias stepper stays raw: the DS has no numeric stepper, and `.az-bias-edit` is a
+ *  joined compound (one shared border, hairline dividers) that three separate DS controls
+ *  would not reproduce. Filed. */
+const spendColumns = (ctx: {
+  setBias: (k: PlacementKey, v: number) => void
+  applying: boolean
+  /** `WINDOW_DAYS` is per-render (`lookbackDays ?? DEFAULT`), so it cannot be read from module
+   *  scope — it comes through here, like every other value the spec needs. */
+  windowDays: number
+  topManaged: boolean | undefined
+  spendRows: SpendRow[]
+  totalPerDay: number
+  totalProjPerDay: number
+  dailyBudgetCents: number | null
+}): Array<Column<SpendRow>> => [
+  { key: 'placement', label: 'Placement', render: sr => PLACEMENT_SHORT[sr.key], total: 'Total' },
+  { key: 'impr', label: 'Impr', align: 'right', render: sr => (sr.row?.impressions ?? 0).toLocaleString() },
+  { key: 'clicks', label: 'Clicks', align: 'right', render: sr => sr.row?.clicks ?? 0 },
+  { key: 'spend', label: `Spend ${ctx.windowDays}d`, align: 'right', render: sr => euros(sr.costCents),
+    total: euros(ctx.spendRows.reduce((a, r) => a + r.costCents, 0)) },
+  { key: 'perday', label: '€/day', align: 'right', render: sr => euros(Math.round(sr.perDay)),
+    total: euros(Math.round(ctx.totalPerDay)) },
+  { key: 'sales', label: 'Sales', align: 'right', render: sr => euros(sr.row?.salesCents ?? 0) },
+  { key: 'acos', label: 'ACOS', align: 'right', render: sr => {
+    const r = sr.row
+    const acos = r && r.salesCents > 0 ? Math.round(r.costCents / r.salesCents * 100) : null
+    return acos != null ? `${acos}%` : '—'
+  } },
+  { key: 'bias', label: 'Bias % (bid)', align: 'right', render: sr => (<>
+      <span className="az-bias-edit">
+        <button type="button" onClick={() => ctx.setBias(sr.key, sr.newBias - 10)} disabled={ctx.applying || ctx.topManaged} aria-label="Decrease bias">−</button>
+        <input type="number" min={0} max={900} value={sr.newBias} onChange={e => ctx.setBias(sr.key, Number(e.target.value))} disabled={ctx.applying || ctx.topManaged} />
+        <button type="button" onClick={() => ctx.setBias(sr.key, sr.newBias + 10)} disabled={ctx.applying || ctx.topManaged} aria-label="Increase bias">+</button>
+      </span>
+      {sr.changed && <span className="az-spend-was">was +{sr.curBias}%</span>}
+    </>) },
+  { key: 'proj', label: 'Proj €/day', align: 'right',
+    render: sr => <span className={sr.changed ? 'az-spend-chg' : undefined}>{euros(Math.round(sr.projPerDay))}</span>,
+    total: (
+      <span className={Math.round(ctx.totalProjPerDay) !== Math.round(ctx.totalPerDay) ? 'az-spend-chg' : undefined}>
+        {euros(Math.round(ctx.totalProjPerDay))}{ctx.dailyBudgetCents != null && ctx.totalProjPerDay > ctx.dailyBudgetCents ? ' ⚠' : ''}
+      </span>
+    ) },
+]
 interface SelfComp { campaignId: string; name: string; status: string; asins: string[] }
 // RC3.3 — cross-product keyword-rank collision (different products, same keyword).
 interface KwContender { campaignId: string; campaignName: string; status: string; asins: string[]; isMine: boolean; targetIds: string[]; bidCents: number; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null; cvr: number | null; tosBias: number }
@@ -925,45 +996,16 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           <span style={{ flex: 1 }} />
           {dailyBudgetCents != null && <span className="az-budget-chip">Daily budget {euros(dailyBudgetCents)}</span>}
         </div>
-        <div className="az-spend-tablewrap">
-          <table className="az-spend-table">
-            <thead><tr><th className="l">Placement</th><th>Impr</th><th>Clicks</th><th>Spend {WINDOW_DAYS}d</th><th>€/day</th><th>Sales</th><th>ACOS</th><th>Bias % (bid)</th><th>Proj €/day</th></tr></thead>
-            <tbody>
-              {spendRows.map(sr => {
-                const r = sr.row
-                const acos = r && r.salesCents > 0 ? Math.round(r.costCents / r.salesCents * 100) : null
-                return (
-                  <tr key={sr.key} className={targetSlot?.placement === sr.key && userMoved ? 'on' : ''}>
-                    <td className="l">{PLACEMENT_SHORT[sr.key]}</td>
-                    <td>{(r?.impressions ?? 0).toLocaleString()}</td>
-                    <td>{r?.clicks ?? 0}</td>
-                    <td>{euros(sr.costCents)}</td>
-                    <td>{euros(Math.round(sr.perDay))}</td>
-                    <td>{euros(r?.salesCents ?? 0)}</td>
-                    <td>{acos != null ? `${acos}%` : '—'}</td>
-                    <td>
-                      <span className="az-bias-edit">
-                        <button type="button" onClick={() => setBias(sr.key, sr.newBias - 10)} disabled={applying || topManaged} aria-label="Decrease bias">−</button>
-                        <input type="number" min={0} max={900} value={sr.newBias} onChange={e => setBias(sr.key, Number(e.target.value))} disabled={applying || topManaged} />
-                        <button type="button" onClick={() => setBias(sr.key, sr.newBias + 10)} disabled={applying || topManaged} aria-label="Increase bias">+</button>
-                      </span>
-                      {sr.changed && <span className="was">was +{sr.curBias}%</span>}
-                    </td>
-                    <td className={sr.changed ? 'chg' : ''}>{euros(Math.round(sr.projPerDay))}</td>
-                  </tr>
-                )
-              })}
-              <tr className="tot">
-                <td className="l">Total</td>
-                <td></td><td></td>
-                <td>{euros(spendRows.reduce((s, r) => s + r.costCents, 0))}</td>
-                <td>{euros(Math.round(totalPerDay))}</td>
-                <td></td><td></td><td></td>
-                <td className={Math.round(totalProjPerDay) !== Math.round(totalPerDay) ? 'chg' : ''}>{euros(Math.round(totalProjPerDay))}{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' ⚠' : ''}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<SpendRow>
+            size="sm"
+            className="az-spend-grid"
+            rows={spendRows}
+            rowKey={sr => sr.key}
+            columns={spendColumns({ setBias, applying, windowDays: WINDOW_DAYS, topManaged, spendRows, totalPerDay, totalProjPerDay, dailyBudgetCents })}
+            showTotals
+            rowClassName={sr => (targetSlot?.placement === sr.key && userMoved ? 'on' : undefined)}
+            emptyState="No placement spend in this window."
+          />
         <div className="az-spend-actions">
           <Button variant="primary" disabled={applying || topManaged || !campaign || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
             {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply {dirtyPlacements.length || 'all'} placement{dirtyPlacements.length === 1 ? '' : 's'}</>}

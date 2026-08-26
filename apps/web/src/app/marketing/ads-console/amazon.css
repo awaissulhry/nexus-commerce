@@ -1613,3 +1613,9 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-kwb-sub { font-size: 10.5px; color: var(--ink3); text-transform: capitalize; }
 .az-kwb-up { color: var(--nds-success-text); font-weight: 700; }
 .az-kwb-dim { color: var(--ink3); }
+
+/* The placement-spend grid. `.chg`, `.was` and `tr.on` were scoped under `.az-spend-table`, so
+   a DS grid cell cannot reach them — same values, reachable selectors. */
+.az-spend-grid tr.on td { background: var(--bg3); }
+.az-spend-chg { color: var(--navy); font-weight: 700; }
+.az-spend-was { display: block; font-size: 9.5px; color: var(--ink3); margin-top: 2px; }
