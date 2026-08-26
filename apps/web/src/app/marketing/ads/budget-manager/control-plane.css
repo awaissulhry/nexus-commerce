@@ -7,7 +7,12 @@
    All that is left is the staged-changes dot the chip has no notion of. */
 .cp-tab .dot { color: #7c3aed; font-style: normal; }
 .cp-tabs .grow { flex: 1; }
-.cp-hint { font-size: 11.5px; color: var(--nds-text-muted); }
+/* 🔴 RAMP, unlike its neighbours: this renders inside a DS Drawer/Modal, which
+   createPortals to document.body — OUTSIDE `.h10-shell` and so outside the token pin
+   that protects every other rule in this file. A semantic token here flips with the OS
+   while the panel's own ground does not. Portals move a component across the boundary
+   the pin is scoped to. */
+.cp-hint { font-size: 11.5px; color: var(--nds-grey-600); }
 
 /* inspector */
 .cp-insp { width: 300px; flex-shrink: 0; height: 540px; overflow-y: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); padding: 14px; display: flex; flex-direction: column; gap: 16px; }

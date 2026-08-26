@@ -188,7 +188,12 @@
 .bp-item-h .nm { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
 .bp-item-h .bd, .bp-item-h .al { font-size: 11px; color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; }
 .bp-item-h .al { margin-left: auto; }
-.bp-item-h .chev { color: var(--nds-text-muted); transition: transform 0.15s; }
+/* 🔴 RAMP, unlike its neighbours: this renders inside a DS Drawer/Modal, which
+   createPortals to document.body — OUTSIDE `.h10-shell` and so outside the token pin
+   that protects every other rule in this file. A semantic token here flips with the OS
+   while the panel's own ground does not. Portals move a component across the boundary
+   the pin is scoped to. */
+.bp-item-h .chev { color: var(--nds-grey-600); transition: transform 0.15s; }
 .bp-item-h .chev.open { transform: rotate(180deg); }
 .tag { font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 800; padding: 2px 6px; border-radius: 5px; }
 .tag.ok { background: #e6f4ef; color: #067d62; }
