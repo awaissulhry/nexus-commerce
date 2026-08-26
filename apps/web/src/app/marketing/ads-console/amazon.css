@@ -30,6 +30,9 @@
 /* ── TOP BAR ───────────────────────────────────────────────── */
 .az-top { height: 48px; flex: none; background: var(--navy); color: #fff; display: flex; align-items: center; gap: 0; padding: 0 14px; }
 .az-top .brand { font-weight: 700; font-size: 16px; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; color: #fff; }
+/* NOT a failure, though a file-only sweep reads it as 2.14:1: `.az-top` sets
+   `background: var(--navy)`, so this is --orange on #232f3e = 6.34:1. The ground is inherited
+   from the ancestor, which is exactly the thing a stylesheet pass cannot see. Leave it. */
 .az-top .brand .mk { color: var(--orange); }
 .az-top .crumb { margin-left: 18px; font-weight: 700; font-size: 14px; color: #fff; }
 .az-top .home { margin-left: 10px; opacity: .85; display: inline-flex; }
@@ -657,7 +660,7 @@
 .az-urc-staged { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink2); background: none; border: none; cursor: pointer; padding: 0; }
 .az-urc-staged:hover { color: var(--navy); }
 .az-urc-staged.has { color: var(--navy); font-weight: 700; }
-.az-urc-staged.has svg { color: var(--orange); }
+.az-urc-staged.has svg { color: var(--amber); }
 
 /* RC4.5 — staged-changes tray */
 .az-tray { margin-top: 10px; border: 1px solid var(--divider); border-radius: 12px; background: #fff; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.07); }
@@ -1219,7 +1222,7 @@ button.az-rovw-card:hover { border-color: var(--navy); background: var(--bg2); }
 .az-cc-cats button:hover { background: var(--bg3); }
 .az-cc-cats button.on { background: var(--bg2); font-weight: 700; border-left-color: var(--orange); }
 .az-cc-cats button .ct { color: var(--ink3); font-weight: 500; font-size: 11.5px; }
-.az-cc-cats .nx { color: var(--orange); font-size: 10px; font-weight: 700; }
+.az-cc-cats .nx { color: var(--nds-warning-text); font-size: 10px; font-weight: 700; }
 
 /* available list */
 .az-cc-avail { flex: 1; min-width: 0; border-left: 1px solid var(--divider); border-right: 1px solid var(--divider); padding: 0 16px; display: flex; flex-direction: column; min-height: 0; }
