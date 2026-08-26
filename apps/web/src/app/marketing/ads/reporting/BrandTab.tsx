@@ -82,7 +82,16 @@ export function BrandTab({ market }: { market: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
-  const [plotted, setPlotted] = useState<string[]>(['brandCustomers', 'brandCustomersMedian'])
+  /**
+   * ONE series by default — the same reason as the Market share tab.
+   *
+   * `MetricChart` gives every plotted metric its OWN y-axis with domain [0, 'auto']. Brand
+   * customers (8–20 across the weeks held) and the category median (9–12) are the same unit, so
+   * on separate auto-scaled axes both fill the plot and the median can be drawn ABOVE a value
+   * that is larger than it. That is worse than no comparison. Ticking it is still available, and
+   * the chart's own caption says each metric is drawn to its own scale.
+   */
+  const [plotted, setPlotted] = useState<string[]>(['brandCustomers'])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -305,6 +314,11 @@ function OneMarket({
             emptyLabel="No weeks held for this node yet."
             storageKey="rpx-brand-chart"
           />
+          <p className="rpx-foot">
+            Each series ticked here is drawn to its own scale, so two of them cannot be compared by
+            height. The funnel and the ranked benchmarks above compare our figures against the
+            category median directly.
+          </p>
         </Card>
       </div>
     </>
