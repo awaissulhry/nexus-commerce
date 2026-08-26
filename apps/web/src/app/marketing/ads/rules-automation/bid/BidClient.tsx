@@ -51,7 +51,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, Select } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -728,18 +728,15 @@ export function BidClient() {
 
   const toolbarLeft = (
     <>
-      <span className="h10-svt-seg" role="tablist" aria-label="Grain">
-        {([['targets', 'Targets'], ['campaigns', 'Campaigns']] as const).map(([v, label]) => (
-          <button
-            key={v} type="button" role="tab" aria-selected={view === v}
-            className={`seg ${view === v ? 'on' : ''}`}
-            onClick={() => push({ view: v })}
-            title={v === 'targets'
-              ? 'One row per target — the grain a bid is actually set at'
-              : 'One row per campaign — the grain a floor, a ceiling and a bidder are set at'}
-          >{label}</button>
-        ))}
-      </span>
+      <SegmentedControl
+        ariaLabel="Grain" size="sm"
+        value={view}
+        onChange={(v) => push({ view: v })}
+        options={[
+          { value: 'targets', label: 'Targets', title: 'One row per target — the grain a bid is actually set at' },
+          { value: 'campaigns', label: 'Campaigns', title: 'One row per campaign — the grain a floor, a ceiling and a bidder are set at' },
+        ]}
+      />
       {searchBox}
     </>
   )

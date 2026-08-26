@@ -64,7 +64,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1120,25 +1120,27 @@ export function ApplyRulesClient() {
 
   const toolbarLeft = (
     <span className="h10-ar-tools">
-      {/* The grain switch. 🔴 `.h10-svt-seg` carries `margin: 10px 24px 0` (`rules-automation.css`
-          :523) and is where the 24px pattern on this page gets copied from — the page gutter here
-          is 0, so that margin is zeroed under `.h10-ar-tools` rather than inherited. */}
-      <span className="h10-svt-seg" role="tablist" aria-label="Grain">
-        {APPLY_RULES_GRAINS.map((g) => (
-          <button
-            key={g} type="button" role="tab" aria-selected={grain === g}
-            className={`seg ${grain === g ? 'on' : ''}`}
-            onClick={() => push({ grain: g, sort: '', dir: '' })}
-            title={g === 'campaign'
-              ? 'One row per campaign — the grain the write gate, the bounds and the pins are set at'
-              : g === 'portfolio'
-                ? 'One row per portfolio. 148 of 220 campaigns carry none, so they group under "No portfolio".'
-                : g === 'line'
-                  ? 'One row per product line. A campaign advertising two lines appears under both, so these rows sum to more than the account.'
-                  : 'One row per marketplace.'}
-          >{GRAIN_LABEL[g]}</button>
-        ))}
-      </span>
+      {/* The grain switch. It declared `role="tablist"` and controlled no panel — no `aria-controls`
+          and no `role="tabpanel"` anywhere in this half — so a reader was told to expect tabs and
+          got a filter. The DS `SegmentedControl` is a `radiogroup`, which is what this is.
+          `.h10-svt-seg` and its `margin: 10px 24px 0` are retired with it; the DS control carries
+          no margin, so the `.h10-ar-tools` reset that existed to cancel it is gone too. */}
+      <SegmentedControl
+        ariaLabel="Grain" size="sm"
+        value={grain}
+        onChange={(g) => push({ grain: g, sort: '', dir: '' })}
+        options={APPLY_RULES_GRAINS.map((g) => ({
+          value: g,
+          label: GRAIN_LABEL[g],
+          title: g === 'campaign'
+            ? 'One row per campaign — the grain the write gate, the bounds and the pins are set at'
+            : g === 'portfolio'
+              ? 'One row per portfolio. 148 of 220 campaigns carry none, so they group under "No portfolio".'
+              : g === 'line'
+                ? 'One row per product line. A campaign advertising two lines appears under both, so these rows sum to more than the account.'
+                : 'One row per marketplace.',
+        }))}
+      />
       {searchBox}
     </span>
   )

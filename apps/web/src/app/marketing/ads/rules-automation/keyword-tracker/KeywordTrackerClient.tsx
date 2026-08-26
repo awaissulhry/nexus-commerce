@@ -44,7 +44,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Select } from '@/design-system/primitives'
+import { Button, SegmentedControl, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -860,15 +860,16 @@ export function KeywordTrackerClient() {
             storageKey="nexus.kt.cols"
             toolbarLeft={(
               <span className="h10-kt-tools">
-                <span className="h10-svt-seg" role="tablist" aria-label="Share data filter">
-                  {([['all', 'All'], ['yes', 'With share data'], ['no', 'Not measured']] as const).map(([v, label]) => (
-                    <button
-                      key={v} type="button" role="tab" aria-selected={measured === v}
-                      className={`seg ${measured === v ? 'on' : ''}`}
-                      onClick={() => push({ measured: v })}
-                    >{label}</button>
-                  ))}
-                </span>
+                <SegmentedControl
+                  ariaLabel="Share data filter" size="sm"
+                  value={measured}
+                  onChange={(v) => push({ measured: v })}
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'yes', label: 'With share data' },
+                    { value: 'no', label: 'Not measured' },
+                  ]}
+                />
                 <button
                   type="button"
                   className={`h10-kt-toggle ${branded ? 'on' : ''}`}

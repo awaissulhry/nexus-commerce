@@ -516,10 +516,6 @@
 
 /* SK1 — SOV / Keyword Tracker [Rules | Report] segmented toggle */
 .h10-svt { display: flex; flex-direction: column; }
-.h10-svt-seg { display: inline-flex; gap: 4px; margin: 10px 24px 0; padding: 3px; background: var(--nds-grey-75); border-radius: var(--nds-radius-xl); align-self: flex-start; }
-.h10-svt-seg .seg { font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-600); background: transparent; border: 0; border-radius: var(--nds-radius-md); padding: 6px 18px; cursor: pointer; transition: background .12s, color .12s; }
-.h10-svt-seg .seg:hover { color: var(--nds-grey-900); }
-.h10-svt-seg .seg.on { color: var(--nds-blue-600); background: var(--nds-white); box-shadow: 0 1px 3px rgba(20,28,38,.12); }
 
 /* RGD.0 — Rank goal ↔ Dayparting style toggle (lives in the builder top bar) */
 .h10-rgd-toggle { display: inline-flex; gap: 2px; margin-left: 14px; padding: 3px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); }
@@ -1383,7 +1379,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    Appended at EOF, `h10-kt-*` selectors only, exactly as the RA.AUTO and RA.GRAIN blocks above:
    source order beats specificity in this file, so an override that is not last is not an
    override. Nothing here can reach another tab — every selector is a class that exists only on
-   /rules-automation/keyword-tracker. The one reused family is `.h10-svt-seg` (the section's
+   /rules-automation/keyword-tracker. The one reused family was `.h10-svt-seg` (the section's
    segmented control) and it is used, not restyled. */
 
 /* The one sentence that states what resolved, and how old the numbers under it are. */
@@ -1412,8 +1408,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* Toolbar: the share-data filter and the brand-term toggle. */
 .h10-kt-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.h10-kt-tools .h10-svt-seg { margin: 0; padding: 2px; }
-.h10-kt-tools .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
 .h10-kt-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 11px; cursor: pointer; }
 .h10-kt-toggle:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
 .h10-kt-toggle.on { color: var(--nds-blue-600); background: var(--nds-blue-100); }
@@ -1466,7 +1460,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    The page gutter inside `.h10-rules-page` is ZERO, not 24px — `h10-main`'s 30px padding IS the
    gutter, measured on prod at 1728px where `.h10-hdr`, `.h10-rules-tabs` and `.h10-am-card` all
    sit at 96→1698. Every block below is `margin: Npx 0`. A `margin: … 24px` (the pattern
-   `.h10-svt-seg` carries) would inset it past everything else on the page. */
+   `.h10-svt-seg` carried, before it became the DS `SegmentedControl`) would inset it past
+   everything else on the page. */
 
 /* ── the sentences under the bar ────────────────────────────────────────────────────────────── */
 .h10-ng-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
@@ -1721,7 +1716,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    The page gutter inside `.h10-rules-page` is ZERO, not 24px — `h10-main`'s 30px padding IS the
    gutter, measured on prod at 1728px where `.h10-hdr`, `.h10-rules-tabs` and `.h10-am-card` all
    sit at 96→1698. Every block below is `margin: Npx 0`. A `margin: … 24px` (the pattern
-   `.h10-svt-seg` carries, which is where it gets copied from) would inset it past everything else
+   `.h10-svt-seg` carried, which is where it got copied from) would inset it past everything else
    on the page and be the only staggered thing on it. */
 
 /* ── the sentences under the bar ────────────────────────────────────────────────────────────── */
@@ -1851,7 +1846,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
    The page gutter inside `.h10-rules-page` is ZERO, not 24px: `h10-main`'s 30px padding IS the
    gutter, and every band sits at the same left edge as `.h10-am-card`. Nothing in this block
-   carries a horizontal margin. `.h10-svt-seg` (:523) carries `margin: 10px 24px 0` and is where
+   carries a horizontal margin. `.h10-svt-seg` carried `margin: 10px 24px 0` and was where
    that 24px keeps getting copied from — which is why the lane control below is its own family
    rather than a reuse of it.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -1901,10 +1896,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-search .ad.suf button { display: inline-flex; align-items: center; font: inherit; color: var(--nds-text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
 .h10-plc-search .ad.suf button:hover { color: var(--nds-grey-900); }
 
-.h10-plc-lanes { display: inline-flex; gap: 4px; padding: 2px; background: var(--nds-grey-75); border-radius: 9px; }
-.h10-plc-lanes .seg { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); background: transparent; border: 0; border-radius: var(--nds-radius-md); padding: 4px 11px; cursor: pointer; transition: background .12s, color .12s; }
-.h10-plc-lanes .seg:hover { color: var(--nds-grey-900); }
-.h10-plc-lanes .seg.on { color: var(--nds-blue-600); background: var(--nds-white); box-shadow: 0 1px 3px rgba(20,28,38,.12); }
 
 .h10-plc-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--nds-text-muted); }
 .h10-plc-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-weight: 700; }
@@ -2244,7 +2235,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
        block yields dark cards in a permanently light shell.
      · 🔴 The page gutter inside `.h10-rules-page` is ZERO, not 24px — `h10-main`'s 30px padding IS
        the gutter, and `.h10-hdr` / `.h10-rules-tabs` / `.h10-am-card` all sit flush. A block styled
-       `margin: … 24px` (the pattern `.h10-svt-seg` carries) would be the only staggered thing on
+       `margin: … 24px` (the pattern `.h10-svt-seg` carried) would be the only staggered thing on
        the page. Every margin below is `… 0 0`. Verified with getBoundingClientRect against
        `.h10-am-card`, not by eye.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -2292,10 +2283,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-search .x:hover { color: var(--nds-grey-900); }
 .h10-sov-weeks { display: inline-flex; align-items: center; gap: 7px; }
 .h10-sov-weeks .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-muted); }
-/* `.h10-svt-seg` carries `margin: … 24px`; inside the toolbar that would stagger it. Reset here,
+/* (was the `.h10-svt-seg` margin reset. The family is retired — its four call sites are the DS
+   `SegmentedControl`, which carries no margin, so there is nothing left to reset.)
    at the END of the file, because source order beats specificity in this stylesheet. */
-.h10-sov-weeks .h10-svt-seg { margin: 0; padding: 2px; }
-.h10-sov-weeks .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
 .h10-sov-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: var(--nds-radius-md); padding: 6px 11px; cursor: pointer; }
 .h10-sov-toggle:hover { color: var(--nds-grey-900); background: var(--nds-rail-text-strong); }
 .h10-sov-toggle.on { color: var(--nds-blue-600); background: var(--nds-blue-100); }
@@ -2487,7 +2477,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-win { display: inline-flex; align-items: center; gap: 8px; }
 /* DS-ALIGN — the DS `Input` at `xs`. Width on the field — see `.h10-bd-search` above. */
 .h10-bud-search { width: 230px; }
-/* The grain segment. Its own class rather than `.h10-svt-seg`, which carries a `margin: … 24px`
+/* The grain segment. Its own class rather than `.h10-svt-seg`, which carried a `margin: … 24px`
    that would inset it past every other block on this page — see the gutter note at the top. */
 .h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-stale-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bud-stale:hover { background: #fdeed5; }
@@ -2549,7 +2539,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
    🔴 1. The page gutter inside `.h10-rules-page` is **0, not 24px**. At innerWidth 1728 `.h10-hdr`,
          `.h10-rules-tabs` and `.h10-am-card` all sit at 96→1698; `h10-main`'s 30px padding IS the
-         gutter. `.h10-svt-seg` (:523) carries `margin: 10px 24px 0` and is where that 24px gets
+         gutter. `.h10-svt-seg` carried `margin: 10px 24px 0` and was where that 24px got
          copied from, so it is zeroed under `.h10-ar-tools` below. Nothing here sets a horizontal
          margin.
 
@@ -2588,8 +2578,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid chrome ──────────────────────────────────────────────────────────────────────────────── */
 .h10-ar-tools { display: inline-flex; align-items: center; gap: 10px; }
-.h10-ar-tools .h10-svt-seg { margin: 0; padding: 2px; }
-.h10-ar-tools .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
 /* DS-ALIGN — the DS `Input` at `xs`. Width on the field — see `.h10-bd-search` above. */
 .h10-ar-search { width: 230px; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.

@@ -63,7 +63,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
@@ -961,16 +961,16 @@ export function PlacementClient() {
             >
               <Sliders size={12} aria-hidden /> Set across scope…
             </button>
-            <span className="h10-plc-lanes" role="tablist" aria-label="Placement lane">
-              {LANE_OPTIONS.map((l) => (
-                <button
-                  key={l.value} type="button" role="tab" aria-selected={lane === l.value}
-                  className={`seg ${lane === l.value ? 'on' : ''}`}
-                  title={l.tip}
-                  onClick={() => push({ lane: l.value })}
-                >{l.value === 'all' ? 'All' : LANE_LABEL[l.value as LaneKey]}</button>
-              ))}
-            </span>
+            <SegmentedControl
+              ariaLabel="Placement lane" size="sm"
+              value={lane}
+              onChange={(v) => push({ lane: v })}
+              options={LANE_OPTIONS.map((l) => ({
+                value: l.value,
+                label: l.value === 'all' ? 'All' : LANE_LABEL[l.value as LaneKey],
+                title: l.tip,
+              }))}
+            />
           </span>
         )}
         toolbarRight={data ? (
