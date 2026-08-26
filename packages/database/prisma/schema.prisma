@@ -3234,6 +3234,13 @@ model AmazonAdsPortfolio {
 // cross-currency conversion (GBP/PLN/SEK) without precision loss. Every
 // row carries currencyCode explicitly so the rollup knows what to
 // convert from.
+// AX3 — `AmazonAdsDailyPerformanceArchive` exists in the database and DELIBERATELY has no model
+// here. It is created by `20260826b_ax3_ams_daily_archive` with `LIKE "AmazonAdsDailyPerformance"
+// INCLUDING DEFAULTS`, so its columns track this model's exactly rather than through a hand-
+// written mirror that one typo makes unrestorable. It holds rows removed from the table below,
+// with `archivedAt` / `archivedReason`. Read it with raw SQL — having no model is what stops it
+// being accidentally joined into a live aggregate, which is the mistake that put rows in it.
+//
 model AmazonAdsDailyPerformance {
   id            String   @id @default(cuid())
   profileId     String
