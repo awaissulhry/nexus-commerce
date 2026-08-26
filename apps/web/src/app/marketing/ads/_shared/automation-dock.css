@@ -24,10 +24,17 @@
  * a component happens to be mounted. `--nds-text-2` is DEFINED as `var(--nds-grey-600)` at :root,
  * so this renders byte-identically in light and simply cannot flip.
  *
- * Icons take `--nds-grey-500` (3.10 in both themes) rather than `--nds-text-3`, which falls to
- * 2.70 on a grey-100 ground in dark — under the 3:1 an icon answers to. Measure an icon on the
- * ground it actually sits on, not on white. The originals — grey-450 at 2.58, grey-300 at 1.67 —
- * cleared neither floor in either theme.
+ * Icons take `--nds-text-3`, and that is a POSITION argument too. `.h10-shell` pins it twice —
+ * shared-shell.css:145 to `var(--nds-grey-500)` and :456 to `#7e8796`; same selector, same
+ * specificity, so source order decides and #7e8796 wins. On this dock's white that is 3.62,
+ * against 3.10 for grey-500. Even if the dock were ever portaled out of the shell, dark text-3
+ * (#8a94a6) is 3.06 on white — still over the 3:1 an icon answers to. The 2.70 figure that once
+ * argued for the ramp here is text-3 on a grey-100 GROUND, which these icons do not sit on;
+ * measure an icon on the ground it actually has. The originals — grey-450 at 2.58, grey-300 at
+ * 1.67 — cleared neither floor in either theme.
+ *
+ * TEXT above stays on the ramp: inside the shell `--nds-text-2` pins to `var(--nds-grey-600)`
+ * anyway, so the two spellings render identically and the ramp survives a portal.
  *
  * `.adock-notch:disabled` keeps grey-300 on purpose: a disabled control is exempt, and darkening
  * it would make it read as available.
@@ -43,7 +50,7 @@
 .adock-count { font-size: 11px; color: var(--nds-grey-600); }
 .adock-collapse {
   margin-left: auto; display: inline-flex; align-self: center;
-  color: var(--nds-grey-500); background: none; border: 0; border-radius: 5px; padding: 3px; cursor: pointer;
+  color: var(--nds-text-3); background: none; border: 0; border-radius: 5px; padding: 3px; cursor: pointer;
 }
 .adock-collapse:hover { background: var(--nds-grey-50); color: #2a5399; }
 
@@ -89,12 +96,12 @@
 }
 .adock-rule:hover { background: var(--nds-grey-25); border-color: var(--nds-grey-150); border-left-color: var(--cat, var(--nds-grey-200)); }
 .adock-rule:active { cursor: grabbing; }
-.adock-grip { color: var(--nds-grey-500); padding-top: 2px; flex-shrink: 0; }
+.adock-grip { color: var(--nds-text-3); padding-top: 2px; flex-shrink: 0; }
 .adock-main { min-width: 0; flex: 1; }
 .adock-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adock-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--cat, var(--nds-grey-200)); flex-shrink: 0; }
 .adock-name { font-size: 12px; font-weight: 550; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.adock-edit { margin-left: auto; color: var(--nds-grey-500); flex-shrink: 0; display: inline-flex; }
+.adock-edit { margin-left: auto; color: var(--nds-text-3); flex-shrink: 0; display: inline-flex; }
 .adock-edit:hover { color: var(--nds-blue-600); }
 .adock-sub { font-size: 10.5px; color: var(--nds-grey-600); margin: 2px 0 0; font-variant-numeric: tabular-nums; }
 
