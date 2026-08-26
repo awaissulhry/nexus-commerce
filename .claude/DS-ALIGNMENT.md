@@ -7,32 +7,50 @@ Every component in the advertising console uses the design system instead of han
 what the DS already ships. Measured 2026-08-25: **453 components, 1,331 raw `<button>`,
 269 `<input>`, 70 checkboxes, 48 `<table>`, 33 `<select>`, 25 hand-built modals.**
 
-## ROUND 2 — the target is 100%
+## WHERE THIS STANDS — refresh this line when you finish a round
 
 Measured on origin/main, both ends at the same commits and the same glob:
 
 | raw element | at start | now | converted |
 |---|---|---|---|
-| `<select>` | 91 | 14 | 85% |
-| checkbox | 114 | 26 | 77% |
-| `<input>` | 517 | 140 | 73% |
-| `<button>` | 1331 | **666** | 50% |
-| `<table>` | 67 | **67** | **0%** |
+| `<table>` | 67 | **2** | 97% |
+| `<select>` | 91 | 7 | 92% |
+| checkbox | 114 | 14 | 88% |
+| `<input>` | 403 | 73 | 82% |
+| `<button>` | 1331 | **351** | 74% |
 
-**Tables are the untouched surface.** Nothing has adopted a DS grid, in either direction —
-`<table>` has not moved at all. Classified: **41 are real data grids** (sortable, selectable, or
-6+ columns), 22 are mid tables (4–5 columns), 4 are small static ones (≤3 columns).
+Files importing the DS: **301 of 469**. Gap log: 128 filed, 125 handled.
 
-- Use **`DataGrid`** (`components/`) for almost all of them. It already has sortable columns,
-  sticky columns, selection, totals and per-column width, and is already adopted in 60 files.
-- Use **`WorkspaceGrid`** (`patterns/`) only when the surface also needs the filter bar and
-  column customisation — it is the heavier workspace shell, adopted in 58 files.
-- A genuinely static 2–3 column table is allowed to stay a `<table>`. Say so in the commit rather
-  than converting it to look thorough.
+**Buttons are the long pole and they are NOT sweepable.** Roughly 600 of the original set carried
+no button-ish class at all, so what remains needs reading one site at a time. The biggest pockets:
 
-**`ads/_shared`, `ads/_shell` and `ads/_canvas` are now IN scope** (they were held back in round 1
-because every other directory imports them). They belong to ONE session — see the prompts. Convert
-their internals only; do not change what they export, or you break every consumer at once.
+| buttons | files | scope |
+|---|---|---|
+| 116 | 28 | `ads/rules-automation` |
+| 43 | 10 | `ads/ebay` |
+| 32 | 16 | `ads-console/rank` |
+| 28 | 10 | `ads/_shared` |
+| 26 | 10 | `ads-console/automation` |
+| 25 | 5 | `ads/_shell` |
+| 18 | 10 | `ads/campaign-builder` |
+
+Re-derive this before scoping a round — do not trust the table, it ages:
+
+```sh
+cd apps/web/src/app/marketing && python3 -c "
+import re, glob
+from collections import defaultdict
+d=defaultdict(lambda:[0,0])
+for f in glob.glob('ads/**/*.tsx',recursive=True)+glob.glob('ads-console/**/*.tsx',recursive=True):
+    p=f.split('/'); top='/'.join(p[:2]) if len(p)>2 else p[0]
+    b=len(re.findall(r'<button\b', open(f,encoding='utf-8').read()))
+    if b: d[top][0]+=1; d[top][1]+=b
+for k,v in sorted(d.items(), key=lambda kv:-kv[1][1]): print(f'{v[1]:>5} {v[0]:>4}  {k}')"
+```
+
+**`ads/_shared`, `ads/_shell` and `ads/_canvas` are still partly unconverted and every other
+directory imports them.** They belong to ONE session, and internals only — do not change what any
+file exports.
 
 ## STANDING RULE — everything new uses the DS
 
