@@ -26,6 +26,16 @@ export interface SegmentedOption {
   label: ReactNode
   icon?: ReactNode
   /**
+   * Disable this segment alone. The group-level `disabled` turns the whole control off; this is
+   * for a mode that is unavailable in the current context while its neighbours are not.
+   *
+   * `move()` skips these. It did NOT before this prop existed — it stepped to the next index and
+   * selected it — so adding per-option disable without that fix would have let an arrow key
+   * select an option the user cannot select and then fail to focus it, losing focus from the
+   * control entirely.
+   */
+  disabled?: boolean
+  /**
    * Native tooltip for the whole segment.
    *
    * Without it a per-option explanation had to ride inside the `label` node, where it covers the
@@ -55,12 +65,21 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
 
   const move = (dir: 1 | -1) => {
     const idx = options.findIndex((o) => o.value === value)
-    const next = (idx + dir + options.length) % options.length
-    onChange(options[next].value)
-    // shift focus to the newly-selected segment so keyboard nav stays on the active option
-    requestAnimationFrame(() => {
-      ref.current?.querySelectorAll<HTMLButtonElement>('.nds-seg-opt')[next]?.focus()
-    })
+    const n = options.length
+    // Skip DISABLED options. Without this, an arrow key selects one the user cannot select and
+    // then tries to focus a disabled button — which takes no focus, so focus is lost from the
+    // control entirely. Bounded by n, so an all-disabled group simply does nothing.
+    for (let step = 1; step <= n; step++) {
+      const next = (((idx + dir * step) % n) + n) % n
+      const opt = options[next]
+      if (!opt || opt.disabled) continue
+      onChange(opt.value)
+      // shift focus to the newly-selected segment so keyboard nav stays on the active option
+      requestAnimationFrame(() => {
+        ref.current?.querySelectorAll<HTMLButtonElement>('.nds-seg-opt')[next]?.focus()
+      })
+      return
+    }
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -85,7 +104,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
             tabIndex={rovingTabIndex(active, selectedIndex, i)}
             className={`nds-seg-opt ${active ? 'on' : ''}`}
             title={opt.title}
-            disabled={disabled}
+            disabled={disabled || opt.disabled}
             onClick={() => onChange(opt.value)}
           >
             {opt.icon && <span className="nds-seg-icon">{opt.icon}</span>}

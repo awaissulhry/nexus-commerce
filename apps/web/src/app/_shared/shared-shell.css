@@ -393,7 +393,14 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-user-txt .sub { font-size: 11px; color: var(--nds-rail-text-2); }
 .h10-rail:hover .h10-railft { opacity: 1; }
 
-/* ── 🔴 The light pin ───────────────────────────────────────────────────────────────────────
+/* ── 🔴 THE light pin — the only one. Add pins HERE. ────────────────────────────────────────
+   Before this consolidation there were THREE `.h10-shell` token blocks in this file, and each of
+   us appended the one we needed without seeing the others. Two had gone stale against the DS
+   (they pin through the ramp, and a ramp reference rots the moment a role diverges from it), and
+   one of those silently undid an icon-contrast fix — correct only because source order happened
+   to favour the later block. Nobody had done anything wrong; the file simply had no single place
+   that answered "what does this console pin?", so the answer kept getting added.
+   ────────────────────────────────────────────────────────────────────────────────────────────
    This console pins its own ground light — `.h10-shell` grounds on `--nds-grey-50`, a RAMP
    step, and `color-scheme: light`. But `.dark` lands on <html> whenever the OS prefers dark
    (`system` is the default mode), and it redefines the SEMANTIC tokens while leaving every
