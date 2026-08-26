@@ -38,7 +38,7 @@
   letter-spacing: 0.02em; text-transform: uppercase;
 }
 .dt-dayhead .dt-daycount {
-  font-weight: 550; text-transform: none; letter-spacing: 0; color: var(--nds-grey-500);
+  font-weight: 550; text-transform: none; letter-spacing: 0; color: var(--nds-text-2);
 }
 
 /* ── one row ────────────────────────────────────────────────────────── */
@@ -87,7 +87,7 @@
 
 .dt-meta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  font-size: 11px; color: var(--nds-grey-500);
+  font-size: 11px; color: var(--nds-text-2);
 }
 .dt-meta .dt-sep { color: #ccd4de; }
 
@@ -100,7 +100,7 @@
 .dt-detail.bad { background: #fdf5f4; border-left-color: #e6bcba; color: #7d3f3b; }
 
 .dt-time {
-  font-size: 11px; color: var(--nds-grey-450); white-space: nowrap;
+  font-size: 11px; color: var(--nds-text-muted); white-space: nowrap;
   font-variant-numeric: tabular-nums; padding-top: 3px;
 }
 
@@ -166,7 +166,7 @@
 .dt-eptitle { font-size: 12.5px; font-weight: 600; color: #232c37; line-height: 1.4; }
 .dt-epsub {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-  font-size: 11px; color: var(--nds-grey-500); margin-top: 2px;
+  font-size: 11px; color: var(--nds-text-2); margin-top: 2px;
 }
 .dt-epright { display: flex; align-items: center; gap: 7px; }
 
@@ -369,7 +369,7 @@
 .ap-decidedwhat { font-size: 12.5px; color: #232c37; line-height: 1.45; overflow-wrap: anywhere; }
 .ap-decidedmeta {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px;
-  font-size: 11px; color: var(--nds-grey-500);
+  font-size: 11px; color: var(--nds-text-2);
 }
 .ap-reason {
   font-size: 11.5px; color: #616d7c; font-style: italic;

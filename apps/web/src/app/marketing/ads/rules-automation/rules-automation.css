@@ -1,3 +1,23 @@
+/* ── The grey ramp is not a text palette (2026-08-26) ─────────────────────────────────────────
+   `--nds-grey-500` is #8a93a1 — 3.10:1 on white. The tell is that `--nds-text-3`, whose job is
+   ICONS and whose floor is 3:1, is an alias of the same hex. Words need 4.5. This stylesheet and
+   the three beside it carried 137 `color:` declarations on grey-500/450/400/300, measuring
+   3.10 / 2.58 / 2.04 / 1.67 to one.
+
+   Raised in one pass: grey-500 → --nds-text-2 (5.91:1 on white, 5.46:1 on the shell's #f4f6f9),
+   and 450/400/300 → --nds-text-muted (5.01 / 4.62). Every substitution raises; none lowers.
+
+   What was deliberately NOT touched:
+   · Four icon rules still on grey-500 — 3.10:1 clears the 3:1 floor a non-text control needs.
+     Three icon rules on 450/400 did NOT clear it and moved to --nds-text-3.
+   · `border-color` / `outline-color` / `caret-color`. `color` is a substring of all three, and a
+     bulk substitution silently darkens borders; the match is anchored to a bare `color:`.
+   · Dark-theme rules. There are none in these four files, checked rather than assumed.
+
+   Six of the raised rules sit on `:disabled` or `.off` selectors, which 1.4.3 exempts. Raised
+   anyway: two of them carry comments saying "muted, still legible, keeps its tooltip", so
+   legibility was always the intent — the token was just the wrong one. */
+
 /* ───────────────────────────────────────────────────────────────────────────
  * Rules & Automation — builder + rule-type modal + bulk-edit styles.
  * Isolated from ads.css (concurrent-session safe). Palette matches the shared
@@ -48,7 +68,7 @@
 /* Phase 5 — portfolio scope selector above the campaign picker */
 .h10-rb-pfscope { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
 .h10-rb-pfscope > label { font-size: 13px; font-weight: 600; color: var(--nds-grey-700); }
-.h10-rb-pfscope > label .opt { font-weight: 400; color: var(--nds-grey-500); }
+.h10-rb-pfscope > label .opt { font-weight: 400; color: var(--nds-text-2); }
 .h10-rb-pfscope select { height: 36px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 30px 0 11px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); min-width: 260px; cursor: pointer; }
 .h10-rb-pfscope select:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 .h10-rb-pfscope .hint { font-size: 12.5px; color: var(--nds-blue-600); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: var(--nds-radius-sm); padding: 5px 10px; }
@@ -78,17 +98,17 @@
 .h10-rb-twocol .colh { background: var(--nds-grey-50); text-align: center; font-size: 13px; font-weight: 700; color: var(--nds-grey-700); padding: 12px; border-bottom: 1px solid var(--nds-grey-150); }
 .h10-rb-twocol .subh { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; font-size: 12.5px; gap: 12px; }
 .h10-rb-twocol .subh > span:first-child { font-weight: 700; color: var(--nds-grey-600); }
-.h10-rb-twocol .subh .muted { color: var(--nds-grey-500); display: inline-flex; align-items: center; gap: 5px; font-weight: 700; text-align: right; }
+.h10-rb-twocol .subh .muted { color: var(--nds-text-2); display: inline-flex; align-items: center; gap: 5px; font-weight: 700; text-align: right; }
 .h10-rb-twocol .subh .mts { display: inline-flex; gap: 6px; flex-shrink: 0; }
 .h10-rb-twocol .subh .mt { width: 26px; height: 26px; border-radius: 50%; background: #8a1538; color: var(--nds-white); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; cursor: default; }
 .h10-rb-twocol .empty { padding: 28px 18px 46px; text-align: center; }
-.h10-rb-twocol .empty .ill { width: 54px; height: 54px; border-radius: 50%; background: var(--nds-grey-100); color: var(--nds-grey-500); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.h10-rb-twocol .empty .ill { width: 54px; height: 54px; border-radius: 50%; background: var(--nds-grey-100); color: var(--nds-text-2); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
 .h10-rb-twocol .empty .t { font-size: 14.5px; font-weight: 700; color: var(--nds-grey-800); margin-bottom: 5px; }
-.h10-rb-twocol .empty .d { font-size: 12.5px; color: var(--nds-grey-500); line-height: 1.5; }
+.h10-rb-twocol .empty .d { font-size: 12.5px; color: var(--nds-text-2); line-height: 1.5; }
 
 /* criteria */
 .h10-rb-card.crit { margin-bottom: 16px; }
-.h10-rb-card.crit .acts { display: inline-flex; gap: 12px; color: var(--nds-grey-450); }
+.h10-rb-card.crit .acts { display: inline-flex; gap: 12px; color: var(--nds-text-muted); }
 .h10-rb-conds { padding: 6px 18px 16px; }
 .h10-rb-conds .cond { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 /* BP.P3 — `position: relative` lifts the pills above the absolutely-positioned dashed connector
@@ -142,7 +162,7 @@
 .h10-rb-st .sth b { font-size: 13.5px; color: var(--nds-grey-900); }
 .h10-rb-st .thr { display: flex; background: var(--nds-grey-50); padding: 10px 16px; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-rb-st .thr span:first-child { flex: 0 0 56%; }
-.h10-rb-st .nodata { text-align: center; color: var(--nds-grey-500); font-size: 13px; padding: 48px 0; }
+.h10-rb-st .nodata { text-align: center; color: var(--nds-text-2); font-size: 13px; padding: 48px 0; }
 
 /* advanced settings */
 .h10-rb-card.adv { padding: 22px 24px; }
@@ -209,7 +229,7 @@
 .h10-nt-crit { font-size: 12.5px; color: var(--nds-grey-700); }
 .h10-nt-freq { display: inline-flex; flex-direction: column; line-height: 1.3; }
 .h10-nt-freq b { font-size: 12.5px; color: var(--nds-grey-900); font-weight: 600; }
-.h10-nt-freq span { font-size: 11px; color: var(--nds-grey-500); }
+.h10-nt-freq span { font-size: 11px; color: var(--nds-text-2); }
 .h10-nt-namew { display: inline-flex; align-items: center; gap: 12px; }
 .h10-nt-open { opacity: 0; display: inline-flex; align-items: center; gap: 5px; background: var(--nds-blue-600); color: var(--nds-white); font-size: 11.5px; font-weight: 700; border-radius: var(--nds-radius-md); padding: 4px 9px; text-decoration: none; transition: opacity .1s; white-space: nowrap; }
 .nds-wsgrid tbody tr:hover .h10-nt-open, .h10-nt-open:focus-visible { opacity: 1; }
@@ -227,7 +247,7 @@
 .h10-hist-h span { display: block; font-size: 12.5px; color: var(--nds-pill-neutral-fg); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
 
 .h10-hist-b { flex: 1; overflow-y: auto; }
-.h10-hist-msg { padding: 40px 22px; text-align: center; color: var(--nds-grey-500); font-size: 13px; line-height: 1.5; }
+.h10-hist-msg { padding: 40px 22px; text-align: center; color: var(--nds-text-2); font-size: 13px; line-height: 1.5; }
 .h10-hist-r { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--nds-grey-75); font-size: 12.5px; }
 .h10-hist-r .st { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 3px 8px; border-radius: var(--nds-radius-sm); text-align: center; }
 .h10-hist-r .st.ok { background: #dcfce7; color: var(--nds-green-700); }
@@ -236,7 +256,7 @@
 .h10-hist-r .st.bad { background: #fde8e8; color: var(--nds-red-700); }
 .h10-hist-r .st.muted { background: var(--nds-grey-100); color: var(--nds-pill-neutral-fg); }
 .h10-hist-r .sum { color: var(--nds-grey-800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-hist-r .when { color: var(--nds-grey-500); white-space: nowrap; }
+.h10-hist-r .when { color: var(--nds-text-2); white-space: nowrap; }
 
 /* bulk-edit modal */
 .h10-ntm-back { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 140; display: flex; align-items: center; justify-content: center; }
@@ -284,7 +304,7 @@
 /* DS-ALIGN — the DS `Button variant="primary"`; only its place in the row is ours. */
 .cp-statusrow .nds-btn.primary { margin-left: auto; }
 .cp-list, .cp-alist { max-height: 322px; overflow-y: auto; }
-.cp-msg { padding: 36px 12px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
+.cp-msg { padding: 36px 12px; text-align: center; color: var(--nds-text-2); font-size: 13px; }
 .cp-row, .cp-arow { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--nds-grey-75); }
 .cp-badge { width: 22px; height: 22px; border-radius: var(--nds-radius-sm); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--nds-white); flex-shrink: 0; }
 .cp-badge.auto { background: #0048ab; }
@@ -296,7 +316,7 @@
 .cp-status.off { background: var(--nds-grey-100); color: var(--nds-pill-neutral-fg); }
 .cp-add { display: inline-flex; align-items: center; gap: 4px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); color: var(--nds-blue-600); border-radius: var(--nds-radius-lg); padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
 .cp-add:hover { background: var(--nds-blue-50); }
-.cp-add.added { background: var(--nds-grey-75); border-color: var(--nds-grey-150); color: var(--nds-grey-500); cursor: default; }
+.cp-add.added { background: var(--nds-grey-75); border-color: var(--nds-grey-150); color: var(--nds-text-2); cursor: default; }
 .cp-pager { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--nds-grey-100); }
 .cp-pager .pgn { min-width: 28px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); color: var(--nds-blue-600); font-size: 13px; font-weight: 600; padding: 0 8px; }
 .cp-pager .pp { margin-left: auto; }
@@ -304,9 +324,9 @@
 .cp-rhead b { font-size: 15px; font-weight: 800; color: #2b3a4f; }
 .cp-removeall { display: inline-flex; align-items: center; gap: 6px; background: var(--nds-grey-25); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); padding: 6px 12px; font: inherit; font-size: 13px; color: var(--nds-grey-800); cursor: pointer; }
 .cp-removeall:hover { background: var(--nds-grey-100); }
-.cp-removeall:disabled { color: var(--nds-grey-400); cursor: default; }
+.cp-removeall:disabled { color: var(--nds-text-muted); cursor: default; }
 .cp-colhdr { padding: 9px 16px; background: var(--nds-grey-50); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); }
-.cp-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--nds-grey-450); font-size: 13px; }
+.cp-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--nds-text-muted); font-size: 13px; }
 /* DS-ALIGN — the DS `ToolbarButton`; only its place in the row is ours. */
 .cp-rm { margin-left: auto; flex-shrink: 0; }
 /* B3: rule templates — Apply Template (Criteria header) + Save Template (footer) + modal */
@@ -323,7 +343,7 @@
 .h10-rb-tmpl-modal .tmbody .h10-rb-input { width: 100%; }
 .h10-rb-tmpl-modal .tmhint { font-size: 12.5px; color: var(--nds-pill-neutral-fg); margin: 9px 0 0; line-height: 1.45; }
 .h10-rb-tmpl-modal .tmfoot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-.h10-rb-tmpl-modal .tmempty { padding: 30px 6px; text-align: center; color: var(--nds-grey-500); font-size: 13px; line-height: 1.5; }
+.h10-rb-tmpl-modal .tmempty { padding: 30px 6px; text-align: center; color: var(--nds-text-2); font-size: 13px; line-height: 1.5; }
 .h10-rb-tmpl-modal .tmlist { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
 .h10-rb-tmpl-modal .tmrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--nds-grey-150); border-radius: 9px; }
 .h10-rb-tmpl-modal .tmn { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -359,7 +379,7 @@
 .h10-trk-delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; justify-content: flex-end; }
 .h10-trk-delta.up { color: #1a7f37; }
 .h10-trk-delta.down { color: var(--nds-red-500); }
-.h10-trk-delta.flat { color: var(--nds-grey-500); }
+.h10-trk-delta.flat { color: var(--nds-text-2); }
 
 /* ── H2: populated ad-group two-panel rows (left = ad group + look-for-terms; right = target chips) ── */
 .h10-rb-agrows { display: flex; flex-direction: column; }
@@ -367,13 +387,13 @@
 .h10-rb-twocol .agrow:last-child { border-bottom: 0; }
 .h10-rb-twocol .agrow .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-rb-twocol .agrow .nm b { font-size: 13px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-rb-twocol .agrow .nm .camp { font-size: 11.5px; color: var(--nds-grey-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-rb-twocol .agrow .nm .camp { font-size: 11.5px; color: var(--nds-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rb-twocol .agrow .look { flex-shrink: 0; display: inline-flex; align-items: center; padding-right: 4px; }
 /* (was `.look input { accent-color; 16px }` — the DS `Checkbox` sizes and colours its own box,
    and `.nds-check` is the wrapping label rather than the input, so there is nothing to size here.) */
 .h10-rb-twocol .agrow.tgt { justify-content: space-between; }
 .h10-rb-twocol .agrow .chips { display: inline-flex; gap: 8px; }
-.h10-rb-twocol .agrow .tchip { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--nds-grey-200); background: var(--nds-white); color: var(--nds-grey-500); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.h10-rb-twocol .agrow .tchip { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--nds-grey-200); background: var(--nds-white); color: var(--nds-text-2); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .h10-rb-twocol .agrow .tchip.on { background: #8a1538; border-color: #8a1538; color: var(--nds-white); }
 /* DS-ALIGN — the DS `ToolbarButton` at `sm`, `tone="danger"`. */
 .h10-rb-twocol .agrow .agrm { flex-shrink: 0; }
@@ -383,7 +403,7 @@
 .h10-rb-agpop .grph { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 2px 6px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-rb-agpop .grph .gn { font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rb-agpop .grph .add { flex-shrink: 0; }
-.h10-rb-agpop .agpop-msg { padding: 28px 8px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; line-height: 1.5; }
+.h10-rb-agpop .agpop-msg { padding: 28px 8px; text-align: center; color: var(--nds-text-2); font-size: 12.5px; line-height: 1.5; }
 .h10-rb-agpop .row .st.warn { color: #9a6700; background: #fdf3d7; }
 .h10-rb-agpop .row .st.arch { color: var(--nds-grey-600); background: var(--nds-grey-100); }
 .h10-rb-agpop .row .add:disabled { color: #1a7f37; border-color: #cfe8d6; background: #f3faf5; cursor: default; }
@@ -423,7 +443,7 @@
 
 .h10-rb-prev .psub { padding: 0 22px 12px; font-size: 12.5px; color: var(--nds-pill-neutral-fg); }
 .h10-rb-prev .pbody { overflow-y: auto; border-top: 1px solid var(--nds-grey-100); }
-.h10-rb-prev .pmsg { padding: 40px 22px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
+.h10-rb-prev .pmsg { padding: 40px 22px; text-align: center; color: var(--nds-text-2); font-size: 13px; }
 .h10-rb-prev .pthr, .h10-rb-prev .ptr { display: flex; align-items: center; padding: 10px 22px; font-size: 12.5px; }
 .h10-rb-prev .pthr { background: var(--nds-grey-50); font-weight: 700; color: var(--nds-grey-600); position: sticky; top: 0; }
 .h10-rb-prev .ptr { border-bottom: 1px solid var(--nds-grey-75); }
@@ -480,12 +500,12 @@
 .h10-sb-date { width: 196px; }
 .h10-sb-date.wide { width: 228px; }
 .h10-sb-chart-toggle { display: inline-flex; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); overflow: hidden; }
-.h10-sb-chart-toggle button { border: 0; background: var(--nds-white); color: var(--nds-grey-500); padding: 8px 10px; cursor: pointer; display: inline-flex; }
+.h10-sb-chart-toggle button { border: 0; background: var(--nds-white); color: var(--nds-text-2); padding: 8px 10px; cursor: pointer; display: inline-flex; }
 .h10-sb-chart-toggle button + button { border-left: 1px solid var(--nds-grey-200); }
 .h10-sb-chart-toggle button.on { background: var(--nds-blue-100); color: var(--nds-blue-600); }
 .h10-sb-chart-body { padding: 18px; }
 .h10-sb-nodata { background: var(--nds-grey-25); border-radius: var(--nds-radius-lg); min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
-.h10-sb-nodata .ill { width: 54px; height: 54px; border-radius: 50%; background: var(--nds-grey-100); color: var(--nds-grey-500); display: inline-flex; align-items: center; justify-content: center; }
+.h10-sb-nodata .ill { width: 54px; height: 54px; border-radius: 50%; background: var(--nds-grey-100); color: var(--nds-text-2); display: inline-flex; align-items: center; justify-content: center; }
 .h10-sb-nodata .t { font-size: 15px; font-weight: 600; color: var(--nds-grey-700); }
 
 /* weekly schedule table */
@@ -496,11 +516,11 @@
 .h10-sb-week-r:last-child { border-bottom: 0; }
 .h10-sb-week-r .day { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-sb-week-r .time { display: inline-flex; align-items: center; gap: 8px; }
-.h10-sb-week-r .time .dash { color: var(--nds-grey-500); }
+.h10-sb-week-r .time .dash { color: var(--nds-text-2); }
 .h10-sb-week-r .adj { display: inline-flex; align-items: center; gap: 8px; }
 /* DS-ALIGN — the DS `Input` at `sm`. */
 .h10-sb-adjval { width: 82px; }
-.h10-sb-week .act { display: inline-flex; gap: 11px; justify-content: flex-end; color: var(--nds-grey-450); }
+.h10-sb-week .act { display: inline-flex; gap: 11px; justify-content: flex-end; color: var(--nds-text-muted); }
 
 /* Advanced — schedule start & end date card */
 .h10-sb-adv { padding: 18px; }
@@ -529,8 +549,8 @@
 /* RGD.0 — Rank goal ↔ Dayparting style toggle (lives in the builder top bar) */
 
 /* RGD.0 — placeholder for the rank-plan body (RankPlanPanel lands in RGD.1) */
-.h10-rgd-stub { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--nds-grey-500); border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-2xl); background: var(--nds-grey-25); }
-.h10-rgd-stub svg { color: var(--nds-grey-400); }
+.h10-rgd-stub { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--nds-text-2); border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-2xl); background: var(--nds-grey-25); }
+.h10-rgd-stub svg { color: var(--nds-text-3); }
 .h10-rgd-stub b { font-size: 15px; color: var(--nds-grey-900); }
 .h10-rgd-stub span { font-size: 13px; max-width: 440px; line-height: 1.5; }
 
@@ -538,7 +558,7 @@
 .h10-rp { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); }
 .h10-rp-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--nds-grey-100); flex-wrap: wrap; }
 .h10-rp-head .t { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-rp-head .t .sub { font-weight: 600; color: var(--nds-grey-500); }
+.h10-rp-head .t .sub { font-weight: 600; color: var(--nds-text-2); }
 .h10-rp-head .grow { flex: 1; }
 .h10-rp-defend { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 1px solid transparent; border-radius: var(--nds-radius-md); padding: 5px 10px; cursor: pointer; }
 .h10-rp-defend.on { color: var(--nds-green-600); background: #e7f7ee; border-color: #b6e6c9; }
@@ -546,7 +566,7 @@
 .h10-rp-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 6px 12px; cursor: pointer; }
 .h10-rp-btn:hover:not(:disabled) { background: var(--nds-grey-75); }
 .h10-rp-btn:disabled { opacity: .5; cursor: default; }
-.h10-rp-load { padding: 32px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
+.h10-rp-load { padding: 32px; text-align: center; color: var(--nds-text-2); font-size: 13px; }
 .h10-rp-sec { padding: 14px 16px; border-bottom: 1px solid var(--nds-grey-50); }
 .h10-rp-sec:last-of-type { border-bottom: 0; }
 .h10-rp-lbl { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); margin-bottom: 10px; }
@@ -560,12 +580,12 @@
 .h10-rp-chip.on { border-color: var(--nds-blue-600); background: var(--nds-blue-50); color: #14223a; }
 .h10-rp-chip .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
 .h10-rp-chip .ao { font-size: 9.5px; font-weight: 800; letter-spacing: .4px; color: #b91c1c; background: #fde8e8; border-radius: 4px; padding: 1px 5px; }
-.h10-rp-empty { font-size: 12.5px; color: var(--nds-grey-500); padding: 4px 0 8px; }
+.h10-rp-empty { font-size: 12.5px; color: var(--nds-text-2); padding: 4px 0 8px; }
 .h10-rp-win { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
 .h10-rp-win .days { display: inline-flex; gap: 3px; }
 .h10-rp-win .days button { width: 26px; height: 26px; font-size: 11px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 1px solid transparent; border-radius: var(--nds-radius-sm); cursor: pointer; }
 .h10-rp-win .days button.on { color: var(--nds-white); background: var(--nds-blue-600); }
-.h10-rp-win .to, .h10-rp-win .arrow { font-size: 12px; color: var(--nds-grey-500); }
+.h10-rp-win .to, .h10-rp-win .arrow { font-size: 12px; color: var(--nds-text-2); }
 .h10-rp-win .grow { flex: 1; }
 
 .h10-rp-decs { display: flex; flex-direction: column; gap: 8px; }
@@ -574,7 +594,7 @@
 .h10-rp-dec .act { color: var(--nds-grey-600); flex: 1; min-width: 200px; }
 .h10-rp-dec .act i { color: var(--nds-pill-neutral-fg); }
 .h10-rp-msg { margin: 12px 16px 0; padding: 9px 12px; font-size: 12.5px; color: #14223a; background: var(--nds-blue-50); border: 1px solid var(--nds-blue-200); border-radius: var(--nds-radius-lg); }
-.h10-rp-note { padding: 12px 16px 14px; font-size: 11.5px; color: var(--nds-grey-500); line-height: 1.5; }
+.h10-rp-note { padding: 12px 16px 14px; font-size: 11.5px; color: var(--nds-text-2); line-height: 1.5; }
 /* RGD.1 — delivery chip */
 .h10-deliv { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 3px 8px; }
 .h10-deliv.ok { background: #e7f7ee; border-color: #b6e6c9; color: var(--nds-green-700); }
@@ -604,7 +624,7 @@
 .h10-trgrid-table { user-select: none; }
 .h10-tr-hrow, .h10-tr-drow { display: grid; grid-template-columns: 46px repeat(24, 1fr); gap: 2px; }
 .h10-tr-drow { margin-top: 2px; }
-.h10-tr-hh { font-size: 9px; color: var(--nds-grey-500); text-align: center; align-self: end; }
+.h10-tr-hh { font-size: 9px; color: var(--nds-text-2); text-align: center; align-self: end; }
 .nds-btn.h10-tr-dlbl { font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border-radius: 4px; padding: 0; }
 .nds-btn.h10-tr-dlbl:hover { background: var(--nds-grey-150); }
 .h10-tr-cell { height: 22px; border-radius: 3px; cursor: pointer; position: relative; overflow: hidden; border: 1px solid rgba(0,0,0,.04); }
@@ -634,13 +654,13 @@
 .h10-hm2-hd .ttl { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-hm2-hd .ttl .tz { font-weight: 500; color: #a0a8b3; }
 .h10-hm2-hd .grow { flex: 1; }
-.h10-hm2-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--nds-grey-500); }
+.h10-hm2-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--nds-text-2); }
 .h10-hm2-legend i { width: 13px; height: 13px; border-radius: 2px; display: inline-block; }
 .h10-hm2-legend .L0 { background: var(--nds-grey-50); } .h10-hm2-legend .L1 { background: #d8e8dc; } .h10-hm2-legend .L2 { background: #a7d6b0; } .h10-hm2-legend .L3 { background: #5fb377; } .h10-hm2-legend .L4 { background: #2e8b57; }
 .h10-hm2-grid { display: flex; flex-direction: column; gap: 2px; }
 .h10-hm2-row { display: grid; grid-template-columns: 38px repeat(24, 1fr) 42px; gap: 2px; align-items: center; }
 .h10-hm2-row.head .h10-hm2-hh { font-size: 8.5px; color: #a0a8b3; text-align: center; }
-.h10-hm2-dlbl { font-size: 10px; font-weight: 700; color: var(--nds-grey-500); }
+.h10-hm2-dlbl { font-size: 10px; font-weight: 700; color: var(--nds-text-2); }
 .h10-hm2-cell { height: 15px; border-radius: 2px; background: var(--nds-grey-50); }
 .h10-hm2-cell.L0 { background: var(--nds-grey-50); } .h10-hm2-cell.L1 { background: #d8e8dc; } .h10-hm2-cell.L2 { background: #a7d6b0; } .h10-hm2-cell.L3 { background: #5fb377; } .h10-hm2-cell.L4 { background: #2e8b57; }
 .h10-hm2-cell.peak { box-shadow: 0 0 0 1.5px var(--nds-blue-600) inset; }
@@ -671,23 +691,23 @@
    too wide for the 90px action column these five share and the DS has no dense tier. */
 .h10-kebab { width: 26px; height: 24px; }
 .h10-rte-scope { display: flex; align-items: center; gap: 10px; padding: 0 16px 10px; flex-wrap: wrap; }
-.h10-rte-scopehint { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-rte-scopehint { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--nds-text-2); }
 .h10-rte-list { overflow-y: auto; border-top: 1px solid var(--nds-grey-100); }
 .h10-rte-row { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-bottom: 1px solid var(--nds-grey-50); flex-wrap: wrap; }
 .h10-rte-row.ovr { background: var(--nds-blue-50); }
 .h10-rte-head { background: var(--nds-grey-25); position: sticky; top: 0; z-index: 1; }
 .h10-rte-row .nm { flex: 1; min-width: 200px; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
-.h10-rte-head .nm { font-size: 11px; font-weight: 700; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .3px; }
+.h10-rte-head .nm { font-size: 11px; font-weight: 700; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: .3px; }
 .h10-rte-row .nm .sw { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 .h10-rte-row .nm b { font-weight: 700; color: var(--nds-grey-900); }
 .h10-rte-row .nm .bdg { font-size: 9.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-100); border-radius: 4px; padding: 1px 6px; }
 .h10-rte-row .nm .bdg.ov { background: #dbeafe; color: #1e40af; }
-.h10-rte-row .nm .desc { flex: 1 1 100%; font-size: 11px; color: var(--nds-grey-500); }
+.h10-rte-row .nm .desc { flex: 1 1 100%; font-size: 11px; color: var(--nds-text-2); }
 .h10-rte-row .fld { flex: 0 0 60px; }
-.h10-rte-head .fld { font-size: 10px; font-weight: 700; color: var(--nds-grey-500); text-align: center; }
+.h10-rte-head .fld { font-size: 10px; font-weight: 700; color: var(--nds-text-2); text-align: center; }
 /* DS-ALIGN — the DS `Input` at `xs`; the cell decides the width. */
 .h10-rte-row .fld .nds-field { width: 100%; }
-.h10-rte-row .fld.h10-rte-na { font-size: 10.5px; color: var(--nds-grey-400); text-align: center; }
+.h10-rte-row .fld.h10-rte-na { font-size: 10.5px; color: var(--nds-text-muted); text-align: center; }
 .h10-rte-row .act { flex: 0 0 90px; display: inline-flex; gap: 2px; justify-content: flex-end; }
 /* DS-ALIGN — the DS `Input` at `sm`. */
 .h10-rte-name { min-width: 0; }
@@ -700,7 +720,7 @@
 .h10-mfield { display: inline-flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 600; color: var(--nds-grey-600); }
 /* DS-ALIGN — the boxes in these labelled micro-fields are the DS `Input` at `xs`. */
 .h10-mfield .nds-field { width: 64px; }
-.h10-mfield.h10-rte-na { color: var(--nds-grey-400); font-weight: 500; align-self: center; }
+.h10-mfield.h10-rte-na { color: var(--nds-text-muted); font-weight: 500; align-self: center; }
 /* MB.2 — Min-bid drawer: the Motion drawer's sibling, in the Min-bid swatch's own hue so
    the two are never mistaken for each other at a glance. */
 .h10-rte-minbid .h10-mtitle { color: var(--nds-amber-700); }
@@ -720,7 +740,7 @@
 .h10-blend-lane { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--nds-grey-100); flex-wrap: wrap; }
 .h10-blend-lane.on { }
 .h10-blend-en { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; min-width: 150px; }
-.h10-blend-sig { font-size: 10.5px; color: var(--nds-grey-500); }
+.h10-blend-sig { font-size: 10.5px; color: var(--nds-text-2); }
 .h10-blend-fields { display: inline-flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
 .h10-blend-eff { font-size: 11px; font-weight: 700; color: var(--nds-green-700); }
 .h10-blend-base { display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
@@ -738,7 +758,7 @@
 
 /* RGD.5 — schedule templates modal (reuses .h10-rte box) */
 .h10-rte .list { overflow-y: auto; }
-.h10-rte .ft .cnt { font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-rte .ft .cnt { font-size: 11.5px; color: var(--nds-text-2); }
 
 /* Rank Goals list (Dayparting Schedules tab) — mirrors Ads Manager's .nmw pattern: a max-width
    name wrapper caps the column so a long name truncates (ellipsis) and the hover Manage button
@@ -761,14 +781,14 @@
 .h10-dp-panel { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 14px 16px 16px; margin-bottom: 12px; }
 .h10-dp-panelhd { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .h10-dp-panelttl h3 { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-dp-panelttl p { margin: 3px 0 0; font-size: 12px; color: var(--nds-grey-500); }
+.h10-dp-panelttl p { margin: 3px 0 0; font-size: 12px; color: var(--nds-text-2); }
 .h10-dp-panelttl p b { color: var(--nds-grey-800); }
 /* Controls wrap onto their own line on narrow viewports rather than crushing the title. */
 .h10-dp-panelctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.h10-dp-panelempty { margin-top: 14px; padding: 28px 18px; text-align: center; font-size: 12.5px; color: var(--nds-grey-500); background: var(--nds-grey-25); border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-lg); }
+.h10-dp-panelempty { margin-top: 14px; padding: 28px 18px; text-align: center; font-size: 12.5px; color: var(--nds-text-2); background: var(--nds-grey-25); border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-lg); }
 /* DPS.4b — the resolved window, stated under the panel title so the grid is never read as covering
    more than it does. Muted, one line, with a warning tone when coverage is thin. */
-.h10-dp-panelrange { margin: 4px 0 0; font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-dp-panelrange { margin: 4px 0 0; font-size: 11.5px; color: var(--nds-text-2); }
 .h10-dp-panelrange b { color: var(--nds-grey-800); font-weight: 600; }
 .h10-dp-panelrange .warn { color: #b45309; font-weight: 600; }
 
@@ -780,7 +800,7 @@
 /* The active rank differs from the baseline only while a window is open — that is the moment
    the operator most needs to notice, so the chip gains weight instead of staying uniform. */
 .h10-rg-chip.live { border-color: var(--nds-blue-600); box-shadow: 0 0 0 1px rgba(31,111,222,.18); font-weight: 700; }
-.h10-rg-none { color: var(--nds-grey-400); }
+.h10-rg-none { color: var(--nds-text-muted); }
 .h10-rg-warn { color: #b45309; font-weight: 600; }
 
 /* ── RDX/A4 — schedule activity drawer ─────────────────────────────────────────────────────
@@ -795,16 +815,16 @@
 .h10-act-r .fld { font-weight: 700; color: var(--nds-grey-800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-act-r .chg { min-width: 0; color: var(--nds-grey-700); }
 .h10-act-r .chg b { font-weight: 700; color: var(--nds-grey-900); }
-.h10-act-r .chg i, .h10-act-r .chg em { display: block; font-style: normal; font-size: 11.5px; color: var(--nds-grey-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-act-r .chg i, .h10-act-r .chg em { display: block; font-style: normal; font-size: 11.5px; color: var(--nds-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Delivery is a separate column from intent on purpose: a change we asked for is not a change
    Amazon took, and the list used to imply it was. */
 .h10-act-r .dlv { font-size: 11px; font-weight: 700; border-radius: 5px; padding: 3px 8px; white-space: nowrap; }
 .h10-act-r .dlv.ok { color: var(--nds-blue-900); background: var(--nds-pill-success-bg); }
 .h10-act-r .dlv.bad { color: #a3211a; background: #fbdedb; }
 .h10-act-r .dlv.dry { color: #9a6700; background: #fdf3d3; }
-.h10-act-r .dlv.muted, .h10-act-r .dlv.none { color: var(--nds-grey-500); background: var(--nds-grey-100); }
+.h10-act-r .dlv.muted, .h10-act-r .dlv.none { color: var(--nds-text-2); background: var(--nds-grey-100); }
 .h10-act-r .dlv .att { margin-left: 4px; opacity: .75; font-weight: 600; }
-.h10-act-r .when { color: var(--nds-grey-500); white-space: nowrap; }
+.h10-act-r .when { color: var(--nds-text-2); white-space: nowrap; }
 
 /* RDX/B1 — market chips. A group can span more than one marketplace, so this renders a set rather
    than a single value; the codes are short enough that two or three sit inline without wrapping. */
@@ -812,7 +832,7 @@
 .h10-rg-mkts .mk { font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--nds-grey-700); background: var(--nds-grey-100); border-radius: 4px; padding: 2px 6px; }
 /* The narrowed-to-empty explanation under the headline. Pulled up against the 14px flex gap so it
    reads as one block with the line above rather than a second, unrelated message. */
-.h10-rr-empty .sub { margin-top: -8px; max-width: 420px; text-align: center; font-size: 12.5px; color: var(--nds-grey-500); line-height: 1.5; }
+.h10-rr-empty .sub { margin-top: -8px; max-width: 420px; text-align: center; font-size: 12.5px; color: var(--nds-text-2); line-height: 1.5; }
 
 /* ── RDX/B2 — row actions ──────────────────────────────────────────────────────────────────
    The trigger lives in the sticky first column so it can't be hidden by column customisation
@@ -844,10 +864,10 @@
    the height of one grid row: 3px cells with 1px gutters = 95×27px. Untouched hours are drawn
    at low opacity by the component, so what stands out is where the schedule LEAVES its baseline. */
 .h10-wkcell { display: inline-flex; align-items: center; gap: 9px; }
-.h10-wkcell .n { font-size: 11.5px; color: var(--nds-grey-500); white-space: nowrap; }
+.h10-wkcell .n { font-size: 11.5px; color: var(--nds-text-2); white-space: nowrap; }
 .h10-wkshape { display: inline-flex; flex-direction: column; gap: 1px; cursor: default; }
 .h10-wkshape .row { display: flex; align-items: center; gap: 1px; }
-.h10-wkshape .dl { width: 7px; margin-right: 2px; font-size: 6.5px; line-height: 1; font-weight: 700; color: var(--nds-grey-400); text-align: center; user-select: none; }
+.h10-wkshape .dl { width: 7px; margin-right: 2px; font-size: 6.5px; line-height: 1; font-weight: 700; color: var(--nds-text-muted); text-align: center; user-select: none; }
 .h10-wkshape .c { width: 3px; height: 3px; border-radius: 1px; }
 /* Every 6th hour gets a hairline so 06:00/12:00/18:00 are findable without an axis row. */
 .h10-wkshape .c.tick { box-shadow: -1px 0 0 0 var(--nds-white); }
@@ -865,7 +885,7 @@
 /* An amber dot, not red: uncovered campaigns are a gap to review, not a failure. */
 .h10-cov-hd .dot { width: 8px; height: 8px; border-radius: 50%; background: #e0a52e; flex-shrink: 0; }
 .h10-cov-hd .ttl b { color: var(--nds-grey-900); font-weight: 700; }
-.h10-cov-hd .ttl .sub { color: var(--nds-grey-500); }
+.h10-cov-hd .ttl .sub { color: var(--nds-text-2); }
 .h10-cov-hd .gap { color: #9a6700; background: #fdf3d3; border-radius: var(--nds-radius-sm); padding: 3px 9px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .h10-cov-hd .gap b { font-weight: 800; }
 .h10-cov-hd .grow { flex: 1; }
@@ -876,7 +896,7 @@
 .h10-cov-hd .chev { color: var(--nds-grey-500); transition: transform .12s; }
 .h10-cov-hd .chev.on { transform: rotate(180deg); }
 .h10-cov-b { border-top: 1px solid var(--nds-grey-100); padding: 12px 16px 14px; }
-.h10-cov-note { font-size: 12px; color: var(--nds-grey-500); line-height: 1.5; margin-bottom: 10px; }
+.h10-cov-note { font-size: 12px; color: var(--nds-text-2); line-height: 1.5; margin-bottom: 10px; }
 .h10-cov-note.muted { margin: 8px 0 0; font-style: italic; }
 /* Capped so a long uncovered tail scrolls inside the panel instead of burying the schedule list. */
 .h10-cov-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-lg); }
@@ -910,7 +930,7 @@
 .h10-ver-r .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
 .h10-ver-r .hd b { color: var(--nds-grey-900); font-weight: 700; }
 .h10-ver-r .hd .by { color: var(--nds-grey-700); font-weight: 600; }
-.h10-ver-r .hd .at { color: var(--nds-grey-400); font-size: 11.5px; margin-left: auto; white-space: nowrap; }
+.h10-ver-r .hd .at { color: var(--nds-text-muted); font-size: 11.5px; margin-left: auto; white-space: nowrap; }
 .h10-ver-r .diff { margin: 6px 0 8px; padding-left: 16px; font-size: 12.5px; color: var(--nds-grey-700); line-height: 1.6; }
 .h10-ver-r .diff li { list-style: disc; }
 /* HX.5 — the quiet way through to the account-wide change log. Understated on purpose: this is a
@@ -937,7 +957,7 @@
 .h10-dp-selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; background: var(--nds-grey-75); border: 1px solid #d4e4fb; border-radius: 9px; }
 .h10-dp-selbar .cnt { font-size: 12.5px; color: var(--nds-grey-800); }
 .h10-dp-selbar .cnt b { font-weight: 700; }
-.h10-dp-selbar .cnt em { font-style: normal; color: var(--nds-grey-500); }
+.h10-dp-selbar .cnt em { font-style: normal; color: var(--nds-text-2); }
 .h10-dp-selbar .grow { flex: 1; }
 .h10-dp-selbar .lbl { font-size: 12px; color: var(--nds-grey-600); }
 /* DS-ALIGN — the DS `Input` at `sm`; only the width it needs for a template name is ours. */
@@ -958,7 +978,7 @@
 .h10-arm-runs .run .tm { font-variant-numeric: tabular-nums; color: var(--nds-pill-neutral-fg); }
 .h10-arm-runs .run .nm { font-weight: 600; color: var(--nds-grey-800); }
 .h10-arm-ceil { margin-top: 9px; display: flex; flex-direction: column; gap: 3px; }
-.h10-arm-ceil .c { font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-arm-ceil .c { font-size: 11.5px; color: var(--nds-text-2); }
 .h10-arm-ceil .c b { color: var(--nds-grey-700); font-weight: 700; margin-right: 6px; }
 .h10-arm-ceil .c em { font-style: normal; }
 .h10-arm-blast { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--nds-pill-neutral-fg); }
@@ -974,7 +994,7 @@
    Wider than the shared h10-ntm confirm, because each row carries a week-shape strip: you pick a
    template by looking at its plan, not by trusting its name. */
 .h10-ntm.wide { width: 620px; max-width: calc(100vw - 32px); }
-.h10-ntm-h .x { border: 0; background: none; color: var(--nds-grey-500); cursor: pointer; padding: 3px; border-radius: var(--nds-radius-sm); display: inline-flex; margin-left: auto; }
+.h10-ntm-h .x { border: 0; background: none; color: var(--nds-text-2); cursor: pointer; padding: 3px; border-radius: var(--nds-radius-sm); display: inline-flex; margin-left: auto; }
 .h10-ntm-h .x:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); }
 .h10-tpl-list { max-height: 340px; overflow-y: auto; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-lg); }
 .h10-tpl-r { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--nds-grey-50); cursor: pointer; }
@@ -983,8 +1003,8 @@
 .h10-tpl-r.on { background: var(--nds-blue-50); }
 .h10-tpl-r .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-tpl-r .nm { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-tpl-r .meta { font-size: 11.5px; color: var(--nds-grey-500); }
-.h10-tpl-r .del { border: 0; background: none; color: var(--nds-grey-400); cursor: pointer; padding: 5px; border-radius: var(--nds-radius-sm); display: inline-flex; flex-shrink: 0; }
+.h10-tpl-r .meta { font-size: 11.5px; color: var(--nds-text-2); }
+.h10-tpl-r .del { border: 0; background: none; color: var(--nds-text-muted); cursor: pointer; padding: 5px; border-radius: var(--nds-radius-sm); display: inline-flex; flex-shrink: 0; }
 .h10-tpl-r .del:hover { background: #fbdedb; color: #a3211a; }
 /* E2 — window fit. The headline number is the share of SALES, not of spend: spend follows the bid
    you set, sales follow the demand you were aiming at. */
@@ -993,10 +1013,10 @@
 .h10-arm-fit .txt { font-size: 12.5px; color: var(--nds-grey-700); line-height: 1.5; }
 .h10-arm-fit .txt b { color: var(--nds-grey-900); font-weight: 700; }
 .h10-arm-missed { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
-.h10-arm-missed .lbl { font-size: 11px; font-weight: 700; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .3px; }
+.h10-arm-missed .lbl { font-size: 11px; font-weight: 700; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: .3px; }
 .h10-arm-missed .m { font-size: 11.5px; color: #7a5200; background: #fdf3d3; border-radius: var(--nds-radius-sm); padding: 3px 8px; white-space: nowrap; }
 .h10-arm-missed .m b { font-weight: 700; }
-.h10-arm-note { margin-top: 9px; font-size: 11.5px; color: var(--nds-grey-500); line-height: 1.5; }
+.h10-arm-note { margin-top: 9px; font-size: 11.5px; color: var(--nds-text-2); line-height: 1.5; }
 /* C2 — structural integrity, alongside coverage. A clean result says so rather than staying
    silent: a check you cannot see is a check you stop trusting. */
 .h10-cov-int { font-size: 11.5px; font-weight: 600; border-radius: var(--nds-radius-sm); padding: 3px 9px; white-space: nowrap; }
@@ -1014,7 +1034,7 @@
 .h10-n24-sum { padding: 14px 20px 12px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-n24-sum .hdr { font-size: 12.5px; color: #4a5462; margin: 0 0 8px; line-height: 1.5; }
 .h10-n24-sum .hdr b { color: var(--nds-grey-900); font-weight: 700; }
-.h10-n24-sum .hdr .tz { color: var(--nds-grey-500); }
+.h10-n24-sum .hdr .tz { color: var(--nds-text-2); }
 .h10-n24-sum .note { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; line-height: 1.5; color: #4a5462; margin: 0 0 7px; padding: 8px 10px; border-radius: var(--nds-radius-md); background: var(--nds-grey-25); }
 .h10-n24-sum .note svg { flex: none; margin-top: 1px; }
 /* Every note is icon(optional) + ONE span. A bare <b> beside a text node would become two flex
@@ -1028,7 +1048,7 @@
 .h10-n24-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
 .h10-n24-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #4a5462; }
 .h10-n24-legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--nds-grey-300); flex: none; }
-.h10-n24-legend em { font-style: normal; color: var(--nds-grey-500); }
+.h10-n24-legend em { font-style: normal; color: var(--nds-text-2); }
 
 /* The DataGrid puts `className` on the WRAPPER div, so `table-layout` has to name the
    table itself; the three column widths this block used to set are `Column.width` now,
@@ -1049,7 +1069,7 @@
 .h10-n24-t td:nth-child(2) em { font-style: normal; font-size: 10.5px; color: #9aa2ae; margin-left: 6px; }
 .h10-n24-t td:nth-child(2) em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
 .h10-n24-t td:nth-child(2) .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
-.h10-n24-t .none { color: var(--nds-grey-400); }
+.h10-n24-t .none { color: var(--nds-text-muted); }
 .h10-n24-t td:nth-child(3) .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
 .h10-n24-t td:nth-child(3) .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
 .h10-n24-t td:nth-child(3) .hold, .h10-n24-t td:nth-child(3) .sup { white-space: nowrap; }
@@ -1058,7 +1078,7 @@
 /* MB.6 — this hour's climb stops at the CPC ceiling, not at the target's own Ceiling. Its own
    line: inside the nowrap .chase span it pushed the cell over its column. */
 .h10-n24-t td:nth-child(3) .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
-.h10-n24-t td:nth-child(3) .sup { color: var(--nds-grey-500); }
+.h10-n24-t td:nth-child(3) .sup { color: var(--nds-text-2); }
 .h10-n24-t td:nth-child(4) { color: var(--nds-pill-neutral-fg); }
 .h10-n24-t td:nth-child(4) span { display: block; font-size: 11px; white-space: nowrap; }
 .h10-n24-t td:nth-child(4) .ao { color: var(--nds-note-error-fg); font-weight: 700; }
@@ -1083,7 +1103,7 @@
 /* `Button variant="quiet" size="sm" block` — the DS carries the reset and the hover wash.
    `justify-content` because a DS button centres its content and a list of names reads left. */
 .nds-btn.h10-d2-opt { justify-content: flex-start; text-align: left; font-size: 13px; font-weight: 400; color: var(--nds-grey-900); }
-.h10-d2-empty { padding: 12px 9px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; }
+.h10-d2-empty { padding: 12px 9px; text-align: center; color: var(--nds-text-2); font-size: 12.5px; }
 .h10-d2-diff .pick { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--nds-grey-900); padding-bottom: 10px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-d2-diff .pick b { font-weight: 700; }
 /* `Button variant="link" inline`. #2563eb measured 5.17:1; --nds-text-link is 5.98:1, so the
@@ -1093,15 +1113,15 @@
 .h10-d2-diff .sum { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 0; font-size: 12.5px; color: #4a5462; }
 .h10-d2-diff .sum b { font-weight: 700; color: var(--nds-grey-900); }
 .h10-d2-diff .sum .warn b { color: var(--nds-note-error-fg); }
-.h10-d2-diff .sum .muted { color: var(--nds-grey-500); }
+.h10-d2-diff .sum .muted { color: var(--nds-text-2); }
 /* One row per changed hour, capped in height so a 40-hour paint scrolls instead of pushing the
    confirm button off-screen — the button is the point of the dialog. */
 .h10-d2-diff .rows { max-height: 240px; overflow-y: auto; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-lg); }
 .h10-d2-diff .r { display: grid; grid-template-columns: 92px 1fr 18px 1fr; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--nds-grey-50); }
 .h10-d2-diff .r:last-child { border-bottom: 0; }
 .h10-d2-diff .r .t { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
-.h10-d2-diff .r .f { color: var(--nds-grey-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-d2-diff .r .a { color: var(--nds-grey-400); text-align: center; }
+.h10-d2-diff .r .f { color: var(--nds-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-d2-diff .r .a { color: var(--nds-text-muted); text-align: center; }
 .h10-d2-diff .r .v { color: var(--nds-grey-900); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-d2-none { padding: 16px 10px; font-size: 12.5px; color: #4a5462; line-height: 1.5; }
 .h10-d2-none b { color: var(--nds-grey-900); }
@@ -1112,20 +1132,20 @@
    A LIVE event uses the alarm tone rather than a success tone: it means the weekly plan is not
    running right now, which is the thing you most need to notice on this page. */
 .h10-evt { border: 1px solid var(--nds-grey-100); border-radius: 9px; overflow: hidden; margin-bottom: 10px; }
-.h10-evt-empty { padding: 12px 9px; font-size: 12.5px; color: var(--nds-grey-500); text-align: center; }
+.h10-evt-empty { padding: 12px 9px; font-size: 12.5px; color: var(--nds-text-2); text-align: center; }
 .h10-evt-r { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-bottom: 1px solid var(--nds-grey-50); }
 .h10-evt-r:last-child { border-bottom: 0; }
 .h10-evt-r.live { background: #fffaf3; }
 .h10-evt-r.past { opacity: .6; }
 .h10-evt-r .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-evt-r .nm { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-evt-r .meta { font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-evt-r .meta { font-size: 11.5px; color: var(--nds-text-2); }
 
 .h10-evt-form { border: 1px solid var(--nds-grey-150); border-radius: 9px; padding: 14px; display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
 .h10-evt-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--nds-grey-700); }
 /* The event-plan switch is the DS `SegmentedControl` — a seventh spelling of the same pill, gone
    with the other six. */
-.h10-evt-note { margin: 0; font-size: 11.5px; color: var(--nds-grey-500); line-height: 1.5; }
+.h10-evt-note { margin: 0; font-size: 11.5px; color: var(--nds-text-2); line-height: 1.5; }
 .h10-evt-act { display: flex; align-items: center; gap: 10px; }
 
 /* RDX/G2 — the arm-confirm reuses the D2 diff shell; only the alarming variant is new. */
@@ -1174,7 +1194,7 @@
    nothing, and quoting only the changes would flatter the fleet. */
 .h10-imp { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 11px 15px; margin-bottom: 12px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); background: var(--nds-white); }
 .h10-imp-l { display: flex; align-items: center; gap: 9px; }
-.h10-imp-k { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+.h10-imp-k { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .h10-imp-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-sm); overflow: hidden; }
 .h10-imp-seg button { border: 0; border-right: 1px solid var(--nds-grey-100); background: var(--nds-white); padding: 3px 8px; font-size: 11px; font-weight: 700; color: var(--nds-pill-neutral-fg); cursor: pointer; }
 .h10-imp-seg button:last-child { border-right: 0; }
@@ -1182,15 +1202,15 @@
 .h10-imp-n { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .h10-imp-s { display: flex; flex-direction: column; }
 .h10-imp-s b { font-size: 16px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; line-height: 1.15; }
-.h10-imp-s b em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--nds-grey-450); }
-.h10-imp-s i { font-style: normal; font-size: 10.5px; color: var(--nds-grey-500); margin-top: 1px; }
+.h10-imp-s b em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--nds-text-muted); }
+.h10-imp-s i { font-style: normal; font-size: 10.5px; color: var(--nds-text-2); margin-top: 1px; }
 .h10-imp-top { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-left: auto; }
-.h10-imp-top .lbl { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+.h10-imp-top .lbl { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); }
 .h10-imp-r { display: inline-flex; align-items: center; gap: 5px; max-width: 190px; padding: 3px 8px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-imp-r em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--nds-blue-600); }
 /* A failed load says so in one muted line rather than vanishing — hiding it is what
    kept a 500 on this endpoint invisible on prod. */
-.h10-imp-off { display: block; font-size: 11.5px; color: var(--nds-grey-500); }
+.h10-imp-off { display: block; font-size: 11.5px; color: var(--nds-text-2); }
 .h10-imp-s.bad b { color: var(--nds-red-700); }
 /* Named on its own line rather than folded into the counters: a rule whose every
    action fails still reports completed runs, so the number alone reads as health. */
@@ -2101,7 +2121,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-sec { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); scroll-margin-top: 120px; }
 .nds-btn.h10-bsp-sechd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; font: inherit; text-align: left; }
 .nds-btn.h10-bsp-sechd:hover { background: var(--nds-grey-25); border-radius: 9px; }
-.h10-bsp-sechd .chev { flex: none; color: var(--nds-grey-450); transition: transform .15s ease; transform: rotate(-90deg); }
+.h10-bsp-sechd .chev { flex: none; color: var(--nds-text-3); transition: transform .15s ease; transform: rotate(-90deg); }
 .h10-bsp-sec.open .h10-bsp-sechd .chev { transform: rotate(0deg); }
 .h10-bsp-sechd .ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .h10-bsp-sechd .ttl b { font-size: 13.5px; font-weight: 800; color: var(--nds-grey-900); }
@@ -2718,7 +2738,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-bsp-del { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; background: none; border: 0; font-size: 11.5px; font-weight: 700; color: var(--nds-note-error-icon); cursor: pointer; }
 .nds-btn.h10-bsp-del:hover:not(:disabled) { text-decoration: underline; background: none; }
-.h10-bsp-del:disabled { color: var(--nds-grey-450); cursor: not-allowed; }
+.h10-bsp-del:disabled { color: var(--nds-text-muted); cursor: not-allowed; }
 
 .h10-bsp-sub { display: flex; flex-direction: column; gap: 6px; padding-top: 9px; border-top: 1px solid var(--nds-grey-100); }
 .h10-bsp-sub > b { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); }
@@ -2819,7 +2839,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
    🔴 `.thin` beats every band because it comes LAST: a low-confidence row is muted regardless of
    value, so 50.00%-of-4-impressions can never be the brightest thing on screen. */
-.h10-sov-share.b1 { color: var(--nds-grey-500); }
+.h10-sov-share.b1 { color: var(--nds-text-2); }
 .h10-sov-share.b2 { color: var(--nds-grey-600); }
 .h10-sov-share.b3 { color: var(--nds-grey-900); }
 .h10-sov-share.b4 { color: var(--nds-info-text); }
@@ -4418,7 +4438,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-caps em { font-style: normal; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--nds-grey-700); background: var(--nds-grey-100); border-radius: 5px; padding: 1px 6px; }
 .h10-au-nocap { font-style: normal; font-size: 11.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; }  /* 7.31:1 on #fffbeb */
 
-.h10-au-obsdash { color: var(--nds-grey-450); }
+.h10-au-obsdash { color: var(--nds-text-muted); }
 .h10-au-rowactor td { background: var(--nds-grey-25); }
 .h10-au-name.asname { cursor: default; }
 
@@ -4453,7 +4473,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-limittbl { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
 
 
-.h10-au-limittbl tr.off td { color: var(--nds-grey-450); }
+.h10-au-limittbl tr.off td { color: var(--nds-text-muted); }
 .h10-au-limittbl td i { font-style: normal; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
 /* DS-ALIGN — `ToolbarButton tone="danger"`, whose red hover is the cue. */
 .h10-au-limitadd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -4474,7 +4494,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-ledgertbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 
 
-.h10-au-ledgertbl tr.undone td { color: var(--nds-grey-450); }
+.h10-au-ledgertbl tr.undone td { color: var(--nds-text-muted); }
 .h10-au-ledgertbl td.noactor { color: #b42318; font-weight: 600; }
 .h10-au-ledgertbl .undonetag { font-style: normal; color: var(--nds-text-muted); }
 .h10-au-ledgertbl .noev { font-style: normal; color: #92400e; }
@@ -4516,7 +4536,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud2-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--nds-grey-700); }
 .h10-bud-base { display: inline-flex; flex-direction: column; gap: 2px; }
 .h10-bud-base em { font-style: normal; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--nds-grey-700); background: var(--nds-grey-100); border-radius: 5px; padding: 1px 6px; width: fit-content; }
-.h10-bud-nobase { color: var(--nds-grey-450); }
+.h10-bud-nobase { color: var(--nds-text-muted); }
 
 /* BUD.3/BUD.6 — selection acts, the footer, the transfer dialog */
 .h10-bud-selrow { display: inline-flex; gap: 6px; }
@@ -4702,8 +4722,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-chip:hover { border-color: #b9c4d0; }
 .h10-sov-chip.on { border-color: var(--nds-blue-600); background: var(--nds-blue-50); color: #17436f; }
 .h10-sov-chip.on b { color: #123a63; }
-.h10-sov-chip.zero { color: var(--nds-grey-500); }
-.h10-sov-chip.zero b { color: var(--nds-grey-500); font-weight: 600; }
+.h10-sov-chip.zero { color: var(--nds-text-2); }
+.h10-sov-chip.zero b { color: var(--nds-text-2); font-weight: 600; }
 .h10-sov-chipnote { font-size: 11.5px; color: var(--nds-text-muted); margin-left: auto; }
 .h10-sov-sigs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .h10-sov-sig { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
@@ -4719,7 +4739,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov5-series li .bar { flex: 0 0 140px; height: 8px; background: var(--nds-grey-75); border-radius: 4px; overflow: hidden; }
 .h10-sov5-series li .bar i { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 4px; }
 .h10-sov5-series li b { flex: 0 0 62px; font-variant-numeric: tabular-nums; color: #16202b; }
-.h10-sov5-series li .sub { color: var(--nds-grey-500); font-size: 11px; }
+.h10-sov5-series li .sub { color: var(--nds-text-2); font-size: 11px; }
 .h10-sov5-series li .flag { padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; background: #fff6e8; color: #7a4512; }
 .h10-sov5-series li.unparsed b, .h10-sov5-series li.unparsed .sub { color: #b3bcc6; }
 .h10-sov5-funnel { margin-bottom: 14px; }
@@ -4831,7 +4851,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc3-edit button:disabled { opacity: .5; cursor: default; }
 /* The affordance on a cell that is NOT being edited. Invisible until the row is hovered, so 660
    rows do not each shout a pencil at you. */
-.h10-plc3-pencil { margin-left: 6px; border: 0; background: none; padding: 0; color: var(--nds-grey-500); cursor: pointer; opacity: 0; transition: opacity .12s; }
+.h10-plc3-pencil { margin-left: 6px; border: 0; background: none; padding: 0; color: var(--nds-text-2); cursor: pointer; opacity: 0; transition: opacity .12s; }
 tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-plc3-pencil:hover { color: var(--nds-blue-700); }
 
@@ -5265,7 +5285,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-act.never svg { flex-shrink: 0; }
 .h10-rg-act.quiet { font-weight: 500; color: #6b7280; }
 .h10-rg-act.unknown { font-weight: 500; font-style: italic; color: #6b7280; }
-.h10-rg-act.pendingread { color: var(--nds-grey-300); }
+.h10-rg-act.pendingread { color: var(--nds-text-muted); }
 .h10-rg-act:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 2px; border-radius: 4px; }
 
 /* ── P2: H10's threshold columns (Order Threshold · Max ACoS) ────────────────────────────────────
@@ -5540,7 +5560,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    keeps a pointer cursor because it still does something: it explains itself.
    🔴 The question-mark cursor is banned account-wide (ratchet baseline 0) — and the ratchet greps
    this file as text, so do not name it here either. Keep the default; the note carries the why. */
-.h10-rb-create.held { background: var(--nds-grey-100); color: var(--nds-grey-500); box-shadow: inset 0 0 0 1px var(--nds-grey-150); }
+.h10-rb-create.held { background: var(--nds-grey-100); color: var(--nds-text-2); box-shadow: inset 0 0 0 1px var(--nds-grey-150); }
 .h10-rb-create.held:hover { background: var(--nds-rail-text-strong); color: #6f7885; }
 
 /* The rank preview is SEVEN columns where budget is five, so it gets its own width. At the shared
@@ -5589,7 +5609,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 }
 .h10-ktp-strip b { color: var(--nds-grey-900); font-weight: 800; }
 .h10-ktp-strip .warn { color: var(--nds-warning-text); font-weight: 700; }
-.h10-ktp-strip .sep { color: var(--nds-grey-300); }
+.h10-ktp-strip .sep { color: var(--nds-text-muted); }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .h10-rb-banner.warn { background: #33280f; color: #e8dcc4; }

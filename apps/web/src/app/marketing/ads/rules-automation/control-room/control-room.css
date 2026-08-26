@@ -119,7 +119,7 @@
   gap: 0 20px; margin: 0; flex-shrink: 0;
 }
 .acr-facts div { min-width: 0; }
-.acr-facts dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); margin: 0 0 3px; }
+.acr-facts dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-2); margin: 0 0 3px; }
 .acr-facts dd { font-size: 12.5px; color: var(--nds-grey-700); margin: 0; white-space: nowrap; }
 /* "Governs" carries the only free-text value here ("82 of 216 campaigns allowlisted",
    "33 schedules · 0 product plans"). nowrap on that cell pushes the whole row past the
@@ -151,7 +151,7 @@
 .acr-counts { display: flex; gap: 30px; }
 .acr-counts div { display: flex; flex-direction: column; gap: 2px; }
 .acr-counts .n { font-size: 21px; font-weight: 650; color: var(--nds-grey-700); line-height: 1.1; }
-.acr-counts .k { font-size: 11.5px; color: var(--nds-grey-500); }
+.acr-counts .k { font-size: 11.5px; color: var(--nds-text-2); }
 .acr-counts .on .n { color: var(--nds-success-text); }
 
 .acr-bar { height: 6px; border-radius: 3px; background: var(--nds-grey-100); margin: 13px 0 0; overflow: hidden; }
@@ -163,7 +163,7 @@
 /* ── section headings ────────────────────────────────────────────────────── */
 .acr-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 9px; }
 .acr-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
-.acr-sec-count { font-size: 12px; color: var(--nds-grey-500); }
+.acr-sec-count { font-size: 12px; color: var(--nds-text-2); }
 .acr-rules { margin-top: 4px; }
 
 /* ── the per-rule dial ───────────────────────────────────────────────────── */
@@ -183,7 +183,7 @@
 .nds-btn.acr-notch:hover:not(:disabled):not(.on) { background: var(--nds-grey-50); }
 /* Disabled = above this rule's graduation ceiling. Muted, still legible, keeps its tooltip —
    an operator must be able to SEE the rung they cannot reach, and why. */
-.nds-btn.acr-notch:disabled { color: var(--nds-grey-400); cursor: not-allowed; background: var(--nds-white); }
+.nds-btn.acr-notch:disabled { color: var(--nds-text-muted); cursor: not-allowed; background: var(--nds-white); }
 .nds-btn.acr-notch.on { color: var(--nds-white); }
 .acr-notch.on.off { background: #7a869a; }
 .acr-notch.on.observe { background: #4d5b6e; }
@@ -193,7 +193,7 @@
 .acr-ceiling { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #8a6320; margin: 6px 0 0; }
 
 .acr-empty { font-size: 13px; color: var(--nds-text-muted); padding: 28px 0; }
-.acr-foot { font-size: 12px; color: var(--nds-grey-500); margin: 18px 0 0; line-height: 1.55; max-width: 76ch; }
+.acr-foot { font-size: 12px; color: var(--nds-text-2); margin: 18px 0 0; line-height: 1.55; max-width: 76ch; }
 
 /* Below ~980px the facts grid crowds the description — stack instead of squeezing. */
 @media (max-width: 980px) {
@@ -214,7 +214,7 @@
 .acr-change-what { font-size: 13px; color: var(--nds-grey-900); }
 .acr-change-what strong { font-weight: 600; }
 .acr-delta { font-size: 12.5px; color: #46536a; margin-left: 6px; font-variant-numeric: tabular-nums; }
-.acr-change-when { font-size: 11.5px; color: var(--nds-grey-450); margin-left: auto; white-space: nowrap; }
+.acr-change-when { font-size: 11.5px; color: var(--nds-text-muted); margin-left: auto; white-space: nowrap; }
 .acr-change-sub { font-size: 12px; color: var(--nds-text-muted); margin-top: 2px; }
 .acr-change-why { font-size: 12px; color: #56637a; margin-top: 4px; }
 
@@ -243,7 +243,7 @@
   padding: 16px 18px; margin: 4px 0 14px;
 }
 .acr-today-hero { min-width: 0; }
-.acr-today-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-grey-500); font-weight: 700; }
+.acr-today-hero-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-text-2); font-weight: 700; }
 .acr-today-hero-v {
   font-size: 27px; font-weight: 650; color: var(--nds-grey-900); line-height: 1.15; margin-top: 3px;
   display: flex; align-items: baseline; gap: 9px; font-variant-numeric: tabular-nums;
@@ -294,8 +294,8 @@
   padding: 13px 16px 13px 0; text-align: right; min-width: 0;
 }
 /* The caveat under a row with no € — same measure as the detail it follows. */
-.acr-exc-noprice { font-size: 11.5px; color: var(--nds-grey-450); margin: 7px 0 0; line-height: 1.5; font-style: italic; max-width: 92ch; }
-.acr-exc-amount-note { font-size: 11px; color: var(--nds-grey-500); }
+.acr-exc-noprice { font-size: 11.5px; color: var(--nds-text-muted); margin: 7px 0 0; line-height: 1.5; font-style: italic; max-width: 92ch; }
+.acr-exc-amount-note { font-size: 11px; color: var(--nds-text-2); }
 
 .acr-exc-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .acr-exc-head h3 { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); margin: 0; }
@@ -311,7 +311,7 @@
 .acr-exc-detail { font-size: 12.5px; color: #56637a; margin: 6px 0 0; line-height: 1.55; max-width: 92ch; }
 
 .acr-exc-amount { font-size: 17px; font-weight: 650; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; line-height: 1.2; }
-.acr-exc-age { font-size: 11px; color: var(--nds-grey-450); margin-top: 2px; }
+.acr-exc-age { font-size: 11px; color: var(--nds-text-muted); margin-top: 2px; }
 .acr-exc-go {
   display: inline-flex; align-items: center; gap: 4px; margin-top: 6px;
   font-size: 12.5px; font-weight: 550; color: var(--nds-blue-600); text-decoration: none; white-space: nowrap;
@@ -349,7 +349,7 @@
 .acr-fs-bar { height: 6px; border-radius: 3px; background: var(--nds-grey-100); overflow: hidden; }
 .acr-fs-bar-fill { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 3px; }
 .acr-fs-n { font-size: 12px; color: var(--nds-grey-700); font-variant-numeric: tabular-nums; text-align: right; }
-.acr-fs-n.zero { color: var(--nds-grey-400); }
+.acr-fs-n.zero { color: var(--nds-text-muted); }
 
 .acr-fs-targets { display: flex; gap: 5px; flex-wrap: wrap; min-width: 0; }
 .acr-fs-chip {
@@ -357,11 +357,11 @@
   font-size: 11px; border-radius: 4px; padding: 2px 7px;
   background: var(--nds-grey-75); color: #4d5b6e; border: 1px solid var(--nds-grey-150); white-space: nowrap;
 }
-.acr-fs-chip em { font-style: normal; color: var(--nds-grey-500); font-size: 10.5px; }
+.acr-fs-chip em { font-style: normal; color: var(--nds-text-2); font-size: 10.5px; }
 /* All-out reaches highest; min bid drives to the floor. They must not look alike. */
 .acr-fs-chip.hot { background: #fdf2f2; color: var(--nds-danger-text); border-color: #e6bcba; }
 .acr-fs-chip.sup { background: var(--nds-grey-25); color: #7a869a; border-color: var(--nds-grey-150); }
-.acr-fs-none { font-size: 11.5px; color: var(--nds-grey-400); }
+.acr-fs-none { font-size: 11.5px; color: var(--nds-text-muted); }
 
 .acr-fs-flags { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 .acr-fs-flag {
@@ -371,7 +371,7 @@
 .acr-fs-flag.nocap { background: #fff8ec; color: #8a6320; }
 .acr-fs-flag.unb { background: #fdf2f2; color: var(--nds-danger-text); }
 .acr-fs-flag.sup { background: var(--nds-grey-75); color: #6b7789; }
-.acr-fs-ticks { font-size: 11px; color: var(--nds-grey-450); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.acr-fs-ticks { font-size: 11px; color: var(--nds-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .acr-fs-engines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .acr-fs-engine { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); padding: 12px 15px; }
@@ -481,13 +481,13 @@
 }
 .acr-dw-health { display: flex; gap: 22px; margin: 0; }
 .acr-dw-health div { min-width: 0; }
-.acr-dw-health dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); margin: 0 0 3px; }
+.acr-dw-health dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-2); margin: 0 0 3px; }
 .acr-dw-health dd { font-size: 12.5px; color: var(--nds-grey-700); margin: 0; white-space: nowrap; }
 .acr-dw-health dd.bad { color: #b3352f; }
 
 .acr-dw-hint { font-size: 11.5px; color: var(--nds-text-muted); margin: 11px 0 0; line-height: 1.55; max-width: 76ch; }
 .acr-dw-last { display: flex; align-items: baseline; gap: 8px; margin: 11px 0 0; flex-wrap: wrap; }
-.acr-dw-last span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); }
+.acr-dw-last span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-2); }
 .acr-dw-last code {
   font-size: 11.5px; color: var(--nds-grey-700); background: var(--nds-grey-25);
   border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 2px 7px;
@@ -520,7 +520,7 @@
 .acr-dw-sum { color: #46536a; line-height: 1.45; word-break: break-word; min-width: 220px; }
 .acr-dw-act { color: #46536a; font-size: 11.5px; white-space: nowrap; }
 .acr-dw-ent { max-width: 260px; }
-.acr-dw-why { display: block; font-size: 11px; color: var(--nds-grey-500); margin-top: 2px; line-height: 1.4; }
+.acr-dw-why { display: block; font-size: 11px; color: var(--nds-text-2); margin-top: 2px; line-height: 1.4; }
 
 .acr-dw-none {
   font-size: 12.5px; color: var(--nds-text-muted); line-height: 1.55;
@@ -563,7 +563,7 @@
 .acr-gg-check { user-select: none; }
 /* DS-ALIGN — the two reset chips are `Button variant="tonal"`, the tier-2 tinted treatment.
    #2a5399 on --nds-blue-50 was 6.62:1; the DS pair is 7.41:1. */
-.acr-gg-count { font-size: 11.5px; color: var(--nds-grey-500); margin-left: auto; }
+.acr-gg-count { font-size: 11.5px; color: var(--nds-text-2); margin-left: auto; }
 
 /* Wide grid scrolls inside its own box; the page body never scrolls sideways. */
 /* The grid is the DS `DataGrid`. Its wrapper carries the border, the radius and the scroll, so
@@ -582,7 +582,7 @@
   display: block; font-weight: 600; color: var(--nds-grey-900);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.acr-gg-name .m { display: block; font-size: 11px; color: var(--nds-grey-500); margin-top: 1px; }
+.acr-gg-name .m { display: block; font-size: 11px; color: var(--nds-text-2); margin-top: 1px; }
 .acr-gg-dash { color: #b6bfcb; }
 
 /* DS-ALIGN — the bound boxes are the DS `Input`; the primitive carries the border, the hover
@@ -642,7 +642,7 @@
   display: flex; flex-direction: column; gap: 2px;
   border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); background: var(--nds-white); padding: 11px 13px;
 }
-.acr-week-tile .k { font-size: 11px; font-weight: 600; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .04em; }
+.acr-week-tile .k { font-size: 11px; font-weight: 600; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: .04em; }
 .acr-week-tile b { font-size: 20px; font-weight: 660; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; line-height: 1.25; }
 .acr-week-tile .s { font-size: 11.5px; color: var(--nds-text-muted); }
 .acr-week-tile.good b { color: var(--nds-success-text); }
@@ -650,7 +650,7 @@
 .acr-week-tile.bad { border-color: #f3cbc7; background: #fdf7f6; }
 .acr-week-tile.bad b { color: #a3342b; }
 
-.acr-week-note { font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-500); margin: 8px 0 0; max-width: 92ch; }
+.acr-week-note { font-size: 11.5px; line-height: 1.55; color: var(--nds-text-2); margin: 8px 0 0; max-width: 92ch; }
 
 .acr-week-grad { font-size: 12.5px; line-height: 1.55; margin: 10px 0 0; padding: 9px 12px; border-radius: var(--nds-radius-md); }
 .acr-week-grad.ready { color: var(--nds-success-text); background: #f2fbf7; border: 1px solid #cfe8dc; }
@@ -671,7 +671,7 @@
 .acr-digest-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--nds-grey-700); margin: 0 0 5px; }
 .acr-digest-head svg { color: var(--nds-grey-500); }
 .acr-digest p { font-size: 12.5px; line-height: 1.55; color: #56637a; margin: 0 0 6px; max-width: 92ch; }
-.acr-digest-flags { font-size: 11.5px; color: var(--nds-grey-500); }
+.acr-digest-flags { font-size: 11.5px; color: var(--nds-text-2); }
 .acr-digest-flags code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
   background: var(--nds-grey-100); border-radius: 3px; padding: 1px 4px; color: #56637a;
@@ -698,7 +698,7 @@
 }
 .acr-gg-bulk-lbl {
   font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--nds-grey-500); white-space: nowrap;
+  color: var(--nds-text-2); white-space: nowrap;
 }
 .acr-gg-bulk .acr-gg-clear { margin-left: auto; }
 
@@ -711,7 +711,7 @@
   padding: 4px 7px;
 }
 .acr-gg-bulk-pin .nds-btn:first-child { border-radius: 4px 0 0 4px; border-right: none; }
-.acr-gg-bulk-pin .nds-btn.off { border-radius: 0 4px 4px 0; background: var(--nds-white); color: var(--nds-grey-450); border-color: var(--nds-grey-150); }
+.acr-gg-bulk-pin .nds-btn.off { border-radius: 0 4px 4px 0; background: var(--nds-white); color: var(--nds-text-muted); border-color: var(--nds-grey-150); }
 .acr-gg-bulk-pin .nds-btn:disabled { opacity: 0.55; cursor: default; }
 .acr-gg-bulk-pin .nds-btn:hover:not(:disabled) { filter: brightness(0.97); }
 
@@ -722,7 +722,7 @@
 
 /* ── ACR.4.3 · undo, on the row that did the thing ───────────────────────── */
 .acr-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 7px 0 0; font-size: 11.5px; }
-.acr-undo.blocked { color: var(--nds-grey-450); font-style: italic; }
+.acr-undo.blocked { color: var(--nds-text-muted); font-style: italic; }
 .acr-undo.confirming { color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb; border-radius: var(--nds-radius-sm); padding: 7px 10px; }
 .acr-undo.confirming strong { color: #6b4d15; font-weight: 650; }
 /* DS-ALIGN — the Undo and Cancel steps are the DS `Button` at `xs`. Only the COMMITTING step
@@ -750,7 +750,7 @@
 /* ACR.1.3e — CPC ceiling cell. The multiplier reads as a multiplier, so the unit sits
    beside the box rather than being implied by a header three columns away. */
 .acr-gg-cpc { display: inline-flex; align-items: baseline; gap: 3px; }
-.acr-gg-cpc .x { font-size: 11px; color: var(--nds-grey-500); }
+.acr-gg-cpc .x { font-size: 11px; color: var(--nds-text-2); }
 .acr-gg-num.narrow { width: 52px; }
 
 /* ACR.1.3f — spacing only. The protected-terms panel brings its own chrome from
@@ -796,7 +796,7 @@
   border: 1px solid var(--nds-grey-150);
   box-shadow: inset 0 1px 2px rgb(20 28 38 / 0.03);
 }
-.acr-fl-canvas .react-flow__attribution { font-size: 9px; background: transparent; color: var(--nds-grey-400); }
+.acr-fl-canvas .react-flow__attribution { font-size: 9px; background: transparent; color: var(--nds-text-muted); }
 .acr-fl-h { opacity: 0; width: 4px; height: 4px; min-width: 0; min-height: 0; border: 0; }
 
 .acr-fln {
@@ -838,11 +838,11 @@
 .acr-fln-level.lv-propose { color: #8a6320; background: #fff8ec; }
 .acr-fln-level.lv-auto { color: var(--nds-success-text); background: #f1faf5; }
 .acr-fln-open { font-size: 10.5px; color: #8a6320; font-weight: 650; font-variant-numeric: tabular-nums; }
-.acr-fln-open.muted { color: var(--nds-grey-400); font-weight: 500; }
+.acr-fln-open.muted { color: var(--nds-text-muted); font-weight: 500; }
 .acr-fln-degraded { font-size: 10.5px; color: var(--nds-danger-text); font-weight: 650; }
-.acr-fln-run { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--nds-grey-500); font-variant-numeric: tabular-nums; }
+.acr-fln-run { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
 .acr-fln-working { color: var(--nds-blue-600); font-weight: 650; }
-.acr-fln-never { color: var(--nds-grey-400); }
+.acr-fln-never { color: var(--nds-text-muted); }
 .acr-fln-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .acr-fln-dot.ok { background: #1a9d6a; box-shadow: 0 0 0 2px rgb(26 157 106 / 0.15); }
 .acr-fln-dot.bad { background: var(--nds-red-600); box-shadow: 0 0 0 2px rgb(212 69 63 / 0.15); }
@@ -857,7 +857,7 @@
 .acr-flf.sev-high { border-left-color: #e2703a; }
 .acr-flf.sev-medium { border-left-color: #e0b34e; }
 .acr-flf.sev-low, .acr-flf.sev-info { border-left-color: var(--nds-grey-300); }
-.acr-flf-kind { font-size: 9.5px; font-weight: 750; letter-spacing: 0.07em; text-transform: uppercase; color: var(--nds-grey-500); }
+.acr-flf-kind { font-size: 9.5px; font-weight: 750; letter-spacing: 0.07em; text-transform: uppercase; color: var(--nds-text-2); }
 .acr-flf-entity { font-size: 11.5px; color: #232c37; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* agent drawer */
@@ -989,7 +989,7 @@
 .acr-fl-checks li svg { flex: none; transform: translateY(1px); }
 .acr-fl-checks li.ck-pass svg { color: #1a9d6a; }
 .acr-fl-checks li.ck-fail svg { color: var(--nds-red-600); }
-.acr-fl-checks li.ck-na svg { color: var(--nds-grey-400); }
+.acr-fl-checks li.ck-na svg { color: var(--nds-text-3); }
 .acr-fl-checkq { color: #232c37; font-weight: 600; flex: none; }
 .acr-fl-checknote { color: var(--nds-text-muted); font-size: 11.5px; }
 
@@ -1024,7 +1024,7 @@
   content: ''; position: absolute; left: 7px; top: 21px; bottom: -7px; width: 1px; background: var(--nds-grey-150);
 }
 .acr-flw-pipestep { font-size: 13px; color: #232c37; font-weight: 550; }
-.acr-flw-pipemeta { font-size: 11px; color: var(--nds-grey-500); font-variant-numeric: tabular-nums; }
+.acr-flw-pipemeta { font-size: 11px; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
 .acr-flw-evidence { padding: 4px 0; }
 .acr-flw-finding { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--nds-grey-100); flex-wrap: wrap; }
 .acr-flw-finding:first-of-type { border-top: 0; }
@@ -1095,12 +1095,12 @@
 .acr-fl-dcard-head { font-size: 13px; color: var(--nds-grey-700); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .acr-fl-dcard-what { margin: 0; font-size: 13.5px; color: #232c37; font-weight: 550; line-height: 1.5; }
 .acr-fl-dcard-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.acr-fl-dcard-facts dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--nds-grey-500); }
+.acr-fl-dcard-facts dt { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--nds-text-2); }
 .acr-fl-dcard-facts dd { margin: 1px 0 0; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.5; }
 /* `Button variant="link" inline` — the DS owns the colour and the hover. The permanent underline
    is this console's standing answer to --nds-text-link measuring 1.03:1 against body text. */
 .nds-btn.acr-fl-dcard-plan { align-self: flex-start; gap: 6px; font-size: 12px; text-decoration: underline; }
-.acr-fl-dcard-teach { margin: 0; font-size: 11.5px; color: var(--nds-grey-500); }
+.acr-fl-dcard-teach { margin: 0; font-size: 11.5px; color: var(--nds-text-2); }
 
 /* ── FX.7 — money & report cards ─────────────────────────────────────── */
 .acr-fl-chart { margin: 2px 0 12px; }
@@ -1169,12 +1169,12 @@
 .acr-eg-node.k-product { border-top-color: #1a9d6a; }
 .acr-eg-node.k-variation { border-top-color: #8b5cf6; }
 .acr-eg-node.focus { border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgb(31 111 222 / 0.12), 0 10px 24px rgb(20 28 38 / 0.1); }
-.acr-eg-kind { font-size: 9px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nds-grey-500); }
+.acr-eg-kind { font-size: 9px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nds-text-2); }
 .acr-eg-label {
   font-size: 12px; font-weight: 600; color: var(--nds-grey-900); line-height: 1.3;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.acr-eg-sub { font-size: 10.5px; color: var(--nds-grey-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acr-eg-sub { font-size: 10.5px; color: var(--nds-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acr-eg-canvas { height: 520px; }
 .acr-eg-node.compact { width: 146px; padding: 6px 9px; gap: 1px; border-top-width: 2px; }
 .acr-eg-node.compact .acr-eg-label { font-size: 11px; -webkit-line-clamp: 2; }
@@ -1191,7 +1191,7 @@
 .acr-eg-laneswatch { width: 12px; height: 3px; border-radius: 2px; flex: none; }
 .acr-eg-more {
   width: 146px; padding: 7px 10px; border-radius: var(--nds-radius-lg); text-align: center;
-  font-size: 10.5px; color: var(--nds-grey-500); background: var(--nds-grey-50); border: 1px dashed var(--nds-grey-150);
+  font-size: 10.5px; color: var(--nds-text-2); background: var(--nds-grey-50); border: 1px dashed var(--nds-grey-150);
 }
 
 /* ── NAF.AC — Charter Studio ─────────────────────────────────────────── */
@@ -1211,7 +1211,7 @@
 }
 .acr-cs-difftitle {
   display: block; margin-bottom: 6px; font-family: inherit; font-size: 10.5px;
-  font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nds-grey-500);
+  font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nds-text-2);
 }
 .acr-cs-line { display: flex; gap: 8px; padding: 1px 0; white-space: pre-wrap; word-break: break-word; }
 .acr-cs-line.added { color: var(--nds-success-text); background: #f1faf5; }
