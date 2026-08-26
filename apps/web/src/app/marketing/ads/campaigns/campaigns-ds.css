@@ -68,7 +68,10 @@
    2.94 there and text-3 flips to #8a94a6 (2.90). Both under the 3:1 an icon answers to.
    grey-600 is 5.6 on that ground and cannot flip. Measured 2026-08-26. */
 .h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-grey-600); }
-.h10-apm .apm-thead .apm-sortbtn.asc svg, .h10-apm .apm-thead .apm-sortbtn.desc svg { color: var(--nds-primary); }
+/* 🔴 blue-700, not --nds-primary. This caret is inside a DS Modal — portalled past the
+   shell pin — where primary flips to #6d9ee8: 2.52 on `.apm-thead`'s grey-50, under the
+   3:1 an icon answers to. blue-700 is 5.52 there and cannot flip. Measured 2026-08-26. */
+.h10-apm .apm-thead .apm-sortbtn.asc svg, .h10-apm .apm-thead .apm-sortbtn.desc svg { color: var(--nds-blue-700); }
 
 /* ── campaign / ad-group tab bar ───────────────────────────────────────────
    `Tabs size="lg"` — the DS built that tier FROM `.h10-cd-tab`, and it measures
