@@ -16,6 +16,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Radio } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
@@ -301,7 +302,10 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                     <label className="az-mfield az-mkeep" title="Climb to the Ceiling on its own every cycle, even with no signal (bounded by the Ceiling + ACOS cap). Off = only climb when Amazon's data says you're winning.">
                       <span>Keep climbing</span>
                       {view === 'scope'
-                        ? <select disabled={!scopeAvailable} value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'} onChange={e => setScopeKeep(t.key, e.target.value as '' | 'on' | 'off')}><option value="">inherit</option><option value="on">on</option><option value="off">off</option></select>
+                        ? <Listbox size="xs" width={88} disabled={!scopeAvailable} ariaLabel="Keep climbing"
+                            value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'}
+                            onChange={v => setScopeKeep(t.key, v as '' | 'on' | 'off')}
+                            options={[{ value: '', label: 'inherit' }, { value: 'on', label: 'on' }, { value: 'off', label: 'off' }]} />
                         : <input type="checkbox" checked={effKeep(t)} onChange={e => setLibKeep(t.id, e.target.checked)} />}
                     </label>
                   </div>

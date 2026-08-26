@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { Save, Layers } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components'
 
 export interface BlendLane {
   placement: string
@@ -99,12 +100,24 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
       })}
       <div className="az-blend-base">
         <span className="az-blend-baselbl">Base bid</span>
-        <select value={bidMode} onChange={(e) => setBidMode(e.target.value)}>
-          <option value="hold">Hold — don&apos;t touch</option>
-          <option value="absolute">Set to €…</option>
-          <option value="deltaPct">Adjust ±%…</option>
-          <option value="suppress">Suppress to ~€0.02</option>
-        </select>
+        {/* `.az-blend-base select` (amazon.css:599) styled the native control; Listbox renders a
+            <button>, so that rule stops matching rather than out-specifying the DS. `xs` is the
+            tier it was hand-rolled at — 11.5px, 3px padding. The two number inputs beside it
+            CANNOT move yet: `.az-blend-base input[type=number]` is (0,2,1) against
+            `.nds-field > input` (0,1,1), and amazon.css loads last. Logged in DS-GAPS. */}
+        <Listbox
+          size="xs"
+          width={186}
+          ariaLabel="Base bid mode"
+          value={bidMode}
+          onChange={(v) => setBidMode(v)}
+          options={[
+            { value: 'hold', label: "Hold — don't touch" },
+            { value: 'absolute', label: 'Set to €…' },
+            { value: 'deltaPct', label: 'Adjust ±%…' },
+            { value: 'suppress', label: 'Suppress to ~€0.02' },
+          ]}
+        />
         {bidMode === 'absolute' && (
           <input type="number" step="0.01" min={0.02} placeholder="0.50" value={bidValueCents != null ? (bidValueCents / 100).toFixed(2) : ''} onChange={(e) => setBidValueCents(e.target.value === '' ? null : Math.round(Number(e.target.value) * 100))} />
         )}
