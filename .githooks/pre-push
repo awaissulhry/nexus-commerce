@@ -97,6 +97,16 @@ node scripts/check-css-hex-ratchet.mjs --check || {
 # :root alias of a token that .dark overrides keeps its LIGHT value inside .dark, and no amount
 # of overriding X reaches it. Three status pills measured 1.50, 2.09 and 2.21 in the browser
 # while a static resolver called them passing.
+# The ads console pins its own ground light, so it must pin every token .dark flips — or the text
+# flips and the ground does not (--nds-text measured 1.11:1 that way). A pin can also go STALE:
+# one pinned --nds-text-3 through the ramp and silently dragged it back below the 3:1 icon floor
+# after the role diverged. This checks both: every flipping token pinned, every pin still equal to
+# the DS light value.
+node scripts/check-shell-pin-fresh.mjs --check || {
+  echo "❌ shell-pin guard FAILED — see message above (rule + why: scripts/check-shell-pin-fresh.mjs header)"
+  exit 1
+}
+
 node scripts/check-dark-alias-scope.mjs --check || {
   echo "❌ dark-alias scope guard FAILED — see message above (rule + why: scripts/check-dark-alias-scope.mjs header)"
   exit 1
