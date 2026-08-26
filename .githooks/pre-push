@@ -97,6 +97,15 @@ node scripts/check-css-hex-ratchet.mjs --check || {
 # :root alias of a token that .dark overrides keeps its LIGHT value inside .dark, and no amount
 # of overriding X reaches it. Three status pills measured 1.50, 2.09 and 2.21 in the browser
 # while a static resolver called them passing.
+# The .d.ts beside each component is committed tsc output, and nothing in this repo type-checks
+# against it — so it goes stale silently the moment a prop is added. 19 components were missing 52
+# props between them, and ButtonVariant listed 5 of its 10 members. The brief tells sessions to
+# read the component; a stale declaration describes one that does not exist.
+node scripts/check-ds-dts-fresh.mjs --check || {
+  echo "❌ DS declaration freshness FAILED — run: node scripts/check-ds-dts-fresh.mjs --write"
+  exit 1
+}
+
 node scripts/check-dark-alias-scope.mjs --check || {
   echo "❌ dark-alias scope guard FAILED — see message above (rule + why: scripts/check-dark-alias-scope.mjs header)"
   exit 1
