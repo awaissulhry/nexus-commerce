@@ -170,6 +170,9 @@ export function Next24Preview({ groupId }: { groupId: string }) {
       {/* `Column.render` is handed the row and nothing else, so the two facts that depend on
           POSITION — row 0 is the hour running right now, and a row whose target differs from the
           one above it starts a new stretch — are derived here and carried on the row. */}
+      {/* The four cell classes are `Column.className` again. They were `:nth-child()` for a day,
+          while the DS had nowhere to put a per-cell class — which would have broken the moment a
+          column was hidden or reordered, since nth-child counts POSITION and these name a COLUMN. */}
       <DataGrid<PreviewRow>
         className="h10-n24-t"
         rows={data.hours.map((h, i) => ({ ...h, isNow: i === 0, changed: i > 0 && h.targetKey !== data.hours[i - 1].targetKey }))}
@@ -177,14 +180,14 @@ export function Next24Preview({ groupId }: { groupId: string }) {
         rowClassName={(h) => (h.changed ? 'chg' : undefined)}
         columns={[
           {
-            key: 'hr', label: 'Hour', width: 84,
+            key: 'hr', label: 'Hour', width: 84, className: 'hr',
             render: (h) => (<>
               {h.isNow ? <b>now</b> : <span>{DAYS[h.dow]} {hh(h.hour)}</span>}
               {h.isNow && <em>{DAYS[h.dow]} {hh(h.hour)}</em>}
             </>),
           },
           {
-            key: 'tg', label: 'Target',
+            key: 'tg', label: 'Target', className: 'tg',
             render: (h) => (h.missingTarget ? (
               <span className="miss"><AlertTriangle size={12} /> {h.targetKey} — deleted</span>
             ) : h.targetName ? (
@@ -201,7 +204,7 @@ export function Next24Preview({ groupId }: { groupId: string }) {
             )),
           },
           {
-            key: 'bd', label: 'Bid', width: 118,
+            key: 'bd', label: 'Bid', width: 118, className: 'bd',
             render: (h) => (<>
               {h.suppressed ? (
                 <span className="sup">bids at ~2¢ floor</span>
@@ -226,7 +229,7 @@ export function Next24Preview({ groupId }: { groupId: string }) {
             </>),
           },
           {
-            key: 'gd', label: 'Guardrails', width: 108,
+            key: 'gd', label: 'Guardrails', width: 108, className: 'gd',
             render: (h) => (<>
               {h.allOut && <span className="ao">all-out</span>}
               {h.maxCpcCents != null && <span>max {eur(h.maxCpcCents)}</span>}

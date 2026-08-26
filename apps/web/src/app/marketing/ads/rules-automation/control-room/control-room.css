@@ -1236,10 +1236,6 @@
 .acr-cs-revnote { font-size: 12.5px; color: var(--nds-grey-700); }
 .acr-cs-revactions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* The two tables here are the DS `DataGrid` now, and `.nds-grid tbody td` (0,1,2) outranks
-   `.acr-dw-tbl td` (0,1,1) — padding, colour and borders come from the DS. `vertical-align` is
-   the one cell property it does not decide, and both of these stack a second line inside a cell.
-   Stated here rather than in `rules-automation.css`: this stylesheet does not borrow. */
-.acr-dw-tbl td,
-.acr-fl-table td,
-.acr-week-table td { vertical-align: top; }
+/* The tables here are the DS `DataGrid`, and `.nds-grid tbody td` (0,1,2) outranks
+   `.acr-dw-tbl td` (0,1,1) — padding, colour, borders AND vertical-align all come from the DS
+   now. The shared `vertical-align: top` this block used to carry is gone: the DS sets it. */

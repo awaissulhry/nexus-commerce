@@ -1090,7 +1090,10 @@
 /* The DataGrid puts `className` on the WRAPPER div, so `table-layout` has to name the
    table itself; the three column widths this block used to set are `Column.width` now,
    and the four `td.hr`/`.tg`/`.bd`/`.gd` cell classes — which only ever named a column
-   POSITION — are `:nth-child()`. `Column` carries no per-cell className (DS-GAPS). */
+   POSITION — are `Column.className` again. They were `:nth-child()` for a day, while `Column`
+   had no className; the DS grew one, and nth-child was the wrong shape anyway — it counts
+   position where these name a column, so hiding or reordering one would have painted the wrong
+   cells. */
 .h10-n24-t { font-size: 12px; }
 .h10-n24-t table { table-layout: fixed; }
 
@@ -1099,27 +1102,27 @@
 
 /* A change of governing target is a bid write — the rule marks where each one falls. */
 .h10-n24-t tr.chg td { border-top: 1px solid var(--nds-grey-150); }
-.h10-n24-t td:nth-child(1) { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
-.h10-n24-t td:nth-child(1) b { color: var(--nds-grey-900); font-weight: 800; }
-.h10-n24-t td:nth-child(1) em { display: block; font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); }
-.h10-n24-t td:nth-child(2) i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
-.h10-n24-t td:nth-child(2) em { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); margin-left: 6px; }
-.h10-n24-t td:nth-child(2) em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
-.h10-n24-t td:nth-child(2) .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
+.h10-n24-t td.hr { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
+.h10-n24-t td.hr b { color: var(--nds-grey-900); font-weight: 800; }
+.h10-n24-t td.hr em { display: block; font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); }
+.h10-n24-t td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
+.h10-n24-t td.tg em { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); margin-left: 6px; }
+.h10-n24-t td.tg em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
+.h10-n24-t td.tg .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
 .h10-n24-t .none { color: var(--nds-text-muted); }
-.h10-n24-t td:nth-child(3) .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
-.h10-n24-t td:nth-child(3) .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
-.h10-n24-t td:nth-child(3) .hold, .h10-n24-t td:nth-child(3) .sup { white-space: nowrap; }
-.h10-n24-t td:nth-child(3) .chase b { font-weight: 700; }
-.h10-n24-t td:nth-child(3) .chase.risk { color: var(--nds-note-error-fg); }
+.h10-n24-t td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
+.h10-n24-t td.bd .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
+.h10-n24-t td.bd .hold, .h10-n24-t td.bd .sup { white-space: nowrap; }
+.h10-n24-t td.bd .chase b { font-weight: 700; }
+.h10-n24-t td.bd .chase.risk { color: var(--nds-note-error-fg); }
 /* MB.6 — this hour's climb stops at the CPC ceiling, not at the target's own Ceiling. Its own
    line: inside the nowrap .chase span it pushed the cell over its column. */
-.h10-n24-t td:nth-child(3) .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
-.h10-n24-t td:nth-child(3) .sup { color: var(--nds-text-2); }
-.h10-n24-t td:nth-child(4) { color: var(--nds-pill-neutral-fg); }
-.h10-n24-t td:nth-child(4) span { display: block; font-size: 11px; white-space: nowrap; }
-.h10-n24-t td:nth-child(4) .ao { color: var(--nds-note-error-fg); font-weight: 700; }
-.h10-n24-t td:nth-child(4) .bad { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t td.bd .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
+.h10-n24-t td.bd .sup { color: var(--nds-text-2); }
+.h10-n24-t td.gd { color: var(--nds-pill-neutral-fg); }
+.h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }
+.h10-n24-t td.gd .ao { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t td.gd .bad { color: var(--nds-note-error-fg); font-weight: 700; }
 
 /* RDX/E2 — the fit block when there is not enough evidence to state a share. No big number,
    because the whole point is that there is no number worth showing. */
@@ -4627,7 +4630,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd8-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 
 
-.h10-bd8-tbl td:nth-child(1), .h10-bd8-tbl td:nth-child(4), .h10-bd8-tbl td:nth-child(6) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-bd8-tbl td.nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .h10-bd8-tbl .t { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .h10-bd8-tbl tr.failed td { color: #b42318; }
 .h10-bd8-ref { margin-top: 14px; border-top: 1px solid var(--nds-grey-100); padding-top: 10px; }
@@ -4827,7 +4830,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* The log gained three columns (Who · Why · Landed), so it needs to breathe and to scroll inside
    itself rather than widening the drawer. */
-.h10-bd3-writes th, .h10-bd3-writes td { vertical-align: top; }
+/* (was `.h10-bd3-writes th, td { vertical-align: top }` — the DS sets it on tbody td now) */
+.h10-bd3-writes th { vertical-align: top; }
 .h10-bd3-writes td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-bd3-writes td b.bad { color: #9a3412; font-weight: 800; }
 
@@ -5715,20 +5719,11 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    (0,1,1) and `.nds-grid tbody td` is (0,1,2), so the DS outranks every one of these wrappers
    on padding, colour, borders, weight and white-space — 96 declarations across twenty blocks
    were still written here and none of them reached the page. They are gone rather than
-   out-specified: one cell treatment across all ten tables is the point of the exercise, and the
-   DS header (11.5px/700, --nds-text-strong) replaces eight hand-rolled uppercase variants.
-   Only `vertical-align` had no DS stance — it split five tables top and five to the browser's
-   `middle`, which floats a sub-label away from the line it belongs to. Named once, for all ten;
-   logged in DS-GAPS as the one cell property `DataGrid` does not decide. */
-.h10-au-ledgertbl td,
-.h10-au-limittbl td,
-.h10-bd3-writes td,
-.h10-bd8-tbl td,
-.h10-hv-cmp td,
-.h10-kt-drtable td,
-.h10-kt6-tbl td,
-.h10-n24-t td,
-.h10-plc3-rows td { vertical-align: top; }
+   out-specified: one cell treatment across all ten tables is the point of the exercise.
+
+   `vertical-align` used to be the one property the DS did not decide, and this block carried a
+   shared `top` for all ten because it had split them five and five. `.nds-grid tbody td` sets
+   `vertical-align: top` itself now, so the override is gone with it. */
 
 /* ── The link-style button, once ──────────────────────────────────────────────────────────────
    Nineteen call sites across apply-rules, placement, keyword-tracker and bid are the DS

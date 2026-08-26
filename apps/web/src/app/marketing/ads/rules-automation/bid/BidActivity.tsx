@@ -165,7 +165,7 @@ export function BidActivity({ scope, campaigns, loading }: BidSlotProps) {
               rowKey={(r) => r.id}
               rowClassName={(r) => (r.delivery?.state === 'FAILED' ? 'failed' : undefined)}
               columns={[
-                { key: 'when', label: 'When', render: (r) => <>{when(r.at)}</> },
+                { key: 'when', label: 'When', className: 'nw', render: (r) => <>{when(r.at)}</> },
                 {
                   // A null name is a product/audience target with no text expression — a raw
                   // cuid tells the operator nothing, so say what it IS and keep the id in the
@@ -174,10 +174,10 @@ export function BidActivity({ scope, campaigns, loading }: BidSlotProps) {
                   render: (r) => <span className={r.entity.name ? 't' : 't unnamed'} title={r.entity.id}>{r.entity.name ?? 'unnamed target'}</span>,
                 },
                 { key: 'campaign', label: 'Campaign', render: (r) => <span className="t">{r.campaign?.name ?? campName.get(r.campaign?.id ?? '') ?? '—'}</span> },
-                { key: 'change', label: 'Change', render: (r) => <>{eurFromCents(r.oldValue)} → <b>{eurFromCents(r.newValue)}</b></> },
+                { key: 'change', label: 'Change', className: 'nw', render: (r) => <>{eurFromCents(r.oldValue)} → <b>{eurFromCents(r.newValue)}</b></> },
                 { key: 'who', label: 'Who', render: (r) => <span className="t" title={r.reason ?? undefined}>{r.origin?.name ?? (r.source === 'external' ? 'outside Nexus' : r.source)}</span> },
                 {
-                  key: 'delivered', label: 'Delivered',
+                  key: 'delivered', label: 'Delivered', className: 'nw',
                   render: (r) => (r.delivery == null ? <>—</>
                     : isApplied(r.delivery.state) ? <>yes</>
                       : r.delivery.state === 'FAILED' ? <b title={r.delivery.lastError ?? 'Never accepted by Amazon — the bid did not move.'}>no</b>
