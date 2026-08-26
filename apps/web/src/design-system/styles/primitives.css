@@ -1100,3 +1100,25 @@ button.nds-token > .t,
 .nds-btn.on.danger svg {
   color: currentColor;
 }
+
+/* A Pill that is a <button> — a status that is also the control that changes it. Resets the
+   button chrome and inherits type, so a clickable pill is visually identical to a static one;
+   only the cursor and the hover say it is interactive. */
+.nds-pill.btn {
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  border-width: 0;
+  cursor: pointer;
+}
+.nds-pill.btn:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.nds-pill.btn:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+.nds-pill.btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
