@@ -213,7 +213,11 @@ export async function hourlyPulse(opts: {
 
   const markets: HourlyMarket[] = marketRows.map((r) => {
     const last = r.last_day ? String(r.last_day) : null
-    const lag = last ? Math.round((Date.now() - Date.parse(`${last}T00:00:00Z`)) / 86_400_000) : null
+    // 🔴 Days between two DATES, not elapsed hours rounded. `Date.now()` at 15:59 UTC is 0.66 days
+    // past today's midnight, which `Math.round` turned into 1 — so the live stream, current to
+    // this hour, reported itself as a day behind. Compare the calendar days.
+    const todayMs = Date.parse(`${today}T00:00:00Z`)
+    const lag = last ? Math.round((todayMs - Date.parse(`${last}T00:00:00Z`)) / 86_400_000) : null
     return {
       marketplace: String(r.marketplace),
       lastDay: last,
