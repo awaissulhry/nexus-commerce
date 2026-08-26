@@ -204,8 +204,8 @@ export function ProbePanel() {
                       columns={probeColumns(openRows)}
                       expanded={openRows}
                       renderExpanded={(r) => <ProbeDetail probe={r} />}
+                      rowClassName={() => 'hl-pb-r'}
                       rowProps={(r) => ({
-                        className: 'hl-pb-r',
                         'aria-expanded': openRows.has(r.id),
                         onClick: () => setOpenRows((prev) => {
                           const next = new Set(prev)
