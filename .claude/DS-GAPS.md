@@ -519,3 +519,42 @@ though the control is not.
 Low priority: one call site, and a native colour picker is genuinely hard to skin. Worth a
 `ColorSwatch` primitive only if a second surface ever needs one — but worth *naming* in the
 primitives README either way, so the next person does not re-derive the inline style.
+
+## 🔴 `Pill onClick` renders at the AMBIENT font size — its own `font-size` is defeated
+*Session 5 · ROUND 2 · 2026-08-26 · found on prod, after shipping the first call site*
+
+`Pill` becomes a `<button>` when given `onClick`. `.nds-pill.btn` then applies, to strip the UA's
+button chrome:
+
+```css
+.nds-pill.btn { font: inherit; font-size: inherit; font-weight: inherit; border-width: 0; cursor: pointer; }
+```
+
+That is **(0,2,0)** and it beats `.nds-pill` **(0,1,0)**, which is where the pill's own
+`font-size: 11px; font-weight: 600` live. So a clickable pill does not inherit "the button's type",
+it inherits **the page's** — whatever font-size the surrounding element happens to have.
+
+Measured on prod, the eBay rule-card mode pill against the static `Pill` immediately beside it in
+the same row:
+
+| | clickable `Pill` | static `Pill` |
+|---|---|---|
+| font | **16px / 400** | 11px / 600 |
+| box | **93 × 30** | 148 × 23 |
+
+The component's own comment says "a clickable pill is visually identical to a static one; only the
+cursor and the hover say it is interactive." It is not: 7px taller and half again the type size.
+
+**Why nobody hit it:** parsing every `<Pill …>` tag across `apps/web/src/app` (multi-line aware —
+a one-line grep misses it) finds **61 `Pill` sites and exactly ONE with `onClick`**, the one this
+session converted. The prop was added to `Pill` FOR that call site, documented in its own
+docstring, and never exercised until now.
+
+**The fix is one line in the DS** — drop `font-size`/`font-weight` from `.nds-pill.btn` and keep
+only `font-family`, or re-state the pill's own two values after them. `font: inherit` alone is the
+culprit; the shorthand resets size and weight and the two longhands after it re-assert `inherit`.
+Not done here: `design-system/**` is off-limits to this session.
+
+Worked around locally at `ebay.css` — `.eb-rule-head .nds-pill.btn { font-size: 11px; font-weight: 600 }`
+(0,3,0). **That workaround should be deleted when the DS is fixed.** Any future `Pill onClick`
+call site will need the same until then.

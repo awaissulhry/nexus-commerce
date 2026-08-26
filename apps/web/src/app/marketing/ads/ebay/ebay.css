@@ -367,3 +367,14 @@
 .eb-root .dash-kpi-v { font-weight: 700; }
 .eb-root .dash-card-h { font-weight: 700; }
 .eb-root .dd { font-weight: 700; }
+
+/* The rule-card mode pill is the DS `Pill` with `onClick`, which makes it a <button>. Its
+   `.nds-pill.btn` rules (0,2,0) set `font: inherit; font-size: inherit; font-weight: inherit` to
+   strip the UA's button chrome — and that also defeats `.nds-pill`'s OWN `font-size: 11px;
+   font-weight: 600` (0,1,0). Measured on prod after shipping the conversion: this pill rendered
+   at 16px/400 and 93x30 beside the static `Pill` next to it at 11px/600 and 23px. The component
+   docstring says a clickable pill "is visually identical to a static one"; it is not, and this is
+   its first and only call site, which is why nobody had hit it. Restated at 0,3,0 until the DS
+   fixes it — filed in DS-GAPS. `.eb-rule-head` is `flex-wrap: wrap`, so the oversized pill was
+   also a wrap risk on a narrow viewport. */
+.eb-rule-head .nds-pill.btn { font-size: 11px; font-weight: 600; }
