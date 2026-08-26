@@ -213,7 +213,8 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
             <Field className="cd-field" label="Campaign Name" required>
               <Input value={form.name} onChange={(e) => set('name', e.target.value)} fieldClassName="cd-field-full" />
             </Field>
-            <Field className="cd-field" label="Portfolio" htmlFor="cd-portfolio">
+            {/* no `htmlFor` — `Listbox` takes no `id`; the trigger is named by its `ariaLabel`. */}
+            <Field className="cd-field" label="Portfolio">
               <PortfolioSelect value={form.portfolioId} onChange={(v) => set('portfolioId', v)} marketplace={campaign?.marketplace ?? undefined} />
             </Field>
             <Field className="cd-field s" label="Daily Budget" required>
@@ -379,7 +380,6 @@ function PortfolioSelect({ value, onChange, marketplace }: { value: string; onCh
   // one — so "No Portfolio" is a real option here rather than a button above the list.
   return (
     <Listbox
-      className="cd-pfsel"
       width="100%"
       ariaLabel="Portfolio"
       value={value}
@@ -400,8 +400,7 @@ function BidRuleSelect() {
       {/* No custom bid-rule data is wired yet, so the list is deliberately empty: the DS
           renders its own "No options" state and the in-popover search. */}
       <Listbox
-        className="cd-pfsel"
-        width="100%"
+          width="100%"
         ariaLabel="Bid Rule"
         value=""
         onChange={() => {}}

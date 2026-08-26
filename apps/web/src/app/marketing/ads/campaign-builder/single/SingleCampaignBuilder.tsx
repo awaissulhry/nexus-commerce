@@ -280,7 +280,7 @@ export function SingleCampaignBuilder() {
                     <Field className="spw-field" label="Ad Group Name" required info={<InfoTip tip="An ad group holds the products you advertise together and the targeting that applies to them." />}>
                       <Input value={adGroup} onChange={(e) => setAdGroup(e.target.value)} placeholder="Enter Group name" fieldClassName="spw-field-full" />
                     </Field>
-                    <Field className="spw-field" label="Portfolio (Optional)" htmlFor="scb-portfolio" info={<InfoTip tip="Group campaigns together to organize your advertising and manage budgets across them." />}>
+                    <Field className="spw-field" label="Portfolio (Optional)" info={<InfoTip tip="Group campaigns together to organize your advertising and manage budgets across them." />}>
                       <PortfolioPicker value={portfolioId} onChange={setPortfolioId} />
                     </Field>
                   </div>
