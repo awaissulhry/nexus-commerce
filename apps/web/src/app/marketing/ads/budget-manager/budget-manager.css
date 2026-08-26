@@ -68,7 +68,7 @@
 /* an inline value-edit trigger: DS `Button variant="quiet" size="xs"` owns the
    borderless-until-hover box; these are the cell type and the two muted marks. */
 .bm-nextbtn { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
-.bm-nextbtn svg { color: var(--nds-grey-500); }
+.bm-nextbtn svg { color: var(--nds-text-3); }
 .bm-nextbtn .ph { color: var(--nds-text-muted); font-weight: 500; }
 .bm-nextedit { width: 116px; min-width: 0; }
 
@@ -132,7 +132,7 @@
    type scale and pushing the chevron to the far edge, which `block` (flex-start) does not do. */
 .bm-faq-q { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); padding: 12px 2px; }
 .bm-faq-q .chev { margin-left: auto; }
-.bm-faq-q svg { color: var(--nds-grey-500); flex-shrink: 0; transition: transform 0.15s; }
+.bm-faq-q svg { color: var(--nds-grey-600); flex-shrink: 0; transition: transform 0.15s; }
 .bm-faq-item.open .bm-faq-q svg { transform: rotate(180deg); }
 .bm-faq-a { margin: 0 2px 14px; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.55; }
 

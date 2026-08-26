@@ -63,7 +63,11 @@
 .h10-apm .apm-thead .apm-sortbtn { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); text-transform: uppercase; letter-spacing: 0.03em; padding: 0; }
 /* the sort caret carries the column's state, so it is meaningful non-text: 3:1 floor.
    grey-300 is ~2:1; --nds-text-3 is the icon tier at 3.10:1. */
-.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-grey-500); }
+/* 🔴 grey-600, and neither of the obvious answers. This caret sits on `.apm-thead`'s
+   grey-50 ground INSIDE a DS Modal, which portals out of the shell pin: grey-500 is
+   2.94 there and text-3 flips to #8a94a6 (2.90). Both under the 3:1 an icon answers to.
+   grey-600 is 5.6 on that ground and cannot flip. Measured 2026-08-26. */
+.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-grey-600); }
 .h10-apm .apm-thead .apm-sortbtn.asc svg, .h10-apm .apm-thead .apm-sortbtn.desc svg { color: var(--nds-primary); }
 
 /* ── campaign / ad-group tab bar ───────────────────────────────────────────
