@@ -340,6 +340,41 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const avgUtilById = new Map(avgUtilRows.map((r) => [r.cid, r]))
 
       /**
+       * ADM-A2 — Top of Search impression share. The column read "unknown" on every row.
+       *
+       * 🔴 It is NOT an honest absence, and the obvious check says it is. `topOfSearchIS` exists on
+       * BOTH `AmazonAdsDailyPerformance` and `AmazonAdsPlacementReport`; the daily-performance copy
+       * is abandoned and stopped being written on 2026-08-19, so sampling that table over a recent
+       * window returns 0 of 302 and reads exactly like "Amazon reports nothing". The live source is
+       * the PLACEMENT report — 1,460 non-null rows, current to 2026-08-24, refreshed nightly by
+       * `tos-is-ingest` (213 rows updated 2026-08-26). Nothing read it into this payload.
+       *
+       * Only TOP rows ever carry the column, so `topOfSearchIS: { not: null }` is the whole filter —
+       * matching on a placement label would couple this to Amazon's wording for that bucket.
+       *
+       * `weightedIS` is IMPORTED, not reimplemented: an impression share is a ratio, so days are
+       * weighted by impressions and never averaged flat. A second copy of that rule is how two
+       * surfaces start quoting different shares for the same campaign.
+       *
+       * `days` rides beside the value for the same reason it does on avgBudgetUtil — the window the
+       * operator picked and the days Amazon actually reported are different numbers.
+       */
+      const { weightedIS } = await import('../services/advertising/placement-grid.service.js')
+      const tosRows = extIds.length
+        ? await prisma.amazonAdsPlacementReport.findMany({
+            where: { campaignId: { in: extIds }, date: dateFilter, topOfSearchIS: { not: null } },
+            select: { campaignId: true, impressions: true, topOfSearchIS: true },
+          })
+        : []
+      const tosByExt = new Map<string, Array<{ value: number; weight: number }>>()
+      for (const r of tosRows) {
+        if (r.topOfSearchIS == null) continue
+        const pts = tosByExt.get(r.campaignId) ?? []
+        pts.push({ value: Number(r.topOfSearchIS), weight: r.impressions ?? 0 })
+        tosByExt.set(r.campaignId, pts)
+      }
+
+      /**
        * ADM-P6 — Current Budget Utilization, and the two hour columns beside it.
        *
        * The Ad Manager rendered `not measured` on 220 of 220 rows for all three, and the sentence
@@ -382,6 +417,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         // from "never reported", and Prisma renders both as 0.
         const ca = cntL.get(it.id)
         const cb = it.externalCampaignId ? cntE.get(it.externalCampaignId) : undefined
+        const tosPts = (it.externalCampaignId ? tosByExt.get(it.externalCampaignId) : undefined) ?? []
         const reported = (f: keyof typeof _count) => n(ca?.[f]) + n(cb?.[f]) > 0
         const summed = (f: 'units7d' | 'salesSameSku7dCents' | 'ordersSameSku7d' | 'unitsSameSku7d') =>
           reported(f) ? n(a?.[f]) + n(b?.[f]) : null
@@ -411,6 +447,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // Average selling price = ad sales ÷ units sold. Null when units are unknown OR zero:
           // dividing by an unsold campaign invents a price no one paid.
           asp: saleUnits == null || saleUnits <= 0 ? null : salesCents / 100 / saleUnits,
+          // ADM-A2 — a FRACTION, impression-weighted across the days Amazon reported, and null
+          // when it reported none. `days` is what the cell prints beside it so a one-day share is
+          // never read as a week's.
+          topOfSearchIS: tosPts.length ? weightedIS(tosPts) : null,
+          topOfSearchISDays: tosPts.length,
           // ADM-P6 — TODAY's utilization, as a FRACTION, and null whenever the state is not a
           // reading: `silent` (Amazon has reported nothing since the 00:00 UTC reset),
           // `unsupported` (SD/SB — the SP endpoint does not cover them), `unknown` (never

@@ -115,23 +115,53 @@ const UNKNOWN = <span className="h10-rc-unknown" title="Amazon reported no value
 // for body text. That was tolerable for a one-glyph dash; twelve columns of WORDS in it would not
 // be, and these cells now carry words.
 const na = (label: string, why: string): ReactNode => <span className="h10-rc-unknown" title={why}>{label}</span>
-const NTB_WHY = 'New-to-brand is reported only for Sponsored Brands and Sponsored Display. Every campaign in this account is Sponsored Products, so Amazon reports nothing here — this is not a gap in our ingest.'
-const NTB_UNITS_WHY = 'New-to-brand UNITS are not ingested at all (only NTB orders and NTB sales are), and NTB itself is a Sponsored Brands / Display metric — this account runs only Sponsored Products.'
-const NOT_APPLICABLE: Record<string, ReactNode> = {
-  ntbOrders: na('n/a — SP', NTB_WHY),
-  ntbOrdersPct: na('n/a — SP', NTB_WHY),
-  ntbOrderRate: na('n/a — SP', NTB_WHY),
-  ntbSales: na('n/a — SP', NTB_WHY),
-  ntbSalesPct: na('n/a — SP', NTB_WHY),
-  ntbUnits: na('n/a — SP', NTB_UNITS_WHY),
-  ntbUnitsPct: na('n/a — SP', NTB_UNITS_WHY),
-  viewImpr: na('n/a — SP', 'Viewable impressions are reported for Sponsored Display and Sponsored Brands. This account runs only Sponsored Products, and the ingested field is 0 on every row.'),
-  kindleReads: na('n/a', 'A Kindle Direct Publishing metric. This account sells no books, so Amazon has nothing to report.'),
-  kindleRoyalties: na('n/a', 'A Kindle Direct Publishing metric. This account sells no books, so Amazon has nothing to report.'),
-  // ADM-P6 — `actBidHours` and `oobHours` used to live here, saying "not measured" because the
-  // out-of-budget term had no source. It has one now (Amazon's budget-usage reading, sampled every
-  // five minutes), so both are real cells below and neither is an N/A any more.
+
+/**
+ * 🔴 ADM-A2 — these reasons are PER ROW, not per column.
+ *
+ * This was a `Record<string, ReactNode>` keyed only by column, so every row got the same sentence.
+ * On a Sponsored Products campaign "n/a — SP" is exactly right: Amazon does not report new-to-brand
+ * or viewable impressions for SP, so the emptiness is Amazon's, not our ingest's. On a Sponsored
+ * Display or Sponsored Brands campaign the same words are simply false — the metric IS reported for
+ * that ad product — and the viewImpr tooltip went further and asserted "this account runs only
+ * Sponsored Products", which the account itself disproves: 15 SPONSORED_DISPLAY + 4
+ * SPONSORED_BRANDS campaigns, and 26 of the 6,045 campaign report rows are SPONSORED_DISPLAY
+ * (measured 2026-08-26).
+ *
+ * A cell that states the wrong reason is the same class of defect as a cell that states the wrong
+ * number — it sends the operator hunting for a gap in the pipeline that is not there, or worse,
+ * tells them a metric can never arrive when enabling one SD campaign would produce it.
+ *
+ * So: SP rows keep the accurate "n/a — SP"; SD/SB rows say the honest thing instead — the metric
+ * applies to them and Amazon has reported nothing (all three ingested fields — ntbOrders14d,
+ * ntbSalesCents14d, viewableImpressions — are 0 on all 6,045 rows, and every SD/SB campaign is
+ * currently paused).
+ */
+const SP_ONLY_METRICS = new Set(['ntbOrders', 'ntbOrdersPct', 'ntbOrderRate', 'ntbSales', 'ntbSalesPct', 'ntbUnits', 'ntbUnitsPct', 'viewImpr'])
+
+const NTB_WHY_SP = 'New-to-brand is reported only for Sponsored Brands and Sponsored Display. This is a Sponsored Products campaign, so Amazon reports nothing here — not a gap in our ingest.'
+const NTB_UNITS_WHY_SP = 'New-to-brand UNITS are not ingested at all (only NTB orders and NTB sales are), and NTB itself is a Sponsored Brands / Display metric — this is a Sponsored Products campaign.'
+const VIEW_WHY_SP = 'Viewable impressions are reported for Sponsored Display and Sponsored Brands. This is a Sponsored Products campaign, and the ingested field is 0 on every row.'
+/** SD/SB: the metric DOES apply here, so the honest answer is that nothing has been reported. */
+const NTB_WHY_SDSB = 'New-to-brand IS reported for this ad product, so this is not "not applicable" — Amazon has reported no value for this campaign in the selected window. Every Sponsored Display / Sponsored Brands campaign in this account is currently paused, and the ingested NTB fields are 0 on every row.'
+const VIEW_WHY_SDSB = 'Viewable impressions ARE reported for this ad product — Amazon has reported no value for this campaign in the selected window. The ingested field is 0 on every row.'
+
+const KINDLE_WHY = 'A Kindle Direct Publishing metric. This account sells no books, so Amazon has nothing to report.'
+
+function notApplicableFor(key: string, c: Camp): ReactNode | null {
+  if (key === 'kindleReads' || key === 'kindleRoyalties') return na('n/a', KINDLE_WHY)
+  if (!SP_ONLY_METRICS.has(key)) return null
+  // Absent adProduct is treated as SP: it is what 200 of 219 rows are, and the SD/SB wording
+  // asserts more than an unknown ad product supports.
+  const isSP = (c.adProduct ?? 'SPONSORED_PRODUCTS') === 'SPONSORED_PRODUCTS'
+  if (key === 'viewImpr') return isSP ? na('n/a — SP', VIEW_WHY_SP) : na('not reported', VIEW_WHY_SDSB)
+  if (!isSP) return na('not reported', NTB_WHY_SDSB)
+  const unitsCol = key === 'ntbUnits' || key === 'ntbUnitsPct'
+  return na('n/a — SP', unitsCol ? NTB_UNITS_WHY_SP : NTB_WHY_SP)
 }
+// ADM-P6 — `actBidHours` and `oobHours` used to live here, saying "not measured" because the
+// out-of-budget term had no source. It has one now (Amazon's budget-usage reading, sampled every
+// five minutes), so both are real cells below and neither is an N/A any more.
 /**
  * Spend with no attributed sales — a real outcome, and not a number ACoS can express. Muted but
  * NOT italic, following the rule this stylesheet already states for "no owner": italic marks an
@@ -352,7 +382,7 @@ const CLUSTER: PhysCol[] = [
   { key: 'bidAutomation', label: 'Bid Automation', metric: false },
 ]
 // 🔴 ADM-A1 — this Set is what routes a column to `settingsCell`; everything else renders through
-// `renderCol`, whose `default:` is `NOT_APPLICABLE[key] ?? '—'`. So a key with a case in
+// `renderCol`, whose `default:` is `notApplicableFor(key, c) ?? '—'`. So a key with a case in
 // settingsCell but NOT listed here is unreachable: the cell is dead code and the operator sees a
 // dash. Measured on prod 2026-08-26 — `actBidHours` and `oobHours` rendered '—' on 100 of 100 rows
 // while the payload carried actBidHours/oobHours/hoursObserved for 201 of 220 campaigns and
@@ -471,7 +501,7 @@ function renderCol(c: Camp, key: string): ReactNode {
      * ⛔ None of them is removed. Placeholder surfaces are a roadmap here, and which columns an
      * account keeps is the operator's call — this only stops them pretending.
      */
-    default: return NOT_APPLICABLE[key] ?? '—'
+    default: return notApplicableFor(key, c) ?? '—'
   }
 }
 
