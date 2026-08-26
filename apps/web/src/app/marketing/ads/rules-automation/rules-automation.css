@@ -407,7 +407,7 @@
 .h10-rb-setuphd { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
 .h10-rb-setuphd h2 { margin: 0; }
 .h10-rb-setuphd .maprow { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.h10-rb-setuphd .maprow .chev { color: var(--nds-grey-500); cursor: pointer; }
+.h10-rb-setuphd .maprow .chev { color: var(--nds-text-3); cursor: pointer; }
 .h10-rb-banner { display: flex; align-items: flex-start; gap: 10px; background: var(--nds-blue-100); border-radius: var(--nds-radius-lg); padding: 12px 14px; margin-bottom: 16px; font-size: 13px; color: var(--nds-grey-800); line-height: 1.45; }
 .h10-rb-banner svg { color: var(--nds-blue-600); flex-shrink: 0; margin-top: 1px; }
 
@@ -930,7 +930,7 @@
 .h10-cov-hd .bar span { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 3px; }
 .h10-cov.ok .h10-cov-hd .bar span { background: #0a7d48; }
 .h10-cov-hd .pct { font-weight: 700; color: var(--nds-grey-900); min-width: 34px; text-align: right; }
-.h10-cov-hd .chev { color: var(--nds-grey-500); transition: transform .12s; }
+.h10-cov-hd .chev { color: var(--nds-text-3); transition: transform .12s; }
 .h10-cov-hd .chev.on { transform: rotate(180deg); }
 .h10-cov-b { border-top: 1px solid var(--nds-grey-100); padding: 12px 16px 14px; }
 .h10-cov-note { font-size: 12px; color: var(--nds-text-2); line-height: 1.5; margin-bottom: 10px; }
@@ -4830,8 +4830,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* The log gained three columns (Who · Why · Landed), so it needs to breathe and to scroll inside
    itself rather than widening the drawer. */
-/* (was `.h10-bd3-writes th, td { vertical-align: top }` — the DS sets it on tbody td now) */
-.h10-bd3-writes th { vertical-align: top; }
+/* (was `.h10-bd3-writes th, td { vertical-align: top }` — the DS sets it on BOTH `tbody td` and
+   `thead th` now, so nothing is left to override.) */
 .h10-bd3-writes td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-bd3-writes td b.bad { color: #9a3412; font-weight: 800; }
 
