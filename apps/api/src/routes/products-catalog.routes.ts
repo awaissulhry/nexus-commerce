@@ -606,10 +606,17 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/tags/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as { name?: string; color?: string }
+      const body = request.body as { name?: string; color?: string | null }
+      // Only touch what was SENT. This read `color: body.color ?? null`, so renaming a tag
+      // without resending its colour silently stripped it — the caller asked to change one
+      // field and lost another. `undefined` now means "leave alone" and an explicit `null`
+      // still clears it, which is the distinction the old expression could not make.
       const tag = await prisma.tag.update({
         where: { id },
-        data: { name: body.name, color: body.color ?? null },
+        data: {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.color !== undefined ? { color: body.color } : {}),
+        },
       })
       return tag
     } catch (err: any) {
@@ -663,31 +670,54 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/products/bulk-tag', async (request, reply) => {
     try {
-      const body = request.body as { productIds?: string[]; tagIds?: string[]; mode?: 'add' | 'remove' }
+      const body = request.body as {
+        productIds?: string[]
+        tagIds?: string[]
+        mode?: 'add' | 'remove'
+        /**
+         * Apply to the VARIATIONS of any parent in `productIds` as well.
+         *
+         * A tag is a merchandising idea — "Clearance", "Summer 2026" — and a variation is the
+         * same product in another size. Tag a parent without this and filtering by that tag
+         * inside the family view returns nothing, which is exactly where someone would look.
+         * Opt-in rather than automatic, because some tags genuinely are variation-level
+         * ("damaged", "discontinued size") and the caller is the only one who knows which.
+         */
+        includeChildren?: boolean
+      }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
       const tagIds = Array.isArray(body.tagIds) ? body.tagIds : []
       const mode = body.mode === 'remove' ? 'remove' : 'add'
       if (productIds.length === 0 || tagIds.length === 0) {
         return reply.code(400).send({ error: 'productIds[] + tagIds[] required' })
       }
-      let touched = 0
-      for (const productId of productIds) {
-        for (const tagId of tagIds) {
-          if (mode === 'add') {
-            await prisma.productTag.upsert({
-              where: { productId_tagId: { productId, tagId } },
-              update: {},
-              create: { productId, tagId },
-            })
-          } else {
-            await prisma.productTag.deleteMany({
-              where: { productId, tagId },
-            })
-          }
-          touched++
-        }
+
+      let targetIds = productIds
+      if (body.includeChildren) {
+        const kids = await prisma.product.findMany({
+          where: { parentId: { in: productIds }, deletedAt: null },
+          select: { id: true },
+        })
+        targetIds = [...new Set([...productIds, ...kids.map((k) => k.id)])]
       }
-      return { ok: true, mode, touched }
+
+      // Set-at-a-time, not a nested loop. This ran one upsert per (product × tag): a 40-variation
+      // family against 3 tags was 123 sequential round trips, and with `includeChildren` that is
+      // the normal case rather than the extreme one.
+      let touched = 0
+      if (mode === 'add') {
+        const rows = targetIds.flatMap((productId) => tagIds.map((tagId) => ({ productId, tagId })))
+        const res = await prisma.productTag.createMany({ data: rows, skipDuplicates: true })
+        touched = res.count
+      } else {
+        const res = await prisma.productTag.deleteMany({
+          where: { productId: { in: targetIds }, tagId: { in: tagIds } },
+        })
+        touched = res.count
+      }
+      // `products` is what the caller asked for expanded to what was actually written, so a
+      // client can say "tagged 41 products" instead of guessing.
+      return { ok: true, mode, touched, products: targetIds.length }
     } catch (err: any) {
       fastify.log.error({ err }, '[products/bulk-tag] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
