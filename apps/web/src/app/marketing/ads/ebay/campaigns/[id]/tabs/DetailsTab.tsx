@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Input, Pill } from '@/design-system/primitives'
 import { money } from '../../../../campaigns/_grid/format'
+import '../../../../campaigns/campaigns-ds.css'
 import { EbDateField } from '../../../_lib/EbDateField'
 import { postEbayAds, type CampaignDetailPayload } from '../../../_lib'
 import type { Strategy } from '../tabs'
@@ -101,9 +102,9 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
   return (
     <div className="h10-cd-details">
       <div className="h10-cd-cols">
-        <nav className="h10-cd-subnav" aria-label="Settings sections">
+        <nav className="cd-subnav" aria-label="Settings sections">
           {SECTIONS.map((s) => (
-            <button key={s.id} type="button" className={active === s.id ? 'on' : ''} onClick={() => refs.current[s.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{s.label}</button>
+            <Button key={s.id} variant={active === s.id ? 'tonal' : 'quiet'} block onClick={() => refs.current[s.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{s.label}</Button>
           ))}
         </nav>
         <div className="h10-cd-form">

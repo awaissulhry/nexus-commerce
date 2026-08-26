@@ -385,3 +385,17 @@ tr:hover .h10-editpen` has no `.nds-grid` counterpart, so an in-cell edit afford
 second copy with a `tr:hover` selector of its own. Either the reveal belongs on both grids, or the
 pencil belongs in the DS as a primitive (`EditAffordance`?) that owns its own colour and hover.
 - `DataGrid.renderExpanded` renders ONE full-width `<tr><td colSpan={all}>`, so it cannot express column-ALIGNED child rows — a campaign's spend under the same Spend header as its product's, which is the whole point of expanding in `ProductsTable` and `CampaignsTable`. Worked around by flattening parent+children into one `rows` array with a `kind` union and `sort={null}`; that works, but it means the grid cannot sort. A `subRows`/`getSubRows` that renders children as real rows would serve both. Also: the prop's docblock cites "as `CampaignsTable` already does" — `CampaignsTable` does NOT use it, that precedent does not exist — apps/web/src/design-system/components/DataGrid.tsx:70
+
+## `.h10-cd-subnav` in `ads.css` is now dead — 4 rules, 1 raw hex
+*Session 5 · ROUND 2 · 2026-08-26 · left for whoever owns `ads.css`*
+
+`ads.css:661–664` styles the campaign-detail settings rail. Session 1 moved the Amazon side to
+`.cd-subnav` + `Button variant="quiet"/"tonal" block` (see `campaigns-ds.css:41–48`); this session
+moved the eBay side the same way, so **`.h10-cd-subnav` now has zero call sites in `apps/web/src`**
+— verified by grep across `*.tsx`/`*.ts`/`*.css`, source only.
+
+Deleting the four rules also retires `#1b2230` on line 663, one of the raw hexes the ratchet counts.
+Not done here: `ads.css` is outside this session's scope and is the most contended file in the
+console, so removal belongs to a session that owns it. The explanatory comment at
+`campaigns-ds.css:44` describes the conflict in the present tense; once the rules go it is history,
+and could say so.
