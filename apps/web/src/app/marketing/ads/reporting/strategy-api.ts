@@ -39,6 +39,8 @@ export interface BrandBand {
 export interface BrandStage {
   id: 'awareness' | 'consideration' | 'purchase'
   label: string
+  /** Amazon's own name for this stage's index — "Purchase" carries `salesIndex`. */
+  indexLabel: string
   index: number | null
   metrics: BrandBenchmark[]
 }
@@ -101,7 +103,10 @@ export interface BrandStrategy {
 
 export interface ShareStage {
   id: 'impressions' | 'clicks' | 'cartAdds' | 'purchases'
+  /** Plural noun, for prose. */
   label: string
+  /** The stage as a share — declared server-side so the card and the chart legend agree. */
+  shareLabel: string
   ours: number
   market: number
   share: number | null

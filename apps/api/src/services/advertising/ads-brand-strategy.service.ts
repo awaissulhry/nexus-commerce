@@ -111,6 +111,14 @@ export interface BrandStageMetric extends BrandBenchmark {}
 export interface BrandStage {
   id: 'awareness' | 'consideration' | 'purchase'
   label: string
+  /**
+   * Amazon's OWN name for the index this stage carries.
+   *
+   * The purchase stage's index is `salesIndex`, so deriving the caption from the stage label
+   * produced "Amazon's purchase index" under a stat card reading "Sales index" — two names for
+   * one number, on the same screen.
+   */
+  indexLabel: string
   /** Amazon's composite score for the stage, 0–1. NOT a percentile. */
   index: number | null
   metrics: BrandStageMetric[]
@@ -240,10 +248,11 @@ function buildBenchmark(row: Row, trio: BenchmarkTrio, metrics: Record<string, u
 }
 
 /** The three stages, and which benchmarked figures Amazon reports inside each. */
-const STAGE_MAP: Array<{ id: BrandStage['id']; label: string; index: 'awarenessIndex' | 'considerationIndex' | 'salesIndex'; metrics: string[] }> = [
-  { id: 'awareness', label: 'Awareness', index: 'awarenessIndex', metrics: ['viewedDetailPageOnly', 'brandedSearchesOnly'] },
-  { id: 'consideration', label: 'Consideration', index: 'considerationIndex', metrics: ['addToCarts', 'brandedSearchesAndDetailPageViews'] },
-  { id: 'purchase', label: 'Purchase', index: 'salesIndex', metrics: ['brandCustomers', 'highValueCustomers'] },
+const STAGE_MAP: Array<{ id: BrandStage['id']; label: string; indexLabel: string; index: 'awarenessIndex' | 'considerationIndex' | 'salesIndex'; metrics: string[] }> = [
+  { id: 'awareness', label: 'Awareness', indexLabel: 'awareness index', index: 'awarenessIndex', metrics: ['viewedDetailPageOnly', 'brandedSearchesOnly'] },
+  { id: 'consideration', label: 'Consideration', indexLabel: 'consideration index', index: 'considerationIndex', metrics: ['addToCarts', 'brandedSearchesAndDetailPageViews'] },
+  // Amazon calls this one `salesIndex`, not "purchase index" — the stage is Purchase, the index is Sales.
+  { id: 'purchase', label: 'Purchase', indexLabel: 'sales index', index: 'salesIndex', metrics: ['brandCustomers', 'highValueCustomers'] },
 ]
 
 function buildBands(metrics: Record<string, unknown> | null): BrandBand[] {
@@ -385,6 +394,7 @@ export async function brandStrategy(opts: {
     ? STAGE_MAP.map((s) => ({
       id: s.id,
       label: s.label,
+      indexLabel: s.indexLabel,
       index: colNum(latest[s.index]),
       metrics: s.metrics.map((id) => byId.get(id)).filter((b): b is BrandBenchmark => !!b),
     }))

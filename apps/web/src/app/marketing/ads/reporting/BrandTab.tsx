@@ -46,6 +46,22 @@ function offsetFor(b: BrandBenchmark): number | null {
   return (b.ratio >= 1 ? 1 : -1) * (b.distance / FULL_SCALE)
 }
 
+/**
+ * Why a row has no bar — and it is never one reason.
+ *
+ * The first cut of this said "Amazon sent no benchmark" whenever the offset was null, which was
+ * wrong for the commonest case on this account: return on engagement for high-value customers
+ * reads 0 for us against a category median of 0.29. Amazon sent the benchmark; OUR value is zero,
+ * and the log of zero has no scale. Four different absences, four different sentences.
+ */
+function noteFor(b: BrandBenchmark): string {
+  if (!b.discriminates) return 'Amazon returns the same figure for us, the median and the top performers'
+  if (b.value == null) return 'Amazon did not report this measure for this week'
+  if (b.median == null) return 'Amazon sent no category benchmark for this measure'
+  if (b.median === 0) return 'The category median is zero, so a ratio to it has no value'
+  return 'Ours is zero, so the distance from the median has no scale'
+}
+
 function verdictFor(b: BrandBenchmark) {
   return b.discriminates ? b.verdict : ('cannot-discriminate' as const)
 }
@@ -189,7 +205,7 @@ function OneMarket({
                 <span className="i">{s.index == null ? '—' : s.index.toFixed(2)}</span>
               </div>
               <div className="bar"><span style={{ width: `${Math.max(0, Math.min(1, s.index ?? 0)) * 100}%` }} /></div>
-              <div className="cap">Amazon&rsquo;s {s.label.toLowerCase()} index · 0 to 1</div>
+              <div className="cap">Amazon&rsquo;s {s.indexLabel} · 0 to 1</div>
               <div className="rule" />
               {s.metrics.map((m) => (
                 <div key={m.id} className="rpx-stage-metric">
@@ -237,9 +253,7 @@ function OneMarket({
             offset={b.discriminates ? offsetFor(b) : null}
             verdict={verdictFor(b)}
             distanceLabel={b.discriminates ? fmtDistance(b) : 'cannot discriminate'}
-            note={b.discriminates
-              ? 'Amazon sent no benchmark for this measure'
-              : 'Amazon returns the same figure for us, the median and the top performers'}
+            note={noteFor(b)}
             ticks={TICKS}
           />
         ))}

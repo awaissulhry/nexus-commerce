@@ -39,7 +39,17 @@ export function MarketShareTab({ market }: { market: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
-  const [plotted, setPlotted] = useState<string[]>(['impressionShare', 'clickShare'])
+  /**
+   * ONE series by default, deliberately.
+   *
+   * `MetricChart` gives every plotted metric its OWN y-axis with domain [0, 'auto'] — an
+   * operator decision (R4) that is right for spend beside ACOS and wrong here: all four of these
+   * are the same unit, so two of them drawn to their own scales both fill the plot and a reader
+   * sees click share and impression share as equal when one is twice the other. The funnel above
+   * is where the stages are compared, on one scale and with their denominators. Ticking a second
+   * series is still allowed, and the chart's own caption says each is drawn to its own scale.
+   */
+  const [plotted, setPlotted] = useState<string[]>(['impressionShare'])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -152,11 +162,11 @@ export function MarketShareTab({ market }: { market: string }) {
             <div className="rpx-share-funnel">
               {data.funnel.map((s) => (
                 <div key={s.id} className={`rpx-share-stage${s.share != null && s.share === 0 ? ' is-zero' : ''}`}>
-                  <div className="lbl">{s.label.toLowerCase()} share</div>
+                  <div className="lbl">{s.shareLabel}</div>
                   <div className="val">{fmtShare(s.share)}</div>
                   <div className="sub">
                     {s.share == null
-                      ? `the market recorded no ${s.label.toLowerCase()} — no denominator`
+                      ? `the market recorded no ${s.label} — no denominator`
                       : `${fmtCount(s.ours)} of ${fmtCount(s.market)}`}
                   </div>
                   <div className="bar">
@@ -185,6 +195,11 @@ export function MarketShareTab({ market }: { market: string }) {
               emptyLabel="No weeks held for this market."
               storageKey="rpx-share-chart"
             />
+            <p className="rpx-foot">
+              Each series ticked here is drawn to its own scale, so two of them cannot be compared
+              by height — the funnel above compares the four stages on one scale, with the
+              market&rsquo;s count beside ours.
+            </p>
             <div className="rpx-coverage">
               <span className="k">Rows delivered</span>
               {data.series.map((w) => (

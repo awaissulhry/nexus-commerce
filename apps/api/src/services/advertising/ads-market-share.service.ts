@@ -39,7 +39,16 @@ const share = (ours: number, market: number): number | null => (market > 0 ? our
 
 export interface ShareStage {
   id: 'impressions' | 'clicks' | 'cartAdds' | 'purchases'
+  /** Plural noun, for prose: "the market recorded no cart adds". */
   label: string
+  /**
+   * The stage's name as a share, e.g. "Cart-add share".
+   *
+   * Declared rather than derived so the funnel card and the chart legend cannot drift: building
+   * it client-side from `label` produced "Impressions share" and "Cart adds share" beside a
+   * legend that already read "Impression share" and "Cart-add share".
+   */
+  shareLabel: string
   ours: number
   market: number
   share: number | null
@@ -155,10 +164,10 @@ export async function marketShare(opts: {
   const newest = ordered[ordered.length - 1] ?? null
   const funnel: ShareStage[] = newest
     ? [
-      { id: 'impressions', label: 'Impressions', ours: n(newest.imp_b), market: n(newest.imp_t), share: share(n(newest.imp_b), n(newest.imp_t)) },
-      { id: 'clicks', label: 'Clicks', ours: n(newest.clk_b), market: n(newest.clk_t), share: share(n(newest.clk_b), n(newest.clk_t)) },
-      { id: 'cartAdds', label: 'Cart adds', ours: n(newest.cart_b), market: n(newest.cart_t), share: share(n(newest.cart_b), n(newest.cart_t)) },
-      { id: 'purchases', label: 'Purchases', ours: n(newest.buy_b), market: n(newest.buy_t), share: share(n(newest.buy_b), n(newest.buy_t)) },
+      { id: 'impressions', label: 'impressions', shareLabel: 'Impression share', ours: n(newest.imp_b), market: n(newest.imp_t), share: share(n(newest.imp_b), n(newest.imp_t)) },
+      { id: 'clicks', label: 'clicks', shareLabel: 'Click share', ours: n(newest.clk_b), market: n(newest.clk_t), share: share(n(newest.clk_b), n(newest.clk_t)) },
+      { id: 'cartAdds', label: 'cart adds', shareLabel: 'Cart-add share', ours: n(newest.cart_b), market: n(newest.cart_t), share: share(n(newest.cart_b), n(newest.cart_t)) },
+      { id: 'purchases', label: 'purchases', shareLabel: 'Purchase share', ours: n(newest.buy_b), market: n(newest.buy_t), share: share(n(newest.buy_b), n(newest.buy_t)) },
     ]
     : []
 
