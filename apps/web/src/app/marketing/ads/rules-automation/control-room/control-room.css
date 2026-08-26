@@ -513,7 +513,7 @@
   border: 1px solid var(--nds-grey-150); background: var(--nds-grey-25); color: var(--nds-grey-600);
   border-radius: 4px; padding: 1.5px 6px; white-space: nowrap;
 }
-.acr-dw-st.success { background: #e8f6ef; color: var(--nds-success-text); border-color: #bfe3d2; }
+.acr-dw-st.success { background: #e8f6ef; color: var(--nds-green-700); border-color: #bfe3d2; }
 .acr-dw-st.failed { background: #fdeceb; color: #a3342b; border-color: #f3cbc7; }
 .acr-dw-st.running { background: var(--nds-blue-50); color: #2a5399; border-color: #c8d8f5; }
 

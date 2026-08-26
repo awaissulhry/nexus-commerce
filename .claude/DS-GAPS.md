@@ -656,3 +656,37 @@ The remaining 15 map with no change at all.
 
 **When it is done:** add `styles/workspace-grid.css` to `RAMP_FILES` in `tools/token-guard.mjs` in the same commit, or it will drift straight back. And per Session 1: the check should flag ALIAS TARGETS too — a rule naming `--nds-blue-600` is invisible to a ban that only knows role names.
 - 🔴 ✅ RESOLVED — **the console was illegible for anyone whose OS is dark, and I made it worse.** `.h10-shell` grounds itself on `--nds-grey-50` (a RAMP step, which `.dark` never touches) and sets `color-scheme: light`, but `.dark` lands on `<html>` whenever the OS prefers dark — `system` is the default mode — and redefines the SEMANTIC tokens. So the text flipped and the ground did not. Measured on that ground under `.dark`: `--nds-text` **1.11**, `--nds-text-strong` **1.11**, `--nds-success-text` 1.42, `--nds-warning-text` 1.70, `--nds-text-2`/`-muted` 1.91, `--nds-text-link` 1.93, `--nds-danger-text` 1.97. **My own dark-palette work caused half of it** — `--nds-text-strong` and `--nds-text-muted` had no dark override until I added one. Fixed by pinning all **54** flipping tokens to their DS light values on `.h10-shell`, at EOF of `shared-shell.css`. Verified in a real `html.dark`: pinned 14.30 / 9.11 / 5.46 / 4.91 / 5.52, and an UNPINNED control on the same ground still reads **1.11**, which is what proves the pin is doing the work. 🔴 **Adding a `.dark` override to any DS token now means adding its pin there too** — noted in the block.
+
+## A token-name sweep has a blind spot by construction, and it is the aliased half
+*Session 1 · ROUND 2 · 2026-08-26 · a search-strategy finding, not a contrast one*
+
+`--nds-primary` **is** `var(--nds-blue-600)`. `--nds-text-2` **is** `var(--nds-grey-600)`.
+`--nds-text-3` **was** `var(--nds-grey-500)`. Where a role is defined as an alias of a ramp step,
+a call site can name either side and they render identically — so:
+
+- a rule naming the **ramp** is invisible to a fix on the **role** (`--nds-text-3` was raised and
+  reached 3 of my 7 icon rules; `--nds-primary`'s text uses moved to `--nds-text-link` and reached
+  7 while 53 of mine said `--nds-blue-600`);
+- a rule naming the **role** is invisible to a ground that pins the **ramp** — and vice versa.
+
+**Whichever way the token is defined, the search for it misses the other side.** That is not a
+contrast problem; it is a property of aliased design tokens, and it applies to any sweep keyed on
+token names — deprecations, renames, theme audits, ratchets.
+
+Three consequences worth acting on:
+
+1. **A ratchet on this must resolve aliases**, not match names. A check banning `--nds-grey-*`
+   never sees `--nds-primary`, and a check banning `--nds-primary` never sees `--nds-blue-600`.
+2. **Decoupling a role from its ramp is a correctness change, not tidying.** Making `--nds-text-3`
+   a literal was what let it move without dragging `--nds-grey-500`'s other consumers.
+3. **A pin scoped to a subtree only protects that subtree.** Eight DS components portal to
+   `document.body` — Modal, Menu, Drawer, Listbox, Combobox, MultiSelect, HoverCard, Toast — which
+   is outside `.h10-shell`. This half styles ~100 rules on portalled surfaces, and for those a
+   ramp step is the only theme-safe choice: correct on both sides of a portal, where a pinned
+   semantic token is correct on one.
+
+And the method rule underneath all of it, from nexus-commerce-56, who caught their own probe with
+it: **containment is a DOM fact, so assert it.** `.h10-shell` sits INSIDE `main`, not around it —
+there are two `<main>` elements and `document.querySelector('main')` returns the outer one. A
+probe appended to `main` measures the UNPINNED zone while appearing to measure the page. Verify
+the rendered value on a real element, not the token name on a synthetic one.

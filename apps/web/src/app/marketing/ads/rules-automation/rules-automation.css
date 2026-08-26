@@ -19,11 +19,23 @@
    `--nds-text-2` is literally `var(--nds-grey-600)` at `:root`, and `--nds-text-link` is the same
    #1a60c4 as `--nds-blue-700`. So light rendering is byte-identical and dark stops collapsing.
 
-   The RIGHT fix is one rule on `.h10-shell` in ads.css pinning these tokens for the whole
-   console, which would also cover the ~240 semantic COLOUR tokens still here
-   (--nds-warning-text → #f0b46a, --nds-success-text → #6ee7a8, --nds-danger-text → #ef9c93, all
-   1.58-1.91:1 on light paper). That file is outside this session's scope; raised rather than
-   taken. These pins are forward-compatible with it — a ramp step is correct either way.
+   `.h10-shell` now pins all 57 of these tokens (`shared-shell.css`, 8fa177e6c), so inside the
+   shell the semantic names would be safe again. These stay ramp steps anyway, and the reason is
+   PORTALS: eight DS components render at `document.body` — Modal, Menu, Drawer, Listbox,
+   Combobox, MultiSelect, HoverCard, Toast — which is OUTSIDE `.h10-shell`, so the pin does not
+   reach them. This half styles ~100 rules on portalled surfaces (`.h10-kt-dr*`, `.acr-dw*`,
+   `.h10-ntm*`, `.h10-rowmenu*`). A ramp step is correct on both sides of a portal; a pinned
+   semantic token is correct only on one.
+
+   The cost, stated plainly: the grey ramp has no step at the muted tier — 500 is #8a93a1, 600 is
+   #5b6573, nothing near #626c7b — so `--nds-text-muted` → `--nds-grey-600` buys 5.32 → 5.91 and
+   spends a distinction. The quietest text stops being quieter than the body text. Worth it here
+   only because the alternative flips to 2.06:1 the moment the surface leaves the shell.
+
+   Three roles on portalled surfaces had no ramp at their own value, and took a REDUCTION to be
+   theme-safe: --nds-success-text 7.63 → --nds-green-700 5.02, --nds-warning-text 8.87 →
+   --nds-amber-700 5.18. Both still clear AA, and on those surfaces they were 1.58 and 1.82 under
+   `.dark`. --nds-pill-neutral-fg → --nds-grey-600 is byte-identical.
 
    Found by nexus-commerce-56, who corrected their own earlier advice; verified here independently
    against tokens.css, the theme hook, and the running page before acting. */
@@ -331,7 +343,7 @@
 .h10-ntm { width: 440px; max-width: calc(100vw - 40px); background: var(--nds-white); border-radius: var(--nds-radius-3xl); box-shadow: 0 24px 60px rgba(20,28,38,.3); overflow: visible; }
 .h10-ntm-h { padding: 18px 22px 4px; }
 .h10-ntm-h b { font-size: 16px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-ntm-sub { padding: 0 22px 12px; font-size: 12.5px; color: var(--nds-pill-neutral-fg); line-height: 1.45; }
+.h10-ntm-sub { padding: 0 22px 12px; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.45; }
 .h10-ntm-b { padding: 12px 22px 14px; border-top: 1px solid var(--nds-grey-100); }
 .h10-ntm-b:empty { display: none; }
 .h10-ntm-tog { display: inline-flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--nds-grey-800); font-weight: 600; }
@@ -3293,8 +3305,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-drtable th.n, .h10-kt-drtable td.n { text-align: right; font-variant-numeric: tabular-nums; }
 
 .h10-kt-drtable td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-grey-600); }
-.h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-success-text); background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
-.h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-warning-text); background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
+.h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-green-700); background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
+.h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-amber-700); background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
 
 /* the campaign list — collapsed, because `giacca moto` has 53 campaigns and 73 ad groups */
 .h10-kt-drcamps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -3306,7 +3318,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-drcamps .nds-btn.row:hover { background: var(--nds-grey-25); }
 .h10-kt-drcamps .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .h10-kt-drcamps .st { flex-shrink: 0; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-grey-600); background: var(--nds-grey-75); padding: 1px 6px; border-radius: 5px; }
-.h10-kt-drcamps .st[data-s="ENABLED"] { color: var(--nds-success-text); background: #e7f5ed; }
+.h10-kt-drcamps .st[data-s="ENABLED"] { color: var(--nds-green-700); background: #e7f5ed; }
 .h10-kt-drcamps .ct, .h10-kt-drcamps .mt, .h10-kt-drcamps .bid { flex-shrink: 0; font-size: 10.5px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-kt-drcamps .bid { font-weight: 700; color: var(--nds-grey-900); }
 .h10-kt-drcamps .groups { list-style: none; margin: 0; padding: 0 10px 7px 30px; display: flex; flex-direction: column; gap: 4px; background: var(--nds-grey-25); }
