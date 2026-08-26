@@ -121,7 +121,12 @@
 .eb-kind-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
 .eb-decide-cell { display: inline-flex; align-items: center; gap: 6px; }
 .eb-why-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.eb-why-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-text-2); padding: 4px 8px; border-bottom: 1px solid var(--nds-grey-100); }
+/* `--nds-grey-600`, NOT `--nds-text-2`: this table only ever renders inside WhyModal, which
+   portals to document.body — measured on prod, that modal is `shell.contains() === false`.
+   Outside the `.h10-shell` pin `--nds-text-2` flips to #aab6c2 (2.06:1) on a dark OS, so the
+   theme-invariant ramp step is the correct one HERE and the wrong one everywhere else in
+   this file. The other 15 in ebay.css render inside the shell and keep the semantic token. */
+.eb-why-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-grey-600); padding: 4px 8px; border-bottom: 1px solid var(--nds-grey-100); }
 .eb-why-table td { padding: 6px 8px; border-bottom: 1px solid var(--nds-grey-50); color: var(--nds-grey-700); vertical-align: top; }
 
 /* ER3.2 — routed rule editor (deltas 3/4/5) */

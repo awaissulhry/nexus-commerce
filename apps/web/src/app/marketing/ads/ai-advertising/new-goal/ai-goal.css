@@ -81,7 +81,12 @@
 /* `--nds-text-strong`, not the #37495b the ads.css rule carried: the raw-hex ratchet holds new
    CSS at zero literals, and the token is a straight improvement here — 9.27:1 → 9.87:1. */
 .aig-adv-f .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-text-strong); }
-.aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-text-2); }
+/* `--nds-grey-600`, NOT `--nds-text-2` — same colour on white, but this renders inside the
+   Advanced Targeting DRAWER, which portals to document.body and so falls outside the
+   `.h10-shell` pin. Measured on prod: `.aig-adv-f` is `shell.contains() === false`, and out
+   there `--nds-text-2` flips to #aab6c2 (2.06:1) on a dark OS. The ramp step is
+   theme-invariant. Inside the shell the semantic token is right; here it is not. */
+.aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-grey-600); }
 .aig-adv-f .nds-textarea { min-height: 120px; }
 
 /* The keyword-source picker is the DS `Tabs` now (it was an underline bar hand-rolled at
