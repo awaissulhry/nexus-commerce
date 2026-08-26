@@ -35,6 +35,22 @@
    white, and every one passes: 9.52, 5.82, 10.66, 7.46, 14.45, 9.49. Measuring them against white
    is what makes a correct dark palette look broken.
 
+   ── Third pass: 18 more that pass on WHITE and fail on the page ──────────────────────────────
+   The first two passes measured against white, which is the wrong ground for anything sitting on
+   the console's own #f4f6f9. Eighteen declarations cleared 4.5 on white and did not clear it on
+   the shell — #667485 is 4.77 against one and 4.41 against the other, and the Control Room's tab
+   strip sits directly on the shell, so four of its five tabs were failing on the live page while
+   a white-ground audit called them fine.
+
+   Greys → --nds-text-2 (5.91 white / 5.46 shell), which clears both grounds and ends the
+   dependency. Three were not greys and keep their meaning: an amber icon and an amber em to
+   --nds-warning-text (8.87 / 8.19), a blue status to --nds-text-link (5.98 / 5.52).
+
+   Measured on the running page afterwards, not just in the file: Control Room went 5 failures to
+   1, Automations 1 to 1. Both remainders are outside these four files — the page-header
+   `.eyebrow` lives in ads.css, and `.acr-tab.on` is --nds-blue-600 itself, 4.42:1 on this ground,
+   which is a token decision and is filed (bce870746).
+
    Six of the raised rules sit on `:disabled` or `.off` selectors, which 1.4.3 exempts. Raised
    anyway: two of them carry comments saying "muted, still legible, keeps its tooltip", so
    legibility was always the intent — the token was just the wrong one. */
@@ -96,7 +112,7 @@
 
 /* Phase 6 — conflict warning (a selected campaign is already in another schedule) */
 .h10-rb-conflict { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; padding: 11px 13px; background: #fff8ec; border: 1px solid #f2d59a; border-radius: 9px; color: #7a5a12; }
-.h10-rb-conflict > svg { flex-shrink: 0; margin-top: 1px; color: #c9871f; }
+.h10-rb-conflict > svg { flex-shrink: 0; margin-top: 1px; color: var(--nds-warning-text); }
 .h10-rb-conflict .body { font-size: 13px; line-height: 1.5; min-width: 0; }
 .h10-rb-conflict .body b { color: #6a4d0f; }
 .h10-rb-conflict .body ul { margin: 6px 0 0; padding: 0 0 0 2px; list-style: none; display: flex; flex-direction: column; gap: 2px; }
@@ -104,7 +120,7 @@
 .h10-rb-conflict .body .cn { font-weight: 600; color: #59440d; }
 .h10-rb-conflict .body .gn { font-weight: 600; color: #b45309; }
 /* Phase 6 — delete/remove semantics note under Control */
-.h10-rb-hint-note { margin: 10px 0 0; font-size: 12.5px; color: #6b7583; line-height: 1.5; }
+.h10-rb-hint-note { margin: 10px 0 0; font-size: 12.5px; color: var(--nds-text-2); line-height: 1.5; }
 
 .h10-rb-card { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); background: var(--nds-white); }
 .h10-rb-card-h { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; }
@@ -333,7 +349,7 @@
 .cp-badge.prod { background: var(--nds-grey-100); border: 1px solid var(--nds-grey-200); color: #5b6b7b; }
 .cp-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-status { font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 20px; flex-shrink: 0; }
-.cp-status.on { background: #d8eafc; color: #2f72d6; }
+.cp-status.on { background: #d8eafc; color: var(--nds-text-link); }
 .cp-status.off { background: var(--nds-grey-100); color: var(--nds-pill-neutral-fg); }
 .cp-add { display: inline-flex; align-items: center; gap: 4px; background: var(--nds-white); border: 1px solid var(--nds-blue-600); color: var(--nds-blue-600); border-radius: var(--nds-radius-lg); padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
 .cp-add:hover { background: var(--nds-blue-50); }
@@ -3601,7 +3617,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   font-style: normal; font-size: 10.5px; color: #4a5566; max-width: 100%; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .h10-ngp-plist .reach { font-size: 11.5px; color: #4a5566; }
-.h10-ngp-plist .reach.nil { color: #6a7382; }
+.h10-ngp-plist .reach.nil { color: var(--nds-text-2); }
 .h10-ngp-plist .reach b, .h10-ngp-plist .cx b { font-weight: 800; color: #10151c; }
 .h10-ngp-plist .cx { font-size: 11.5px; color: #4a5566; }
 .h10-ngp-plist .cx.hot { color: #a8321f; }
@@ -5233,7 +5249,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-au-reach b { font-weight: 700; color: #16202b; }
 .h10-au-reach em { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); }
 .h10-au-reach.all b { color: #7a4d10; }
-.h10-au-reach.all em { color: #a06a12; }
+.h10-au-reach.all em { color: var(--nds-warning-text); }
 .h10-au-reach.dead { color: #9c2f10; font-weight: 700; }
 .h10-au-reach.dead em { color: #9c2f10; }
 
@@ -5279,7 +5295,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-look { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #16202b; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-rg-look.unsettled { color: var(--nds-warning-text); }
 .h10-rg-look.unsettled svg { flex-shrink: 0; }
-.h10-rg-look.none { font-weight: 500; font-style: italic; color: #6b7280; }
+.h10-rg-look.none { font-weight: 500; font-style: italic; color: var(--nds-text-2); }
 
 /* ── B4 (2026-08-20) — the rules grid's Activity cell ──────────────────────────────────────────
    Where the rule's output actually went. Five states, and the two that matter most are the two
@@ -5301,11 +5317,11 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-act.waiting { color: var(--nds-blue-600); }
 .h10-rg-act.waiting:hover, .h10-rg-act.wrote:hover { text-decoration: underline; }
 .h10-rg-act.wrote { color: #16202b; font-weight: 500; }
-.h10-rg-act.wrote em { font-style: normal; font-weight: 500; color: #6b7280; }
+.h10-rg-act.wrote em { font-style: normal; font-weight: 500; color: var(--nds-text-2); }
 .h10-rg-act.never { color: var(--nds-warning-text); }
 .h10-rg-act.never svg { flex-shrink: 0; }
-.h10-rg-act.quiet { font-weight: 500; color: #6b7280; }
-.h10-rg-act.unknown { font-weight: 500; font-style: italic; color: #6b7280; }
+.h10-rg-act.quiet { font-weight: 500; color: var(--nds-text-2); }
+.h10-rg-act.unknown { font-weight: 500; font-style: italic; color: var(--nds-text-2); }
 .h10-rg-act.pendingread { color: var(--nds-text-muted); }
 .h10-rg-act:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 2px; border-radius: 4px; }
 
@@ -5317,11 +5333,11 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    looking like two tables. Appended at the END of this file: source order decides against
    equal-specificity neighbours ([[reference_css_source_order_beats_specificity]]). */
 .h10-rg-thr { display: inline-flex; align-items: baseline; gap: 5px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #16202b; }
-.h10-rg-thr i { font-style: normal; font-weight: 500; font-size: 11.5px; color: #6b7280; }
+.h10-rg-thr i { font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--nds-text-2); }
 .h10-rg-thr.default { font-weight: 500; }
 /* The em dash is a STATEMENT, not a blank — it carries the only sentence saying this rule has no
    such ceiling, so it must be legible and hoverable rather than faded to the edge of visible. */
-.h10-rg-thr.none { font-weight: 500; color: #6b7280; }
+.h10-rg-thr.none { font-weight: 500; color: var(--nds-text-2); }
 
 /* ── HV-R P3a: the Ad Group View's roster line ───────────────────────────────────────────────────
    States the denominator the grid cannot: 122 of 289 ad groups can source a harvest and only 51 of
