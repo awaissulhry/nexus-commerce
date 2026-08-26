@@ -211,6 +211,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // show at a glance which campaigns are unbounded.
           minBidCents: true,
           maxBidCents: true,
+          // ADM-H P1, RESTORED 2026-08-26 — the BUDGET twin of the pair above, enforced by the
+          // same `ads-write-gate.ts` on every budget write. The Ad Manager's Min/Max Budget cell
+          // read `c.minMaxBudget`, a key this response has never sent, so it printed "None" on
+          // 220 of 220 rows while its pencil wrote React state that died on reload. The cell and
+          // the `PATCH /advertising/campaigns/:id/guardrails` writer both speak these cents; only
+          // the SELECT was missing, and it was lost with the rest of P1 in the 2026-08-22 rebase.
+          // Currently unset on 220 of 220 campaigns — so "None" stays the honest reading, but it
+          // is now a reading rather than a hard-coded absence, and the editor round-trips.
+          minBudgetCents: true,
+          maxBudgetCents: true,
         },
       })
       // P2 — derive inline placement multipliers (ToS/PDP/RoS) from
@@ -256,13 +266,38 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const n = (v: bigint | number | null | undefined) => Number(v ?? 0)
       const m2c = (v: bigint | number | null | undefined) => Math.round(Number(v ?? 0) / 10000)
       const dateFilter = { gte: range.since, lte: range.until }
-      const _sum = { impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true } as const
+      /**
+       * ADM-H P3, RESTORED 2026-08-26 — the seven columns that rendered "unknown" forever.
+       *
+       * `Sale Units`, `SameSKU Sales/Sale Units/Orders`, `Other Sales`, `Other Sales %` and `ASP`
+       * all have their cells built and deployed in CampaignsGrid; the SELECT that feeds them was
+       * lost to a rebase on 2026-08-22 and never re-landed, so the payload simply never carried
+       * the keys. Measured on prod 2026-08-26: 100 of 100 rendered rows read "unknown" while
+       * `units7d` had data on 302 of 302 report rows and the SameSKU trio on 183 of 302.
+       *
+       * 🔴 The SameSKU window must match the SALES window or the halo subtraction below is
+       * nonsense — `adSalesCents` reads `sales7dCents`, so these read the `*SameSku7d*` twins.
+       * Mixing 7d sales with 14d same-SKU would produce negative halo on real campaigns.
+       *
+       * `_count` rides beside `_sum`: these columns are nullable and Amazon leaves them unset for
+       * campaigns it has not attributed. Prisma sums null as 0, so without the count an
+       * unreported figure becomes a confident "0 units sold" — the exact class of lie
+       * `feedback_100_percent_honest_ui` forbids. Zero counted rows ⇒ null ⇒ the cell says
+       * "unknown".
+       */
+      const _sum = {
+        impressions: true, clicks: true, costMicros: true, sales7dCents: true, sales14dCents: true, orders7d: true,
+        units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true,
+      } as const
+      const _count = { units7d: true, salesSameSku7dCents: true, ordersSameSku7d: true, unitsSameSku7d: true } as const
       const [byLocal, byExt] = await Promise.all([
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum }),
-        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum }),
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum, _count }),
+        prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum, _count }),
       ])
       const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
       const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
+      const cntL = new Map(byLocal.map((r) => [r.localEntityId, r._count]))
+      const cntE = new Map(byExt.map((r) => [r.entityId, r._count]))
       /**
        * ADM-H P2, RESTORED — Average Budget Utilization.
        *
@@ -342,6 +377,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const uh = usageHours.get(it.id) ?? { observed: 0, outOfBudget: 0, actBid: 0, supported: false }
         const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
         const salesCents = adSalesCents(a) + adSalesCents(b)
+        // ADM-H P3 — a nullable metric Amazon never reported is `unknown`, not 0. The count of
+        // rows that actually carried a value decides; the sum alone cannot tell "reported zero"
+        // from "never reported", and Prisma renders both as 0.
+        const ca = cntL.get(it.id)
+        const cb = it.externalCampaignId ? cntE.get(it.externalCampaignId) : undefined
+        const reported = (f: keyof typeof _count) => n(ca?.[f]) + n(cb?.[f]) > 0
+        const summed = (f: 'units7d' | 'salesSameSku7dCents' | 'ordersSameSku7d' | 'unitsSameSku7d') =>
+          reported(f) ? n(a?.[f]) + n(b?.[f]) : null
+        const saleUnits = summed('units7d')
+        const sameSkuCents = summed('salesSameSku7dCents')
+        // Halo: Amazon publishes no other-SKU column at campaign grain, so it is (total − sameSKU).
+        // Null when the same-SKU half is unknown — a subtraction with an unknown operand is not 0,
+        // and clamped at 0 because attribution windows can make the parts exceed the whole.
+        const otherCents = sameSkuCents == null ? null : Math.max(0, salesCents - sameSkuCents)
         return {
           ...it,
           impressions: n(a?.impressions) + n(b?.impressions),
@@ -351,6 +400,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           acos: salesCents > 0 ? spendCents / salesCents : null,
           roas: spendCents > 0 ? salesCents / spendCents : null,
           ppcOrders: n(a?.orders7d) + n(b?.orders7d),
+          // ADM-H P3 — euros for the money columns, counts for the rest, a FRACTION for the
+          // percentage: the units each cell already formats for (eur / toLocaleString / sharePct).
+          saleUnits,
+          sameSkuSales: sameSkuCents == null ? null : sameSkuCents / 100,
+          sameSkuSaleUnits: summed('unitsSameSku7d'),
+          sameSkuOrders: summed('ordersSameSku7d'),
+          otherSales: otherCents == null ? null : otherCents / 100,
+          otherSalesPct: otherCents == null || salesCents <= 0 ? null : otherCents / salesCents,
+          // Average selling price = ad sales ÷ units sold. Null when units are unknown OR zero:
+          // dividing by an unsold campaign invents a price no one paid.
+          asp: saleUnits == null || saleUnits <= 0 ? null : salesCents / 100 / saleUnits,
           // ADM-P6 — TODAY's utilization, as a FRACTION, and null whenever the state is not a
           // reading: `silent` (Amazon has reported nothing since the 00:00 UTC reset),
           // `unsupported` (SD/SB — the SP endpoint does not cover them), `unknown` (never

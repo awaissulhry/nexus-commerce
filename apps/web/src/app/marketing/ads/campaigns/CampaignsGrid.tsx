@@ -351,7 +351,21 @@ const CLUSTER: PhysCol[] = [
   { key: 'minMaxBid', label: 'Min/Max Bid', metric: false },
   { key: 'bidAutomation', label: 'Bid Automation', metric: false },
 ]
-const SETTINGS_KEYS = new Set(['delivery', 'amazonDelivery', 'automation', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
+// 🔴 ADM-A1 — this Set is what routes a column to `settingsCell`; everything else renders through
+// `renderCol`, whose `default:` is `NOT_APPLICABLE[key] ?? '—'`. So a key with a case in
+// settingsCell but NOT listed here is unreachable: the cell is dead code and the operator sees a
+// dash. Measured on prod 2026-08-26 — `actBidHours` and `oobHours` rendered '—' on 100 of 100 rows
+// while the payload carried actBidHours/oobHours/hoursObserved for 201 of 220 campaigns and
+// `UsageHoursCell` sat deployed in the bundle, never called. ADM-P6 added the cases at the
+// settingsCell switch and never added the keys here.
+//
+// Their siblings `curBudgetUtil` and `avgBudgetUtil` are the precedent: listed here AND carrying a
+// `metricVal` case, so they render as settings cells and still sort numerically. These two are the
+// same shape and now match it.
+//
+// If you add a `case` to settingsCell, add the key here in the same edit — `ADM-A1` in
+// CampaignsGrid.vitest.test.ts fails the build if the two ever disagree again.
+const SETTINGS_KEYS = new Set(['delivery', 'amazonDelivery', 'automation', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil', 'actBidHours', 'oobHours'])
 function physCols(itemKey: string): PhysCol[] {
   if (itemKey === 'bidAlgorithm') return CLUSTER
   const it = COL_BY_KEY[itemKey]

@@ -193,7 +193,12 @@ export function BidAlgoMenu({ current, anchor, onPick, onClose }: {
  * prod stores 30 where the rest store 0.3. A value above 1 is therefore already a percentage.
  */
 export function TargetAcosCell({ fraction }: { fraction?: number | null }) {
-  if (fraction == null) return <span className="h10-rc-none" title="No target ACoS is set on this campaign. Rules that bid to a target read the account default instead.">—</span>
+  // ADM-A1 — says **None**, not a dash. The vocabulary this file already documents on
+  // MinMaxBudgetCell is: **None** = settable and unset, **—** = that HALF of a range has no value.
+  // A target ACoS is a single settable value, so a bare dash read as "no data here" when the truth
+  // is "nobody has set one" — and it was the only one of the four absence cells saying it
+  // differently. Measured on prod 2026-08-26: '—' on 100 of 100 rows, null on 220 of 220.
+  if (fraction == null) return <span className="h10-rc-none" title="No target ACoS is set on this campaign. Rules that bid to a target read the account default instead.">None</span>
   const pct = fraction > 1 ? fraction : fraction * 100
   return <span className="h10-rc-num">{pct.toFixed(2)}%</span>
 }
