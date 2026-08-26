@@ -210,6 +210,10 @@ export async function marketShare(opts: {
     'Amazon publishes Search Query Performance weekly and roughly ten days in arrears, and it covers only queries where our ASINs appeared — it is not the whole catalogue.',
     'Shares are our count divided by the market’s for the same query. A share of “—” means the market recorded nothing at that stage, so ours has no denominator; 0.00% means the market recorded activity and none of it was ours.',
     'Brand-level rows are excluded: the feed holds an ASIN-level and a brand-level row for the same query-week, and counting both would double every figure here.',
+    // Competitor brand names appear as QUERIES in the list below, which invites the obvious
+    // question. Amazon gives the market total and our slice of it and never names another
+    // seller, so per-competitor share is a data-purchase decision, not an engineering one.
+    'Amazon reports the market’s total and our slice of it. It never names another brand, so a competitor-by-competitor comparison is not derivable from this feed — what is shown is our own share on a query, including on a competitor’s brand name.',
   ]
   if (thinWeeks.length) {
     caveats.push(`${thinWeeks.length === 1 ? 'One week is' : `${thinWeeks.length} weeks are`} below ${thinBelow} query rows against a window median of ${medianRows} and cannot be compared with the rest: ${thinWeeks.join(', ')}.`)
