@@ -1231,3 +1231,23 @@ button.nds-token > .t,
 @media (prefers-reduced-motion: reduce) {
   .nds-tbtn.reveal { transition: none; }
 }
+
+/* A unit mark BESIDE the field rather than shaded inside it. The border stays on `.nds-field`;
+   only the mark moves out, so the state tints a caller puts on the field still ring the input
+   alone — which is what a dense grid cell wants, and why 26 rules in this console put the border
+   on the input instead of a wrapper. */
+.nds-field-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.nds-field-row > .af {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nds-text-2);
+}
+.nds-field-row.disabled > .af {
+  color: var(--nds-text-disabled);
+}
