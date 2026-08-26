@@ -37,7 +37,10 @@ import { SectionLayout, type SectionSpec } from '@/design-system/patterns/Sectio
 import { useSections } from './useSections'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+/** The axis: every third hour, or 24 labels collide into a smear. */
 const HOURS = Array.from({ length: 24 }, (_, h) => (h % 3 === 0 ? String(h).padStart(2, '0') : ''))
+/** The tooltip: all 24, because a cell on a grid about WHICH HOUR must be able to say which. */
+const HOUR_TITLES = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00 UTC`)
 
 /**
  * GX.7 — the panels, and the three that ship OFF.
@@ -232,6 +235,7 @@ export function HourlyTab({ market }: { market: string }) {
                 data={compareGrid}
                 rowLabels={['Today', DAY_LABELS[new Date(`${data.comparisonDay}T00:00:00Z`).getUTCDay()]]}
                 colLabels={HOURS}
+                colTitles={HOUR_TITLES}
                 format={fmt}
                 emptyLabel="no rows"
               />
@@ -247,6 +251,7 @@ export function HourlyTab({ market }: { market: string }) {
                 data={heatGrid}
                 rowLabels={DAY_LABELS}
                 colLabels={HOURS}
+                colTitles={HOUR_TITLES}
                 format={fmt}
                 emptyLabel="no rows in this window"
               />
@@ -310,7 +315,7 @@ export function HourlyTab({ market }: { market: string }) {
           coverage: (
             <Card
               header="Stream coverage by market"
-              description="What the lag in the header is made of. The stream reports what serves, so an idle market producing nothing is the pipeline working."
+              description="What the lag in the header is made of. Counted over the WHOLE stream, not the window above — every day and every campaign the feed has ever carried for that market. The stream reports what serves, so an idle market producing nothing is the pipeline working."
             >
               <div className="rpx-rows">
                 {data.markets.map((m) => (
@@ -319,7 +324,7 @@ export function HourlyTab({ market }: { market: string }) {
                     <span className="c">
                       {m.idle
                         ? <Pill tone="neutral">no enabled campaigns</Pill>
-                        : <>{m.campaigns} {m.campaigns === 1 ? 'campaign' : 'campaigns'} · {m.days} {m.days === 1 ? 'day' : 'days'} held</>}
+                        : <>{m.campaigns} {m.campaigns === 1 ? 'campaign' : 'campaigns'} seen · {m.days} {m.days === 1 ? 'day' : 'days'} of stream</>}
                     </span>
                     <span className="n">{m.lastDay ?? 'never'}</span>
                     <span className="n s">{m.lagDays == null ? '—' : `${m.lagDays}d`}</span>
@@ -338,6 +343,7 @@ export function HourlyTab({ market }: { market: string }) {
                 data={sampleGrid}
                 rowLabels={DAY_LABELS}
                 colLabels={HOURS}
+                colTitles={HOUR_TITLES}
                 format={(v) => `${v} ${v === 1 ? 'day' : 'days'}`}
                 emptyLabel="no rows in this window"
               />
