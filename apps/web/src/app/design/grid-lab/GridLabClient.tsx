@@ -25,11 +25,13 @@ import '@/app/marketing/ads/ads.css'
 import '@/design-system/styles/workspace-grid.css'
 
 import { useCallback, useState } from 'react'
-import { Button, Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
-import { WorkspaceGrid } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
+import { WorkspaceGrid, AdsFilterBar } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
+import type { FilterState, GridFilter } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
 import { AgWorkspaceGrid } from '@/design-system/patterns/workspace-grid/engine/AgWorkspaceGrid'
 import { LAB_COLUMNS, LAB_ROWS, LAB_ROW_ID, type LabRow } from './fixture'
+import { GridFeatureLab } from './GridFeatureLab'
 
 const renderFirst = (r: LabRow) => (
   <>
@@ -39,6 +41,63 @@ const renderFirst = (r: LabRow) => (
 )
 
 const firstSortValue = (r: LabRow) => r.name
+
+/**
+ * AG.3 — one filter bar, two engines, ONE state object. That is the whole point: a filter that
+ * narrows the left grid and the right grid differently is the migration failing, and it can only
+ * be seen if both are driven from the same value.
+ *
+ * `acos` is `number | null` in the fixture (null = never measured, NOT zero), and the shared
+ * pipeline's rule is written in terms of NaN — so the accessor bridges the two deliberately.
+ * Set a range and the unmeasured campaigns must leave BOTH grids: a row that has no ACoS has not
+ * been measured against the range, and passing it would be the grid inventing a measurement.
+ */
+const LAB_FILTERS: GridFilter[] = [
+  { key: 'acos', label: 'ACoS', kind: 'range', unit: '%', value: (r) => (r as LabRow).acos ?? NaN },
+  {
+    key: 'kind',
+    label: 'Type',
+    kind: 'select',
+    options: [
+      { value: 'SP', label: 'Sponsored Products' },
+      { value: 'SB', label: 'Sponsored Brands' },
+      { value: 'SD', label: 'Sponsored Display' },
+    ],
+    value: (r) => (r as LabRow).kind,
+  },
+]
+
+/**
+ * AG.3 — the same edit contract handed to both engines. `render` is the CALLER's, so the control
+ * inside the cell is byte-identical in each grid; only the surrounding mechanics differ, which is
+ * exactly the surface this lab exists to compare. Type into the left grid and the right one and
+ * the input must keep focus in both — the engine reaches cells through context rather than
+ * rebuilding its column defs, precisely so a keystroke does not tear the input out from under you.
+ */
+const LAB_EDIT = {
+  label: 'Edit names',
+  fields: [
+    {
+      key: '__first',
+      initial: (r: LabRow) => r.name,
+      render: (v: string, set: (n: string) => void) => (
+        <Input value={v} onChange={(e) => set(e.target.value)} aria-label="Campaign name" />
+      ),
+    },
+  ],
+  onApply: async (edits: Array<{ id: string; values: Record<string, string> }>) => {
+    // The lab persists nothing — it proves the DIFF, which is the half that can corrupt data.
+    // eslint-disable-next-line no-console
+    console.log('[grid-lab] onApply', JSON.stringify(edits))
+  },
+}
+
+/** Bulk actions are a render prop, so the lab proves the slot works without inventing an action. */
+const selectionActions = (ids: string[], clear: () => void) => (
+  <Button variant="secondary" size="sm" onClick={clear}>
+    Clear {ids.length} selected
+  </Button>
+)
 
 /** One measured surface: what the DOM actually computed, not what the stylesheet intended. */
 interface Probe {
@@ -66,6 +125,30 @@ function measure(rowSel: string, cellSel: string, headSel: string): Probe {
   if (!row || !cell || !head) return EMPTY_PROBE
   const cellCs = getComputedStyle(cell)
   const headCs = getComputedStyle(head)
+  /**
+   * AG.3 — the row rule is read from whichever element actually carries it. The hand-rolled grid
+   * puts `border-bottom` on the `td` (`.nds-wsgrid tbody td`); AG Grid's `rowBorder` param lands
+   * on `.ag-row`. Reading only the cell reported the AG rule as `rgba(0, 0, 0, 0)` and the parity
+   * table called it a difference — a probe artefact presented as a measurement, which is worse
+   * than no measurement because someone acts on it.
+   */
+  const transparent = (c: string) => c === 'rgba(0, 0, 0, 0)' || c === 'transparent'
+  /**
+   * Walk cell → row for the first element that actually paints a bottom rule. The hand-rolled
+   * grid puts it on the `td`; AG Grid puts it on the cell CONTAINER (`.ag-grid-scrolling-cells`),
+   * which is neither the cell nor the row — reading either one alone reported `rgba(0, 0, 0, 0)`
+   * and the table called an invisible rule a colour difference.
+   */
+  const ruleColor = (() => {
+    let n: Element | null = cell
+    while (n) {
+      const c = getComputedStyle(n).borderBottomColor
+      if (!transparent(c) && getComputedStyle(n).borderBottomWidth !== '0px') return c
+      if (n === row) break
+      n = n.parentElement
+    }
+    return cellCs.borderBottomColor
+  })()
   return {
     // getBoundingClientRect, not offsetHeight: subpixel matters here. A 0.024px shortfall has
     // already doubled a row height in this codebase once.
@@ -74,7 +157,7 @@ function measure(rowSel: string, cellSel: string, headSel: string): Probe {
     cellFontSize: cellCs.fontSize,
     headerFontSize: headCs.fontSize,
     cellColor: cellCs.color,
-    rowBorderColor: cellCs.borderBottomColor,
+    rowBorderColor: ruleColor,
   }
 }
 
@@ -84,18 +167,35 @@ export function GridLabClient() {
   const [sideBar, setSideBar] = useState(false)
   const [setFilters, setSetFilters] = useState(false)
   const [probes, setProbes] = useState<{ legacy: Probe; ag: Probe } | null>(null)
+  const [fstate, setFstate] = useState<FilterState>({})
+  const [lastClicked, setLastClicked] = useState<string | null>(null)
+  const [tab, setTab] = useState<'parity' | 'features'>('parity')
 
   const runProbe = useCallback(() => {
     // Measured in a frame of its own, after any pending style/layout work — reading in the same
     // tick as a mutation returns a half-applied cascade.
     requestAnimationFrame(() => {
       setProbes({
+        // AG.3 — `:not(.h10-am-total)` is load-bearing. The pinned Total row renders FIRST in
+        // tbody, so a bare `tbody tr` returned IT: bold, `--nds-grey-900`, its own height. The
+        // table was comparing the legacy TOTAL row against an AG DATA row and reporting the
+        // difference as an engine gap. Both sides now measure an ordinary data row.
         legacy: measure(
-          '.gl-legacy .nds-wsgrid tbody tr',
-          '.gl-legacy .nds-wsgrid tbody tr td',
+          '.gl-legacy .nds-wsgrid tbody tr:not(.h10-am-total)',
+          '.gl-legacy .nds-wsgrid tbody tr:not(.h10-am-total) td',
           '.gl-legacy .nds-wsgrid thead th',
         ),
-        ag: measure('.gl-ag .ag-center-cols-container .ag-row', '.gl-ag .ag-cell', '.gl-ag .ag-header-row'),
+        // AG.3 — `.ag-center-cols-container` does not exist in AG Grid 36.1.0; the rows live in
+        // `.ag-grid-scrolling-container`. The old selector matched NOTHING, so `measure` hit its
+        // `!row` guard and returned EMPTY_PROBE — the parity table has been printing "not found"
+        // for every AG value since AG.2, which reads as a measurement rather than a missed one.
+        // Measured in the browser, not guessed. `:not(.ag-row-pinned)` keeps the pinned Total row
+        // out: it is arithmetic, and its height is not the row height under comparison.
+        ag: measure(
+          '.gl-ag .ag-row:not(.ag-row-pinned)',
+          '.gl-ag .ag-row:not(.ag-row-pinned) .ag-cell',
+          '.gl-ag .ag-header-row',
+        ),
       })
     })
   }, [])
@@ -113,6 +213,20 @@ export function GridLabClient() {
             Grid&rsquo;s default breaks.
           </p>
         </header>
+
+        {/* A TAB, not a second route — /design is already where this codebase judges a rendering
+            decision, and the two labs answer different questions about the same engine. */}
+        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
+          <Button variant={tab === 'parity' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('parity')}>
+            Engine parity
+          </Button>
+          <Button variant={tab === 'features' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('features')}>
+            Enterprise features
+          </Button>
+        </div>
+
+        {tab === 'features' ? <GridFeatureLab /> : (
+          <>
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button variant="secondary" size="sm" onClick={runProbe}>
@@ -140,6 +254,15 @@ export function GridLabClient() {
           />
         </div>
 
+        {/* Rendered ONCE and handed to both grids with `hideFilterPanel`, the same shape the
+            Rules & Automation pages use to show one bar instead of two. */}
+        <AdsFilterBar filters={LAB_FILTERS} value={fstate} onChange={setFstate} defaultOpen />
+
+        <p className="text-md" style={{ margin: 0, color: 'var(--nds-text-2)' }}>
+          Last row clicked: <b>{lastClicked ?? 'none'}</b> — clicking a checkbox or a button inside
+          a row must NOT count, in either grid.
+        </p>
+
         {probes && <ProbeTable legacy={probes.legacy} ag={probes.ag} />}
 
         <section className="gl-legacy" style={{ display: 'grid', gap: 8 }}>
@@ -157,6 +280,13 @@ export function GridLabClient() {
             selectable
             selected={selLegacy}
             onSelectedChange={setSelLegacy}
+            selectionActions={selectionActions}
+            onRowClick={(r) => setLastClicked(`${r.name} (WorkspaceGrid)`)}
+            editMode={LAB_EDIT}
+            filters={LAB_FILTERS}
+            filterState={fstate}
+            onFilterStateChange={setFstate}
+            hideFilterPanel
             showTotal
             customizable={false}
             defaultSort={{ key: 'spend', dir: 'desc' }}
@@ -177,6 +307,13 @@ export function GridLabClient() {
             selectable
             selected={selAg}
             onSelectedChange={setSelAg}
+            selectionActions={selectionActions}
+            onRowClick={(r) => setLastClicked(`${r.name} (AG Grid)`)}
+            editMode={LAB_EDIT}
+            filters={LAB_FILTERS}
+            filterState={fstate}
+            onFilterStateChange={setFstate}
+            hideFilterPanel
             showTotal
             defaultSort={{ key: 'spend', dir: 'desc' }}
             enableSideBar={sideBar}
@@ -184,6 +321,8 @@ export function GridLabClient() {
             height={560}
           />
         </section>
+          </>
+        )}
       </main>
     </div>
   )
@@ -218,13 +357,31 @@ const PROBE_COLUMNS: Array<Column<ProbeRow>> = [
   { key: 'verdict', label: 'Match', render: (r) => (r.same ? '\u2713 match' : '\u2715 differs') },
 ]
 
+/**
+ * Heights compare with a sub-pixel tolerance; everything else is exact.
+ *
+ * A `<tr>` height is content-driven and lands on a fraction (45.95px); AG Grid virtualises off a
+ * fixed integer row height and cannot be given one. Exact equality is therefore unreachable by
+ * construction, and a row that can only ever read "✕ differs" teaches the reader to ignore the
+ * table — which is worse than the 0.05px it is reporting. The raw numbers are still printed, so
+ * nothing is hidden: a reader sees 45.95 vs 46 and can judge it. Anything at or above half a
+ * pixel — including the 6.95px and 9.5px gaps this instrument found once it worked — still fails.
+ */
+const HEIGHT_FIELDS = new Set<keyof Probe>(['rowHeight', 'headerHeight'])
+const probesMatch = (field: keyof Probe, a: Probe[keyof Probe], b: Probe[keyof Probe]) => {
+  if (HEIGHT_FIELDS.has(field) && typeof a === 'number' && typeof b === 'number') {
+    return Math.abs(a - b) <= 0.5
+  }
+  return a === b
+}
+
 function ProbeTable({ legacy, ag }: { legacy: Probe; ag: Probe }) {
   const rows: ProbeRow[] = PROBE_FIELDS.map(([field, property]) => ({
     key: field,
     property,
     legacy: fmt(legacy[field]),
     ag: fmt(ag[field]),
-    same: legacy[field] === ag[field],
+    same: probesMatch(field, legacy[field], ag[field]),
   }))
 
   return (
