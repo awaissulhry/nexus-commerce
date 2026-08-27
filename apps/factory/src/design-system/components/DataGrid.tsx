@@ -386,6 +386,19 @@ export function DataGrid<T>({
         merged.splice(at, 0, k)
       }
       const savedLocks = (saved as { lockedColumns?: string[] }).lockedColumns
+      // The writer below persists `sortBy`/`sortDir` along with everything else, but this loader
+      // never read them back: the operator's sort survived a reload in localStorage and nowhere
+      // else, so the grid re-mounted in its default order while the dialog reopened showing the
+      // saved one. Restoring it here is the other half of a write that was already happening.
+      //
+      // Guarded exactly the way `onConfirm` guards applying it: a caller that never passed
+      // `prefsSortFields` showed no sort section, so its stored `sortBy` is the inert '' carried
+      // through untouched — and a key that is no longer offered (a column since removed, a field
+      // renamed) must not silently sort the grid by nothing.
+      const savedSortBy = typeof saved.sortBy === 'string' ? saved.sortBy : ''
+      const restoredSort = prefsSortFields?.some((f) => f.value === savedSortBy)
+        ? { key: savedSortBy, dir: saved.sortDir === 'asc' ? ('asc' as const) : ('desc' as const) }
+        : null
       setPrefs((prev) => ({
         ...prev,
         visibleColumns: merged,
@@ -393,7 +406,15 @@ export function DataGrid<T>({
         lockedColumns: Array.isArray(savedLocks) ? savedLocks.filter((k) => known.has(k)) : defaultLockedKeys,
         stickyFirstColumn: saved!.stickyFirstColumn !== false,
         stickyLastColumn: saved!.stickyLastColumn !== false,
+        ...(restoredSort ? { sortBy: restoredSort.key, sortDir: restoredSort.dir } : null),
       }))
+      // The ROWS have to move too, not just the dialog's copy of the value — otherwise the
+      // dialog reopens describing an order the grid was never in. A controlled consumer owns
+      // its own sort state, so it is told rather than overwritten behind its back.
+      if (restoredSort) {
+        onSortChange?.(restoredSort)
+        if (!controlled) setOwnSort(restoredSort)
+      }
     }
     setPrefsLoaded(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
