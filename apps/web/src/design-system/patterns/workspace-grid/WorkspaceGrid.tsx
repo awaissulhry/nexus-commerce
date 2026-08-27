@@ -26,6 +26,9 @@ import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { emitPrefsChanged } from '../prefs-bus'
 import { enabledRank } from './enabledRank'
 import { filterRows } from './filterRows'
+import { compareSortValues } from './sortValues'
+import { isInteractiveChild } from './rowInteraction'
+import { collectEdits, draftValue } from './editDrafts'
 
 // The DS HoverCard takes a suppression check rather than knowing what a column drag is.
 const colDragging = () => document.body.classList.contains('col-dragging')
@@ -602,15 +605,10 @@ export function WorkspaceGrid<T>({
       if (!getVal || !sort) return 0
       const va = getVal(a) as number | string | null | undefined
       const vb = getVal(b) as number | string | null | undefined
-      // KT.3 — a column may return null/undefined for "this row has no value", and a blank must sink
-      // in BOTH directions. Returned BEFORE the direction flip, so it is not merely reversed:
-      // otherwise "sort by spend ascending" surfaces every row we never paid for instead of the
-      // cheapest one we did. Additive — of 321 sortValue definitions in the ads tree, none returns
-      // null today (28 substitute a sentinel like NEGATIVE_INFINITY, which is exactly the flaw this
-      // lets a column opt out of), so no existing consumer changes behaviour.
-      if (va == null || vb == null) return va == null ? (vb == null ? 0 : 1) : -1
-      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
-      return sort.dir === 'asc' ? cmp : -cmp
+      // KT.3 — a blank sinks in BOTH directions, decided before the direction flip. The rule and
+      // the reasoning now live in ./sortValues, which the AG Grid engine runs too, so the two
+      // cannot agree on the day they are written and drift afterwards.
+      return compareSortValues(va, vb, sort.dir)
     })
     return arr
   }, [searched, sort, columns, firstSortValue, groupBy, enabledFirst, userSorted, rawOrder])
@@ -771,19 +769,13 @@ export function WorkspaceGrid<T>({
 
   const hasActiveFilters = Object.values(fstate).some((v) => (Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? !!v : !!(v.min || v.max)))
 
-  // edit-mode diffs: a row contributes the fields whose draft differs from its initial
-  const dirtyEdits = useMemo(() => {
-    if (!editMode) return [] as Array<{ id: string; values: Record<string, string> }>
-    const out: Array<{ id: string; values: Record<string, string> }> = []
-    for (const row of sorted) {
-      const id = rowId(row); const d = drafts[id]
-      if (!d) continue
-      const values: Record<string, string> = {}
-      for (const f of editMode.fields) { const v = d[f.key]; if (v !== undefined && v !== f.initial(row)) values[f.key] = v }
-      if (Object.keys(values).length) out.push({ id, values })
-    }
-    return out
-  }, [editMode, sorted, drafts, rowId])
+  // edit-mode diffs. The rule — dirty means "differs from initial", and '' is a deliberate
+  // clearing rather than an absence — lives in ./editDrafts so the AG Grid engine computes the
+  // same answer. `onApply` WRITES this, so a wrong diff is a data bug, not a rendering one.
+  const dirtyEdits = useMemo(
+    () => (editMode ? collectEdits(sorted, rowId, editMode.fields, drafts) : []),
+    [editMode, sorted, drafts, rowId],
+  )
   const enterEdit = () => { setDrafts({}); setEditing(true) }
   const discardEdits = () => { setDrafts({}); setEditing(false) }
   const applyEdits = async () => {
@@ -791,7 +783,7 @@ export function WorkspaceGrid<T>({
     setApplying(true)
     try { await editMode.onApply(dirtyEdits); setDrafts({}); setEditing(false) } finally { setApplying(false) }
   }
-  const editVal = (row: T, f: GridEditField<T>) => drafts[rowId(row)]?.[f.key] ?? f.initial(row)
+  const editVal = (row: T, f: GridEditField<T>) => draftValue(drafts, rowId(row), f, row)
 
   // ── per-cell hover-edit: the H10 ".h10-editpen" pencil (shown on row hover) opens a
   //    ".h10-editpop" popover. Reuses the same editMode.fields + onApply as bulk mode, but
@@ -992,7 +984,7 @@ export function WorkspaceGrid<T>({
                       )}
                       <tr
                         className={`${sel.has(id) ? 'on' : ''}${onRowClick ? ' clickable' : ''}${keyboardNav && idx === focusIdx ? ' kbd-focus' : ''}${rowClassName?.(row) ? ` ${rowClassName(row)}` : ''}${hierarchy?.isRemainder?.(row) ? ' nds-tree-remainder' : ''}`}
-                        onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
+                        onClick={onRowClick ? (e) => { if (!isInteractiveChild(e.target)) onRowClick(row) } : undefined}
                       >
                         {selectable && (
                           <td className="ck">
