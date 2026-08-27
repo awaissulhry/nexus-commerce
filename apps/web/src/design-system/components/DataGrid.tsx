@@ -28,6 +28,19 @@ export interface Column<T> {
   className?: string
   sortable?: boolean
   sortValue?: (row: T) => number | string
+  /**
+   * Hold this column in place in the Customise dialog — never hidden, never dragged — WITHOUT
+   * pinning it to an edge.
+   *
+   * `sticky`/`stickyRight` already imply it, and until now they were the only way to say it. That
+   * forced a grid whose Product and Actions columns must not move to pin them as well, which is a
+   * visible, different decision: /products/next had its sticky toggles removed deliberately
+   * because pinning the Product column was not wanted, and the column still has to stay put.
+   *
+   * Position picks the end it holds: past the last movable column it locks to the right, anywhere
+   * else to the left. Ignored unless `customizable`.
+   */
+  prefsLocked?: boolean
   /** pin this column to the left (sticky); give a numeric `width` so offsets stack */
   sticky?: boolean
   /** pin this column to the right (sticky); give a numeric `width` so offsets stack */
@@ -35,6 +48,15 @@ export interface Column<T> {
   width?: number
   /** value rendered in the totals row */
   total?: ReactNode
+  /**
+   * Heading this column sits under in the Customise dialog's column tick-list. Columns without
+   * one collect under the dialog's list label, so a grid that declares no groups renders exactly
+   * one section and is unchanged. Ignored unless `customizable`.
+   *
+   * Presentation only — grouping does NOT constrain column order. The dialog's ordered list is
+   * flat and reorders freely across groups.
+   */
+  group?: string
   /**
    * Plain-text name for the Customise dialog. Only needed when `label` is not a
    * string — most grids here pass JSX (`<Hdr …/>`, `<TipText>…</TipText>`), and
@@ -107,6 +129,18 @@ export interface DataGridProps<T> {
    * which works but costs the grid its sorting. Shown only for rows in `expanded`.
    */
   getSubRows?: (row: T) => T[] | undefined
+  /**
+   * Let `getSubRows` children carry their own selection checkbox, and count them in select-all
+   * while they are visible.
+   *
+   * Off by default, because the two grids using `getSubRows` with `selectable` today render an
+   * EMPTY checkbox cell for children — an ad group is acted on through its campaign, and turning
+   * that on under them would change what their select-all means. A grid whose children are
+   * independently actionable (a product variation has its own status, its own price) opts in.
+   *
+   * `rowSelectable` still gates each child, exactly as it gates each parent.
+   */
+  subRowSelectable?: boolean
   /**
    * Row density. `md` (default) is 13px with 11px/14px cells; `sm` is 12.5px / 7px 10px; `xs` is
    * 11.5px / 5px 9px, matching the tier every other control gained.
@@ -182,6 +216,18 @@ export interface DataGridProps<T> {
   onCustomizeOpenChange?: (open: boolean) => void
   /** Dialog heading + trigger label (default "Customise"). */
   customizeTitle?: string
+  /**
+   * Sort fields offered INSIDE the Customise dialog, as `{value: columnKey, label}`.
+   *
+   * Omit it (every existing consumer) and the dialog shows no Sort section, exactly as before:
+   * a grid that sorts from its headers does not need a second way to say the same thing.
+   *
+   * Pass it when the operator is used to setting sort there. A page that HAD this section and
+   * then adopted `customizable` lost it silently, with no way to ask for it back — that is the
+   * gap this closes. The chosen field is applied through the same path as a header click, so
+   * controlled `sort` / `onSortChange` consumers stay in charge of their own state.
+   */
+  prefsSortFields?: ReadonlyArray<{ value: string; label: string }>
 }
 
 /**
@@ -201,7 +247,7 @@ export function DataGrid<T>({
   selectAllHint,
   selectRowHint,
   showTotals,
-  emptyState, renderExpanded, expanded, rowProps, size = 'md', headerProps, cellProps, getSubRows,
+  emptyState, renderExpanded, expanded, rowProps, size = 'md', headerProps, cellProps, getSubRows, subRowSelectable,
   initialSort,
   sort: controlledSort,
   onSortChange,
@@ -213,6 +259,7 @@ export function DataGrid<T>({
   customizeOpen,
   onCustomizeOpenChange,
   customizeTitle,
+  prefsSortFields,
 }: DataGridProps<T>) {
   const [ownSort, setOwnSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
     initialSort ?? null,
@@ -231,30 +278,46 @@ export function DataGrid<T>({
     if (!prefsControlled) setOwnPrefsOpen(next)
   }
 
-  // Pinned columns lead and trail; only the middle is draggable. Feeding the
-  // dialog `[...lead, ...movable, ...trail]` is what makes its own
-  // locked-leading / locked-trailing partition land on the right columns.
-  const { lockedLead, lockedTrail, movableKeys, prefsColumns } = useMemo(() => {
+  // Pinned columns lead and trail; everything else is ordered by the operator.
+  //
+  // 🔴 `sticky`/`stickyRight` PIN a column to an edge — a layout decision the operator cannot
+  // override from the dialog. `prefsLocked` is different now: it only SEEDS the column's lock,
+  // and the operator can unlock it and then reorder or remove it like any other. It used to
+  // hold the column out of the movable pool entirely, which is why Product and Actions could
+  // never be moved on /products/next.
+  const { lockedLead, lockedTrail, togglableKeys, defaultLockedKeys, prefsColumns, anyPinned } = useMemo(() => {
+    const isPinned = (c: Column<T>) => !!c.sticky || !!c.stickyRight
+    const togglable = columns.filter((c) => !isPinned(c))
     const lead = columns.filter((c) => c.sticky)
-    const trail = columns.filter((c) => c.stickyRight)
-    const movable = columns.filter((c) => !c.sticky && !c.stickyRight)
+    const trail = columns.filter((c) => c.stickyRight && !c.sticky)
     return {
       lockedLead: lead,
       lockedTrail: trail,
-      movableKeys: movable.map((c) => c.key),
-      prefsColumns: [...lead, ...movable, ...trail].map((c) => ({
+      // The roster of columns the operator can show, hide, reorder or lock. Independent of the
+      // current lock set on purpose: it is what `knownColumns` records, and a roster that
+      // shrank every time a column was locked would make the loader read locked columns as new.
+      togglableKeys: togglable.map((c) => c.key),
+      defaultLockedKeys: togglable.filter((c) => c.prefsLocked).map((c) => c.key),
+      // Whether anything actually PINS — which is what the dialog's sticky toggles govern.
+      anyPinned: columns.some((c) => c.sticky || c.stickyRight),
+      prefsColumns: [...lead, ...togglable, ...trail].map((c) => ({
         key: c.key,
         // An empty string is a string, and an actions column legitimately has
         // `label: ''` — a blank draggable row the operator cannot identify (or
         // restore once hidden) is worse than a key.
         label: typeof c.label === 'string' && c.label.trim() ? c.label : c.prefsLabel ?? c.key,
-        locked: !!c.sticky || !!c.stickyRight,
+        // `locked` is now the IMMUTABLE kind: pinned to an edge, no lock control offered.
+        locked: isPinned(c),
+        // …and this one is merely where the operator's lock starts out.
+        defaultLocked: !!c.prefsLocked,
+        group: c.group,
       })),
     }
   }, [columns])
 
   const [prefs, setPrefs] = useState<PreferencesValue>(() => ({
-    visibleColumns: movableKeys,
+    visibleColumns: togglableKeys,
+    lockedColumns: defaultLockedKeys,
     stickyFirstColumn: true,
     stickyLastColumn: true,
     // This grid paginates nothing and sorts from its own headers, so these
@@ -271,6 +334,13 @@ export function DataGrid<T>({
   // site that builds `columns` inline hands us a new array every render, and a
   // dep-driven reload would overwrite the operator's in-session order forever.
   const loadedFor = useRef<string | null>(null)
+  // 🔴 A ref cannot gate the writer. `loadedFor` is set synchronously inside the load effect, so
+  // the write effect below — same commit, declared after — already passed its guard while
+  // `prefs` was still the un-reconciled initial state, and persisted the FULL default roster.
+  // Measured on /products/next: two writes of all eight columns landed 24ms before the
+  // reconciled five, and a reload inside that window restored every hidden column permanently.
+  // A state flag defers the writer to the next render, by which time `prefs` is the real one.
+  const [prefsLoaded, setPrefsLoaded] = useState(false)
   useEffect(() => {
     if (!customizable || !storageKey || loadedFor.current === storageKey) return
     loadedFor.current = storageKey
@@ -281,29 +351,65 @@ export function DataGrid<T>({
     } catch {
       saved = null
     }
-    if (!saved) return
-    const known = new Set(movableKeys)
-    const kept = (Array.isArray(saved.visibleColumns) ? saved.visibleColumns : []).filter((k) => known.has(k))
-    // A column shipped after this operator last opened the dialog is absent from
-    // their saved list. Appending it beats dropping it: dropping would hide
-    // every new column, permanently, from everyone who ever opened this grid.
-    const seen = new Set(kept)
-    setPrefs((prev) => ({
-      ...prev,
-      visibleColumns: [...kept, ...movableKeys.filter((k) => !seen.has(k))],
-      stickyFirstColumn: saved!.stickyFirstColumn !== false,
-      stickyLastColumn: saved!.stickyLastColumn !== false,
-    }))
-  }, [customizable, storageKey, movableKeys])
+    if (saved) {
+      const known = new Set(togglableKeys)
+      const kept = (Array.isArray(saved.visibleColumns) ? saved.visibleColumns : []).filter((k) => known.has(k))
+      // A column shipped after this operator last opened the dialog must appear — dropping it
+      // would hide every new column, permanently, from everyone who ever opened this grid.
+      //
+      // 🔴 But "new" cannot be inferred from `visibleColumns` alone, and inferring it was a bug:
+      // that list records what is VISIBLE, so a column the operator deliberately HID and a
+      // column that did not exist yet are both simply absent from it. Every hidden column was
+      // therefore treated as new and re-appended on load — the operator hid it, saved,
+      // refreshed, and found it back at the END of the row, which is the tell.
+      //
+      // `knownColumns` is the roster the grid held when these prefs were written, so the two
+      // cases are distinguishable: in the roster but not visible ⇒ hidden on purpose; not in the
+      // roster at all ⇒ genuinely new. Absent entirely (prefs written before that field) ⇒ fall
+      // back to append-everything, which is wrong in the same way but no worse than before.
+      const savedKnown = Array.isArray((saved as { knownColumns?: string[] }).knownColumns)
+        ? new Set((saved as { knownColumns?: string[] }).knownColumns)
+        : null
+      const seen = new Set(kept)
+      const appended = togglableKeys.filter((k) => !seen.has(k) && (savedKnown ? !savedKnown.has(k) : true))
+      // Placed at its CANONICAL index, not at the end. Appending was survivable while every new
+      // column was a metric column; it stopped being survivable when `prefsLocked` columns
+      // joined this roster, because appending would have moved Product to the far right of every
+      // grid whose prefs predate the change.
+      const merged = [...kept]
+      for (const k of appended) {
+        const canon = togglableKeys.indexOf(k)
+        let at = merged.length
+        for (let i = 0; i < merged.length; i++) {
+          if (togglableKeys.indexOf(merged[i]) > canon) { at = i; break }
+        }
+        merged.splice(at, 0, k)
+      }
+      const savedLocks = (saved as { lockedColumns?: string[] }).lockedColumns
+      setPrefs((prev) => ({
+        ...prev,
+        visibleColumns: merged,
+        // Absent ⇒ prefs written before the lock existed ⇒ the grid's own defaults.
+        lockedColumns: Array.isArray(savedLocks) ? savedLocks.filter((k) => known.has(k)) : defaultLockedKeys,
+        stickyFirstColumn: saved!.stickyFirstColumn !== false,
+        stickyLastColumn: saved!.stickyLastColumn !== false,
+      }))
+    }
+    setPrefsLoaded(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customizable, storageKey, togglableKeys])
 
   useEffect(() => {
-    if (!customizable || !storageKey || loadedFor.current !== storageKey) return
+    if (!customizable || !storageKey || !prefsLoaded) return
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(prefs))
+      // `knownColumns` travels with the prefs so the loader can tell a hidden column from one
+      // that did not exist when these were written. Without it, hiding a column cannot survive
+      // a reload — see the reconciliation above.
+      window.localStorage.setItem(storageKey, JSON.stringify({ ...prefs, knownColumns: togglableKeys }))
     } catch {
       /* private mode / quota — the grid still works, the order just won't survive */
     }
-  }, [prefs, customizable, storageKey])
+  }, [prefs, customizable, storageKey, togglableKeys, prefsLoaded])
 
   // The operator's order IS the render order; a drag that did not move a column
   // would lie. Untouched when `customizable` is absent.
@@ -347,7 +453,23 @@ export function DataGrid<T>({
     if (!controlled) setOwnSort(next)
   }
 
-  const allKeys = (rowSelectable ? rows.filter(rowSelectable) : rows).map(rowKey)
+  // Select-all covers the rows the operator can actually SEE ticked. With `subRowSelectable` the
+  // expanded children are among them, so leaving them out would render a select-all that ticks
+  // the header box while visible checkboxes below it stay empty. Gated, so the default is the
+  // parents-only list every existing consumer has.
+  const allKeys = useMemo(() => {
+    const base = rowSelectable ? rows.filter(rowSelectable) : rows
+    const keys = base.map(rowKey)
+    if (!subRowSelectable || !getSubRows || !expanded) return keys
+    for (const r of rows) {
+      if (!expanded.has(rowKey(r))) continue
+      for (const kid of getSubRows(r) ?? []) {
+        if (rowSelectable && !rowSelectable(kid)) continue
+        keys.push(rowKey(kid))
+      }
+    }
+    return keys
+  }, [rows, rowKey, rowSelectable, subRowSelectable, getSubRows, expanded])
   const selCount = selected?.size ?? 0
   const allSelected = !!selectable && selCount > 0 && allKeys.length > 0 && allKeys.every((k) => selected!.has(k))
   const someSelected = !!selectable && selCount > 0 && !allSelected
@@ -486,7 +608,19 @@ export function DataGrid<T>({
                     const kk = rowKey(kid)
                     return (
                       <tr key={kk} {...(rowProps?.(kid) ?? {})} className={['nds-grid-kid', rowClassName?.(kid) ?? ''].filter(Boolean).join(' ') || undefined}>
-                        {selectable && <td className="ck sticky" style={{ left: 0 }} />}
+                        {selectable && (
+                          <td className="ck sticky" style={{ left: 0 }}>
+                            {subRowSelectable && (!rowSelectable || rowSelectable(kid)) && (
+                              <input
+                                type="checkbox"
+                                checked={selected?.has(kk) ?? false}
+                                onChange={() => toggleRow(kk)}
+                                title={selectRowHint}
+                                aria-label="Select row"
+                              />
+                            )}
+                          </td>
+                        )}
                         {cols.map((c, ci) => (
                           <td key={c.key} {...(cellProps?.(kid, c, ci) ?? {})} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', c.className ?? '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                             {c.render(kid)}
@@ -546,20 +680,30 @@ export function DataGrid<T>({
       <PreferencesModal
         open={prefsOpen}
         onClose={() => setPrefsOpen(false)}
-        value={prefs}
+        // Seeded from the LIVE sort, so opening the dialog after sorting from a header shows what
+        // is actually in force rather than whatever it was last saved with.
+        value={{ ...prefs, sortBy: sort?.key ?? prefs.sortBy, sortDir: sort?.dir ?? prefs.sortDir }}
         onConfirm={(next) => {
           setPrefs(next)
+          // Only when the caller asked for the section — otherwise `next.sortBy` is the inert
+          // value carried through untouched, and applying it would sort by an empty key.
+          if (prefsSortFields?.length && next.sortBy && (next.sortBy !== sort?.key || next.sortDir !== sort?.dir)) {
+            const applied = { key: next.sortBy, dir: next.sortDir }
+            onSortChange?.(applied)
+            if (!controlled) setOwnSort(applied)
+          }
           setPrefsOpen(false)
         }}
         allColumns={prefsColumns}
-        defaultVisible={movableKeys}
-        // Hidden rather than disabled: this grid paginates nothing and sorts
-        // from its own headers, so both sections would be controls that change
-        // nothing. Their values ride through `prefs` untouched.
-        sortFieldOptions={[]}
+        defaultVisible={togglableKeys}
+        // Page-size stays hidden — this grid paginates nothing, and a control that changed
+        // nothing would be a lie. Sort is the CALLER's call now: omitted, the section is hidden
+        // and the grid sorts from its headers as before; supplied, the dialog drives the very
+        // same sort those headers do.
+        sortFieldOptions={prefsSortFields ?? []}
         pageSizeChoices={[]}
         // No pinned columns ⇒ two toggles that move nothing.
-        showSticky={lockedLead.length > 0 || lockedTrail.length > 0}
+        showSticky={anyPinned}
         title={customizeTitle}
       />
     </>

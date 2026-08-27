@@ -569,6 +569,29 @@
   overflow: hidden auto;
   max-height: 360px;
 }
+/* A column group. Every row lives in one — a caller that declares no `group` gets a single
+   unnamed section, which is byte-for-byte the old flat list. */
+.nds-prefs-group + .nds-prefs-group {
+  border-top: 1px solid var(--nds-border-subtle);
+}
+/* Sticky so the heading survives the scroll box. `.nds-prefs-cols` caps at 360px and the ads
+   Ad Manager passes 50 columns, so without this the operator scrolls into a run of names with
+   nothing left on screen saying which group they belong to.
+   Measured: --nds-text-muted on --nds-surface-sunken is 4.69:1 light, 7.67:1 dark. */
+.nds-prefs-grouphd {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 7px 10px;
+  background: var(--nds-surface-sunken);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--nds-text-muted);
+}
 .nds-prefs-row {
   display: flex;
   align-items: center;
@@ -612,6 +635,96 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--nds-text-muted);
+}
+/* The slot holds its width whether or not there is a button in it — otherwise every row
+   shifts sideways the moment a column is ticked. 22px is the button's own footprint. */
+.nds-prefs-xslot {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+}
+/* Same treatment as the TokenChip remove button, deliberately by VALUE rather than by reusing
+   its class: a row is not a token, and TokenChip is built around a content button that this
+   row has no equivalent of. Measured: 5.32:1 resting light, 7.38:1 dark; hover 7.36:1 / 7.14:1. */
+.nds-prefs-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text-muted);
+  cursor: pointer;
+}
+.nds-prefs-x:hover {
+  color: var(--nds-danger-text);
+}
+.nds-prefs-x:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -1px;
+}
+/* The lock control sits between the label and the ✕. Same resting colour as the ✕
+   (--nds-text-muted, 5.01:1 light / 7.38:1 dark); locked-on takes the primary so the state
+   reads without hovering. Named `lockbtn`, not `lock`, so it cannot be misread as a variant of
+   the `.nds-prefs-locked` text tag sitting one element away. */
+.nds-prefs-lockbtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text-muted);
+  cursor: pointer;
+}
+.nds-prefs-lockbtn:hover {
+  color: var(--nds-text);
+}
+.nds-prefs-lockbtn.on {
+  color: var(--nds-primary);
+}
+.nds-prefs-lockbtn:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -1px;
+}
+/* ── The CHOOSING half (columnControl="checkbox") ───────────────────────────
+   Sits under the page-level preferences in the LEFT panel and takes the space they leave, so
+   the panel that used to hold one Sort control in 460px of dialog now carries the tick-list. */
+.nds-prefs-pickset {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.nds-prefs-picks {
+  max-height: 260px;
+}
+.nds-prefs-pick {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.nds-prefs-pick:last-child {
+  border-bottom: none;
+}
+.nds-prefs-pick.locked {
+  background: var(--nds-surface-sunken);
+}
+/* The primitive is an inline-flex label; stretch it so the whole row is the hit target rather
+   than just the 15px box and the text. */
+.nds-prefs-pick .nds-check {
+  display: flex;
+  width: 100%;
+}
+.nds-prefs-picklbl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 .nds-modal-f .grow {
   flex: 1;
