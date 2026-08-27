@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "ag-grid-enterprise": "^36.1.0",
+    "ag-grid-enterprise": "36.1.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-is": "^19.2.5"
