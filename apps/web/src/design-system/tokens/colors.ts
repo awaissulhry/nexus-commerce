@@ -107,6 +107,32 @@ export const accountIdentity = [
 ] as const satisfies ReadonlyArray<{ name: string; hex: string }>
 
 /**
+ * Tag swatches — the closed set the tag colour picker offers.
+ *
+ * PERSISTED, for exactly the reason `accountIdentity` above is: `products/next/TagDialog.tsx`
+ * seeds its state from `SWATCHES[0].hex` and stores the chosen string on the tag, so a value
+ * here is data and not styling — re-snapping one onto a nearer ramp step would orphan every
+ * tag already carrying the old value.
+ *
+ * They live here rather than as literals in primitives/ColorSwatchPicker.tsx so the picker and
+ * anything rendering an already-saved tag read ONE definition, and so the DS token-guard — which
+ * forbids raw hex anywhere outside the token tier — has a legitimate home to point at.
+ *
+ * Seven sit on the ramp; pink is an identity-only hue with no ramp counterpart, pinned at its
+ * measured value the way teal / violet / slate are above.
+ */
+export const tagSwatches = [
+  { name: 'Blue', hex: palette.blue[600] },
+  { name: 'Green', hex: palette.green[600] },
+  { name: 'Amber', hex: palette.amber[600] },
+  { name: 'Red', hex: palette.red[500] },
+  { name: 'Purple', hex: palette.purple[600] },
+  { name: 'Teal', hex: palette.cyan[700] },
+  { name: 'Pink', hex: '#be185d' },
+  { name: 'Grey', hex: palette.grey[600] },
+] as const satisfies ReadonlyArray<{ name: string; hex: string }>
+
+/**
  * Chart inks. Recharts takes colour as a prop, not a class, so an SVG
  * presentation attribute cannot resolve `var(--nds-*)` — these must reach the
  * component as literals. Four are exact ramp steps; `cap` and `reference` are

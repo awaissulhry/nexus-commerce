@@ -2,6 +2,8 @@
 
 import { Check } from 'lucide-react'
 
+import { tagSwatches } from '../tokens/colors'
+
 /**
  * ColorSwatchPicker — pick a colour from a FIXED palette, not from the whole spectrum.
  *
@@ -31,17 +33,13 @@ export interface ColorSwatchPickerProps {
 /**
  * Eight, and eight is the point: enough that two tags in view rarely share one, few enough that
  * the whole set is visible without a scroll and a person can remember which is which.
+ *
+ * The values themselves live in `tokens/colors.ts` as `tagSwatches`, beside `accountIdentity`
+ * which solves the identical problem. They are PERSISTED tag data rather than styling, so they
+ * belong in the token tier where colour is defined once — and raw hex in a primitive is exactly
+ * what the DS token-guard exists to reject.
  */
-export const SWATCHES: ReadonlyArray<{ hex: string; name: string }> = [
-  { hex: '#1f6fde', name: 'Blue' },
-  { hex: '#15a34a', name: 'Green' },
-  { hex: '#b87503', name: 'Amber' },
-  { hex: '#e5484d', name: 'Red' },
-  { hex: '#7400bc', name: 'Purple' },
-  { hex: '#0e7490', name: 'Teal' },
-  { hex: '#be185d', name: 'Pink' },
-  { hex: '#5b6573', name: 'Grey' },
-]
+export const SWATCHES: ReadonlyArray<{ hex: string; name: string }> = tagSwatches
 
 export function ColorSwatchPicker({
   value,
@@ -66,8 +64,8 @@ export function ColorSwatchPicker({
             type="button"
             role="radio"
             aria-checked={selected}
-            // The colour is not the accessible name. A screen reader announcing "#15a34a" has
-            // told the listener nothing they can act on.
+            // The colour is not the accessible name. A screen reader announcing a raw hex value
+            // has told the listener nothing they can act on.
             aria-label={s.name}
             title={s.name}
             disabled={disabled}
@@ -78,7 +76,7 @@ export function ColorSwatchPicker({
             {/* White tick on every swatch. MEASURED, and the first version of this comment was
                 wrong: three of the eight are UNDER the 4.5:1 text floor (Green 3.30, Amber
                 3.76, Red 3.91). That floor does not apply — a tick is a graphical object, so
-                WCAG 1.4.11 asks 3:1, and the tightest of the eight (Green #15a34a) clears it at
+                WCAG 1.4.11 asks 3:1, and the tightest of the eight (Green) clears it at
                 3.30:1. It is also why these hexes are used as DOTS beside a label rather than
                 as a background under text: at that ratio, text on them would fail. */}
             {selected && <Check size={12} strokeWidth={3} aria-hidden />}

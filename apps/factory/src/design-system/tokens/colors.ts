@@ -148,4 +148,27 @@ export const badge = {
   targetingManual: palette.purple[600], //                   "M"
 } as const
 
+/**
+ * Tag swatches — the closed set the tag colour picker offers.
+ *
+ * PERSISTED: the chosen string is stored on the tag, so a value here is data and not styling —
+ * re-snapping one onto a nearer ramp step would orphan every tag already carrying the old value.
+ * They live here rather than as literals in primitives/ColorSwatchPicker.tsx so the picker and
+ * anything rendering an already-saved tag read ONE definition, and so the DS token-guard — which
+ * forbids raw hex anywhere outside the token tier — has a legitimate home to point at.
+ *
+ * Seven sit on the ramp; pink is an identity-only hue with no ramp counterpart, pinned at its
+ * measured value. Kept in step with apps/web's copy of this file (same values, same order).
+ */
+export const tagSwatches = [
+  { name: 'Blue', hex: palette.blue[600] },
+  { name: 'Green', hex: palette.green[600] },
+  { name: 'Amber', hex: palette.amber[600] },
+  { name: 'Red', hex: palette.red[500] },
+  { name: 'Purple', hex: palette.purple[600] },
+  { name: 'Teal', hex: palette.cyan[700] },
+  { name: 'Pink', hex: '#be185d' },
+  { name: 'Grey', hex: palette.grey[600] },
+] as const satisfies ReadonlyArray<{ name: string; hex: string }>
+
 export type SemanticColor = keyof typeof color
