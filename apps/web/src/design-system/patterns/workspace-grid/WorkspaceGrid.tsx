@@ -25,6 +25,7 @@ import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/pa
 import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { emitPrefsChanged } from '../prefs-bus'
 import { enabledRank } from './enabledRank'
+import { filterRows } from './filterRows'
 
 // The DS HoverCard takes a suppression check rather than knowing what a column drag is.
 const colDragging = () => document.body.classList.contains('col-dragging')
@@ -539,11 +540,6 @@ export function WorkspaceGrid<T>({
   const setSel = (s: Set<string>) => { if (onSelectedChange) onSelectedChange(s); else setSelInner(s) }
 
   // ── filtering ──
-  const filterAccessor = useMemo(() => {
-    const byKey = new Map<string, GridColumn<T>>()
-    for (const c of columns) byKey.set(c.key, c)
-    return byKey
-  }, [columns])
 
   // R3 — in server mode the rows ARE the answer: filtering, searching and sorting all
   // happened in SQL over the whole result, and redoing any of them here would narrow a page
@@ -556,40 +552,14 @@ export function WorkspaceGrid<T>({
   const treeMode = hierarchy != null
   const rawOrder = serverMode || treeMode
   const filtered = useMemo(() => {
+    // AG.3 — the pipeline itself moved to ./filterRows so the AG Grid engine runs the IDENTICAL
+    // code rather than a second implementation. Unchanged behaviour; the NaN / empty-filter /
+    // missing-accessor rules and their reasoning are documented there and pinned by
+    // filterRows.vitest.test.ts. The rawOrder bypass stays HERE, because its reason is local:
+    // server and tree rows arrived in a deliberate order and re-deriving one would lie.
     if (rawOrder) return rows
-    if (!filters?.length) return rows
-    return rows.filter((row) => {
-      for (const f of filters) {
-        const st = fstate[f.key]
-        if (f.kind === 'range') {
-          const r = (st as RangeVal | undefined)
-          if (!r || (!r.min && !r.max)) continue
-          const acc = f.value ?? filterAccessor.get(f.key)?.filterValue
-          if (!acc) continue
-          const v = (acc as (row: T) => number)(row)
-          // NaN = "not measured" by every consumer's convention, and their filter tips promise
-          // an unmeasured row never matches a SET range — NaN compares false both ways, so
-          // without this it would silently pass instead.
-          if (Number.isNaN(v)) return false
-          if (r.min !== '' && v < Number(r.min)) return false
-          if (r.max !== '' && v > Number(r.max)) return false
-        } else if (f.kind === 'multiselect') {
-          const vals = (st as string[] | undefined) ?? []
-          if (vals.length === 0) continue
-          const acc = f.value as ((row: T) => string) | undefined
-          if (!acc) continue
-          if (!vals.includes(acc(row))) return false
-        } else {
-          const val = st as string | undefined
-          if (!val) continue
-          const acc = f.value as ((row: T) => string) | undefined
-          if (!acc) continue
-          if (acc(row) !== val) return false
-        }
-      }
-      return true
-    })
-  }, [rows, filters, fstate, filterAccessor, rawOrder])
+    return filterRows(rows, filters, fstate, columns)
+  }, [rows, filters, fstate, columns, rawOrder])
 
   // ── search (H10 inline 🔍) — narrows on the first-column text by default ──
   const searched = useMemo(() => {
