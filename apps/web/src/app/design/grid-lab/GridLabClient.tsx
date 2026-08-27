@@ -25,6 +25,8 @@ import '@/app/marketing/ads/ads.css'
 import '@/design-system/styles/workspace-grid.css'
 
 import { useCallback, useState } from 'react'
+import { Button, Checkbox } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { WorkspaceGrid } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
 import { AgWorkspaceGrid } from '@/design-system/patterns/workspace-grid/engine/AgWorkspaceGrid'
 import { LAB_COLUMNS, LAB_ROWS, LAB_ROW_ID, type LabRow } from './fixture'
@@ -102,8 +104,8 @@ export function GridLabClient() {
     <div className="h10-shell" style={{ display: 'block', minHeight: '100vh' }}>
       <main className="h10-main" style={{ padding: 24, display: 'grid', gap: 20 }}>
         <header style={{ display: 'grid', gap: 6 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Grid parity lab</h1>
-          <p style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)', fontSize: 13 }}>
+          <h1 className="text-3xl font-heading" style={{ margin: 0 }}>Grid parity lab</h1>
+          <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
             One fixture, one column array, two engines. The left panel is the grid operators use
             today; the right is AG Grid Enterprise behind the same props. Sort the <b>ACoS</b> or{' '}
             <b>CTR</b> column in both — the rows with no measurement must sink to the bottom in{' '}
@@ -113,23 +115,35 @@ export function GridLabClient() {
         </header>
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" className="acr-btn" onClick={runProbe}>
+          <Button variant="secondary" size="sm" onClick={runProbe}>
             Measure both
-          </button>
-          <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12.5 }}>
-            <input type="checkbox" checked={sideBar} onChange={(e) => setSideBar(e.target.checked)} />
-            Columns / Filters tool panel <span style={{ color: 'var(--nds-text-2)' }}>(enterprise)</span>
-          </label>
-          <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12.5 }}>
-            <input type="checkbox" checked={setFilters} onChange={(e) => setSetFilters(e.target.checked)} />
-            Set filters on every column <span style={{ color: 'var(--nds-text-2)' }}>(enterprise)</span>
-          </label>
+          </Button>
+          <Checkbox
+            checked={sideBar}
+            onChange={(e) => setSideBar(e.target.checked)}
+            label={
+              <>
+                Columns / Filters tool panel{' '}
+                <span style={{ color: 'var(--nds-text-2)' }}>(enterprise)</span>
+              </>
+            }
+          />
+          <Checkbox
+            checked={setFilters}
+            onChange={(e) => setSetFilters(e.target.checked)}
+            label={
+              <>
+                Set filters on every column{' '}
+                <span style={{ color: 'var(--nds-text-2)' }}>(enterprise)</span>
+              </>
+            }
+          />
         </div>
 
         {probes && <ProbeTable legacy={probes.legacy} ag={probes.ag} />}
 
         <section className="gl-legacy" style={{ display: 'grid', gap: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>
+          <h2 className="text-lg font-heading" style={{ margin: 0 }}>
             Today — hand-rolled <code>WorkspaceGrid</code>
           </h2>
           <WorkspaceGrid<LabRow>
@@ -150,7 +164,7 @@ export function GridLabClient() {
         </section>
 
         <section className="gl-ag" style={{ display: 'grid', gap: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>
+          <h2 className="text-lg font-heading" style={{ margin: 0 }}>
             AG Grid Enterprise 36.1.0 — same props
           </h2>
           <AgWorkspaceGrid<LabRow>
@@ -175,40 +189,48 @@ export function GridLabClient() {
   )
 }
 
+/** One measured property, as the parity grid renders it. */
+interface ProbeRow {
+  key: string
+  property: string
+  legacy: string
+  ag: string
+  same: boolean
+}
+
+const PROBE_FIELDS: Array<[keyof Probe, string]> = [
+  ['rowHeight', 'Row height'],
+  ['headerHeight', 'Header height'],
+  ['cellFontSize', 'Cell font-size'],
+  ['headerFontSize', 'Header font-size'],
+  ['cellColor', 'Cell colour'],
+  ['rowBorderColor', 'Row rule colour'],
+]
+
+/** The DS `DataGrid` rather than a hand-rolled HTML table. A lab whose whole argument is that the
+ *  design system should own the grid has no business describing itself in a raw table — and the
+ *  raw-primitives ratchet holds this file at zero, which is the same point enforced. `numeric`
+ *  supplies the tabular figures the old inline `fontVariantNumeric` was reaching for. */
+const PROBE_COLUMNS: Array<Column<ProbeRow>> = [
+  { key: 'property', label: 'Property', render: (r) => r.property },
+  { key: 'legacy', label: 'WorkspaceGrid', render: (r) => r.legacy, numeric: true },
+  { key: 'ag', label: 'AG Grid', render: (r) => r.ag, numeric: true },
+  { key: 'verdict', label: 'Match', render: (r) => (r.same ? '\u2713 match' : '\u2715 differs') },
+]
+
 function ProbeTable({ legacy, ag }: { legacy: Probe; ag: Probe }) {
-  const rows: Array<[string, string, string, boolean]> = [
-    ['Row height', fmt(legacy.rowHeight), fmt(ag.rowHeight), legacy.rowHeight === ag.rowHeight],
-    ['Header height', fmt(legacy.headerHeight), fmt(ag.headerHeight), legacy.headerHeight === ag.headerHeight],
-    ['Cell font-size', fmt(legacy.cellFontSize), fmt(ag.cellFontSize), legacy.cellFontSize === ag.cellFontSize],
-    ['Header font-size', fmt(legacy.headerFontSize), fmt(ag.headerFontSize), legacy.headerFontSize === ag.headerFontSize],
-    ['Cell colour', fmt(legacy.cellColor), fmt(ag.cellColor), legacy.cellColor === ag.cellColor],
-    ['Row rule colour', fmt(legacy.rowBorderColor), fmt(ag.rowBorderColor), legacy.rowBorderColor === ag.rowBorderColor],
-  ]
+  const rows: ProbeRow[] = PROBE_FIELDS.map(([field, property]) => ({
+    key: field,
+    property,
+    legacy: fmt(legacy[field]),
+    ag: fmt(ag[field]),
+    same: legacy[field] === ag[field],
+  }))
 
   return (
-    <table style={{ borderCollapse: 'collapse', fontSize: 12.5, maxWidth: 720 }}>
-      <thead>
-        <tr>
-          {['Property', 'WorkspaceGrid', 'AG Grid', ''].map((h) => (
-            <th key={h} style={{ textAlign: 'left', padding: '6px 12px', borderBottom: '1px solid var(--nds-grey-200)' }}>
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(([label, a, b, same]) => (
-          <tr key={label}>
-            <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--nds-grey-150)' }}>{label}</td>
-            <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--nds-grey-150)', fontVariantNumeric: 'tabular-nums' }}>{a}</td>
-            <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--nds-grey-150)', fontVariantNumeric: 'tabular-nums' }}>{b}</td>
-            <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--nds-grey-150)' }}>
-              {same ? '✓ match' : '✕ differs'}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ maxWidth: 720 }}>
+      <DataGrid<ProbeRow> columns={PROBE_COLUMNS} rows={rows} rowKey={(r) => r.key} size="sm" />
+    </div>
   )
 }
 
