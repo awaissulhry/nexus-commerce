@@ -17,9 +17,9 @@ export const DEFAULT_REASON = 'MANUAL_ADJUSTMENT'
 
 /** Low-stock → status color token; mirrors the grid cell coloring. */
 export function getStockColor(qty: number, threshold: number): string {
-  if (qty === 0) return 'var(--status-danger-line)'
-  if (qty <= threshold) return 'var(--status-warning-line)'
-  return 'var(--status-success-line)'
+  if (qty === 0) return 'var(--nds-danger)'
+  if (qty <= threshold) return 'var(--nds-warning)'
+  return 'var(--nds-success)'
 }
 
 export interface LevelCell {

@@ -90,6 +90,18 @@ export type ProductRow = {
    * cells).
    */
   childCount?: number
+  /**
+   * Windowed sales, present only when the list was fetched with `includeSales`.
+   *
+   * `null` = not requested; `{units: 0, revenueCents: 0}` = requested and genuinely none in the
+   * window. Those are different answers and the grid renders them differently — a measured zero
+   * is a fact about the product, an absent field is a fact about the request.
+   *
+   * ROLLED UP on a parent row: every ProductProfitDaily row in this database attaches to a
+   * child, none to a parent, so a parent's figure is the sum across its variations. `days`
+   * travels with it so a column can label its own window.
+   */
+  sales?: { units: number; revenueCents: number; days: number } | null
   coverage: Record<
     string,
     { live: number; draft: number; error: number; total: number }

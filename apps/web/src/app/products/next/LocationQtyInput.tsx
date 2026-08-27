@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Lock, Loader2 } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Lock } from 'lucide-react'
+import { Input, Spinner } from '@/design-system/primitives'
 import styles from './styles.module.css'
 
 export function LocationQtyInput({
@@ -86,7 +86,7 @@ export function LocationQtyInput({
       disabled={saving}
     >
       <span className={styles.invNum}>{value}</span>
-      {saving && <Loader2 size={11} className={styles.invSpin} aria-label="Saving" />}
+      {saving && <Spinner size={11} />}
     </button>
   )
 }

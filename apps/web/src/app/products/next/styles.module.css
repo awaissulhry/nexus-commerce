@@ -1,22 +1,22 @@
 /**
  * /products/next — page-scoped styles.
- * All colours are DS token variables; no raw hex values.
- * Composed alongside DS class names (nds-*) which live in
- * the four design-system style sheets imported in the client component.
+ *
+ * Everything here is on the `--nds-*` namespace and nothing else. The platform aliases
+ * (--text-*, --surface-*, --border-*) are the names app/globals.css and .h10-shell ALSO define
+ * as Tailwind RGB channels, where `var(--border-default)` is invalid and silently dropped; the
+ * design system's rule is `--nds-*`, which no other stylesheet redefines and which `.dark`
+ * already handles. See DESIGN.md, "the same names mean two different things".
+ *
+ * The DS stylesheets are loaded once by the ROOT layout, not by this page.
+ *
+ * What is left in this file is only what the DS does not cover — the gaps are filed with their
+ * measurements in .claude/DS-GAPS.md under "/products/next DS alignment".
  */
 
 /* ── Page wrapper ────────────────────────────────────────── */
 .wrap {
   padding: 18px 24px 28px;
   min-height: 100vh;
-  /*
-   * DS success tone renders blue (--nds-pill-success-bg is #d2e6fc,
-   * --nds-pill-success-fg is --nds-blue-900). Override to green locally
-   * so the Active status pill reads as green on this page.
-   * Promote to DS success token when coordinating with the DS session.
-   */
-  --nds-pill-success-bg: var(--nds-green-soft);
-  --nds-pill-success-fg: var(--nds-green-700);
 }
 
 /* ── Header actions row ──────────────────────────────────── */
@@ -27,70 +27,10 @@
 }
 
 /* ── KPI tiles ───────────────────────────────────────────── */
+/* MetricStrip brings its own grid and gap (`.nds-metrics` auto-fits); the page owns only the
+   space between the strip and the filter bar below it. */
 .kpis {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
   margin-bottom: 14px;
-}
-
-.kpiTile {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--nds-radius-2xl);
-  padding: 13px 15px;
-  box-shadow: 0 1px 2px rgb(var(--nds-shadow-rgb) / 0.06),
-              0 1px 3px rgb(var(--nds-shadow-rgb) / 0.04);
-  cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-  user-select: none;
-  outline: none;
-}
-
-.kpiTile:hover {
-  border-color: var(--border-strong);
-}
-
-.kpiTile:focus-visible {
-  box-shadow: var(--nds-focus-ring);
-}
-
-.kpiTileActive {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
-}
-
-.kpiLabel {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-tertiary);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.kpiDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.kpiValue {
-  font-size: 23px;
-  font-weight: 740;
-  color: var(--text-primary);
-  margin-top: 7px;
-  letter-spacing: -0.4px;
-  font-variant-numeric: tabular-nums;
-}
-
-.kpiHint {
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  margin-top: 1px;
 }
 
 /* ── Toolbar (inside .nds-gridcard) ───────────────────── */
@@ -108,133 +48,9 @@
   flex-wrap: wrap;
 }
 
-.clearSel {
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0 4px;
-}
-
-.clearSel:hover {
-  color: var(--color-primary);
-}
-
-/* ── Live indicator chip ─────────────────────────────────── */
-.liveChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: var(--nds-radius-round);
-  background: var(--nds-success-soft);
-  color: var(--status-success-strong);
-  font-weight: 650;
-  font-size: 12px;
-}
-
-.liveDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--nds-live);
-}
-
 /* ── Filter bar wrapper (DS FilterBar spacing) ───────────── */
 .filterBar {
   margin-bottom: 12px;
-}
-
-/* ── Grid density wrapper ────────────────────────────────── */
-.densityCompact :global(.nds-grid tbody td) {
-  padding-top: 5px;
-  padding-bottom: 5px;
-}
-
-.densitySpacious :global(.nds-grid tbody td) {
-  padding-top: 15px;
-  padding-bottom: 15px;
-}
-
-/* ── Channel badge cell ──────────────────────────────────── */
-.chcell {
-  display: flex;
-  gap: 6px;
-}
-
-.ch {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-default);
-  flex: none;
-}
-
-.chOn {
-  background: var(--nds-success-soft);
-  color: var(--status-success-strong);
-  border-color: var(--nds-green-soft);
-}
-
-.chOff {
-  background: var(--surface-sunken);
-  color: var(--text-tertiary);
-}
-
-.chIss {
-  background: var(--nds-warning-soft);
-  color: var(--nds-amber-text);
-  border-color: var(--nds-amber-soft);
-}
-
-/* ── Centered SVG checkbox ───────────────────────────────── */
-/*
- * CHECKBOX CENTERING: implemented as an inline-flex button with a
- * centred SVG path. No DS edit required. The native <input> approach
- * that DataGrid.selectable uses would render a browser-default checkbox
- * (potentially off-centre on some platforms); we avoid it entirely by
- * NOT passing `selectable` to DataGrid and managing selection via a
- * custom first column.
- */
-.ckb {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1.5px solid var(--border-strong);
-  background: var(--surface-card);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-  color: transparent;
-  transition: background 0.1s ease, border-color 0.1s ease;
-  flex: none;
-}
-
-.ckb:hover {
-  border-color: var(--color-primary);
-}
-
-.ckb:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
-}
-
-.ckbOn {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--nds-grey-25);
 }
 
 /* ── Product column cell ─────────────────────────────────── */
@@ -249,16 +65,6 @@
   min-width: 0;
 }
 
-.ptitle {
-  font-weight: 640;
-  font-size: 12.8px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 330px;
-}
-
 /* Title row: clickable name + hover-revealed "Open in new tab" pill.
    Mirrors the ads-manager campaign-name cell (ads.css .nmw .t + .h10-open). */
 .ptitleRow {
@@ -270,9 +76,9 @@
 }
 
 .ptitleLink {
-  font-weight: 640;
-  font-size: 12.8px;
-  color: var(--nds-blue-600);
+  font-weight: var(--nds-font-weight-semibold);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-primary);
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
@@ -290,11 +96,11 @@
   display: none;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--nds-white);
-  background: var(--nds-blue-600);
-  border-radius: 6px;
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-inverse);
+  background: var(--nds-primary);
+  border-radius: var(--nds-radius-sm);
   padding: 3px 8px;
   text-decoration: none;
   flex-shrink: 0;
@@ -307,12 +113,12 @@
 }
 
 .openBtn:hover {
-  background: var(--nds-blue-700);
+  background: var(--nds-primary-hover);
 }
 
 .psub {
-  font-size: 11px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
   margin-top: 2px;
   display: flex;
   gap: 8px;
@@ -322,40 +128,13 @@
 
 .skuTag {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  color: var(--text-tertiary);
-}
-
-.typeTag {
-  background: var(--surface-sunken);
-  color: var(--text-secondary);
-  border-radius: var(--nds-radius-round);
-  padding: 1px 8px;
-  font-size: 10.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
 }
 
 .varCount {
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
   white-space: nowrap;
-}
-
-/* ── Available (stock) cell ──────────────────────────────── */
-.availCell {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-}
-
-.availNum {
-  font-variant-numeric: tabular-nums;
-  font-weight: 680;
-}
-
-.availUnit {
-  color: var(--text-tertiary);
-  font-size: 11px;
 }
 
 /* ── Row action cluster ──────────────────────────────────── */
@@ -366,35 +145,6 @@
   align-items: center;
 }
 
-.editLink {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-card);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-decoration: none;
-  transition: background 0.1s ease;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.editLink:hover {
-  background: var(--nds-surface-hover);
-}
-
-.menuTrigger {
-  height: 28px !important;
-  width: 28px !important;
-  min-width: 28px !important;
-  padding: 0 !important;
-  font-size: 15px !important;
-}
-
 /* ── Variation expand chevron ────────────────────────────── */
 .expandBtn {
   width: 20px;
@@ -403,10 +153,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--nds-radius-pill);
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   cursor: pointer;
   padding: 0;
   transition: background 0.1s ease, color 0.1s ease;
@@ -414,7 +164,7 @@
 
 .expandBtn:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 
 .expandBtn:focus-visible {
@@ -428,56 +178,154 @@
   flex: none;
 }
 
-/* Child rows are indented so their thumb sits past the chevron area */
-.productCellChild {
-  padding-left: 32px;
+/* A MEASURED zero — we asked for the window and the answer was none. Muted so a wall of them
+   does not compete with the rows that did sell, and carrying a `title` that says so, because a
+   bare dash otherwise reads as "unknown" and that is a different fact. */
+.noSales {
+  color: var(--nds-text-muted);
+}
+
+/* Dates are supporting detail, not the row's subject. */
+.updatedCell {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+
+/* The Sales column's own admission of what it cannot count. */
+.unattributed {
+  margin-bottom: 12px;
+}
+
+/* The blast radius of the current selection, stated before any action is clicked. */
+.reachNote { color: var(--nds-text-muted); }
+
+/* ── Tag dialog ───────────────────────────────────────────────────────── */
+.tagBody { display: flex; flex-direction: column; gap: 12px; }
+
+/* Capped and scrollable: the list is every tag that EXISTS, which is unbounded, and a dialog
+   that grows with the tag count stops fitting the screen at exactly the point someone has
+   enough tags to need searching. */
+.tagList {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+}
+
+.tagRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.tagRow:hover { background: var(--nds-surface-hover); }
+
+.tagDot { width: 9px; height: 9px; border-radius: var(--nds-radius-round); flex: none; }
+.tagName { font-size: var(--nds-font-size-base); color: var(--nds-text); }
+
+/* Says WHY the box is half-filled. An indeterminate checkbox is a well-known control and still
+   a puzzle the first time; three words remove the puzzle. */
+.tagMixed {
+  margin-left: auto;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.tagEmpty {
+  margin: 0;
+  padding: 14px 11px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.tagCreate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.tagCreateActions { display: flex; gap: 7px; justify-content: flex-end; }
+
+.tagCascade {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  cursor: pointer;
+}
+.tagCascadeWhy { color: var(--nds-text-muted); }
+
+.tagError {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-strong);
+}
+
+.tagFoot { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; }
+/* The footer states the pending change before you commit it — a bulk write across a selection
+   should never be a surprise. */
+.tagFootNote { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.tagFootActions { display: inline-flex; gap: 8px; }
+
+/* ── Tags column ──────────────────────────────────────────────────────── */
+.tagCell { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; overflow: hidden; }
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tagMore { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); flex: none; }
+
+/* ── Variation-family footer (the capped-preview handoff) ─────────────── */
+/* Sits in DataGrid's `renderExpanded` row. That cell is `padding: 0` and already carries
+   `--nds-surface-sunken` and the colSpan, so this owns only the inner layout.
+   Flush left, deliberately. Indenting it to line up with the child rows sounds tidier and is
+   not: a child's content sits behind the 43px selection column, the grid's cell padding, a 32px
+   indent, a 20px chevron slot and a thumbnail — measured, that is 120px to the thumb and 187px
+   to the title, both of which move with the density tier. Any such number is a constant that
+   silently goes wrong at one of three densities. The sunken ground already says this row belongs
+   to the family above it, and Seller Central left-aligns its own equivalent for the same reason. */
+.famFoot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+}
+
+.famFootCount {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
 }
 
 /* Loading row shown while fetching children */
+/* Aligned with the child rows it stands in for — it IS one, briefly. The DS's tint and the 3px
+   rail on the first cell already say "child" without moving anything, which is why neither this
+   nor the real child rows are indented. */
 .childLoadingRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 32px;
-  color: var(--text-tertiary);
-  font-size: 12px;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
   font-style: italic;
-}
-
-/* CSS-only spinner for the loading state inside the chevron button */
-@keyframes nexus-spin {
-  to { transform: rotate(360deg); }
-}
-.expandSpinner {
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid var(--border-default);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: nexus-spin 0.6s linear infinite;
-  display: block;
-  flex: none;
-}
-
-/* ── Sort header button (used in column labels for manual sort) ── */
-.sortHeaderBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  padding: 0;
-}
-
-.sortHeaderBtn:hover {
-  color: var(--text-primary);
-}
-
-.sortHeaderBtnActive {
-  color: var(--color-primary);
 }
 
 /* ── Inventory cell (FBA/FBM split button) ───────────────────── */
@@ -490,7 +338,7 @@
   padding: 2px 4px;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--nds-radius-sm);
   cursor: pointer;
   text-align: left;
 }
@@ -513,16 +361,16 @@
 }
 .invNum {
   font-variant-numeric: tabular-nums;
-  font-weight: 680;
+  font-weight: var(--nds-font-weight-bold);
 }
 .invTag {
-  color: var(--text-tertiary);
-  font-size: 10px;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .invLock {
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
 }
 
 /* ── LocationQtyInput — editable on-hand control ─────────────── */
@@ -533,18 +381,15 @@
 .invQtyBtn {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 6px; min-width: 40px;
-  background: var(--nds-grey-25); border: 1px solid var(--border-default);
-  border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums;
+  background: var(--nds-surface-hover); border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm); cursor: pointer; font-variant-numeric: tabular-nums;
 }
-.invQtyBtn:hover { border-color: var(--border-strong); }
+.invQtyBtn:hover { border-color: var(--nds-border-strong); }
 .invQtyBtn:disabled { opacity: 0.6; cursor: default; }
 /* DS Input inside a matrix/list cell: the .nds-field wrapper owns the
    border/background/focus; we only constrain width and align the numerals. */
 .invQtyField { width: 76px; }
 .invQtyInput { width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
-.invSpin { color: var(--text-tertiary); animation: invspin 0.8s linear infinite; }
-@keyframes invspin { to { transform: rotate(360deg); } }
-
 /* ── InventoryEditorModal — list + variation×location matrix ─── */
 /* Tokens substituted: --surface-base→--surface-card,
    --status-danger-bg→--status-danger-soft,
@@ -552,31 +397,19 @@
    --border-subtle, --text-link are real tokens (defined in tokens.css). */
 .invModalHead { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .invReasonRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.invReasonLabel { display: inline-flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-secondary); }
+.invReasonLabel { display: inline-flex; flex-direction: column; gap: 2px; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
 /* DS Combobox (custom-rendered dropdown) for the Reason picker. */
 .invReasonCombo { width: 200px; }
 /* DS Input wrapper for the Notes field — grow to fill the reason row. */
 .invNotesField { flex: 1; min-width: 160px; }
-.invToast { padding: 6px 10px; border-radius: 6px; background: var(--status-danger-soft); color: var(--status-danger-strong); font-size: 12px; }
-.invState { padding: 24px; text-align: center; color: var(--text-secondary); display: flex; flex-direction: column; gap: 10px; align-items: center; }
-.invTable { width: 100%; border-collapse: collapse; font-size: 13px; }
-.invTable th { text-align: left; padding: 6px 8px; color: var(--text-tertiary); font-weight: 600; border-bottom: 1px solid var(--border-subtle); }
-.invTable td { padding: 6px 8px; border-bottom: 1px solid var(--border-subtle); }
-.invLocCode { font-weight: 600; margin-right: 6px; }
-.invLocType { color: var(--text-tertiary); font-size: 11px; text-transform: capitalize; }
-.invMatrixWrap { overflow-x: auto; }
-.invMatrix { border-collapse: collapse; font-size: 13px; }
-.invMatrix th, .invMatrix td { padding: 6px 8px; border: 1px solid var(--border-subtle); white-space: nowrap; text-align: center; }
-.invMatrixCorner, .invMatrixRowHead { position: sticky; left: 0; background: var(--surface-card); text-align: left; font-weight: 600; z-index: 1; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.invMatrixRowHead { font-weight: 500; font-variant-numeric: tabular-nums; }
+.invToast { padding: 6px 10px; border-radius: var(--nds-radius-sm); background: var(--nds-danger-soft); color: var(--nds-danger-strong); font-size: var(--nds-font-size-sm); }
+.invState { padding: 24px; text-align: center; color: var(--nds-text-2); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.invLocCode { font-weight: var(--nds-font-weight-semibold); margin-right: 6px; }
+.invLocType { color: var(--nds-text-muted); font-size: var(--nds-font-size-xs); text-transform: capitalize; }
 .invModalFoot { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
-.invManageLink { color: var(--text-link); font-size: 13px; }
+.invManageLink { color: var(--nds-text-link); font-size: var(--nds-font-size-base); }
 
 /* ── Grid loading skeleton (shown while the initial product list loads) ── */
 .gridSkel { display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 6px 2px; }
 .gridSkelRow { display: flex; align-items: center; gap: 12px; }
 .gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
-.gridSkelThumb { width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0; }
-.gridSkelBar { height: 11px; border-radius: 6px; }
-.gridSkelThumb, .gridSkelBar { background: var(--nds-grey-25); animation: gridSkelPulse 1.25s ease-in-out infinite; }
-@keyframes gridSkelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }

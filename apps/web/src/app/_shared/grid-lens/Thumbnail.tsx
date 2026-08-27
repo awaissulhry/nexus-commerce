@@ -21,9 +21,22 @@
  * Cloudinary URLs (`res.cloudinary.com/<cloud>/image/upload/...`) are
  * rewritten with a per-density transform so a 32 px compact thumb
  * actually requests a 32 px asset instead of the full-res master
- * (4× bandwidth savings on the 100-row paint). Non-Cloudinary URLs
- * (Amazon CDN, eBay, Shopify) pass through unchanged — they self-size
- * via their own URL conventions.
+ * (4× bandwidth savings on the 100-row paint).
+ *
+ * 🔴 Amazon URLs are rewritten too, as of 2026-08-26. This block used to say they "self-size
+ * via their own URL conventions" — they do NOT. A bare
+ * `m.media-amazon.com/images/I/<id>.jpg` serves the full-resolution MASTER; the size lives in
+ * the filename (`<id>._SL160_.jpg`) and Amazon returns whatever you ask for. Measured on
+ * /products/next: every Amazon thumb arrived 2560×2560 to be painted into a 56×56 box, while
+ * the one Cloudinary image beside it was a correct 224×224. Because the <img> is `opacity-0`
+ * until `onLoad` fires, a multi-second decode reads as "the image never loaded" rather than as
+ * a slow one — which is how it was reported. After the fix, the same three URLs: 2560×2560 in
+ * 2112 ms → 112×112 in 264 ms.
+ *
+ * eBay and Shopify still pass through. eBay DOES encode size in the filename (`s-l500.jpg`)
+ * and Shopify takes `?width=`, so both are worth doing next; neither was measured here, and a
+ * transform written from documentation rather than from a measurement is how this comment got
+ * to be wrong in the first place.
  */
 
 import {
@@ -80,6 +93,25 @@ function withCloudinaryTransform(url: string, transform: string): string {
   return url.replace(/\/image\/upload\//, `/image/upload/${transform}/`)
 }
 
+/**
+ * Ask Amazon's CDN for a sized rendition. The size is a filename segment, not a query param:
+ * `<id>.jpg` → `<id>._SL112_.jpg`. Any modifier block already present (`._AC_SX679_`) is
+ * REPLACED rather than appended — Amazon honours the last one, and stacking them is how you get
+ * a URL that 404s.
+ */
+function withAmazonTransform(url: string, px: number): string {
+  if (!/(?:m\.media-amazon|images-amazon|ssl-images-amazon)\.com/.test(url)) return url
+  return url.replace(
+    /(\._[A-Za-z0-9,]+_)?\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i,
+    (_m, _mod, ext: string, qs: string | undefined) => `._SL${px}_.${ext}${qs ?? ''}`,
+  )
+}
+
+/** Every CDN we can size, applied in turn. A URL from any other host passes through. */
+function sizedFor(url: string, px: number): string {
+  return withAmazonTransform(withCloudinaryTransform(url, thumbTransformFor(px)), px)
+}
+
 function thumbTransformFor(px: number): string {
   // f_auto: serve webp/avif when the browser supports it.
   // q_auto: per-image quality tuning (smaller files at same SSIM).
@@ -125,8 +157,11 @@ function ThumbnailImpl({
 
   // Memoise the transformed URLs so onLoad / onError keep referring to
   // the same src string and React doesn't bounce the <img> on re-render.
-  const thumbSrc = src ? withCloudinaryTransform(src, thumbTransformFor(thumbPx * 2)) : null
-  const previewSrc = src ? withCloudinaryTransform(src, previewTransform()) : null
+  // `thumbPx * 2` for retina — the same dpr_2.0 the Cloudinary transform asks for.
+  const thumbSrc = src ? sizedFor(src, thumbPx * 2) : null
+  const previewSrc = src
+    ? withAmazonTransform(withCloudinaryTransform(src, previewTransform()), PREVIEW_SIZE_PX)
+    : null
 
   const showImage = thumbSrc && !imgFailed
 

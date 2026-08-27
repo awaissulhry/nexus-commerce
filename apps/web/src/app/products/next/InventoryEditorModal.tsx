@@ -3,12 +3,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
-import { Modal, Combobox } from '@/design-system/components'
+import { Modal, Combobox, DataGrid, type Column } from '@/design-system/components'
 import { Input, Button } from '@/design-system/primitives'
 import type { ProductRow } from '../_types'
 import { useInventoryEditor } from './useInventoryEditor'
 import { LocationQtyInput } from './LocationQtyInput'
-import { editorModeForRow, REASON_OPTIONS, DEFAULT_REASON } from './inventoryEditor.logic'
+import {
+  editorModeForRow,
+  REASON_OPTIONS,
+  DEFAULT_REASON,
+  type LevelCell,
+  type MatrixModel,
+} from './inventoryEditor.logic'
 import styles from './styles.module.css'
 
 export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null; onClose: () => void }) {
@@ -70,6 +76,79 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
     </div>
   )
 
+  // ── List mode: one row per location ─────────────────────────────
+  const listColumns = useMemo<Column<LevelCell>[]>(() => [
+    {
+      key: 'location',
+      label: 'Location',
+      render: (lv) => (
+        <>
+          <span className={styles.invLocCode}>{lv.locationCode}</span>
+          <span className={styles.invLocType}>{lv.locationType.replace(/_/g, ' ').toLowerCase()}</span>
+        </>
+      ),
+    },
+    {
+      key: 'onHand',
+      label: 'On hand',
+      render: (lv) => (
+        <LocationQtyInput
+          value={lv.quantity}
+          reserved={lv.reserved}
+          editable={lv.editable}
+          locationType={lv.locationType}
+          saving={savingKey === `${row!.id}:${lv.locationId}`}
+          onCommit={(v) => doCommit(row!.id, lv.locationId, v)}
+        />
+      ),
+    },
+    { key: 'reserved', label: 'Reserved', numeric: true, render: (lv) => lv.reserved },
+    { key: 'available', label: 'Available', numeric: true, render: (lv) => lv.available },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [row?.id, savingKey, reason, notes])
+
+  // ── Matrix mode: variations × locations ─────────────────────────
+  // The SKU column is `sticky` so it stays readable while the location columns scroll — the
+  // behaviour the hand-rolled table spelled out with `position: sticky; left: 0` on two classes.
+  const matrixColumns = useMemo<Column<MatrixModel['rows'][number]>[]>(() => {
+    if (!matrix) return []
+    return [
+      {
+        key: '_sku',
+        label: 'Variation',
+        sticky: true,
+        width: 220,
+        render: (r) => <span title={r.name || r.sku}>{r.sku}</span>,
+      },
+      ...matrix.columns.map((c) => ({
+        key: c.locationId,
+        label: (
+          <>
+            {c.locationCode}
+            {!c.editable && <Lock size={11} aria-label="Amazon-managed, read-only" style={{ marginLeft: 4, verticalAlign: 'middle' }} />}
+          </>
+        ),
+        prefsLabel: c.locationCode,
+        align: 'center' as const,
+        width: 120,
+        render: (r: MatrixModel['rows'][number]) => {
+          const cell = r.cells[c.locationId] ?? { quantity: 0, reserved: 0, available: 0 }
+          return (
+            <LocationQtyInput
+              value={cell.quantity}
+              reserved={cell.reserved}
+              editable={c.editable}
+              locationType={c.locationType}
+              saving={savingKey === `${r.productId}:${c.locationId}`}
+              onCommit={(v) => doCommit(r.productId, c.locationId, v)}
+            />
+          )
+        },
+      })),
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matrix, savingKey, reason, notes])
+
   return (
     <Modal
       open={open}
@@ -99,75 +178,22 @@ export function InventoryEditorModal({ row, onClose }: { row: ProductRow | null;
             </Link>
           </div>
         ) : (
-          <table className={styles.invTable}>
-            <thead>
-              <tr>
-                <th>Location</th><th>On hand</th><th>Reserved</th><th>Available</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((lv) => (
-                <tr key={lv.locationId}>
-                  <td>
-                    <span className={styles.invLocCode}>{lv.locationCode}</span>
-                    <span className={styles.invLocType}>{lv.locationType.replace(/_/g, ' ').toLowerCase()}</span>
-                  </td>
-                  <td>
-                    <LocationQtyInput
-                      value={lv.quantity}
-                      reserved={lv.reserved}
-                      editable={lv.editable}
-                      locationType={lv.locationType}
-                      saving={savingKey === `${row!.id}:${lv.locationId}`}
-                      onCommit={(v) => doCommit(row!.id, lv.locationId, v)}
-                    />
-                  </td>
-                  <td className={styles.invNum}>{lv.reserved}</td>
-                  <td className={styles.invNum}>{lv.available}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataGrid<LevelCell>
+            columns={listColumns}
+            rows={list}
+            rowKey={(lv) => lv.locationId}
+            size="sm"
+          />
         )
       )}
 
       {!loading && !error && mode === 'matrix' && matrix && (
-        <div className={styles.invMatrixWrap}>
-          <table className={styles.invMatrix}>
-            <thead>
-              <tr>
-                <th className={styles.invMatrixCorner}>Variation</th>
-                {matrix.columns.map((c) => (
-                  <th key={c.locationId}>{c.locationCode}{!c.editable && <Lock size={11} aria-hidden="true" style={{ marginLeft: 4, verticalAlign: 'middle' }} />}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {matrix.rows.map((r) => (
-                <tr key={r.productId}>
-                  <td className={styles.invMatrixRowHead} title={r.name || r.sku}>
-                    {r.sku}
-                  </td>
-                  {matrix.columns.map((c) => {
-                    const cell = r.cells[c.locationId] ?? { quantity: 0, reserved: 0, available: 0 }
-                    return (
-                      <td key={c.locationId}>
-                        <LocationQtyInput
-                          value={cell.quantity}
-                          reserved={cell.reserved}
-                          editable={c.editable}
-                          locationType={c.locationType}
-                          saving={savingKey === `${r.productId}:${c.locationId}`}
-                          onCommit={(v) => doCommit(r.productId, c.locationId, v)}
-                        />
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid<MatrixModel['rows'][number]>
+          columns={matrixColumns}
+          rows={matrix.rows}
+          rowKey={(r) => r.productId}
+          size="sm"
+        />
       )}
     </Modal>
   )

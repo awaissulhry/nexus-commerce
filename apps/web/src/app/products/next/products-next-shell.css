@@ -1,42 +1,38 @@
 /*
- * Light-mode pin for /products/next.
+ * Light-mode pin for /products/next — deliberately almost empty. Read before adding to it.
  *
- * Re-scopes the DS semantic token aliases to their :root (light) values so that
- * even if an ancestor element carries the `.dark` class, everything under
- * `.productsNextLight` renders with the light palette.
+ * This file used to re-declare eleven PLATFORM ALIASES (--text-*, --surface-*, --border-*) so the
+ * page rendered light under an ancestor `.dark`. Every part of that job is now done, better,
+ * somewhere else, and keeping the block was actively harmful for three measured reasons:
  *
- * Strategy: reference --nds-* primitive ramp vars that are defined on :root and
- * never overridden by the .dark block in tokens.css. This is the same approach
- * used in ads.css (hardcoded hex that matches the :root palette), but expressed
- * via var() so there is a single source of truth for the colour values.
+ * 1. IT PINNED THE WRONG NAMESPACE. It defined ZERO `--nds-*` tokens, and `--nds-*` is what every
+ *    design-system component reads. So it protected this page's own stylesheet and not one DS
+ *    component. The real pin is `body:has(.h10-shell), .h10-shell` at the end of
+ *    `app/_shared/shared-shell.css` — 89 `--nds-*` declarations covering all 54 tokens `.dark`
+ *    redefines, and scoped through `body:has()` so it also reaches the eight components that
+ *    portal into `document.body` (Listbox, Menu, Combobox, MultiSelect, HoverCard, Modal, Drawer,
+ *    Toast). The layout already puts `h10-shell` on this element.
  *
- * /* eslint/guard: this file is intentionally outside the P3-token guard scope;
- *    it references only --nds-* primitive vars already present in tokens.css. */
+ * 2. IT COLLIDED WITH `.h10-shell` ON THIS VERY ELEMENT. `.h10-shell` declares the same alias
+ *    names as Tailwind RGB triplets (`--text-primary: 15 23 42`); this block declared them as
+ *    whole colours. Same element, same specificity — only the import order in `layout.tsx` decided
+ *    which won. Reorder those two lines and every `var(--text-primary)` on the page becomes
+ *    invalid and is silently dropped. The page's stylesheet is now on `--nds-*`, so there is
+ *    nothing left to collide.
+ *
+ * 3. IT HAD GONE STALE, exactly the way `scripts/check-shell-pin-fresh.mjs` documents. Pinning
+ *    THROUGH A RAMP (`--text-tertiary: var(--nds-grey-500)`) rots the moment a role diverges from
+ *    its ramp, and two of the eleven had:
+ *      --text-tertiary  #8a93a1 (3.10:1)  — DS had re-toned --nds-text-3 to #7e8796 to clear the
+ *                                           3:1 icon floor; this pin dragged it back.
+ *      --text-link      #1f6fde (4.79:1)  — DS --nds-text-link is #1a60c4 (5.98:1).
+ *    That guard only reads `shared-shell.css`, so it never saw this file.
+ *
+ * What remains is the one thing `.h10-shell` does not do: tell the browser this subtree is light
+ * so NATIVE UI (scrollbars, date/number spinners, autofill) matches. It is not a colour override
+ * and cannot go stale.
+ */
 
 .productsNextLight {
-  /* Pin light surface tokens */
-  --surface-canvas:  var(--nds-grey-50);   /* #f4f6f9 — page background */
-  --surface-card:    var(--nds-white);      /* #ffffff — cards / panels */
-  --surface-sunken:  var(--nds-grey-100);  /* #eef1f5 — sunken wells */
-
-  /* Pin light text tokens */
-  --text-primary:    var(--nds-grey-900);  /* #1c2530 */
-  --text-secondary:  var(--nds-grey-600);  /* #5b6573 */
-  --text-tertiary:   var(--nds-grey-500);  /* #8a93a1 */
-  /* 9.0b — these two were USED by this page but never pinned, so they fell through
-     to globals.css `:root`, where they are RGB channels. Both declarations were
-     therefore dropped and inherited near-black instead: `.invManageLink` was a link
-     that did not look like a link, and the sort chevron was not muted. Measured
-     in-browser 2026-08-24. Pin ALL of them or none — the rule this block already states. */
-  --text-disabled:   var(--nds-grey-400);  /* #aeb6c2 */
-  --text-link:       var(--nds-blue-600);  /* #1f6fde */
-
-  /* Pin light border tokens */
-  --border-default:  var(--nds-grey-200);  /* #d8dde4 */
-  --border-strong:   var(--nds-grey-300);  /* #c2c9d3 */
-  --border-subtle:   var(--nds-grey-150);  /* #e6e9ee */
-
-  /* Tell the browser this subtree uses a light colour scheme so native
-     form controls (scrollbars, selects) also render in light mode. */
   color-scheme: light;
 }
