@@ -239,11 +239,35 @@ node apps/web/src/design-system/tools/token-guard.mjs || {
   exit 1
 }
 
+# AG.4 — the AG Grid import boundary. The engine is the migration's seam: one file imports the
+# React binding, so swapping or reverting the engine is one change. That was a comment until now,
+# and a second importer appeared within hours of it being written.
+echo "→ Checking AG Grid import boundary..."
+node scripts/check-ag-grid-import-boundary.mjs || {
+  echo "❌ AG Grid import boundary FAILED — see message above"
+  exit 1
+}
+
 echo "→ Checking DS barrel/API consistency..."
 node apps/web/src/design-system/tools/api-guard.mjs || {
   echo "❌ DS api-guard FAILED — see message above"
   exit 1
 }
+
+# AG.3 — apps/web unit tests. This workspace had 89 `*.vitest.test.ts` files, no vitest config
+# and no `test` script, so not one of them had ever run: they were written, reviewed and committed
+# as if they were gates while asserting nothing. All 89 pass (1017 tests) as of 2026-08-28.
+#
+# Placed BEFORE the builds deliberately — the suite is pure-logic and finishes in about a second,
+# so a broken assertion fails here instead of after a multi-minute `next build`.
+echo "→ Running apps/web unit tests..."
+npm run test --workspace=@nexus/web --silent > /tmp/web-tests.log 2>&1 || {
+  echo "❌ apps/web tests FAILED"
+  tail -40 /tmp/web-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/web-tests.log | tail -1 || true
+echo "✓ apps/web tests passed"
 
 echo "→ Building apps/web..."
 # Build into a dir unique to THIS push. Concurrent pushes previously shared `.next` and
