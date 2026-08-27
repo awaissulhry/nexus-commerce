@@ -32,6 +32,22 @@ const nextConfig = {
     // bundling it breaks that path (FP3 quote PDF). Keep it external.
     "pdfkit",
   ],
+  // ── Turbopack dev cache — bounded by construction (2026-08-27) ────────────────────────────
+  //
+  // Same reason as apps/web/next.config.js, where the full incident is written up: Next 16
+  // defaults `turbopackFileSystemCacheForDev` to TRUE and nothing prunes it. apps/web's copy
+  // reached 15.8 GB and kernel-panicked this machine twice in 95 minutes; this app's own
+  // `.next-dev` had been sitting at 2.0 GB since 07-05 on the same unbounded default.
+  // Off here too, so the failure cannot simply move apps.
+  experimental: {
+    turbopackFileSystemCacheForDev: false,
+    // A "target" limit in bytes, not a hard cap — but the only lever that reaches Turbopack's
+    // native Rust allocation. DEV ONLY: Next threads the same value into the production build,
+    // and this is guarding a long-lived dev server, not a one-shot build. See apps/web's copy.
+    ...(process.env.NODE_ENV === "development"
+      ? { turbopackMemoryLimit: 4 * 1024 * 1024 * 1024 }
+      : {}),
+  },
 };
 
 export default nextConfig;

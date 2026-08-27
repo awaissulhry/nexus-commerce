@@ -18,6 +18,23 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
+# ── Stale build-dir sweep (2026-08-27) ───────────────────────────────────────────
+# The per-push build dir created further down is cleaned by `trap … EXIT`, and a trap NEVER
+# fires on SIGKILL or a kernel panic. Two panics on 2026-08-27 plus assorted killed pushes
+# had left 35 orphaned `.next-push-*` dirs — 5.75 GB — going back to 08-12, next to stray
+# `.next-check-*` / `.next-diag-*` from ad-hoc verification runs. Disk was not the real cost:
+# it is the same class of bug as the unbounded dev cache that panicked this machine, i.e.
+# cleanup that only happens on a graceful exit.
+#
+# `-mmin +120` is the concurrency guard and it is LOAD-BEARING: sibling sessions push into
+# this same working tree, and a build that is still running keeps a fresh mtime on its dir.
+# Only dirs untouched for two hours are swept, so this can never delete a live push's output.
+# Additive only — it removes no gate and changes no exit code. `|| true` because `set -e` is
+# on and "nothing to sweep" is the normal, healthy case.
+find apps/web apps/factory -maxdepth 1 -type d \
+  \( -name '.next-push-*' -o -name '.next-check-*' -o -name '.next-diag-*' \) \
+  -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+
 echo "→ Checking schema/migration drift (table-level)..."
 node packages/database/scripts/check-schema-drift.mjs || {
   echo "❌ Table-level drift check FAILED — see message above"

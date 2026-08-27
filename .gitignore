@@ -50,8 +50,11 @@ Thumbs.db
 # Turbo
 .turbo/
 .next/
-.next-dev/
-.next-push-*/
+# Every Next build dir, not an enumerated few. NEXT_DIST_DIR / FACTORY_BUILD_DIR let any
+# session name its own (.next-dev, .next-push-$$, .next-check-*, .next-diag-*, .next-verify,
+# .next-ar0 …), and the enumerated list fell behind: on 2026-08-27 three such dirs were
+# sitting UNIGNORED in the tree. Directory-only, and no tracked path starts with `.next-`.
+.next-*/
 
 # Cache
 .cache/

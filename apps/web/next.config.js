@@ -44,6 +44,39 @@ const nextConfig = {
       dynamic: 180,
       static: 300,
     },
+    // ── Turbopack dev cache — bounded by construction (2026-08-27) ─────────────────────────
+    //
+    // `turbopackFileSystemCacheForDev` defaults to TRUE in Next 16 and NOTHING prunes what it
+    // writes. `.next-dev/dev/cache/turbopack` reached 15.8 GB across 1,518 .sst files between
+    // 08-05 and 08-27 — 9.36 GB of that on the last day alone. Starting `next dev` against a
+    // cache that size exhausted the VM compressor on a 24 GB machine and panicked it TWICE
+    // (21:16 and 22:52 CEST): the kernel stalled so long that watchdogd missed 91 seconds of
+    // check-ins and the watchdog reset the box. Panic log names the mechanism outright —
+    // "100% of segments limit (BAD) with 69 swapfiles".
+    //
+    // The negative control is what pins it: a third dev server at 22:16 ran WITHOUT
+    // NEXT_DEV_ISOLATED, so it used the 203 MB `.next` — and survived. Both runs that opened
+    // the 17 GB `.next-dev` died within five minutes. `.next` stayed small only because the
+    // pre-push hook wipes it every push; `.next-dev` had no such janitor and nothing else
+    // bounds this cache.
+    //
+    // Hence OFF rather than pruned on a timer: a cache that is never written cannot grow, and
+    // there is no sweeper to forget to run — note the 22:16 server reached `next dev` via
+    // `npx`, which any predev/npm-script janitor would have missed entirely. The cost is a
+    // cold compile per `next dev` start; HMR within a session is unaffected.
+    turbopackFileSystemCacheForDev: false,
+    // Backstop for in-session growth. Next calls this a "target memory limit … in bytes", so
+    // it is not a hard cap — but it is the only lever that reaches Turbopack's NATIVE (Rust)
+    // allocation, which NODE_OPTIONS=--max-old-space-size cannot touch.
+    //
+    // DEV ONLY, deliberately. Next threads this same value into the PRODUCTION build as well
+    // (`build/turbopack-build/impl.js` → sharedTurboOptions), where a 4 GB target would make
+    // Turbopack GC its in-memory cache earlier on a Vercel builder we neither own nor measured.
+    // The runaway this guards against is a long-lived dev server, not a one-shot build, so the
+    // limit is scoped to where the risk actually is.
+    ...(process.env.NODE_ENV === 'development'
+      ? { turbopackMemoryLimit: 4 * 1024 * 1024 * 1024 }
+      : {}),
   },
   async redirects() {
     return [
