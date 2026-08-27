@@ -139,6 +139,40 @@
   font-size: 12.5px;
 }
 
+/* ── ColorSwatchPicker (a closed palette, not the whole spectrum) ── */
+.nds-swatches {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.nds-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--nds-radius-sm);
+  border: 1px solid rgb(var(--nds-shadow-rgb) / 0.14);
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nds-text-inverse);
+  flex: none;
+}
+.nds-swatch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+/* The selected swatch is ringed rather than merely ticked: at 22px a tick alone is easy to miss
+   next to seven neighbours, and the ring reads at a glance without relying on the tick's own
+   contrast against whichever colour sits under it. */
+.nds-swatch.on {
+  box-shadow: 0 0 0 2px var(--nds-surface), 0 0 0 4px var(--nds-primary);
+}
+.nds-swatch:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
 /* ── Status pill (.h10-pill parity) ──────────────────────────────── */
 .nds-pill {
   display: inline-block;
@@ -167,6 +201,29 @@
 .nds-pill.info {
   color: var(--nds-info-strong);
   background: var(--nds-info-soft);
+}
+/* A pill reporting CONTINUOUS health — a feed that is live or stalled, a connection, a sync.
+   The dot is `currentColor` so it can never disagree with the tone it sits in: a hand-rolled
+   chip-plus-dot keeps its green dot while the feed behind it is dead, which is the specific lie
+   this exists to prevent. */
+.nds-pill.has-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.nds-pill.has-dot .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--nds-radius-round);
+  background: currentColor;
+  flex: none;
+}
+/* Toolbar-height, for a pill standing beside `sm` buttons rather than inside a table cell. */
+.nds-pill.md {
+  height: 28px;
+  padding: 0 11px;
+  font-size: var(--nds-font-size-sm);
+  border-radius: var(--nds-radius-round);
 }
 
 /* ── Program / targeting badge ───────────────────────────────────── */
@@ -828,6 +885,26 @@
   padding: 4px 9px;
   font-size: 11.5px;
   gap: 5px;
+}
+
+/* Icon-only — a SQUARE button whose whole box is the glyph's hit target.
+   `.nds-btn`'s `padding: 7px 13px` shapes a box around a LABEL; given one glyph and no text it
+   renders a lopsided rectangle, so every surface that wanted a row-menu or toolbar icon squared
+   it locally — `.h10-rowmenu-btn` (padding 3px 5px) and a `.menuTrigger` carrying five
+   `!important`s, because a page class and `.nds-btn` collide at equal specificity and the winner
+   depends on stylesheet order. Vertical padding is KEPT so an icon button and a labelled one in
+   the same row are the same height; only the horizontal padding goes. */
+.nds-btn.icon {
+  padding-left: 0;
+  padding-right: 0;
+  width: 30px;
+  flex: none;
+}
+.nds-btn.icon.sm {
+  width: 28px;
+}
+.nds-btn.icon.xs {
+  width: 23px;
 }
 
 /* Input also gains `sm`, which it never had: the console's dense number boxes are 12.5px and

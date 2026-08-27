@@ -43,3 +43,8 @@ export {
 export { AccountsPanel, type AccountsPanelProps } from './AccountsPanel'
 export { BenchmarkBar } from './BenchmarkBar'
 export type { BenchmarkBarProps, BenchmarkVerdict } from './BenchmarkBar'
+
+// The channel footprint that counts the norm and names the exception — so a grid column does not
+// grow by 22px every time a channel is connected.
+export { CoverageSummary } from './CoverageSummary'
+export type { CoverageSummaryProps, CoverageChannel, CoverageState } from './CoverageSummary'

@@ -26,3 +26,8 @@ export { Divider, type DividerProps } from './Divider'
 export { TagInput, type TagInputProps } from './TagInput'
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl'
 export { ToolbarButton, ToolbarDivider, type ToolbarButtonProps } from './ToolbarButton'
+
+// A closed colour palette — the only version of "choose a colour" that cannot produce an
+// unreadable result. See the component docblock for why a free picker is worse.
+export { ColorSwatchPicker, SWATCHES } from './ColorSwatchPicker'
+export type { ColorSwatchPickerProps } from './ColorSwatchPicker'

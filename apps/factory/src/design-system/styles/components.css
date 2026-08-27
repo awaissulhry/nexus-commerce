@@ -716,6 +716,39 @@
 }
 
 
+/* ── CoverageSummary (channel footprint in one non-growing line) ──── */
+/* Separated by a middot generated in CSS, so the markup carries only the facts and a part can be
+   added or dropped without anyone maintaining punctuation. */
+.nds-coverage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.nds-coverage > span + span::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--nds-text-3);
+}
+.nds-coverage .iss {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--nds-danger-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+/* Half-done work, not broken work — amber rather than red, and never the same as a gap. */
+.nds-coverage .draft {
+  color: var(--nds-warning-text);
+}
+/* A gap recedes: it is the absence of a thing, and should not compete with the two states that
+   are asking to be acted on. */
+.nds-coverage .miss {
+  color: var(--nds-text-muted);
+}
+
 /* ── HoverCard (rich hover panel) ────────────────────────────────── */
 .nds-hovercard {
   display: inline-flex;
