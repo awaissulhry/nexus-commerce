@@ -100,7 +100,7 @@ function RangeField({
 }) {
   const cls = unit === '€' ? ' cur' : unit === '%' ? ' pct' : ''
   return (
-    <div className="nds-field nds-range">
+    <div className="nds-range">
       <div className={`nds-range-in${cls}`}>
         {unit === '€' && <span className="ad">€</span>}
         <input

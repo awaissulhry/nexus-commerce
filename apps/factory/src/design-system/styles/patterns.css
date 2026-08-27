@@ -387,23 +387,36 @@
 }
 
 /* ── FilterBar range field (min/max with optional €/% addon) ─────── */
+/* A ROW of two fields, never a field itself. The wrapper also carried the text-field class,
+   which paints a border, a radius and a background of its own, so each min/max box rendered
+   inside a second rounded outline 1px outside it -- measured on /products/next: wrapper
+   394->635, boxes 395->510.5 and 518.5->634 -- and focusing one input lit both rings at once.
+   The row now only spaces its two children. */
 .nds-range {
   display: flex;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 .nds-range-in {
   display: flex;
   align-items: stretch;
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--border-strong);
+  /* Resting border, strong on hover: the two steps every other control in the filter panel
+     uses. This one sat permanently on the strong step and had no hover rule at all, so the
+     min/max boxes read darker than the multiselects beside them and never answered a pointer. */
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-lg);
-  background: var(--surface-card);
+  background: var(--nds-surface);
   overflow: hidden;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
+.nds-range-in:hover {
+  border-color: var(--nds-border-strong);
+}
 .nds-range-in:focus-within {
-  border-color: var(--color-primary);
+  border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
 .nds-range-in input {
