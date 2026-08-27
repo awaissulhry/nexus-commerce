@@ -28,11 +28,32 @@
  */
 import { themeQuartz } from 'ag-grid-community'
 
-/** `.nds-wsgrid tbody td { padding: 11px 14px }` + a 13px/normal line box (~16px) + 1px rule. */
-const ROW_HEIGHT = 39
+/**
+ * MEASURED in /design/grid-lab on 2026-08-28, not derived. Both numbers were previously computed
+ * from `workspace-grid.css` lines 24 and 32 (`padding: 10px/11px 14px`) and came out 39 and 35.
+ * Both were wrong, because **lines 186 and 189 of that same stylesheet override them with
+ * `padding: 12px 14px`** — later in source order, so they win. Source order beats the reading you
+ * did of the first declaration.
+ *
+ * That is precisely what this file's own header demands ("verified against the live DOM in
+ * /design/grid-lab") and it could not happen, because the lab's AG probe selector matched nothing
+ * and its legacy selector matched the pinned Total row. With both fixed, the real numbers are:
+ *
+ *   data row  45.95px   (12 + 12 padding + a 19.5px line box + 1px rule, plus ~1.45px of content
+ *                        taller than the line box — the identity cell's dot and the checkbox)
+ *   header    44.50px
+ *
+ * The 39/35 pair was a 6.95px and 9.5px shortfall on EVERY row of 65 ads screens — the exact
+ * regression the lab exists to catch, sitting undetected because the instrument was broken.
+ *
+ * ROW_HEIGHT is rounded to an integer: AG Grid virtualises off a fixed row height, and a
+ * fractional one accumulates rounding error down a long list. The remaining 0.05px is below the
+ * threshold of anything, and the lab's comparison allows sub-pixel for that reason.
+ */
+const ROW_HEIGHT = 46
 
-/** `.nds-wsgrid thead th { padding: 10px 14px }` + an 11.5px/normal line box (~14px) + 1px rule. */
-const HEADER_HEIGHT = 35
+/** Measured, same run. AG accepts a fractional header height — it is not virtualised. */
+const HEADER_HEIGHT = 44.5
 
 export const workspaceGridTheme = themeQuartz
   .withParams({
@@ -59,8 +80,17 @@ export const workspaceGridTheme = themeQuartz
 
     // --- rows ---
     rowHeight: ROW_HEIGHT,
-    // `.nds-wsgrid tbody td { border-bottom: 1px solid var(--nds-grey-150) }`
-    rowBorder: { style: 'solid', width: 1, color: 'var(--nds-grey-150)' },
+    /**
+     * `.nds-wsgrid tbody td { border-bottom: 1px solid var(--nds-grey-150) }`.
+     *
+     * `true`, not an object. The object form — `{ style, width, color: 'var(--nds-grey-150)' }` —
+     * emitted NO `--ag-row-border-color` at all (measured: the var is empty and cells render
+     * `1px solid rgba(0, 0, 0, 0)`), so the row rule was invisible while the theme looked correct
+     * in source. `true` falls through to `--ag-border-color`, which is already bound to the same
+     * token below and therefore stays dark-aware. A plain colour param resolves `var()` fine; the
+     * border-object form silently does not.
+     */
+    rowBorder: true,
     // `.nds-wsgrid thead th { border-bottom: 1px solid var(--nds-grey-200) }` — a heavier rule
     // than the row rule, deliberately.
     headerRowBorder: { style: 'solid', width: 1, color: 'var(--nds-grey-200)' },

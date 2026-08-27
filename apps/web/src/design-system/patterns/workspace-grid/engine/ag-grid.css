@@ -59,3 +59,40 @@
   text-align: center;
   white-space: normal;
 }
+
+/* AG.3 — the bulk-action bay, shown only while rows are selected. The hand-rolled grid puts these
+   buttons in its own toolbar row; the engine has no toolbar, so this is the one strip it owns.
+   Geometry only, deliberately: every control inside is the caller's and is already a DS primitive,
+   so stating colour here would be a second opinion about a button this file does not own. */
+.nds-ag-selbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+/* `.h10-am-tbl tr.clickable { cursor: pointer }` — a row that opens something must look like it
+   does. Only the cursor: the hover tint is a theme param and lives in theme.ts. */
+.nds-ag-clickable {
+  cursor: pointer;
+}
+
+/* AG.3 — the row rule.
+ *
+ * `theme.ts` asks for this with the `rowBorder` param and AG Grid 36.1.0 emits NOTHING for it:
+ * measured, `--ag-row-border-color` is empty in both the object form
+ * (`{ style, width, color }`) and the `true` form, and rows render `1px solid rgba(0, 0, 0, 0)` —
+ * a rule that is present, sized, and invisible. The theme looked correct in source the whole time.
+ *
+ * AG's own base CSS reads a SHORTHAND: `border-bottom: var(--ag-row-border)`, applied to the cell
+ * CONTAINERS (`.ag-grid-scrolling-cells`, `.ag-grid-pinned-*-cells`), not to `.ag-cell`. Setting
+ * that one variable is therefore not a hand-rolled border — it is supplying the value AG is
+ * already asking for, and it stays a token, so dark mode still costs nothing.
+ *
+ * Matches `.nds-wsgrid tbody td { border-bottom: 1px solid var(--nds-grey-150) }`. Verified in
+ * /design/grid-lab: rgb(230, 233, 238) on both engines.
+ */
+.nds-ag-wrap {
+  --ag-row-border: 1px solid var(--nds-grey-150);
+}
