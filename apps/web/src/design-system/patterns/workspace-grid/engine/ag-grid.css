@@ -1,0 +1,61 @@
+/**
+ * AG.1 — the engine's own stylesheet. Web-only, and deliberately TINY.
+ *
+ * Everything that can be said as a theme param is said in `theme.ts`, not here. This file only
+ * carries what the Theming API has no param for: per-column alignment classes and the no-rows
+ * overlay. If a rule in here starts describing colour or geometry, it belongs in `theme.ts`
+ * instead — two places to change a row height is how the current four-engine mess started.
+ *
+ * Not registered in `design-system/styles/`, and not imported by `layout.tsx`: it is imported by
+ * the engine component, so it only ships on routes that actually mount a grid. It also has no
+ * counterpart in apps/factory, so the fork-drift ratchet has nothing to compare and nothing to
+ * freeze.
+ */
+
+/* `.nds-wsgrid th.num, .nds-wsgrid td.num { text-align: right }` — plus the tabular figures the
+   DS learned to set the hard way: a money column that loses proportional-digit alignment is the
+   one defect a grid cannot afford. */
+.nds-ag-num {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nds-ag-head-num .ag-header-cell-label {
+  justify-content: flex-end;
+}
+
+/* `.nds-wsgrid th.ed, .nds-wsgrid td.ed { text-align: left }` */
+.nds-ag-ed {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.nds-ag-ctr {
+  justify-content: center;
+  text-align: center;
+}
+
+/* The identity column: `.nds-wsgrid td.nm { display: flex; align-items: center; gap: 7px }`.
+   AG Grid already centres its cell content, so only the gap and the ellipsis are restated. */
+.nds-ag-cell-first {
+  gap: 7px;
+}
+
+.nds-ag-cell-first > * {
+  min-width: 0;
+}
+
+/* `.nds-wsgrid td.empty { text-align: center; color: var(--nds-text-2); padding: 28px }`.
+   SGX parity: the sentence must WRAP. The hand-rolled grid shipped this bug to prod — a long
+   empty state painted straight out of its cell and under the frozen column — because the empty
+   cell inherited `white-space: nowrap`. AG Grid's overlay does not inherit that, but the wrap is
+   stated anyway so the fix cannot be lost a second time. */
+.nds-ag-empty {
+  display: block;
+  max-width: 320px;
+  padding: 28px;
+  color: var(--nds-text-2);
+  text-align: center;
+  white-space: normal;
+}
