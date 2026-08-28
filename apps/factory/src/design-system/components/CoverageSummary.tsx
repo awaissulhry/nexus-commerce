@@ -2,7 +2,11 @@
 
 import { AlertTriangle } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Tooltip } from '../primitives/Tooltip'
+// PN.1 — InfoTip, not Tooltip. The DS `Tooltip` is CSS-positioned inside its trigger, and this
+// component's one consumer renders it inside a virtualised grid: the bubble on the first row rose
+// out of the body viewport and painted UNDER the header. `InfoTip` is the tooltip that survives
+// any scrolling container — portalled to document.body, viewport-clamped, flips top/bottom (W6).
+import { InfoTip } from '../primitives/InfoTip'
 
 /**
  * CoverageSummary — a product's channel footprint, in one line that does not grow.
@@ -86,7 +90,7 @@ export function CoverageSummary({ channels, className }: CoverageSummaryProps) {
     : 'No channels connected'
 
   return (
-    <Tooltip label={label}>
+    <InfoTip tip={label}>
       <span className={`nds-coverage${className ? ` ${className}` : ''}`}>
         {parts.length > 0 ? (
           parts
@@ -94,6 +98,6 @@ export function CoverageSummary({ channels, className }: CoverageSummaryProps) {
           <span className="miss">{channels.length ? 'not listed' : 'no channels'}</span>
         )}
       </span>
-    </Tooltip>
+    </InfoTip>
   )
 }

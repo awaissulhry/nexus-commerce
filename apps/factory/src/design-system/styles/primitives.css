@@ -1257,3 +1257,50 @@ button.nds-token > .t,
 .nds-field-row.disabled > .af {
   color: var(--nds-text-disabled);
 }
+
+/* ── IconPicker (the tag glyph set) ─────────────────────────────────────────
+   A wrapping grid rather than a row: 25 options at 26px would run 650px wide beside the colour
+   swatches, so it wraps inside whatever the dialog gives it and scrolls if it must. */
+.nds-iconpick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 96px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.nds-iconpick-opt {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+.nds-iconpick-opt:hover { background: var(--nds-surface-hover); }
+.nds-iconpick-opt.on { border-color: var(--nds-primary); background: var(--nds-wash-primary); }
+.nds-iconpick-opt:disabled { cursor: default; opacity: 0.5; }
+.nds-iconpick-opt:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+/* The glyph in a chip: the dot keeps its old shape, an icon sits on the text baseline. */
+.nds-tag-glyph { flex: none; }
+.nds-tag-glyph.dot { display: inline-block; border-radius: var(--nds-radius-round); }
+
+/* ── ExpandToggle (a row's disclosure chevron) ──────────────────────────────
+   20×20, not the toolbar button's 28: it sits inside a grid cell whose thumbnail offset is
+   measured, and it stays transparent while expanded — a filled background on every open row
+   turns a list of families into a column of blocks. */
+.nds-expand {
+  width: 20px; height: 20px; flex: none; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; border-radius: var(--nds-radius-pill);
+  color: var(--nds-text-3); cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.nds-expand:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-expand:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); }
+.nds-expand:disabled { cursor: default; opacity: 0.4; }

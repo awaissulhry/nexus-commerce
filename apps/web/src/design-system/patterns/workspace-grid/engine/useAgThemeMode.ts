@@ -19,7 +19,15 @@ export function useAgThemeMode(): 'light' | 'dark' {
 
   useEffect(() => {
     const root = document.documentElement
-    const read = () => setMode(root.classList.contains('dark') ? 'dark' : 'light')
+    const read = () => {
+      const next = root.classList.contains('dark') ? 'dark' : 'light'
+      setMode(next)
+      // Popups are parented to the document (see NexusGrid), outside the grid wrapper that
+      // carries the mode for the theme's `browserColorScheme`. AG reads the attribute from any
+      // ancestor, so the document root carries it too — measured: a body-level header menu had
+      // no `data-ag-theme-mode` ancestor at all before this.
+      root.setAttribute('data-ag-theme-mode', next)
+    }
     read()
     const mo = new MutationObserver(read)
     mo.observe(root, { attributes: true, attributeFilter: ['class'] })

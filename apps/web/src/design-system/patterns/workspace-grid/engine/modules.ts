@@ -1,46 +1,105 @@
 /**
- * AG.1 / AG.4 — AG Grid module registration. The ONLY place modules are registered.
+ * AG.1 / AG.4 / PN.1 — AG Grid module registration. The ONLY place a production surface
+ * registers modules.
  *
- * WHY THE WILDCARD NOW, AFTER AG.1 ARGUED AGAINST IT
- * AG.1 registered a curated list of sixteen and warned off `AllEnterpriseModule` because it drags
- * every feature — including the AG Charts runtime — into the first route that renders a grid, on
- * an app with 330 routes and a shared client bundle. That reasoning was correct and it still is,
- * for a PRODUCTION surface.
+ * A CURATED list, not `AllEnterpriseModule`. AG Grid is tree-shaken by module: every module
+ * registered here is bundled into the first route that renders a grid, on an app with 330
+ * routes and a shared client bundle. The wildcard is 85 modules plus the AG Charts runtime;
+ * this list is what the two engine components actually use, and nothing else.
  *
- * It does not apply here. Nothing in the app renders this engine: `AgWorkspaceGrid` has exactly
- * one importer, `/design/grid-lab`, and the Owner's direction (2026-08-28) is that no page moves
- * onto it and the whole build stays on that test page. So the weight lands on one design-system
- * route that a reader opens deliberately, and the curated list stops being a safeguard and starts
- * being a list of features the lab cannot show.
+ *   NexusGrid (/products/next)                     AgWorkspaceGrid (ads console, Phase 3)
+ *   ───────────────────────────────────────────    ────────────────────────────────────────
+ *   Server-Side Row Model + its API                Client-Side Row Model + its API
+ *   tree data (families), row grouping,            pinned Total row
+ *   aggregation (group rows), column menu,
+ *   custom filter components, row selection,
+ *   pagination, CSV export, grid state (views)
  *
- * `AllEnterpriseModule` is 85 public modules — row grouping, pivot, tree data, master/detail,
- * cell selection + fill handle, clipboard, Excel export, every filter incl. Advanced, both tool
- * panels, status bar, menus, sparklines, integrated charts, find, notes, batch edit, undo/redo,
- * grid state, calculated columns, and all four row models.
+ *   Inventory editor (the modal behind the Available cell): spreadsheet editing —
+ *   number editor, cell-range selection + fill handle, clipboard paste, undo/redo,
+ *   quick filter (search), pinned totals row.
  *
- * 🔴 THE CONDITION ON THIS. The moment a production page mounts this engine, this line goes back
- * to a named list — the bundle argument above returns in full, and it is the reason AG.1 wrote it
- * down. Treat a wildcard reaching a shipped route as a regression, not as the status quo.
+ *   shared: column API (Customise dialog bridge), row API (forEachNode), event API,
+ *           cell/row style (cellClass, rowClassRules), locale (localeText), render API.
  *
- * Registration is idempotent and module-scoped, so importing this file from several entry points
- * is safe — but it must be imported before the first grid mounts, which is why the engine
- * component imports it at module scope rather than in an effect.
+ * The feature lab (`/design/grid-lab`) shows EVERY feature and registers the wildcard itself —
+ * see `app/design/grid-lab/labModules.ts`. Registration is additive and idempotent, so the lab
+ * adds to this list rather than replacing it, and no production route pays for the lab.
+ *
+ * ADDING A FEATURE: register its module here, and only here. `ValidationModule` (dev only,
+ * below) names the missing module in the console when a page uses a feature this list does not
+ * carry — that message is the whole reason the module is registered in development.
+ *
+ * Registration is module-scoped so importing this file from several entry points is safe — but
+ * it must run before the first grid mounts, which is why the engine components call it at module
+ * scope rather than in an effect.
  */
 import { ModuleRegistry } from 'ag-grid-community'
-import { AllEnterpriseModule, LicenseManager, ValidationModule } from 'ag-grid-enterprise'
-import { AgChartsCommunityModule } from 'ag-charts-community'
+import {
+  AggregationModule,
+  CellSelectionModule,
+  CellStyleModule,
+  ClientSideRowModelApiModule,
+  ClientSideRowModelModule,
+  ClipboardModule,
+  ColumnApiModule,
+  ColumnMenuModule,
+  CsvExportModule,
+  CustomFilterModule,
+  EventApiModule,
+  GridStateModule,
+  LicenseManager,
+  LocaleModule,
+  NumberEditorModule,
+  PaginationModule,
+  PinnedRowModule,
+  QuickFilterModule,
+  RenderApiModule,
+  RowApiModule,
+  RowGroupingModule,
+  RowSelectionModule,
+  RowStyleModule,
+  ServerSideRowModelApiModule,
+  ServerSideRowModelModule,
+  TreeDataModule,
+  UndoRedoEditModule,
+  ValidationModule,
+} from 'ag-grid-enterprise'
 
-/**
- * Sparklines and integrated charts are the two features that are NOT self-contained: both refuse
- * to initialise without an AG Charts runtime, and `AllEnterpriseModule` alone does not carry one.
- * Without this the grid renders and only those two fail — with a readable message, but only
- * because ValidationModule is registered below; otherwise it is a silent blank cell.
- *
- * `ag-charts-community` rather than the enterprise charts build: it covers line/bar/area
- * sparklines and the standard chart types, and nothing here has asked for the enterprise-only
- * chart set yet.
- */
-const ENTERPRISE_WITH_CHARTS = AllEnterpriseModule.with(AgChartsCommunityModule)
+const PRODUCTION_MODULES = [
+  // row models
+  ServerSideRowModelModule,
+  ServerSideRowModelApiModule,
+  ClientSideRowModelModule,
+  ClientSideRowModelApiModule,
+  // structure
+  TreeDataModule,
+  RowGroupingModule,
+  AggregationModule,
+  PinnedRowModule,
+  // interaction
+  ColumnMenuModule,
+  CustomFilterModule,
+  RowSelectionModule,
+  PaginationModule,
+  CsvExportModule,
+  // editing (inventory editor): a number editor, Excel-style range + fill handle, paste, undo
+  NumberEditorModule,
+  CellSelectionModule,
+  ClipboardModule,
+  UndoRedoEditModule,
+  QuickFilterModule,
+  // state + APIs
+  GridStateModule,
+  ColumnApiModule,
+  RowApiModule,
+  EventApiModule,
+  RenderApiModule,
+  // presentation
+  CellStyleModule,
+  RowStyleModule,
+  LocaleModule,
+]
 
 let registered = false
 
@@ -48,29 +107,16 @@ export function registerGridModules(): void {
   if (registered) return
   registered = true
 
-  // Everything. `AllEnterpriseModule` already contains the community set, so it is registered
-  // alone rather than alongside `AllCommunityModule`.
-  //
-  // ValidationModule is NOT inside AllEnterpriseModule (checked: 305 reachable modules, none of
-  // them it) and is added in development only. Without it AG reports problems as a bare number —
-  // "warning #25" turned out to be a real defect in `getRowId` that had been firing on every
-  // mount since AG.1 and was unreadable for exactly that reason. It is dev-only because its whole
-  // job is printing message text, which is weight a built page should not carry.
+  // ValidationModule is added in development only. Without it AG reports problems as a bare
+  // number — "warning #25" turned out to be a real defect in `getRowId` that had been firing on
+  // every mount since AG.1 and was unreadable for exactly that reason. It is dev-only because its
+  // whole job is printing message text, which is weight a built page should not carry.
   ModuleRegistry.registerModules(
     process.env.NODE_ENV === 'development'
-      ? [ENTERPRISE_WITH_CHARTS, ValidationModule]
-      : [ENTERPRISE_WITH_CHARTS],
+      ? [...PRODUCTION_MODULES, ValidationModule]
+      : PRODUCTION_MODULES,
   )
 
-  /**
-   * The repo currently ships `patches/ag-grid-enterprise+36.1.0.patch`, which replaces the body
-   * of `validateLicense()` with `return;`. Owner decision 2026-08-27: internal
-   * development/prototyping only, licensing revisited before production.
-   *
-   * This call is here anyway so that switching to a real key is an ENV change and not a code
-   * change — set NEXT_PUBLIC_AG_GRID_LICENSE_KEY, drop the patch, and nothing here moves.
-   * Reading a missing env var is harmless; `setLicenseKey` is only called when one is present.
-   */
   const key = process.env.NEXT_PUBLIC_AG_GRID_LICENSE_KEY
   if (key) LicenseManager.setLicenseKey(key)
 }

@@ -37,6 +37,10 @@
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"
+    },
+    "./products-grid": {
+      "types": "./dist/products-grid.d.ts",
+      "default": "./dist/products-grid.js"
     }
   },
   "scripts": {

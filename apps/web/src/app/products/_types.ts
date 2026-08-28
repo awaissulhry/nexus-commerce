@@ -124,7 +124,7 @@ export type ProductRow = {
     mostUrgentChannel: string | null  // channel driving the chip state
     mostUrgentStatus: 'PENDING' | 'FAILED' | 'DEAD' | 'SYNCED' | null
   } | null
-  tags?: Array<{ id: string; name: string; color: string | null }>
+  tags?: Array<{ id: string; name: string; color: string | null; icon?: string | null }>
   updatedAt: string
   createdAt: string
 }
@@ -133,5 +133,7 @@ export type Tag = {
   id: string
   name: string
   color: string | null
+  /** A curated glyph id (design-system `TAG_ICONS`); null renders the dot every tag started with. */
+  icon?: string | null
   productCount?: number
 }

@@ -911,3 +911,52 @@
   color: var(--text-disabled);
   cursor: default;
 }
+
+/* Customise → Group totals: one row per numeric column, label left, function right. */
+.nds-prefs-aggs { display: flex; flex-direction: column; gap: 6px; }
+.nds-prefs-agg { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nds-prefs-agg > span { font-size: 13px; color: var(--nds-text); }
+.nds-prefs-agg .nds-select { width: 140px; }
+
+/* ── Customise, tabbed: each pane scrolls on its own inside a fixed-height body ──────────── */
+.nds-prefs-tabs { margin: -4px 0 16px; }
+.nds-prefs-tabbed { height: 480px; }
+.nds-prefs-tabbed.single { grid-template-columns: 1fr; }
+.nds-prefs-pane { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+.nds-prefs-pane > .nds-prefs-cols,
+.nds-prefs-pane .nds-prefs-pickset > .nds-prefs-cols { flex: 1 1 auto; max-height: none; min-height: 0; }
+.nds-prefs-pane .nds-prefs-pickset { flex: 1 1 auto; }
+.nds-prefs-pane .nds-prefs-picks { max-height: none; }
+.nds-prefs-pane .nds-prefs-avail { flex: 1 1 auto; }
+/* A drop zone: dashed until something lands, solid tint while a chip hovers over it. */
+.nds-prefs-zone {
+  display: flex; flex-direction: column; gap: 6px;
+  min-height: 96px; padding: 8px;
+  border: 1px dashed var(--nds-border-strong); border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.nds-prefs-zone.over { border-style: solid; border-color: var(--nds-primary); background: var(--nds-wash-primary); }
+.nds-prefs-zonehint { margin: auto; font-size: 12px; color: var(--nds-text-muted); text-align: center; }
+.nds-prefs-chip {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; font-size: 13px; color: var(--nds-text);
+  background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md);
+}
+.nds-prefs-avail .nds-prefs-chip { border: none; border-radius: 0; border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-prefs-avail .nds-prefs-chip:last-child { border-bottom: none; }
+.nds-prefs-chip.draggable { cursor: grab; }
+.nds-prefs-chip.draggable:hover { background: var(--nds-surface-hover); }
+.nds-prefs-chip.dragging { opacity: 0.4; }
+.nds-prefs-chiplvl {
+  flex: none; width: 18px; height: 18px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--nds-primary); background: var(--nds-primary-soft);
+}
+.nds-prefs-chipsel { width: 132px; flex: none; }
+.nds-prefs-add {
+  display: inline-flex; align-items: center; justify-content: center; padding: 2px;
+  border: none; border-radius: var(--nds-radius-sm); background: none; color: var(--nds-text-muted); cursor: pointer;
+}
+.nds-prefs-add:hover { color: var(--nds-primary); }
+.nds-prefs-add:focus-visible, .nds-prefs-chip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
+

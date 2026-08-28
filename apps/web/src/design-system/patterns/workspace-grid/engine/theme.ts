@@ -55,8 +55,26 @@ const ROW_HEIGHT = 46
 /** Measured, same run. AG accepts a fractional header height — it is not virtualised. */
 const HEADER_HEIGHT = 44.5
 
+/**
+ * IE.2 — the header's column PARTITIONS, defined ONCE, for every grid.
+ *
+ * Until 2026-08-28 the thin line between header cells came from the column RESIZE HANDLE
+ * (Quartz draws a 2px × 30% mark on every resizable column), so a grid whose columns were not
+ * resizable — the inventory editor — had no partitions at all, and looked like a different
+ * product. A partition is chrome, not a side effect of a per-column option: it is a theme
+ * param here, the handle's own mark is turned off (width 0 — the handle still drags), and the
+ * geometry is the one the products grid already showed: 2px, 30% of the header height,
+ * `--nds-grey-150`. `theme.vitest.test.ts` locks this object so it cannot quietly go missing.
+ */
+export const HEADER_COLUMN_PARTITION = {
+  headerColumnBorder: { style: 'solid', width: 2, color: 'var(--nds-grey-150)' },
+  headerColumnBorderHeight: '30%',
+  headerColumnResizeHandleWidth: 0,
+} as const
+
 export const workspaceGridTheme = themeQuartz
   .withParams({
+    ...HEADER_COLUMN_PARTITION,
     // --- type: `.nds-wsgrid table { font-size: 13px }` ---
     fontFamily: 'var(--nds-font-sans)',
     fontSize: 13,

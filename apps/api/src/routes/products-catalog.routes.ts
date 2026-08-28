@@ -580,6 +580,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           id: t.id,
           name: t.name,
           color: t.color,
+          icon: t.icon,
           productCount: t._count.products,
           updatedAt: t.updatedAt,
         })),
@@ -591,10 +592,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/tags', async (request, reply) => {
     try {
-      const body = request.body as { name?: string; color?: string }
+      const body = request.body as { name?: string; color?: string; icon?: string | null }
       if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' })
       const tag = await prisma.tag.create({
-        data: { name: body.name.trim(), color: body.color ?? null },
+        data: { name: body.name.trim(), color: body.color ?? null, icon: body.icon ?? null },
       })
       return tag
     } catch (err: any) {
@@ -606,7 +607,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/tags/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = request.body as { name?: string; color?: string | null }
+      const body = request.body as { name?: string; color?: string | null; icon?: string | null }
       // Only touch what was SENT. This read `color: body.color ?? null`, so renaming a tag
       // without resending its colour silently stripped it — the caller asked to change one
       // field and lost another. `undefined` now means "leave alone" and an explicit `null`
@@ -616,6 +617,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...(body.color !== undefined ? { color: body.color } : {}),
+          ...(body.icon !== undefined ? { icon: body.icon } : {}),
         },
       })
       return tag

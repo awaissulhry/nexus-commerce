@@ -40,12 +40,39 @@
   max-width: 340px;
 }
 
-/* Selection actions cluster (shown in the toolbar left slot when rows picked) */
+/* Selection actions cluster (shown in the toolbar left slot when rows picked).
+   NEVER wraps: with `flex-wrap: wrap` the last button dropped to a second line and the two-line
+   left block sat off the right group's baseline. Instead the card is a size container and the
+   cluster ADAPTS to its width — icon buttons lose their labels and the reach note hides before
+   anything would need a second line. The status trio keeps its text: a blank button is worse
+   than a narrow one. */
 .selActions {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 0;
+  /* The search field it replaces is 36px; the sm buttons are 28. Without this the toolbar
+     dropped 8px on the first tick and rose again on Clear. */
+  min-height: 36px;
+}
+
+/* The grid card is the size container the toolbar adapts to. */
+.gridCard {
+  container-type: inline-size;
+}
+
+@container (max-width: 1320px) {
+  .selActions .lbl {
+    display: none;
+  }
+}
+
+@container (max-width: 1100px) {
+  .reachNote {
+    display: none;
+  }
 }
 
 /* ── Filter bar wrapper (DS FilterBar spacing) ───────────── */
@@ -132,9 +159,18 @@
   color: var(--nds-text-muted);
 }
 
+/* The variation count is the link to the family page. */
 .varCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: var(--nds-text-muted);
   white-space: nowrap;
+  text-decoration: none;
+}
+.varCount:hover {
+  color: var(--nds-text);
+  text-decoration: underline;
 }
 
 /* ── Row action cluster ──────────────────────────────────── */
@@ -294,19 +330,21 @@
 .tagMore { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); flex: none; }
 
 /* ── Variation-family footer (the capped-preview handoff) ─────────────── */
-/* Sits in DataGrid's `renderExpanded` row. That cell is `padding: 0` and already carries
-   `--nds-surface-sunken` and the colSpan, so this owns only the inner layout.
-   Flush left, deliberately. Indenting it to line up with the child rows sounds tidier and is
-   not: a child's content sits behind the 43px selection column, the grid's cell padding, a 32px
-   indent, a 20px chevron slot and a thumbnail — measured, that is 120px to the thumb and 187px
-   to the title, both of which move with the density tier. Any such number is a constant that
-   silently goes wrong at one of three densities. The sunken ground already says this row belongs
-   to the family above it, and Seller Central left-aligns its own equivalent for the same reason. */
+/* ── Variation-family footer ──────────────────────────────────────────── */
+/* A full-width AG row beneath the last of a family's variations. Flush left, deliberately.
+   Indenting it to line up with the child rows sounds tidier and is not: a child's content sits
+   behind the 43px selection column, the grid's cell padding, a 20px chevron slot and a
+   thumbnail — measured, that is 120px to the thumb and 187px to the title, both of which move
+   with the density tier. Any such number is a constant that silently goes wrong at one of three
+   densities. The sunken ground already says this row belongs to the family above it, and Seller
+   Central left-aligns its own equivalent for the same reason. */
 .famFoot {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  /* The row is a data row tall (one fixed `rowHeight` for the whole grid); the line centres in it. */
+  height: 100%;
   padding: 10px 14px;
 }
 
@@ -413,3 +451,90 @@
 .gridSkel { display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 6px 2px; }
 .gridSkelRow { display: flex; align-items: center; gap: 12px; }
 .gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+
+/* A group row's auto-column cell: the key, then how many products it folds. */
+.groupCell { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.groupCell strong { font-weight: 600; color: var(--nds-text-strong); }
+.groupCount { font-size: 12px; color: var(--nds-text-2); white-space: nowrap; }
+
+
+/* Pagination footer — Ad Manager's: pages, then rows per page, right-aligned under the grid. */
+.pager { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
+.rpp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--nds-text-2); white-space: nowrap; }
+.grow { flex: 1; }
+
+/* ── Bulk edit: a tick per field, then a review (Ad Manager's shape) ─────────────────────── */
+.bulkBody { display: flex; flex-direction: column; }
+.bulkHd,
+.bulkRow { display: grid; grid-template-columns: 24px 150px 1fr; align-items: center; gap: 12px; }
+.bulkHd { padding: 0 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--nds-text-muted); }
+.bulkRow { padding: 12px 2px; border-top: 1px solid var(--nds-border-subtle); }
+.bulkItem { font-size: 13px; font-weight: 600; color: var(--nds-text); }
+.bulkAction { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bulkTags { flex: 1; min-width: 0; }
+.bulkCascade { display: flex; align-items: center; gap: 9px; padding: 12px 2px 0; border-top: 1px solid var(--nds-border-subtle); font-size: 12px; color: var(--nds-text-2); }
+.bulkReview { display: flex; flex-direction: column; gap: 2px; }
+.bulkReviewRow { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--nds-border-subtle); font-size: 13px; color: var(--nds-text); }
+.bulkReviewRow:last-child { border-bottom: none; }
+.bulkReviewField { font-weight: 600; color: var(--nds-text-2); }
+.bulkReviewTags { display: inline-flex; align-items: center; gap: 6px; }
+/* Publish: the destination list, with room to say what it will reach. */
+.pubList { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
+.pubRow { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--nds-radius-md); font-size: 13px; color: var(--nds-text); cursor: pointer; }
+.pubRow:hover { background: var(--nds-surface-hover); }
+.bulkCreate { display: flex; align-items: center; gap: 8px; padding: 10px 2px 2px 186px; }
+.bulkCreate > :first-child { width: 200px; }
+.bulkError { margin: 6px 0 0 186px; font-size: 12px; color: var(--nds-danger-text); }
+/* The tag being created, shown as it will actually render in the grid. */
+.tagCreatePreview { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--nds-text); }
+.tagCreatePreview b { font-weight: 600; }
+
+/* A tag cell: the first tag named, the rest as glyphs — the tooltip carries every name. */
+.tagChipName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tagGlyphChip { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 18px; height: 18px; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); }
+
+/* ── Inventory editor (AG Grid, spreadsheet editing) ────────────────────────────────────── */
+.ieGrow { flex: 1; }
+.ieHint { margin: 10px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }
+.ieHint kbd { font-family: var(--nds-font-mono, ui-monospace, monospace); font-size: 10.5px; padding: 0 4px; border: 1px solid var(--nds-border); border-bottom-width: 2px; border-radius: 4px; background: var(--nds-surface-raised); }
+.ieSetSel { display: inline-flex; align-items: center; gap: 6px; }
+.ieColumns { width: 150px; }
+.ieSetLabel { font-size: 12.5px; color: var(--nds-text-2); white-space: nowrap; }
+.ieSetInput { width: 84px; }
+
+.ieGroupLocked { color: var(--nds-text-muted); }
+
+/* identity cell: the page's product cell with the SKU first; the name is the sub-line. */
+.ieName { color: var(--nds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px; }
+.ieTotalsLabel { font-weight: 600; color: var(--nds-text); }
+
+/* on-hand cells */
+.ieOnHand { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
+.ieEditable { cursor: text; }
+.ieEditable:hover { box-shadow: inset 0 0 0 1px var(--nds-border); }
+.iePending { background: color-mix(in srgb, var(--nds-warning) 14%, transparent) !important; }
+.ieFailed { background: color-mix(in srgb, var(--nds-danger) 10%, transparent) !important; box-shadow: inset 0 0 0 1px var(--nds-danger); }
+.ieLocked { color: var(--nds-text-muted); }
+.ieLockGlyph { font-size: 10px; }
+.ieDelta { position: absolute; right: 6px; top: 3px; font-family: var(--nds-font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; line-height: 14px; padding: 0 5px; border-radius: 999px; background: var(--nds-warning); color: var(--nds-white); }
+.ieDeltaNeg { background: var(--nds-danger); }
+.ieMuted { color: var(--nds-text-muted); }
+.ieStrong { font-weight: 600; }
+.ieOut { color: var(--nds-danger); font-weight: 600; }
+.ieLow { color: var(--nds-warning); font-weight: 600; }
+.ieOk { color: var(--nds-success); font-weight: 600; }
+
+
+/* The editor's modal: the grid card sits at the page's own inset (18px), not the DS body's 28px —
+   at the Spacious tier the 56px thumbnail widens the identity column, and those 20px are what
+   keep "Total avail." on screen without a horizontal scroll. */
+/* `.nds-modal.xxl .nds-modal-b` is (0,3,0); this must out-rank it, not merely follow it. */
+:global(.nds-modal.xxl).ieModal :global(.nds-modal-b) { padding: 18px; }
+
+/* The card's footer strip — the page's `.pager` row: same padding, same rule, small controls. */
+.ieFootStrip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
+.ieReason { width: 180px; }
+.ieNotes { width: 300px; }
+.ieDiscard { font-size: 13px; font-weight: 600; color: var(--nds-danger-text); }
+.ieMsgSuccess { font-size: 12.5px; color: var(--nds-success); max-width: 300px; }
+.ieMsgDanger { font-size: 12.5px; color: var(--nds-danger-text); max-width: 300px; }

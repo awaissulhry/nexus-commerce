@@ -10931,6 +10931,9 @@ model Tag {
   id        String   @id @default(cuid())
   name      String   @unique
   color     String?
+  /// A curated glyph id (see design-system `TAG_ICONS`). Colour alone cannot carry identity at
+  /// the size a tag renders, and WCAG 1.4.1 forbids colour as the only visual carrier.
+  icon      String?
   metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

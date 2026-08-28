@@ -26,12 +26,13 @@ import type { ColDef, GridApi, GridReadyEvent, IServerSideDatasource } from 'ag-
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { Button, Input } from '@/design-system/primitives'
-import { registerGridModules } from '@/design-system/patterns/workspace-grid/engine/modules'
+import { NexusGrid, numericColumn } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
+import { registerLabModules } from './labModules'
 import { workspaceGridTheme } from '@/design-system/patterns/workspace-grid/engine/theme'
 import { useAgThemeMode } from '@/design-system/patterns/workspace-grid/engine/useAgThemeMode'
 import { BIG_ROWS, FEATURE_ROWS, type AdGroupRow, type FeatureRow } from './featureFixture'
 
-registerGridModules()
+registerLabModules()
 
 const eur = (v: number | null | undefined) => (v == null ? '—' : `€${Number(v).toFixed(2)}`)
 
@@ -147,6 +148,81 @@ function ServerSideDemo() {
       ]}
       defaultColDef={{ sortable: true, resizable: true }}
     />
+  )
+}
+
+/**
+ * PN.1 — one grid, AG-native, families as a real tree.
+ *
+ * The earlier attempt re-expressed AG through the DS `DataGrid` contract: a flat
+ * parent → children → footer row list, with `postSortRows` trying to glue families back together
+ * after every sort. Measured, it kept the family adjacent and still ordered the parents wrongly.
+ *
+ * This hands AG a TREE. `treeData` + `getDataPath` means AG sorts within a level and keeps
+ * children under their parent because it knows which rows are children — no re-attachment step,
+ * no flat list, no footer sentinel. The bug is not fixed here; it cannot occur.
+ */
+interface TreeRow {
+  id: string
+  path: string[]
+  market: string
+  status: string
+  spend: number
+  sales: number
+  acos: number | null
+}
+
+const TREE_ROWS: TreeRow[] = FEATURE_ROWS.flatMap((r) => [
+  { id: r.id, path: [r.name], market: r.market, status: r.status, spend: r.spend, sales: r.sales, acos: r.acos },
+  ...r.adGroups.map((g) => ({
+    id: g.id,
+    path: [r.name, g.name],
+    market: r.market,
+    status: r.status,
+    spend: g.spend,
+    sales: g.sales,
+    // A child's ACoS is genuinely unmeasured here — it must sink, not read as zero.
+    acos: g.sales > 0 ? Math.round((g.spend / g.sales) * 10000) / 100 : null,
+  })),
+])
+
+const TREE_COLUMNS: ColDef<TreeRow>[] = [
+  { field: 'market', headerName: 'Market', width: 110, filter: 'agSetColumnFilter' },
+  { field: 'status', headerName: 'Status', width: 120, filter: 'agSetColumnFilter' },
+  { field: 'spend', headerName: 'Spend', width: 130, valueFormatter: (p) => eur(p.value), ...numericColumn },
+  { field: 'sales', headerName: 'Sales', width: 130, valueFormatter: (p) => eur(p.value), ...numericColumn },
+  {
+    field: 'acos',
+    headerName: 'ACoS',
+    width: 120,
+    valueFormatter: (p) => (p.value == null ? '—' : p.value.toFixed(2) + '%'),
+    ...numericColumn,
+  },
+]
+
+function OneGridDemo() {
+  const [selCount, setSelCount] = useState(0)
+  return (
+    <>
+      <div className="text-md" style={{ color: 'var(--nds-text-2)' }}>
+        Selected: <b>{selCount}</b>
+      </div>
+      <NexusGrid<TreeRow>
+        height={460}
+        size="md"
+        rowData={TREE_ROWS}
+        columnDefs={TREE_COLUMNS}
+        getRowId={(p) => p.data.id}
+        treeData
+        getDataPath={(d) => d.path}
+        groupDefaultExpanded={1}
+        autoGroupColumnDef={{ headerName: 'Campaign / Ad group', minWidth: 320, pinned: 'left' }}
+        rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, enableClickSelection: false }}
+        onSelectionChanged={(e) => setSelCount(e.api.getSelectedNodes().length)}
+        sideBar={{ toolPanels: ['columns', 'filters'] }}
+        cellSelection={{ handle: { mode: 'fill' } }}
+      />
+    </>
   )
 }
 
@@ -517,6 +593,14 @@ export function GridFeatureLab() {
           defaultColDef={{ sortable: true, resizable: true }}
         />
       </Demo>
+
+      <Demo
+        title="PN.1 — one grid, families as a real tree"
+        hint="The shape /products/next is heading for. Sort ACoS: variations stay under their campaign because AG knows they are children, and the blanks sink to the bottom in BOTH directions. The earlier version emulated this over a flat list and got the order wrong — this cannot, because AG is doing the sorting it was designed to do."
+      >
+        <OneGridDemo />
+      </Demo>
+
     </div>
   )
 }

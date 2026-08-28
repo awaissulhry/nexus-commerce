@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Search, Tag as TagIcon } from 'lucide-react'
 import { Modal } from '@/design-system/components'
-import { Button, Checkbox, ColorSwatchPicker, Input, SWATCHES, Spinner } from '@/design-system/primitives'
+import { Button, Checkbox, ColorSwatchPicker, IconPicker, Input, SWATCHES, Spinner, TagGlyph } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { ProductRow, Tag as ProductTag } from '@/app/products/_types'
 import styles from './styles.module.css'
@@ -42,6 +42,7 @@ export function TagDialog({ open, onClose, selection, allTags, onApplied, onTags
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState<string>(SWATCHES[0].hex)
+  const [newIcon, setNewIcon] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -123,7 +124,7 @@ export function TagDialog({ open, onClose, selection, allTags, onApplied, onTags
       const res = await fetch(`${getBackendUrl()}/api/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, color: newColor }),
+        body: JSON.stringify({ name, color: newColor, icon: newIcon }),
       })
       if (res.status === 409) {
         // Names are globally unique. An error here would be technically correct and useless —
@@ -139,6 +140,7 @@ export function TagDialog({ open, onClose, selection, allTags, onApplied, onTags
       // on what I have selected".
       setDraft((prev) => ({ ...prev, [tag.id]: 'on' }))
       setNewName('')
+      setNewIcon(null)
       setCreating(false)
       onTagsChanged()
     } catch (e) {
@@ -232,7 +234,7 @@ export function TagDialog({ open, onClose, selection, allTags, onApplied, onTags
                   onChange={() => cycle(tag.id)}
                   aria-label={tag.name}
                 />
-                <span className={styles.tagDot} style={{ background: tag.color ?? 'var(--nds-text-3)' }} />
+                <TagGlyph icon={tag.icon} color={tag.color} />
                 <span className={styles.tagName}>{tag.name}</span>
                 {state === 'mixed' && <span className={styles.tagMixed}>on some</span>}
               </label>
@@ -251,6 +253,13 @@ export function TagDialog({ open, onClose, selection, allTags, onApplied, onTags
               aria-label="New tag name"
             />
             <ColorSwatchPicker value={newColor} onChange={setNewColor} ariaLabel="Tag colour" />
+            {/* The glyph carries the tag when the colour cannot: a 9px dot stops being
+                distinguishable past ~8 hues, and colour must never be the only cue (WCAG 1.4.1). */}
+            <span className={styles.tagCreatePreview}>
+              <TagGlyph icon={newIcon} color={newColor} />
+              <b>{newName.trim() || 'New tag'}</b>
+            </span>
+            <IconPicker value={newIcon} onChange={setNewIcon} color={newColor} ariaLabel="Tag icon" />
             <span className={styles.tagCreateActions}>
               <Button size="sm" onClick={() => setCreating(false)} disabled={busy}>Cancel</Button>
               <Button size="sm" variant="primary" onClick={() => void createTag()} disabled={!newName.trim() || busy}>

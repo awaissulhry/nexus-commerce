@@ -29,5 +29,8 @@ export { ToolbarButton, ToolbarDivider, type ToolbarButtonProps } from './Toolba
 
 // A closed colour palette — the only version of "choose a colour" that cannot produce an
 // unreadable result. See the component docblock for why a free picker is worse.
+export { ExpandToggle, type ExpandToggleProps } from './ExpandToggle'
+export { IconPicker, type IconPickerProps } from './IconPicker'
+export { TAG_ICONS, TagGlyph, tagIconSpec, type TagGlyphProps, type TagIconSpec } from './icons/tag-icons'
 export { ColorSwatchPicker, SWATCHES } from './ColorSwatchPicker'
 export type { ColorSwatchPickerProps } from './ColorSwatchPicker'

@@ -31,6 +31,12 @@ export type FilterDimension =
       value: string[]
       onChange: (next: string[]) => void
       placeholder?: string
+      /**
+       * Always offer the in-popover search, whatever the option count. The picker adds one on
+       * its own past seven options; a DATA-DRIVEN list (product types, brands, tags) is worth
+       * searching at any size, because the operator is looking for a name, not scanning a menu.
+       */
+      searchable?: boolean
       /** Span two columns of the 6-col grid. */
       wide?: boolean
     }
@@ -136,6 +142,7 @@ function DimensionControl<T extends FilterDimension>({ d }: { d: T }) {
           value={d.value}
           onChange={d.onChange}
           placeholder={d.placeholder ?? 'All'}
+          searchable={d.searchable}
         />
       )
     case 'select':

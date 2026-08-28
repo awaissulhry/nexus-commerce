@@ -157,17 +157,37 @@ export const badge = {
  * anything rendering an already-saved tag read ONE definition, and so the DS token-guard — which
  * forbids raw hex anywhere outside the token tier — has a legitimate home to point at.
  *
- * Seven sit on the ramp; pink is an identity-only hue with no ramp counterpart, pinned at its
- * measured value. Kept in step with apps/web's copy of this file (same values, same order).
+ * Seven sit on the ramp; the rest are identity-only hues with no ramp counterpart, pinned at
+ * their measured values the way teal / violet / slate are above.
+ *
+ * 🔴 MEASURED, not chosen by eye. A swatch is a graphical mark, so the bar is WCAG 1.4.11's 3:1 —
+ * and it must clear it on BOTH surfaces, light (#ffffff) and dark (#18263b), because the same hex
+ * is the dot in both themes. The eight added 2026-08-28 all do:
+ *   Orange 3.56/4.28 · Lime 3.09/4.93 · Emerald 3.77/4.04 · Indigo 4.47/3.41
+ *   Violet 4.23/3.60 · Fuchsia 4.71/3.23 · Rose 3.67/4.15 · Stone 4.62/3.29
+ *
+ * 🔴 KNOWN DEFECT in the original eight, measured the same way: Purple (1.79), Teal (2.84),
+ * Pink (2.52) and Grey (2.58) FAIL 3:1 on the dark surface. They are left as they are because
+ * changing a hex changes nothing already saved (a tag stores its own value) but does change a
+ * palette operators recognise — a call to make deliberately, not a silent edit. Identity no
+ * longer rests on colour alone regardless: every tag can carry a glyph (`Tag.icon`).
  */
 export const tagSwatches = [
   { name: 'Blue', hex: palette.blue[600] },
   { name: 'Green', hex: palette.green[600] },
+  { name: 'Emerald', hex: '#059669' },
+  { name: 'Lime', hex: '#65a30d' },
   { name: 'Amber', hex: palette.amber[600] },
+  { name: 'Orange', hex: '#ea580c' },
   { name: 'Red', hex: palette.red[500] },
-  { name: 'Purple', hex: palette.purple[600] },
-  { name: 'Teal', hex: palette.cyan[700] },
+  { name: 'Rose', hex: '#f43f5e' },
   { name: 'Pink', hex: '#be185d' },
+  { name: 'Fuchsia', hex: '#c026d3' },
+  { name: 'Purple', hex: palette.purple[600] },
+  { name: 'Violet', hex: '#8b5cf6' },
+  { name: 'Indigo', hex: '#6366f1' },
+  { name: 'Teal', hex: palette.cyan[700] },
+  { name: 'Stone', hex: '#8d6e63' },
   { name: 'Grey', hex: palette.grey[600] },
 ] as const satisfies ReadonlyArray<{ name: string; hex: string }>
 

@@ -1177,11 +1177,13 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         children: Array<{
           id: string; sku: string; name: string
           thumbnailUrl: string | null; abcClass: string | null
+          lowStockThreshold: number
           totalStock: number; totalReserved: number; totalAvailable: number
           stockLevels: Array<{
             locationId: string; locationCode: string; locationType: string
             quantity: number; reserved: number; available: number
             lastUpdatedAt: string
+            syncStatus: string
           }>
         }>
       } = null
@@ -1191,12 +1193,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           prisma.product.findMany({
             where: { parentId: productId, isParent: false },
             select: {
-              id: true, sku: true, name: true, abcClass: true,
+              id: true, sku: true, name: true, abcClass: true, lowStockThreshold: true,
               images: { select: { url: true }, take: 1 },
               stockLevels: {
                 select: {
                   quantity: true, reserved: true, available: true,
-                  lastUpdatedAt: true,
+                  lastUpdatedAt: true, syncStatus: true,
                   location: { select: { id: true, code: true, name: true, type: true } },
                 },
                 orderBy: { quantity: 'desc' },
@@ -1222,6 +1224,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             name: c.name,
             thumbnailUrl: c.images?.[0]?.url ?? null,
             abcClass: c.abcClass,
+            lowStockThreshold: c.lowStockThreshold,
             totalStock:     c.stockLevels.reduce((s, sl) => s + sl.quantity, 0),
             totalReserved:  c.stockLevels.reduce((s, sl) => s + sl.reserved, 0),
             totalAvailable: c.stockLevels.reduce((s, sl) => s + sl.available, 0),
@@ -1233,6 +1236,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
               reserved:     sl.reserved,
               available:    sl.available,
               lastUpdatedAt: sl.lastUpdatedAt.toISOString(),
+              syncStatus:   sl.syncStatus,
             })),
           })),
         }
@@ -2887,77 +2891,95 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // upserts, so a location with no level yet is created). FBA + Shopify
   // are read-only. Keyed on productId only (variations are child
   // Product rows; ProductVariation is deprecated).
+  //
+  // The body is ONE function so the batch route below cannot drift from
+  // it: `adjustOneLocation` is the single cell, the batch is a loop.
+  const ALLOWED_ADJUST_REASONS = ['MANUAL_ADJUSTMENT', 'INVENTORY_COUNT', 'WRITE_OFF'] as const
+  type AdjustReason = (typeof ALLOWED_ADJUST_REASONS)[number]
+  const adjustReasonOf = (raw: unknown): AdjustReason =>
+    (ALLOWED_ADJUST_REASONS as readonly string[]).includes(String(raw ?? '')) ? (raw as AdjustReason) : 'MANUAL_ADJUSTMENT'
+
+  class NoLocationError extends Error { code = 'NO_LOCATION' as const }
+
+  async function adjustOneLocation(input: { productId: string; locationId: string; value: number; reason: AdjustReason; notes?: string; actor: string }) {
+    const { productId, locationId, value, reason, notes, actor } = input
+    const location = await prisma.stockLocation.findUnique({ where: { id: locationId }, select: { type: true } })
+    if (!location) throw new NoLocationError('Location not found')
+
+    // Fresh server-side read → delta derived here, never from the client.
+    const existing = await prisma.stockLevel.findFirst({
+      where: { locationId, productId, variationId: null },
+      select: { quantity: true, reserved: true },
+    })
+    const currentQuantity = existing?.quantity ?? 0
+    const currentReserved = existing?.reserved ?? 0
+    const adj = computeLocationAdjustment({ locationType: location.type, currentQuantity, currentReserved, value })
+
+    let movement: unknown = null
+    if (!adj.noop) {
+      movement = await applyStockMovement({ productId, locationId, change: adj.change, reason, notes, actor })
+    }
+    // Recompute the product's split so a grid cell can reconcile.
+    const levels = await prisma.stockLevel.findMany({
+      where: { productId },
+      select: { quantity: true, reserved: true, available: true, locationId: true, location: { select: { type: true } } },
+    })
+    const totals = summarizeProductStock(levels.map((l) => ({ locationType: l.location.type, quantity: l.quantity })))
+    const level = levels.find((l) => l.locationId === locationId)
+    return { noop: adj.noop, movement, totals, quantity: level?.quantity ?? 0, reserved: level?.reserved ?? 0, available: level?.available ?? 0 }
+  }
+
   fastify.post('/stock/adjust-location', async (request, reply) => {
     try {
-      const body = (request.body ?? {}) as {
-        productId?: string
-        locationId?: string
-        value?: number
-        reason?: string
-        notes?: string
-      }
+      const body = (request.body ?? {}) as { productId?: string; locationId?: string; value?: number; reason?: string; notes?: string }
       const productId = typeof body.productId === 'string' ? body.productId : ''
       const locationId = typeof body.locationId === 'string' ? body.locationId : ''
-      const value = Number(body.value)
       if (!productId || !locationId) {
         return reply.code(400).send({ error: 'productId and locationId are required', code: 'MISSING_FIELDS' })
       }
-
-      const ALLOWED_REASONS = ['MANUAL_ADJUSTMENT', 'INVENTORY_COUNT', 'WRITE_OFF']
-      const reason = ALLOWED_REASONS.includes(body.reason ?? '')
-        ? (body.reason as 'MANUAL_ADJUSTMENT' | 'INVENTORY_COUNT' | 'WRITE_OFF')
-        : 'MANUAL_ADJUSTMENT'
-
-      const location = await prisma.stockLocation.findUnique({
-        where: { id: locationId },
-        select: { type: true },
-      })
-      if (!location) return reply.code(404).send({ error: 'Location not found', code: 'NO_LOCATION' })
-
-      // Fresh server-side read → delta derived here, never from the client.
-      const existing = await prisma.stockLevel.findFirst({
-        where: { locationId, productId, variationId: null },
-        select: { quantity: true, reserved: true },
-      })
-      const currentQuantity = existing?.quantity ?? 0
-      const currentReserved = existing?.reserved ?? 0
-
-      const adj = computeLocationAdjustment({
-        locationType: location.type,
-        currentQuantity,
-        currentReserved,
-        value,
-      })
-
-      let movement: unknown = null
-      if (!adj.noop) {
-        movement = await applyStockMovement({
-          productId,
-          locationId,
-          change: adj.change,
-          reason,
-          notes: body.notes,
-          actor: 'products-grid-location-edit',
-        })
-      }
-
-      // Recompute the product's split so the grid cell can reconcile.
-      const levels = await prisma.stockLevel.findMany({
-        where: { productId },
-        select: { quantity: true, location: { select: { type: true } } },
-      })
-      const totals = summarizeProductStock(
-        levels.map((l) => ({ locationType: l.location.type, quantity: l.quantity })),
-      )
-
-      return { ok: true, noop: adj.noop, movement, totals }
+      const r = await adjustOneLocation({ productId, locationId, value: Number(body.value), reason: adjustReasonOf(body.reason), notes: body.notes, actor: 'products-grid-location-edit' })
+      return { ok: true, noop: r.noop, movement: r.movement, totals: r.totals }
     } catch (error: any) {
+      if (error instanceof NoLocationError) return reply.code(404).send({ error: error.message, code: error.code })
       if (error instanceof LocationAdjustmentError) {
         return reply.code(400).send({ error: error.message, code: error.code })
       }
       fastify.log.error({ err: error }, '[stock/adjust-location] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }
+  })
+
+  // ── POST /api/stock/adjust-locations ────────────────────────────
+  // The inventory editor's batch: ONE reason and note for the session,
+  // a list of absolute on-hand values. Each change runs through the
+  // same `adjustOneLocation` as the single route — same fresh read,
+  // same derived delta, same FBA/Shopify/invalid refusals, same audit
+  // row per movement — and answers for ITSELF, so the grid keeps a
+  // refused cell pending and clears the confirmed ones. A refusal is a
+  // result, not an HTTP error; only a malformed body is a 400.
+  fastify.post('/stock/adjust-locations', async (request, reply) => {
+    const body = (request.body ?? {}) as { reason?: string; notes?: string; changes?: unknown }
+    if (!Array.isArray(body.changes)) return reply.code(400).send({ error: '`changes` must be an array', code: 'MISSING_FIELDS' })
+    if (body.changes.length === 0) return { ok: true, results: [] }
+    if (body.changes.length > 500) return reply.code(400).send({ error: 'At most 500 changes per batch', code: 'TOO_MANY' })
+    const reason = adjustReasonOf(body.reason)
+    const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined
+
+    const results: Array<{ productId: string; locationId: string; ok: boolean; noop?: boolean; quantity?: number; reserved?: number; available?: number; error?: string; code?: string }> = []
+    for (const raw of body.changes as Array<{ productId?: unknown; locationId?: unknown; value?: unknown }>) {
+      const productId = typeof raw?.productId === 'string' ? raw.productId : ''
+      const locationId = typeof raw?.locationId === 'string' ? raw.locationId : ''
+      if (!productId || !locationId) { results.push({ productId, locationId, ok: false, error: 'productId and locationId are required', code: 'MISSING_FIELDS' }); continue }
+      try {
+        const r = await adjustOneLocation({ productId, locationId, value: Number(raw.value), reason, notes, actor: 'products-next-inventory-editor' })
+        results.push({ productId, locationId, ok: true, noop: r.noop, quantity: r.quantity, reserved: r.reserved, available: r.available })
+      } catch (error: any) {
+        const code = error instanceof NoLocationError || error instanceof LocationAdjustmentError ? error.code : 'FAILED'
+        if (code === 'FAILED') fastify.log.error({ err: error, productId, locationId }, '[stock/adjust-locations] change failed')
+        results.push({ productId, locationId, ok: false, error: error?.message ?? String(error), code })
+      }
+    }
+    return { ok: results.every((r) => r.ok), results }
   })
 
   // ── POST /api/stock/bulk-transfer ───────────────────────────────
