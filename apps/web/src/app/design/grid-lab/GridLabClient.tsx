@@ -200,8 +200,25 @@ export function GridLabClient() {
     })
   }, [])
 
+  /**
+   * `.h10-shell` is worn here for its CASCADE, not its layout: the grid has to sit inside the same
+   * token scope the ads console gives it (see the file header). But the class is an APP SHELL —
+   * `height: 100dvh; overflow: hidden`, with `.h10-main` as the inner scroller — and this page is a
+   * long document, not a fixed-viewport console. `display: block` had already taken `.h10-main`
+   * out of the flex column that made it scroll.
+   *
+   * Measured, not guessed: the shell sat at 962px holding 1958px of content with overflow hidden —
+   * about 1000px clipped, no scrollbar, wheel dead. It hid from me because `overflow: hidden` still
+   * permits PROGRAMMATIC scrolling, so every `scrollIntoView` I used to verify a section worked
+   * while a person could not reach it at all.
+   *
+   * `height: auto` + `overflow: visible` hands scrolling back to the app's own #main-content.
+   */
   return (
-    <div className="h10-shell" style={{ display: 'block', minHeight: '100vh' }}>
+    <div
+      className="h10-shell"
+      style={{ display: 'block', height: 'auto', minHeight: '100vh', overflow: 'visible' }}
+    >
       <main className="h10-main" style={{ padding: 24, display: 'grid', gap: 20 }}>
         <header style={{ display: 'grid', gap: 6 }}>
           <h1 className="text-3xl font-heading" style={{ margin: 0 }}>Grid parity lab</h1>
