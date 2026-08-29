@@ -6,6 +6,7 @@
  *   PATCH /api/products/:id/channel-pricing     — bulk update prices
  *   GET  /api/products/:id/channel-inventory    — variant × market listed qty + physical stock
  *   GET  /api/products/:id/amazon-sync-data     — pull title/desc/bullets from ChannelListing
+ *   PATCH /api/products/:id/channel-follows     — hand a field back to the master, or pin it
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -14,6 +15,7 @@ import { computeAvailableToPublish } from '../services/available-to-publish.serv
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
+import { followUpdateData, isFollowableField, pinnedFields, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -707,4 +709,77 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       }
     },
   )
+
+  // ── PATCH /api/products/:id/channel-follows ─────────────────────────────
+  //
+  // MS.7 — the missing half of inheritance. `channel-pricing` PINS a field when a price is written
+  // and ignores `price: null`, so nothing could put a field back under the master. That made
+  // breaking inheritance a one-way door, which is why the sheet showed divergence read-only.
+  //
+  // This flips flags and NOTHING ELSE: no channel call, no publish. The live listing changes only
+  // on the next publish, and the response says so, because "now follows master" and "the channel
+  // now shows the master's value" are different facts and conflating them would be a lie.
+  //
+  // Body: { updates: [{ marketplace, channel?, field, follows }] }
+  fastify.patch<{
+    Params: { id: string }
+    Body: { updates?: Array<{ marketplace?: string; channel?: string; field?: string; follows?: boolean }> }
+  }>('/products/:id/channel-follows', async (request, reply) => {
+    const { id } = request.params
+    const updates = Array.isArray(request.body?.updates) ? request.body.updates : []
+    if (updates.length === 0) return reply.code(400).send({ error: 'updates must be non-empty' })
+    if (updates.length > 50) return reply.code(400).send({ error: `max 50 updates per call (got ${updates.length})` })
+
+    for (const u of updates) {
+      if (!u.marketplace) return reply.code(400).send({ error: 'each update needs a marketplace' })
+      if (!isFollowableField(u.field)) {
+        return reply.code(400).send({ error: `field must be one of ${FOLLOWABLE_FIELDS.join(', ')}`, got: u.field })
+      }
+      if (typeof u.follows !== 'boolean') return reply.code(400).send({ error: 'follows must be true or false' })
+    }
+
+    try {
+      const results = []
+      for (const u of updates) {
+        const mp = String(u.marketplace).toUpperCase()
+        const ch = String(u.channel ?? 'AMAZON').toUpperCase()
+        const field = u.field as Parameters<typeof followUpdateData>[0]
+
+        const listing = await prisma.channelListing.findFirst({
+          where: { productId: id, channel: ch, marketplace: mp },
+          select: { id: true },
+        })
+        if (!listing) {
+          // Not an error: a market the product was never listed on has nothing to inherit.
+          results.push({ marketplace: mp, channel: ch, field, ok: false, reason: 'no listing on this coordinate' })
+          continue
+        }
+
+        const updated = await prisma.channelListing.update({
+          where: { id: listing.id },
+          data: followUpdateData(field, u.follows as boolean),
+          select: {
+            id: true, followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
+            followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
+          },
+        })
+        results.push({
+          marketplace: mp, channel: ch, field, ok: true,
+          follows: u.follows,
+          stillPinned: pinnedFields(updated as unknown as Record<string, unknown>),
+        })
+      }
+
+      return reply.send({
+        results,
+        // The distinction that matters: the flag decides what the NEXT publish sends. Nothing has
+        // been sent to a channel by this call.
+        note: 'Flags only — nothing was published. The live listing changes on the next publish.',
+      })
+    } catch (error: any) {
+      request.log?.error({ err: error, id }, '[products/channel-follows] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
 }

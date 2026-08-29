@@ -239,3 +239,36 @@ export async function bulkSetCells(input: {
     return { ok: false, updated: [], refused: [], skipped, error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+
+/**
+ * MS.7 — hand a channel field back to the master, or pin it.
+ *
+ * Flags only: nothing is published, and the live listing changes on the NEXT publish. The route
+ * clears the explicit `*Override` when the master takes over and deliberately leaves the direct
+ * column alone — for rows predating the SSOT split that column IS what the channel is carrying.
+ */
+export async function setChannelFollows(input: {
+  productId: string
+  channel: string
+  marketplace: string
+  /** One of title | description | price | quantity | images | bulletPoints. */
+  field: string
+  follows: boolean
+}): Promise<SaveOutcome> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/products/${input.productId}/channel-follows`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: [{ channel: input.channel, marketplace: input.marketplace, field: input.field, follows: input.follows }] }),
+    })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) return { ok: false, reason: body?.error || `Refused (HTTP ${res.status})` }
+    const first = Array.isArray(body?.results) ? body.results[0] : undefined
+    if (first && first.ok === false) return { ok: false, reason: first.reason || 'Refused' }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+  }
+}

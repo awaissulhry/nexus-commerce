@@ -1,6 +1,6 @@
 # The Master Sheet — design (GDS-4)
 
-**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1–MS.6 are BUILT** — reads (§9), the component (§10), bulk fill (§12), publish preview (§13), channel divergence (§14). Where the sheet lives is still open and blocks only the mount.
+**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1–MS.7 are BUILT** — reads (§9), the component (§10), bulk fill (§12), publish preview (§13), channel divergence (§14), un-pin (§17). Where the sheet lives is still open and blocks only the mount.
 
 **Ask (2026-08-28):** "a proper grid where I can actually make changes cell by cell. That would be used as the source of data, which would then be mapped, converted, or directly pushed to multiple channels of a specific market."
 
@@ -404,11 +404,49 @@ about production data: a per-cell refusal arriving inside a 200 being read as su
 fill ignoring applicability and setting a field on rows that cannot hold it, and the single-cell path
 dropping its `expectedVersion` guard.
 
-## 16. What is left
+## 17. MS.7 — un-pin, and the divergence cell becomes a control (2026-08-30)
 
-* **Un-pin.** The one genuinely missing route: setting `followMaster* = true` again. Until it exists,
-  MS.6 stays read-only. This is the next API gap worth closing.
-* **The mount** — §8.3 is still the Owner's decision. The sheet lives at `/design/grid-lab?tab=sheet`.
-* **A live publish has never been fired** (§13). Needs the Owner's word and an ungated env.
-* The column-def builder in `MasterSheet.tsx` is still covered only by browser verification; its two
-  applicability rules are tested in `packages/shared`.
+`PATCH /api/products/:id/channel-follows { updates: [{ marketplace, channel?, field, follows }] }`
+(`services/pim/channel-follows.service.ts`). This closes the one genuinely missing route: nothing
+anywhere could set a follow flag back to `true`, so breaking inheritance was a one-way door.
+
+**What it does and does not do.** It flips flags and nothing else — no channel call, no publish. The
+response says so in words (`Flags only — nothing was published. The live listing changes on the next
+publish.`), because "now follows master" and "the channel now shows the master's value" are different
+facts and conflating them would be a lie.
+
+**It never destroys the channel's value.** Handing a field back to the master clears only the
+explicit `*Override`. For rows predating the Phase 20 SSOT split the pinned value lives in the
+DIRECT column (`price`, `title`) — which is also what the channel is carrying right now. Clearing
+that to "tidy up" would erase the record of a live listing's real price. `images` has a flag but no
+override column at all (a gallery is a relation, not a scalar), and is handled explicitly.
+
+The divergence cell from §14 is now an editable control. It governs the **price** flag specifically —
+the header reads `Amazon · IT price follows` — because one cell cannot set six flags without guessing
+which was meant; the tooltip names the others and says they are not editable here.
+
+**13 tests**, three mutation-tested: clearing the direct column as well (data loss), reading an absent
+flag as pinned (the column defaults to true), and clearing the override when *pinning* rather than
+un-pinning.
+
+### Verified on the real IT catalogue, restored afterwards
+
+| Check | Result |
+|---|---|
+| Un-pin | `1J-EYE5-Y0TW` price `false → true`; response `stillPinned: [title, description, images, bulletPoints]` — price gone from the list |
+| No collateral damage | The channel price was **unchanged** across the flip |
+| Restore | Flipped back to `false`; final state matches the original exactly |
+| Rejects a JSONB attribute | `field: "material"` → **400** (attributes have no flag — §5) |
+| Rejects a non-boolean | `follows: "yes"` → **400** |
+| A coordinate with no listing | `ok: false, reason: "no listing on this coordinate"` — reported, not an error |
+
+## 18. What is left
+
+* **The mount** — §8.3 remains the Owner's decision, deliberately not taken for them. The sheet lives
+  at `/design/grid-lab?tab=sheet`; the recommendation is still a "Sheet" lens on `/products`.
+* **A live publish has never been fired** (§13) — needs the Owner's word and an ungated env
+  (`AMAZON_PUBLISH_MODE` currently reads `gated`).
+* **Follows for the other five fields.** The route handles all six; the sheet exposes only price,
+  because five more columns per coordinate would cost more than they explain. Worth revisiting once
+  an operator says which they actually change.
+* The column-def builder in `MasterSheet.tsx` is still covered only by browser verification.

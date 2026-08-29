@@ -63,7 +63,7 @@ import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 import { BulkSetControl } from './BulkSetControl'
 import { PublishControl } from './PublishControl'
 import { coordKey, type SheetColumn, type SheetRow } from './types'
-import { bulkSetCells, saveSheetCell, useMasterSheet } from './useMasterSheet'
+import { bulkSetCells, saveSheetCell, setChannelFollows, useMasterSheet } from './useMasterSheet'
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
@@ -335,25 +335,37 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
           },
           {
             colId: `follows:${k}`,
-            headerName: `${c.label} follows`,
-            width: 150,
+            headerName: `${c.label} price follows`,
+            width: 170,
             sortable: false,
-            cellClass: 'nds-ag-cell nds-cell-is-locked',
+            // MS.7 — now a CONTROL, because un-pinning finally has a route. It governs the PRICE
+            // flag specifically: one cell cannot set six flags without guessing which one was meant.
+            ...selectEditor([{ value: 'true', label: 'Follows master' }, { value: 'false', label: 'Pinned' }]),
+            editable: (p) => !!p.data?.listings[k],
+            cellClass: (p) => (p.data?.listings[k] ? 'nds-ag-cell nds-cell-is-editable' : 'nds-ag-cell nds-cell-is-locked'),
+            cellClassRules: rt,
             valueGetter: (p: ValueGetterParams<SheetRow>) => {
               const l = p.data?.listings[k]
               if (!l) return null
-              // One cell for six flags: it follows only when every one of them does.
-              return Object.values(l.follows).every(Boolean)
+              return String(l.follows.followMasterPrice !== false)
             },
-            cellRenderer: FollowsCell,
-            cellRendererParams: { of: 'master' },
+            valueSetter: (p: ValueSetterParams<SheetRow>) => {
+              const l = p.data?.listings[k]
+              if (!l) return false
+              // Mutate in place: AG re-reads newValue from params.data right after this returns.
+              l.follows = { ...l.follows, followMasterPrice: p.newValue === 'true' }
+              return true
+            },
+            cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null ? <EmptyValue /> : <FollowsCell {...p} value={p.value === 'true'} of="master" />),
             tooltipValueGetter: (p) => {
               const l = p.data?.listings[k]
               if (!l) return `Not listed on ${c.label}`
               const pinned = Object.entries(l.follows).filter(([, v]) => !v).map(([f]) => f.replace(/^followMaster/, ''))
-              return pinned.length === 0
-                ? `Every field follows the master on ${c.label}`
-                : `Pinned on ${c.label}: ${pinned.join(', ')} — the master no longer drives ${pinned.length === 1 ? 'it' : 'them'}`
+              const others = pinned.filter((f) => f !== 'Price')
+              const head = l.follows.followMasterPrice === false
+                ? `Price is PINNED on ${c.label} — the master no longer drives it. Setting this back publishes the master's price on the NEXT publish; nothing is sent now.`
+                : `Price follows the master on ${c.label}.`
+              return others.length ? `${head}\nAlso pinned (not editable here): ${others.join(', ')}` : head
             },
           },
         ] as ColDef<SheetRow>[]
@@ -368,6 +380,21 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
       const d = dataRef.current
       const colId = e.colDef.colId
       if (!d || !colId) return
+      // MS.7 — a follows cell is a ChannelListing flag, not a master cell: its own route.
+      if (colId.startsWith('follows:')) {
+        const [, channel, marketplace] = colId.split(':')
+        void saveCell(e.api, tracker, e.data.id, colId, () =>
+          setChannelFollows({ productId: e.data.id, channel, marketplace, field: 'price', follows: e.newValue === 'true' }),
+        ).then((o) => {
+          if (o.ok) setLastSavedAt(new Date().toISOString())
+          refreshCounts()
+          const n = e.api.getRowNode(e.data.id)
+          if (n) e.api.refreshCells({ rowNodes: [n], force: true })
+        })
+        refreshCounts()
+        return
+      }
+
       const column = d.columns.find((c) => c.key === colId)
       if (!column) return
 
