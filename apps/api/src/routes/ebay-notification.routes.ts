@@ -24,6 +24,8 @@ import type { FastifyInstance } from 'fastify'
 import crypto from 'crypto'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { registerRawJsonParser } from '../utils/webhook.js'
+import type { RawBodyRequest } from '../utils/webhook.js'
 import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
 
 // ── Trading API helpers ────────────────────────────────────────────────
@@ -84,7 +86,7 @@ async function callTradingApi(callName: string, xmlBody: string): Promise<{
 }
 
 function verifyEbaySignature(
-  body: string,
+  body: Buffer,
   signatureHeader: string | undefined,
   token: string,
 ): boolean {
@@ -94,7 +96,10 @@ function verifyEbaySignature(
       .createHmac('sha256', token)
       .update(body)
       .digest('base64')
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader))
+    const a = Buffer.from(expected, 'base64')
+    const b = Buffer.from(signatureHeader, 'base64')
+    if (a.length === 0 || a.length !== b.length) return false
+    return crypto.timingSafeEqual(a, b)
   } catch {
     return false
   }
@@ -109,6 +114,8 @@ const LEGACY_SALE_TOPICS = new Set([
 ])
 
 export default async function ebayNotificationRoutes(app: FastifyInstance): Promise<void> {
+  // CX.0 (S9): eBay signs the raw bytes; capture them for this plugin only.
+  registerRawJsonParser(app)
 
   // ── GET /api/admin/ebay-token-status ──────────────────────────────
   // Shows the current access-token expiry for every active eBay connection.
@@ -342,19 +349,24 @@ ${eventXml}
   })
 
   // POST /api/webhooks/ebay-notification — receives push events from eBay.
-  app.post('/webhooks/ebay-notification', {
-    config: { rawBody: true },
-  }, async (req, reply) => {
+  app.post('/webhooks/ebay-notification', async (req, reply) => {
     const token = process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN ?? ''
-    const body = (req as any).rawBody ?? JSON.stringify(req.body)
+    const body = (req as RawBodyRequest).rawBody
 
-    // Verify signature if token is configured. Skip only in dev (no token).
-    if (token) {
-      const sig = req.headers['x-ebay-signature'] as string | undefined
-      if (!verifyEbaySignature(body, sig, token)) {
-        logger.warn('[eBay notification] invalid signature')
-        return reply.status(204).send()  // eBay requires 204 even on rejection to stop retries
-      }
+    // CX.0 (S6): fail CLOSED. Without a verification token this endpoint would
+    // accept unauthenticated JSON that cancels orders and injects stock events.
+    // (eBay's real ECDSA/public-key verification + subscriptions land in CX.4.)
+    if (!token) {
+      logger.error('[eBay notification] EBAY_NOTIFICATION_VERIFICATION_TOKEN is not set — refusing notification')
+      return reply.status(503).send({ error: 'notification verification not configured' })
+    }
+    if (!body) {
+      return reply.status(400).send({ error: 'raw body unavailable' })
+    }
+    const sig = req.headers['x-ebay-signature'] as string | undefined
+    if (!verifyEbaySignature(body, sig, token)) {
+      logger.warn('[eBay notification] invalid signature')
+      return reply.status(204).send()  // eBay requires 204 even on rejection to stop retries
     }
 
     const payload = req.body as any

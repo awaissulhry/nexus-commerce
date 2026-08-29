@@ -51,9 +51,6 @@ const RW = (readPerm: RoutePermission, writePerm: RoutePermission, when: Matcher
 const ENTRIES: Entry[] = [
   // ── PUBLIC: health / infra ──────────────────────────────────────
   P(PUBLIC, (_m, p) => p === '/api/health' || p === '/admin/health' || p === '/health'),
-  // AS.0-debug (TEMPORARY): auth-topology probe; endpoint self-gates on a
-  // server-side key (AWS_ROLE_ARN suffix) — remove with the probe route.
-  P(PUBLIC, (_m, p) => p === '/api/admin/amazon-auth-probe'),
   P(PUBLIC, pfx('/api/monitoring')),
   P(PUBLIC, pfx('/monitoring')),
 
@@ -79,7 +76,9 @@ const ENTRIES: Entry[] = [
   P(PUBLIC, (m, p) => m.toUpperCase() === 'POST' && p === '/api/advertising/marketing-stream/ingest'),
 
   // ── PUBLIC: OAuth callbacks (browser redirect / partner-initiated)
-  P(PUBLIC, (m, p) => p.startsWith('/api/amazon-ads/auth/')),
+  // CX.0 (S4): only the browser-redirect callback is public; /connect is
+  // session-gated by the adsConnect rule below.
+  P(PUBLIC, (_m, p) => p === '/api/amazon-ads/auth/callback'),
   P(PUBLIC, (m, p) => p === '/api/ebay/auth/callback'),
 
   // ── Auth surface ────────────────────────────────────────────────

@@ -172,31 +172,8 @@ console.log('\n[R3.1+R3.2] Inspect with disposition + scrap reason')
 
 // ─────────────────────────────────────────────────────────────────
 console.log('\n═══ R4 — channel webhooks ═══')
-console.log('\n[R4.1] Shopify refunds/create test endpoint')
-{
-  const refundId = 9_900_000_000_000 + Date.now()
-  const r = await fetch(`${API}/webhooks/shopify/refunds/create-test`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: refundId,
-      order_id: `smoke-shopify-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      note: 'smoke test',
-      refund_line_items: [{
-        line_item_id: 1,
-        quantity: 1,
-        subtotal: '12.50',
-        subtotal_set: { shop_money: { amount: '12.50', currency_code: 'EUR' } },
-        line_item: { sku: productRow.sku, quantity: 1 },
-      }],
-    }),
-  })
-  const j = await r.json()
-  if (r.ok && j.kind === 'created' && j.returnId) {
-    createdReturns.push(j.returnId)
-    ok(`Shopify webhook → Return ${j.returnId}`)
-  } else bad('Shopify webhook fail', JSON.stringify(j).slice(0, 120))
-}
+// [R4.1] removed in CX.0 — the unsigned refunds/create-test route no longer exists;
+// Shopify refund webhooks are verified against SHOPIFY_WEBHOOK_SECRET over the raw body.
 
 console.log('\n[R4.2] eBay returns ingest test')
 {

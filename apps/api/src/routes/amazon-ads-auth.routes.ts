@@ -75,198 +75,6 @@ const MARKETPLACE_COUNTRY: Record<string, string> = {
 }
 
 const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
-  // ── Debug: test auth step-by-step ─────────────────────────────────────
-  // GET /api/amazon-ads/debug/test-auth
-  // Returns token prefix, raw /v2/profiles response, and /sp/campaigns
-  // response for the first active connection. Remove once auth is stable.
-  fastify.get('/amazon-ads/debug/test-auth', async (_request, reply) => {
-    const { default: prisma } = await import('../db.js')
-    const { decryptSecret } = await import('../lib/crypto.js')
-
-    const conn = await prisma.amazonAdsConnection.findFirst({ where: { isActive: true } })
-    if (!conn?.credentialsEncrypted) {
-      return reply.code(404).send({ error: 'no_active_connection' })
-    }
-
-    let creds: { clientId: string; clientSecret: string; refreshToken: string }
-    try {
-      creds = JSON.parse(decryptSecret(conn.credentialsEncrypted))
-    } catch (err) {
-      return reply.code(500).send({ error: 'decrypt_failed', detail: String(err) })
-    }
-
-    async function getToken(scope?: string) {
-      const params: Record<string, string> = {
-        grant_type: 'refresh_token',
-        refresh_token: creds.refreshToken,
-        client_id: creds.clientId,
-        client_secret: creds.clientSecret,
-      }
-      if (scope) params.scope = scope
-      const r = await fetch('https://api.amazon.com/auth/o2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(params).toString(),
-      })
-      const body = await r.json() as Record<string, unknown>
-      return { ok: r.ok, status: r.status, body, token: r.ok ? body.access_token as string : null }
-    }
-
-    async function tryUrl(url: string, token: string, profileId?: string) {
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-        'Amazon-Advertising-API-ClientId': creds.clientId,
-      }
-      if (profileId) headers['Amazon-Advertising-API-Scope'] = profileId
-      const r = await fetch(url, { headers })
-      let body: unknown
-      try { body = await r.json() } catch { body = await r.text() }
-      return { status: r.status, body }
-    }
-
-    // Token without scope (current approach)
-    const t1 = await getToken()
-    // Token with profile + campaign scope (matches new connect URL)
-    const t2 = await getToken('profile advertising::campaign_management')
-
-    // Use IT profile for campaign tests (main Xavia market)
-    const IT_PROFILE = '4117374346144545'
-
-    const results: Record<string, unknown> = {
-      // Show exactly which credentials are stored in the DB for this connection
-      credentialsInDb: {
-        profileId: conn.profileId,
-        clientIdStored: creds.clientId,          // must == AMAZON_ADS_CLIENT_ID
-        clientIdMatchesEnvVar: creds.clientId === process.env.AMAZON_ADS_CLIENT_ID,
-        envVarClientId: process.env.AMAZON_ADS_CLIENT_ID ?? '(not set)',
-        hasClientSecret: !!creds.clientSecret,
-        refreshTokenPrefix: creds.refreshToken?.slice(0, 15),
-      },
-      tokenWithoutScope: t1.ok ? { prefix: t1.token!.slice(0, 15), length: t1.token!.length } : { error: t1.body },
-      tokenWithScope:    t2.ok ? { prefix: t2.token!.slice(0, 15), length: t2.token!.length } : { error: t2.body },
-    }
-
-    // Test client_credentials grant — might return JWT (eyJ...) instead of Atza|
-    const ccRes = await fetch('https://api.amazon.com/auth/o2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: creds.clientId,
-        client_secret: creds.clientSecret,
-        scope: 'advertising::campaign_management',
-      }).toString(),
-    })
-    const ccBody = await ccRes.json() as Record<string, unknown>
-    const ccToken = ccBody.access_token as string | undefined
-    results.clientCredentialsToken = {
-      status: ccRes.status,
-      ok: ccRes.ok,
-      tokenPrefix: ccToken?.slice(0, 20),
-      tokenLength: ccToken?.length,
-      tokenType: ccBody.token_type,
-      error: ccRes.ok ? undefined : ccBody,
-    }
-
-    if (t1.token) {
-      // ── Reports API — correct v3 column names per ad product ─────────────
-      // Each ad product has its own valid column vocabulary. Using a wrong
-      // column for the report type returns 400 "configuration format".
-      async function tryReport(adProduct: string, reportTypeId: string, columns: string[]) {
-        const r = await fetch('https://advertising-api-eu.amazon.com/reporting/reports', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${t1.token}`,
-            'Amazon-Advertising-API-ClientId': creds.clientId,
-            'Amazon-Advertising-API-Scope': IT_PROFILE,
-            'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
-          },
-          body: JSON.stringify({
-            name: `test-${adProduct.toLowerCase()}-${Date.now()}`,
-            startDate: '2026-05-10',
-            endDate: '2026-05-16',
-            configuration: {
-              adProduct,
-              groupBy: ['campaign'],
-              columns,
-              reportTypeId,
-              timeUnit: 'DAILY',
-              format: 'GZIP_JSON',
-            },
-          }),
-        })
-        let body: unknown
-        try { body = await r.json() } catch { body = await r.text() }
-        return { status: r.status, body }
-      }
-
-      // SP v3 spCampaigns columns (groupBy=campaign): must include date when
-      // timeUnit=DAILY; cost (not spend); attribution windows are 1d/7d/14d/30d.
-      results.reports_SP = await tryReport('SPONSORED_PRODUCTS', 'spCampaigns', [
-        'date', 'campaignId', 'campaignName', 'campaignStatus',
-        'impressions', 'clicks', 'cost',
-        'sales7d', 'purchases7d', 'unitsSoldClicks7d',
-      ])
-
-      // SD v3 sdCampaigns columns (groupBy=campaign): uses sales/purchases
-      // (no attribution-window suffix) plus viewable metrics.
-      results.reports_SD = await tryReport('SPONSORED_DISPLAY', 'sdCampaigns', [
-        'date', 'campaignId', 'campaignName',
-        'impressions', 'clicks', 'cost',
-        'sales', 'purchases', 'viewableImpressions',
-      ])
-
-      // SB v3 sbCampaigns columns (groupBy=campaign): uses attributedSales14d
-      // and detailPageViews; no 7d sales window for campaign-level groupBy.
-      results.reports_SB = await tryReport('SPONSORED_BRANDS', 'sbCampaigns', [
-        'date', 'campaignId', 'campaignName',
-        'impressions', 'clicks', 'cost',
-        'attributedSales14d', 'attributedDetailPageViewsClicks14d',
-      ])
-
-      // ── Confirm SD still works ───────────────────────────────────────────
-      results.sd_campaigns        = await tryUrl('https://advertising-api-eu.amazon.com/sd/campaigns', t1.token, IT_PROFILE)
-      results.sd_adGroups         = await tryUrl('https://advertising-api-eu.amazon.com/sd/adGroups', t1.token, IT_PROFILE)
-      results.sd_productAds       = await tryUrl('https://advertising-api-eu.amazon.com/sd/productAds', t1.token, IT_PROFILE)
-      results.sd_targets          = await tryUrl('https://advertising-api-eu.amazon.com/sd/targets', t1.token, IT_PROFILE)
-
-      // ── v3 SP (known 403 — comparison baseline) ──────────────────────────
-      results.v3_sp_campaigns_403 = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
-    }
-
-    // Try client_credentials token with /sp/campaigns
-    if (ccToken) {
-      results.v3_clientCredentials = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', ccToken, IT_PROFILE)
-    }
-
-    // Try refresh token with openid scope → might return JWT
-    const oidcRes = await fetch('https://api.amazon.com/auth/o2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: creds.refreshToken,
-        client_id: creds.clientId,
-        client_secret: creds.clientSecret,
-        scope: 'openid advertising::campaign_management',
-      }).toString(),
-    })
-    const oidcBody = await oidcRes.json() as Record<string, unknown>
-    const oidcToken = (oidcBody.access_token ?? oidcBody.id_token) as string | undefined
-    results.oidcToken = {
-      status: oidcRes.status,
-      ok: oidcRes.ok,
-      tokenPrefix: oidcToken?.slice(0, 20),
-      tokenLength: oidcToken?.length,
-      error: oidcRes.ok ? undefined : oidcBody,
-    }
-
-    if (oidcToken && oidcRes.ok) {
-      results.v3_oidcToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', oidcToken, IT_PROFILE)
-    }
-
-    return reply.send(results)
-  })
   // ── Step 1: redirect operator to Amazon consent page ──────────────────
   fastify.get('/amazon-ads/auth/connect', async (_request, reply) => {
     if (!CLIENT_ID) {
@@ -278,10 +86,14 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     // PKCE — generates a JWT-format access token instead of the legacy
     // Atza| opaque token. Required for Amazon Advertising API SP v3
     // profile-scoped endpoints which use a JWT validator.
+    // CX.0: prune expired sessions so abandoned connects cannot grow the map.
+    const now = Date.now()
+    for (const [k, v] of PKCE_STORE) if (v.expiresAt <= now) PKCE_STORE.delete(k)
+
     const state = randomBytes(16).toString('hex')
     const codeVerifier = generateCodeVerifier()
     const codeChallenge = generateCodeChallenge(codeVerifier)
-    PKCE_STORE.set(state, { verifier: codeVerifier, expiresAt: Date.now() + 15 * 60 * 1000 })
+    PKCE_STORE.set(state, { verifier: codeVerifier, expiresAt: now + 15 * 60 * 1000 })
 
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
@@ -311,9 +123,18 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'missing_code' })
     }
 
-    // Retrieve PKCE code_verifier from in-memory store
-    const pkce = state ? PKCE_STORE.get(state) : undefined
-    if (pkce) PKCE_STORE.delete(state) // one-time use
+    // CX.0 (S4): the state is mandatory and must match a session this server
+    // minted; an unknown or expired state is rejected before any exchange.
+    // (The in-memory store is replaced by OAuthSession in CX.1.)
+    if (!state) {
+      return reply.code(400).send({ error: 'missing_state' })
+    }
+    const pkce = PKCE_STORE.get(state)
+    PKCE_STORE.delete(state) // one-time use
+    if (!pkce || Date.now() >= pkce.expiresAt) {
+      logger.warn('[amazon-ads-auth] callback with unknown or expired state')
+      return reply.code(400).send({ error: 'invalid_state' })
+    }
 
     // Exchange auth code for access + refresh tokens
     let tokens: LWATokenResponse
@@ -325,11 +146,9 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
       }
-      // Include PKCE verifier if this flow used it — causes Amazon to issue
-      // JWT-format access tokens instead of legacy Atza| opaque tokens.
-      if (pkce && Date.now() < pkce.expiresAt) {
-        exchangeParams.code_verifier = pkce.verifier
-      }
+      // PKCE verifier is always sent (the state check above guarantees it) —
+      // Amazon issues JWT-format access tokens instead of legacy Atza| ones.
+      exchangeParams.code_verifier = pkce.verifier
       const tokenRes = await fetch(LWA_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

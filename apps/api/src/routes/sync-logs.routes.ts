@@ -39,8 +39,6 @@ import {
 } from '../jobs/cron-registry.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { dispatchShopifyWebhook } from './shopify-webhooks.js'
-import { dispatchWooWebhook } from './woocommerce-webhooks.js'
-import { dispatchEtsyWebhook } from './etsy-webhooks.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 
@@ -1076,14 +1074,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        const dispatcher =
-          event.channel === 'SHOPIFY'
-            ? dispatchShopifyWebhook
-            : event.channel === 'WOOCOMMERCE'
-              ? dispatchWooWebhook
-              : event.channel === 'ETSY'
-                ? dispatchEtsyWebhook
-                : null
+        // CX.0: the WooCommerce and Etsy receivers were deleted (Woo is out of
+        // scope; Etsy's real order webhooks arrive via the CX.4 ingress).
+        const dispatcher = event.channel === 'SHOPIFY' ? dispatchShopifyWebhook : null
         if (!dispatcher) {
           return reply.code(400).send({
             error: `Replay not supported for channel '${event.channel}'`,

@@ -72,7 +72,7 @@ import {
   rebalanceAndAudit,
   computeRebalance,
 } from '../services/advertising/budget-pool-rebalancer.service.js'
-import { randomBytes, createHash } from 'node:crypto'
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 // ADM-P6/DC — THE definition of ad-attributed sales. Fourteen readers open-coded it as
 // sales7dCents + sales14dCents, which double-counted the moment the 14-day window was populated.
 import { adSalesCents } from '../services/ads-core/ad-sales.js'
@@ -8403,8 +8403,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // AME.9 — shared-secret gate. When NEXUS_AMS_INGEST_SECRET is set, the
     // forwarder (SQS→Lambda) must send a matching x-ams-secret header. Left
     // open only if the secret is unset (so existing flows don't break).
+    // CX.0 (S12): fail closed when the secret is unset; constant-time compare.
     const secret = process.env.NEXUS_AMS_INGEST_SECRET
-    if (secret && request.headers['x-ams-secret'] !== secret) {
+    if (!secret) {
+      reply.status(503); return { error: 'ams_ingest_secret_not_configured' }
+    }
+    const presented = request.headers['x-ams-secret']
+    const expectedBuf = Buffer.from(secret)
+    const presentedBuf = Buffer.from(typeof presented === 'string' ? presented : '')
+    if (expectedBuf.length !== presentedBuf.length || !timingSafeEqual(expectedBuf, presentedBuf)) {
       const { noteAmsUnauthorized } = await import('../services/advertising/ads-marketing-stream.service.js')
       noteAmsUnauthorized()
       reply.status(401); return { error: 'unauthorized' }

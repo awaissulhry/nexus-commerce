@@ -29,6 +29,8 @@
 import type { FastifyInstance } from 'fastify'
 import crypto from 'node:crypto'
 import prisma from '../db.js'
+import { registerRawJsonParser } from '../utils/webhook.js'
+import type { RawBodyRequest } from '../utils/webhook.js'
 import { publishOutboundEvent } from '../services/outbound-events.service.js'
 
 // ── Sendcloud parcel-status code → our normalized TrackingEvent code ──
@@ -83,7 +85,7 @@ interface SendcloudWebhookBody {
  * digest in the Sendcloud-Signature header. We compute it over the raw
  * request body using the integration's webhook secret.
  */
-function verifySignature(rawBody: string, signature: string | undefined, secret: string): boolean {
+function verifySignature(rawBody: Buffer | string, signature: string | undefined, secret: string): boolean {
   if (!signature) return false
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
   // Constant-time compare — both buffers must be the same length, so
@@ -95,11 +97,13 @@ function verifySignature(rawBody: string, signature: string | undefined, secret:
 }
 
 export async function sendcloudWebhookRoutes(app: FastifyInstance) {
+  // CX.0 (S9): Sendcloud signs the bytes it sent — capture the raw JSON body
+  // for this plugin only, instead of re-serialising the parsed object.
+  registerRawJsonParser(app)
   // Sendcloud sends application/x-www-form-urlencoded by default; some
-  // integrations are configured for JSON. We accept both — Fastify's
-  // default JSON parser handles JSON; for URL-encoded we read raw and
-  // parse manually (form bodies wrap the JSON payload as a single
-  // `payload` field per Sendcloud's docs).
+  // integrations are configured for JSON. We accept both — for URL-encoded
+  // we read raw and parse manually (form bodies wrap the JSON payload as a
+  // single `payload` field per Sendcloud's docs).
   app.post('/api/webhooks/sendcloud', async (request, reply) => {
     // CR.20: prefer the per-carrier rotated secret over the env var.
     // Decrypts on each request — cheap (<1ms) and keeps the cleartext
@@ -126,14 +130,14 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
     }
 
     const sig = (request.headers['sendcloud-signature'] ?? request.headers['x-sendcloud-signature']) as string | undefined
-    // Reconstruct raw body for signature check. Fastify has already
-    // parsed `request.body` by this point; we re-stringify for HMAC.
-    // Sendcloud signs the body bytes Sendcloud sent — round-tripping
-    // through JSON.stringify is acceptable here because Sendcloud
-    // emits canonical JSON without whitespace, and we configure their
-    // panel to send JSON (not form-encoded). If a future integration
-    // sends form-encoded, swap the parser to capture rawBody verbatim.
-    const rawBody = typeof request.body === 'string' ? request.body : JSON.stringify(request.body ?? {})
+    // The raw JSON bytes come from registerRawJsonParser; a form-encoded
+    // delivery arrives as a string body and is verified as-is.
+    const rawBody: Buffer | string | undefined =
+      (request as RawBodyRequest).rawBody ?? (typeof request.body === 'string' ? request.body : undefined)
+    if (!rawBody) {
+      app.log.warn('[sendcloud-webhook] raw body unavailable — refusing')
+      return reply.code(400).send({ error: 'Raw body unavailable' })
+    }
     if (!verifySignature(rawBody, sig, secret)) {
       app.log.warn('[sendcloud-webhook] signature mismatch')
       return reply.code(401).send({ error: 'Invalid signature' })

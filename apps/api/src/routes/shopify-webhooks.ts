@@ -12,7 +12,8 @@
 
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
-import { WebhookValidator, WebhookProcessor } from "../utils/webhook.js";
+import { WebhookValidator, WebhookProcessor, registerRawJsonParser } from "../utils/webhook.js";
+import type { RawBodyRequest } from "../utils/webhook.js";
 import { ConfigManager } from "../utils/config.js";
 import type { ShopifyConfig } from "../types/marketplace.js";
 import { publishListingEvent } from "../services/listing-events.service.js";
@@ -916,6 +917,9 @@ async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): Promise<
 }
 
 export async function shopifyWebhookRoutes(app: FastifyInstance) {
+  // CX.0 (S9): Shopify signs the raw bytes; capture them for this plugin only.
+  registerRawJsonParser(app);
+
   const webhookValidator = new WebhookValidator();
   const webhookProcessor = new WebhookProcessor();
 
@@ -926,7 +930,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   app.post("/webhooks/shopify/products/update", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       // Validate webhook signature
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
@@ -993,7 +997,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   app.post("/webhooks/shopify/products/delete", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       // Validate webhook signature
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
@@ -1060,7 +1064,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   app.post("/webhooks/shopify/inventory/update", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       // Validate webhook signature
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
@@ -1127,7 +1131,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   app.post("/webhooks/shopify/orders/create", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       // Validate webhook signature
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
@@ -1194,7 +1198,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   app.post("/webhooks/shopify/orders/update", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       // Validate webhook signature
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
@@ -1261,7 +1265,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   app.post("/webhooks/shopify/fulfillments/create", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       // Validate webhook signature
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
@@ -1329,13 +1333,13 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
    * see channel-issued refunds alongside operator-created RMAs.
    *
    * Test endpoint (no signature) lives at /webhooks/shopify/refunds/
-   * create-test for sandbox runs — the route below is the
+   * (the former create-test route was removed in CX.0) — the route below is the
    * production path.
    */
   app.post("/webhooks/shopify/refunds/create", async (request, reply) => {
     try {
       const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = JSON.stringify(request.body);
+      const body = (request as RawBodyRequest).rawBody;
 
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
       if (!config) {
@@ -1389,32 +1393,8 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * R4.1 — Sandbox-only test endpoint.
-   *
-   * Skips signature verification + idempotency table check so we can
-   * fire fixture payloads at the handler from a verify script
-   * without setting up a Shopify partner app + ngrok tunnel. Gated
-   * to non-production env: returns 404 unless NEXUS_ENV is anything
-   * other than 'production'. The handler logic is shared with the
-   * real route above, so behaviour is identical end-to-end.
-   */
-  app.post("/webhooks/shopify/refunds/create-test", async (request, reply) => {
-    if ((process.env.NEXUS_ENV ?? '').toLowerCase() === 'production') {
-      return reply.code(404).send({ error: 'Not found' });
-    }
-    try {
-      const result = await handleRefundCreate(request.body as ShopifyWebhookPayload);
-      return reply.send({ success: true, ...result });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] refunds/create-test failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
+  // CX.0 (S8): the unsigned `refunds/create-test` route is gone. Verify
+  // scripts sign a request to the real route with SHOPIFY_WEBHOOK_SECRET.
 }
 
 /**

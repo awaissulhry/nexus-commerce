@@ -11,7 +11,7 @@ Successfully wired the Nexus Commerce application for serverless cloud deploymen
 Updated with production credentials:
 - **DATABASE_URL**: Neon.tech PostgreSQL connection string with SSL mode enabled
   ```
-  postgresql://neondb_owner:npg_V8MJ9GviyFPZ@ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require
+  postgresql://<user>:<password>@<host>/<db>?sslmode=require
   ```
 - **REDIS_URL**: Upstash Redis with TLS/SSL support
   ```
@@ -132,7 +132,7 @@ Updated `ImageService.deleteImage()` to:
 **To migrate to Neon.tech in production:**
 ```bash
 # Set DATABASE_URL to Neon.tech connection string
-export DATABASE_URL="postgresql://neondb_owner:npg_V8MJ9GviyFPZ@ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+export DATABASE_URL="postgresql://<user>:<password>@<host>/<db>?sslmode=require"
 
 # Run migration
 cd packages/database
@@ -245,7 +245,7 @@ Added production startup scripts:
 ### 1. Database Connection
 ```bash
 # Test Neon.tech connection
-psql "postgresql://neondb_owner:npg_V8MJ9GviyFPZ@ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+psql "postgresql://<user>:<password>@<host>/<db>?sslmode=require"
 ```
 
 ### 2. Redis Connection

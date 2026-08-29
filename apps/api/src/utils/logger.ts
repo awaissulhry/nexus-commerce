@@ -5,6 +5,38 @@
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+/**
+ * CX.0 (S20) — credential redaction. Any context value whose KEY looks like
+ * token/secret material is replaced before serialisation, at any depth, so a
+ * careless `logger.info('…', { connection })` can never print a refresh token.
+ */
+const SENSITIVE_KEY = /token|secret|password|authorization|code_verifier|api[_-]?key|credential/i;
+// Metadata ABOUT a credential is safe and useful (tokenExpiresAt, hasRefreshToken…).
+const SAFE_SUFFIX = /(At|Expiry|Expires|Length|Len|Count|Prefix|Ok|Status|Type|Url|Endpoint|Present|Configured)$/;
+const MAX_DEPTH = 6;
+
+function isSensitiveKey(key: string, value: unknown): boolean {
+  if (!SENSITIVE_KEY.test(key) || SAFE_SUFFIX.test(key)) return false;
+  return typeof value === 'string' || (typeof value === 'object' && value !== null);
+}
+
+export function redact(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value !== 'object' || depth > MAX_DEPTH) return value;
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (isSensitiveKey(k, v)) {
+      out[k] = '[redacted]';
+    } else {
+      out[k] = redact(v, depth + 1);
+    }
+  }
+  return out;
+}
+
 interface LogEntry {
   timestamp: string;
   level: LogLevel;
@@ -20,7 +52,7 @@ class Logger {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context
+      context: context === undefined ? undefined : (redact(context) as Record<string, any>)
     };
   }
 

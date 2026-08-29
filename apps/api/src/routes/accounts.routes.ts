@@ -38,6 +38,7 @@ import type { ChannelConnection } from "@prisma/client";
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
 import { listActiveConnections } from "../services/connection-resolver.service.js";
+import { ebayAuthService } from "../services/ebay-auth.service.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
@@ -381,12 +382,45 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
     // from — the FKs are ON DELETE SET NULL precisely so a delete could not
     // quietly erase that, and this path does not delete at all.
     // Tokens for OTHER accounts are untouched (feedback_preserve_sensitive_config).
+    //
+    // CX.0 (S11): a disconnected account must not keep live credentials. For an
+    // eBay OAuth grant, revoke at eBay and null every token column (the same
+    // path the card's Disconnect uses); a failed remote revoke still nulls
+    // locally and is logged. Other OAuth channels null their generic columns.
+    // Env-managed rows have no grant to revoke and are left as they are.
+    let revokedAtChannel = false;
+    if (row.managedBy === "oauth" && row.channelType === "EBAY") {
+      try {
+        await ebayAuthService.revokeTokens(row.id);
+        revokedAtChannel = true;
+      } catch (err) {
+        logger.warn("MAP.4 disconnect: eBay revoke failed; nulling tokens locally", {
+          accountId: row.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     await prisma.channelConnection.update({
       where: { id: row.id },
-      data: { isActive: false, isPrimary: false, lastSyncStatus: "FAILED", lastSyncError: "Disconnected by operator" },
+      data: {
+        isActive: false,
+        isPrimary: false,
+        lastSyncStatus: "FAILED",
+        lastSyncError: "Disconnected by operator",
+        ...(row.managedBy === "oauth"
+          ? {
+              accessToken: null,
+              refreshToken: null,
+              tokenExpiresAt: null,
+              ebayAccessToken: null,
+              ebayRefreshToken: null,
+              ebayTokenExpiresAt: null,
+            }
+          : {}),
+      },
     });
 
-    logger.info("MAP.4 account disconnected", { channel: row.channelType, accountId: row.id });
+    logger.info("MAP.4 account disconnected", { channel: row.channelType, accountId: row.id, revokedAtChannel });
     return reply.send({ success: true, blastRadius: await blastRadius(row.id) });
   });
 };

@@ -552,7 +552,7 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
         return reply.send({
           success: true,
           message: "eBay access token refreshed successfully",
-          token: token.substring(0, 20) + "...", // Return partial token for verification
+          refreshed: token.length > 0, // CX.0 (S19): never echo token material
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
