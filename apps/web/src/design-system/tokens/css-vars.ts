@@ -14,6 +14,7 @@
 import { palette, pill, badge } from './colors'
 import { space } from './spacing'
 import { fontSize, fontWeight } from './typography'
+import { gridVars, gridVarsDark } from './grid'
 
 export interface CssVar {
   /** when set, a section-comment is emitted before this row */
@@ -408,6 +409,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // If you add a name here, first `grep -rn -- "--<name>:" apps/web/src/app`.
   // If globals.css or ads.css already defines it, adding it is a landmine, not a
   // fix — that is why --surface-raised is deliberately absent.
+  // ── Tier 3: grid (GDS) ───────────────────────────────────────────
+  // The AG-Grid-based design-system grid's own tokens, defined once in ./grid.ts so the
+  // TypeScript numbers a page hands AG (row height, header height, widths) and the CSS custom
+  // properties the theme binds are the same table. Every colour is a semantic role, so the
+  // .dark block below needs no grid entry.
+  ...gridVars,
+
   { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--nds-text)' },
   { name: '--text-secondary', value: 'var(--nds-text-2)' },
   { name: '--text-tertiary', value: 'var(--nds-text-3)' },
@@ -560,4 +568,6 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-rail-chip-active-fg', value: '#cfe1fb' },
   { name: '--nds-rail-ft', value: '#6f7b8b' },
 
+  // ── grid aliases, re-declared so they resolve against the dark tier (tokens/grid.ts) ──
+  ...gridVarsDark,
 ]

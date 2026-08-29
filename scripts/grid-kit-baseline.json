@@ -1,0 +1,12 @@
+{
+  "note": "GDS rebuild backlog. Each count may only go DOWN; lower it here when a page is rebuilt and say so in the commit.",
+  "updatedAt": "2026-08-28",
+  "counts": {
+    "dsDataGrid": 71,
+    "gridLens": 60,
+    "adsDataGrid": 56,
+    "workspaceGrid": 4,
+    "tanstack": 17,
+    "rawTable": 194
+  }
+}

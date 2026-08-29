@@ -17,6 +17,7 @@
     "check:drift": "npm run check:drift --workspace=@nexus/database && npm run check:column-drift --workspace=@nexus/database",
     "tokens:gen": "tsx apps/web/src/design-system/tools/generate-tokens-css.ts",
     "tokens:check": "tsx apps/web/src/design-system/tools/generate-tokens-css.ts --check",
+    "grid:conformance": "node scripts/check-grid-chrome.mjs",
     "postinstall": "patch-package"
   },
   "devDependencies": {

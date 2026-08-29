@@ -1,0 +1,367 @@
+/**
+ * The engine's own stylesheet. Web-only, and deliberately TINY.
+ *
+ * Everything that can be said as a theme param is said in `theme.ts`, not here. This file only
+ * carries what the Theming API has no param for: per-column alignment classes, the no-rows
+ * overlay, the cell's line box, the child-row tint and rail, the column-group strip, the density
+ * padding knob, and the DS-built column filters. Every colour and number in here is a
+ * `--nds-grid-*` token from `tokens/grid.ts` — if a rule starts naming a ramp step or a bare
+ * pixel, it belongs in the token table instead. Two places to change a row height is how the
+ * five-engine mess started.
+ *
+ * Not registered in `design-system/styles/`, and not imported by `layout.tsx`: it is imported by
+ * the engine component, so it only ships on routes that actually mount a grid. It has no
+ * counterpart in apps/factory (factory renders no AG grid) — the grid TOKENS are mirrored there,
+ * this sheet is not.
+ */
+
+/* `.nds-wsgrid th.num, .nds-wsgrid td.num { text-align: right }` — plus the tabular figures the
+   DS learned to set the hard way: a money column that loses proportional-digit alignment is the
+   one defect a grid cannot afford. */
+.nds-ag-num {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nds-ag-head-num .ag-header-cell-label {
+  justify-content: flex-end;
+}
+
+.nds-ag-ed {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.nds-ag-ctr {
+  justify-content: center;
+  text-align: center;
+}
+
+/* The identity column: AG already centres its cell content, so only the gap and the ellipsis
+   are restated. */
+.nds-ag-cell-first {
+  gap: 7px;
+}
+
+.nds-ag-cell-first > * {
+  min-width: 0;
+}
+
+/* The empty state. SGX parity: the sentence must WRAP. The hand-rolled grid shipped this bug to
+   prod — a long empty state painted straight out of its cell and under the frozen column —
+   because the empty cell inherited `white-space: nowrap`. AG Grid's overlay does not inherit that,
+   but the wrap is stated anyway so the fix cannot be lost a second time. */
+.nds-ag-empty {
+  display: block;
+  max-width: 320px;
+  padding: 28px;
+  color: var(--nds-grid-empty-fg);
+  text-align: center;
+  white-space: normal;
+}
+
+/* AG.3 — the bulk-action bay, shown only while rows are selected. Geometry only, deliberately:
+   every control inside is the caller's and is already a DS primitive. */
+.nds-ag-selbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+/* A row that opens something must look like it does. Only the cursor: the hover tint is a theme
+   param and lives in theme.ts. */
+.nds-ag-clickable {
+  cursor: pointer;
+}
+
+/* AG.3 — the row rule.
+ *
+ * `theme.ts` asks for this with the `rowBorder` param and AG Grid 36.1.0 emits NOTHING for it:
+ * measured, `--ag-row-border-color` is empty in both the object form and the `true` form, and
+ * rows render `1px solid rgba(0, 0, 0, 0)` — a rule that is present, sized, and invisible.
+ *
+ * AG's own base CSS reads a SHORTHAND: `border-bottom: var(--ag-row-border)`, applied to the cell
+ * CONTAINERS (`.ag-grid-scrolling-cells`, `.ag-grid-pinned-*-cells`), not to `.ag-cell`. Setting
+ * that one variable is therefore not a hand-rolled border — it is supplying the value AG is
+ * already asking for, and it stays a token, so dark mode still costs nothing. */
+.nds-ag-wrap {
+  --ag-row-border: 1px solid var(--nds-grid-row-rule);
+}
+
+/* PN.1 — the cell is a flex row with a NORMAL line box, like the DS `td` it replaces.
+ *
+ * AG sets `line-height: calc(row-height − 3px)` on every cell so a single line of plain text
+ * centres itself. Every renderer this product puts in a cell inherits that: a two-line product
+ * cell became 82px of content inside a 43px row (measured — thumbnail pushed 22px down and
+ * clipped 19px off the bottom), and pills, tag chips and channel labels each sat on a 40px line
+ * box, so nothing shared a vertical centre. The Theming API has no param for this, which is the
+ * one condition under which a rule belongs in this file.
+ *
+ * Centring is done the way the DS grid does it — the cell is the flex container — so a renderer
+ * needs no knowledge of the row height to sit in the middle of it. */
+.nds-ag-wrap .ag-cell,
+.nds-ag-wrap .ag-cell-value {
+  line-height: normal;
+}
+
+.nds-ag-wrap .ag-cell {
+  display: flex;
+  align-items: center;
+}
+
+/* The group cell (the tree column) wraps its chevron and value in `.ag-cell-wrapper`; give the
+   value the remaining width so the product cell's ellipsis has a box to work in. */
+.nds-ag-wrap .ag-cell .ag-cell-wrapper {
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.nds-ag-wrap .ag-cell .ag-group-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* PN.1 — DS tooltips inside cells.
+ *
+ * The DS `Tooltip` is CSS-only: an absolutely positioned bubble that pops above its trigger on
+ * hover, INSIDE the trigger's box. AG clips every cell (`overflow: hidden`) so the bubble was cut
+ * at the cell's top edge — measured on the Channels column, and worse at Cozy/Compact where the
+ * row is shorter than the bubble. Unclipping every cell would let long plain values spill into
+ * their neighbours, so only cells that actually contain a DS tooltip are opened up; everything
+ * else keeps AG's ellipsis. `:has()` is what makes that precise.
+ *
+ * What this cannot fix: a bubble on the FIRST row pops into the scroll viewport's clip, and no
+ * cell rule reaches that. That is the case the portal-rendered `InfoTip` exists for (W6). */
+.nds-ag-wrap .ag-cell:has(.nds-tooltip),
+.nds-ag-wrap .ag-cell:has(.nds-tooltip) .ag-cell-value,
+.nds-ag-wrap .ag-cell:has(.nds-tooltip) .ag-cell-wrapper {
+  overflow: visible;
+}
+
+/* AG rows are absolutely positioned siblings whose DOM order is not their visual order, so a
+   bubble rising out of one row can paint BEHIND the row above it. The hovered row wins. */
+.nds-ag-wrap .ag-row:hover,
+.nds-ag-wrap .ag-row.ag-row-focus {
+  z-index: 1;
+}
+
+/* PN.1 — `flatTree` (see NexusGrid): the DS says "child" with a tint and a 3px rail, never with an
+   indent. A page whose children must line up under their parent owns the tree column's cell
+   (`autoGroupColumnDef.cellRenderer`) — AG then renders no chevron slot and no level step, and
+   nothing here has to undo them. A full-width row below the top level (the family footer) takes
+   the same tint. */
+.nds-ag-flat-tree .ag-row:not(.ag-row-level-0) {
+  background-color: var(--nds-grid-child-bg);
+}
+
+/* On the ROW, not the first cell: a cell is 1px shorter than its row, which left a gap in the
+   rail at every row boundary. The DS drew it on the `td`, whose box includes the row rule, so the
+   rail ran continuously down the family — the row is AG's equivalent box. */
+.nds-ag-flat-tree .ag-row:not(.ag-row-level-0):not(.ag-full-width-row) {
+  box-shadow: inset 3px 0 0 var(--nds-grid-child-rail);
+}
+
+.nds-ag-flat-tree .ag-row:not(.ag-row-level-0).ag-row-hover {
+  background-color: var(--nds-grid-child-hover-bg);
+}
+
+/* PN.1 — a grid inside a `.nds-gridcard` does not draw its own frame.
+ *
+ * The theme's `wrapperBorder` / `wrapperBorderRadius` frame a STANDALONE grid. /products/next
+ * puts the grid inside the DS grid card, which already draws the same 1px border and radius —
+ * measured: two identical borders one pixel apart, and a rounded top corner on the header inside
+ * a card whose own corner is where the rounding belongs. AG sets these variables on its root
+ * wrapper, so the override has to land on that element, not on an ancestor. */
+.nds-gridcard .nds-ag-wrap .ag-root-wrapper {
+  --ag-wrapper-border: none;
+  --ag-wrapper-border-radius: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* IE.4 — a column-group row is a slim STRIP above the header, not a second header.
+ *
+ * AG draws group headers in the header's own style, so a grid with groups showed two header rows
+ * of full height (93px at the Spacious tier) — against the products page's single 46px header
+ * over 85px rows. The Owner: the group labels belong "in the strip above the actual header".
+ * Every NexusGrid with column groups gets this band: the height is the grid's `groupHeaderHeight`
+ * (`gridGeometry.stripH`), the ground is the sunken surface, labels are the DS eyebrow, and the
+ * partitions run the strip's FULL height so it reads as parts of one band rather than as header
+ * cells. */
+.nds-ag-nexus .ag-header-row-group {
+  background: var(--nds-grid-strip-bg);
+  box-shadow: inset 0 -1px 0 var(--nds-grid-strip-rule);
+}
+.nds-ag-nexus .ag-header-group-cell {
+  --ag-header-column-border-height: 100%;
+  font-size: var(--nds-grid-strip-size);
+  font-weight: var(--nds-grid-strip-weight);
+  letter-spacing: var(--nds-grid-strip-tracking);
+  text-transform: uppercase;
+  color: var(--nds-grid-strip-fg);
+}
+.nds-ag-nexus .ag-header-group-cell .ag-header-group-cell-label {
+  justify-content: center;
+}
+
+/* PN.1 — compact density tightens the cell's horizontal padding too. The theme sets cell padding
+   once, so the density-specific value lands here, keyed off the wrapper's `data-density`. AG sets
+   this variable on its root wrapper, hence the selector. (AG renders the padding one pixel under
+   the variable — measured 13 at 14, 9 at 10 — so the token states what the DS grid measured +1.) */
+.nds-ag-wrap[data-density='compact'] .ag-root-wrapper {
+  --ag-cell-horizontal-padding: var(--nds-grid-cell-pad-x-compact);
+}
+
+/* ── Column filters: DS-built components inside AG's column menu ───────────────────────────
+   The list reuses the MultiSelect option rows (`.nds-ms-opt`) and its search box, so a filter in
+   the header menu reads exactly like the same filter in the accordion. These are DS controls, so
+   they speak the DS control tokens, not the grid's. */
+.nds-ag-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 8px;
+  font-size: 13px;
+  color: var(--nds-text);
+}
+.nds-ag-filter-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.nds-ag-filter-range {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.nds-ag-filter-range label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--nds-text-2);
+}
+.nds-ag-filter-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--nds-border);
+}
+
+/* ══ GDS cell library (`../renderers`, `../editors`) ══════════════════════════════════════════
+   Geometry lifted verbatim from /products/next's page stylesheet (measured there); colours are the
+   grid tokens. A page composes these cells; it does not restyle them. */
+
+/* the dash — muted; the title (a measured zero) is on the element, the colour is here */
+.nds-cell-empty { color: var(--nds-grid-muted-fg); }
+.nds-cell-muted { color: var(--nds-grid-muted-fg); }
+.nds-cell-strong { font-weight: var(--nds-font-weight-semibold); }
+.nds-cell-date { font-size: var(--nds-font-size-sm); white-space: nowrap; }
+
+/* identity: leading (expander) · thumb · meta (title row + sub-line) */
+.nds-cell-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.nds-cell-identity-meta { min-width: 0; }
+.nds-cell-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 330px; }
+.nds-cell-title-link {
+  font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-base); color: var(--nds-primary);
+  text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.nds-cell-title-link:hover { text-decoration: underline; }
+/* the hover-revealed "Open in new tab" pill (the ads manager's `.h10-open`, tokenised) */
+.nds-cell-open {
+  display: none; align-items: center; gap: 4px; font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-inverse); background: var(--nds-primary); border-radius: var(--nds-radius-sm); padding: 3px 8px;
+  text-decoration: none; flex-shrink: 0; white-space: nowrap; line-height: 1.2;
+}
+.nds-cell-identity:hover .nds-cell-open, .nds-cell-title-row:hover .nds-cell-open { display: inline-flex; }
+.nds-cell-open:hover { background: var(--nds-primary-hover); }
+.nds-cell-sub { font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+.nds-cell-sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); }
+
+/* the 20px expander and the slot that keeps a leaf aligned under its siblings */
+.nds-cell-expand {
+  width: 20px; height: 20px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--nds-radius-pill); border: none; background: none; color: var(--nds-text-3); cursor: pointer; padding: 0;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.nds-cell-expand:hover { background: var(--nds-surface-hover); color: var(--nds-grid-cell-fg); }
+.nds-cell-expand:focus-visible { outline: none; box-shadow: var(--nds-grid-focus-ring); }
+.nds-cell-expand-slot { width: 20px; flex: none; }
+
+/* actions: Edit + ⋯, right-aligned */
+.nds-cell-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+
+/* tags: one named chip, or up to N glyph chips and a +N */
+.nds-cell-tags { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; overflow: hidden; }
+.nds-cell-tagchip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken); color: var(--nds-text-2); font-size: var(--nds-font-size-xs); white-space: nowrap;
+  max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+}
+.nds-cell-tagchip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nds-cell-tagglyph { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 18px; height: 18px; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); }
+.nds-cell-tagmore { font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); flex: none; }
+
+/* group row: label + count */
+.nds-cell-group { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.nds-cell-group strong { font-weight: var(--nds-font-weight-semibold); color: var(--nds-grid-header-fg); }
+.nds-cell-group-count { font-size: 12px; color: var(--nds-text-2); white-space: nowrap; }
+
+/* stock levels */
+.nds-cell-stock-out { color: var(--nds-danger); font-weight: var(--nds-font-weight-semibold); }
+.nds-cell-stock-low { color: var(--nds-warning); font-weight: var(--nds-font-weight-semibold); }
+.nds-cell-stock-ok { color: var(--nds-success); font-weight: var(--nds-font-weight-semibold); }
+
+/* locked — the cell (a whole read-only column) and the value (a lock glyph beside it) */
+.nds-ag-wrap .ag-cell.nds-cell-is-locked { color: var(--nds-grid-locked-fg); }
+.nds-cell-locked { color: var(--nds-grid-locked-fg); display: inline-flex; align-items: center; gap: 6px; }
+.nds-cell-lock-glyph { font-size: 10px; }
+
+/* the delta chip on a pending edit */
+.nds-cell-delta {
+  position: absolute; right: 6px; top: 3px; font-family: var(--nds-font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700;
+  line-height: 14px; padding: 0 5px; border-radius: var(--nds-radius-full); background: var(--nds-grid-delta-bg); color: var(--nds-grid-delta-fg);
+}
+.nds-cell-delta-neg { background: var(--nds-grid-delta-neg-bg); }
+
+/* editing states — batch (pending / refused) and per-cell round trip (saving / saved / refused) */
+.nds-ag-wrap .ag-cell.nds-cell-is-editable { cursor: text; }
+.nds-ag-wrap .ag-cell.nds-cell-is-editable:hover { box-shadow: inset 0 0 0 1px var(--nds-grid-editable-ring); }
+.nds-ag-wrap .ag-cell.nds-cell-is-pending { background: var(--nds-grid-pending-bg) !important; }
+.nds-ag-wrap .ag-cell.nds-cell-is-saving { background: var(--nds-grid-saving-bg) !important; }
+.nds-ag-wrap .ag-cell.nds-cell-is-saved { box-shadow: inset 0 0 0 1px var(--nds-success); transition: box-shadow 400ms ease; }
+.nds-ag-wrap .ag-cell.nds-cell-is-refused { background: var(--nds-grid-refused-bg) !important; box-shadow: inset 0 0 0 1px var(--nds-grid-refused-ring); }
+.nds-cell-select-editor { width: 100%; padding: 0 4px; }
+
+/* overlays */
+.nds-grid-skel { display: flex; flex-direction: column; width: 100%; padding: 0 14px; }
+.nds-grid-skel-row { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--nds-grid-row-rule); }
+.nds-grid-skel-thumb { flex: none; border-radius: var(--nds-radius-sm); background: var(--nds-grid-skeleton-bg); }
+.nds-grid-skel-text { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.nds-grid-skel-line { display: block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--nds-grid-skeleton-bg) 25%, var(--nds-grid-skeleton-shine) 37%, var(--nds-grid-skeleton-bg) 63%); background-size: 400% 100%; animation: nds-grid-shimmer 1.3s ease infinite; }
+.nds-grid-skel-line-sub { height: 8px; }
+@keyframes nds-grid-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .nds-grid-skel-line { animation: none; } }
+.nds-grid-noRows { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.nds-grid-noRows-title { font-weight: var(--nds-font-weight-semibold); color: var(--nds-grid-cell-fg); }
+.nds-grid-noRows-msg { color: var(--nds-grid-empty-fg); }
+
+/* ══ hosts and toolbars (`../hosts`, `../toolbars`) ═══════════════════════════════════════════
+   Lifted from /products/next (`.pager`, `.rpp`, `.grow`, `.ieFootStrip`, `.gridCard`), measured. */
+/* the page host is a size container, so a toolbar's selection cluster adapts to the CARD's width */
+.nds-grid-card { container-type: inline-size; }
+/* the pager: pages left of the control, rows-per-page on the right (the Ad Manager's arrangement) */
+.nds-grid-pager { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
+.nds-grid-pager-grow { flex: 1; }
+.nds-grid-pager-rpp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--nds-text-2); white-space: nowrap; }
+/* the editor's footer strip inside the card */
+.nds-grid-footstrip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
+.nds-grid-footstrip-grow { flex: 1; }

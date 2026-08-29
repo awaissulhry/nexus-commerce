@@ -59,10 +59,6 @@
 }
 
 /* The grid card is the size container the toolbar adapts to. */
-.gridCard {
-  container-type: inline-size;
-}
-
 @container (max-width: 1320px) {
   .selActions .lbl {
     display: none;
@@ -81,83 +77,8 @@
 }
 
 /* ── Product column cell ─────────────────────────────────── */
-.productCell {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-}
-
-.pmeta {
-  min-width: 0;
-}
-
-/* Title row: clickable name + hover-revealed "Open in new tab" pill.
-   Mirrors the ads-manager campaign-name cell (ads.css .nmw .t + .h10-open). */
-.ptitleRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 330px;
-}
-
-.ptitleLink {
-  font-weight: var(--nds-font-weight-semibold);
-  font-size: var(--nds-font-size-base);
-  color: var(--nds-primary);
-  text-decoration: none;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.ptitleLink:hover {
-  text-decoration: underline;
-}
 
 /* Exact copy of ads.css .h10-open — hidden until the product cell is hovered. */
-.openBtn {
-  display: none;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--nds-font-size-xs);
-  font-weight: var(--nds-font-weight-semibold);
-  color: var(--nds-text-inverse);
-  background: var(--nds-primary);
-  border-radius: var(--nds-radius-sm);
-  padding: 3px 8px;
-  text-decoration: none;
-  flex-shrink: 0;
-  white-space: nowrap;
-  line-height: 1.2;
-}
-
-.productCell:hover .openBtn {
-  display: inline-flex;
-}
-
-.openBtn:hover {
-  background: var(--nds-primary-hover);
-}
-
-.psub {
-  font-size: var(--nds-font-size-xs);
-  color: var(--nds-text-muted);
-  margin-top: 2px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: nowrap;
-}
-
-.skuTag {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: var(--nds-font-size-xs);
-  color: var(--nds-text-muted);
-}
 
 /* The variation count is the link to the family page. */
 .varCount {
@@ -174,59 +95,12 @@
 }
 
 /* ── Row action cluster ──────────────────────────────────── */
-.rowacts {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  align-items: center;
-}
 
 /* ── Variation expand chevron ────────────────────────────── */
-.expandBtn {
-  width: 20px;
-  height: 20px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--nds-radius-pill);
-  border: none;
-  background: none;
-  color: var(--nds-text-3);
-  cursor: pointer;
-  padding: 0;
-  transition: background 0.1s ease, color 0.1s ease;
-}
-
-.expandBtn:hover {
-  background: var(--nds-surface-hover);
-  color: var(--nds-text);
-}
-
-.expandBtn:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
-}
 
 /* Invisible placeholder keeps column alignment on non-parent rows */
-.expandPlaceholder {
-  width: 20px;
-  flex: none;
-}
-
-/* A MEASURED zero — we asked for the window and the answer was none. Muted so a wall of them
-   does not compete with the rows that did sell, and carrying a `title` that says so, because a
-   bare dash otherwise reads as "unknown" and that is a different fact. */
-.noSales {
-  color: var(--nds-text-muted);
-}
 
 /* Dates are supporting detail, not the row's subject. */
-.updatedCell {
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
-  white-space: nowrap;
-}
 
 /* The Sales column's own admission of what it cannot count. */
 .unattributed {
@@ -312,22 +186,6 @@
 .tagFootActions { display: inline-flex; gap: 8px; }
 
 /* ── Tags column ──────────────────────────────────────────────────────── */
-.tagCell { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; overflow: hidden; }
-.tagChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 8px;
-  border-radius: var(--nds-radius-round);
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-xs);
-  white-space: nowrap;
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tagMore { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); flex: none; }
 
 /* ── Variation-family footer (the capped-preview handoff) ─────────────── */
 /* ── Variation-family footer ──────────────────────────────────────────── */
@@ -453,15 +311,8 @@
 .gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
 
 /* A group row's auto-column cell: the key, then how many products it folds. */
-.groupCell { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
-.groupCell strong { font-weight: 600; color: var(--nds-text-strong); }
-.groupCount { font-size: 12px; color: var(--nds-text-2); white-space: nowrap; }
-
 
 /* Pagination footer — Ad Manager's: pages, then rows per page, right-aligned under the grid. */
-.pager { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
-.rpp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--nds-text-2); white-space: nowrap; }
-.grow { flex: 1; }
 
 /* ── Bulk edit: a tick per field, then a review (Ad Manager's shape) ─────────────────────── */
 .bulkBody { display: flex; flex-direction: column; }
@@ -490,11 +341,8 @@
 .tagCreatePreview b { font-weight: 600; }
 
 /* A tag cell: the first tag named, the rest as glyphs — the tooltip carries every name. */
-.tagChipName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.tagGlyphChip { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 18px; height: 18px; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); }
 
 /* ── Inventory editor (AG Grid, spreadsheet editing) ────────────────────────────────────── */
-.ieGrow { flex: 1; }
 .ieHint { margin: 10px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }
 .ieHint kbd { font-family: var(--nds-font-mono, ui-monospace, monospace); font-size: 10.5px; padding: 0 4px; border: 1px solid var(--nds-border); border-bottom-width: 2px; border-radius: 4px; background: var(--nds-surface-raised); }
 .ieSetSel { display: inline-flex; align-items: center; gap: 6px; }
@@ -502,7 +350,7 @@
 .ieSetLabel { font-size: 12.5px; color: var(--nds-text-2); white-space: nowrap; }
 .ieSetInput { width: 84px; }
 
-.ieGroupLocked { color: var(--nds-text-muted); }
+.ieGroupLocked { color: var(--nds-grid-locked-fg); }
 
 /* identity cell: the page's product cell with the SKU first; the name is the sub-line. */
 .ieName { color: var(--nds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px; }
@@ -510,20 +358,6 @@
 
 /* on-hand cells */
 .ieOnHand { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
-.ieEditable { cursor: text; }
-.ieEditable:hover { box-shadow: inset 0 0 0 1px var(--nds-border); }
-.iePending { background: color-mix(in srgb, var(--nds-warning) 14%, transparent) !important; }
-.ieFailed { background: color-mix(in srgb, var(--nds-danger) 10%, transparent) !important; box-shadow: inset 0 0 0 1px var(--nds-danger); }
-.ieLocked { color: var(--nds-text-muted); }
-.ieLockGlyph { font-size: 10px; }
-.ieDelta { position: absolute; right: 6px; top: 3px; font-family: var(--nds-font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; line-height: 14px; padding: 0 5px; border-radius: 999px; background: var(--nds-warning); color: var(--nds-white); }
-.ieDeltaNeg { background: var(--nds-danger); }
-.ieMuted { color: var(--nds-text-muted); }
-.ieStrong { font-weight: 600; }
-.ieOut { color: var(--nds-danger); font-weight: 600; }
-.ieLow { color: var(--nds-warning); font-weight: 600; }
-.ieOk { color: var(--nds-success); font-weight: 600; }
-
 
 /* The editor's modal: the grid card sits at the page's own inset (18px), not the DS body's 28px —
    at the Spacious tier the 56px thumbnail widens the identity column, and those 20px are what
@@ -532,7 +366,6 @@
 :global(.nds-modal.xxl).ieModal :global(.nds-modal-b) { padding: 18px; }
 
 /* The card's footer strip — the page's `.pager` row: same padding, same rule, small controls. */
-.ieFootStrip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
 .ieReason { width: 180px; }
 .ieNotes { width: 300px; }
 .ieDiscard { font-size: 13px; font-weight: 600; color: var(--nds-danger-text); }

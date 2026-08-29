@@ -26,10 +26,11 @@ import type { ColDef, GridApi, GridReadyEvent, IServerSideDatasource } from 'ag-
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { Button, Input } from '@/design-system/primitives'
-import { NexusGrid, numericColumn } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
+import { NexusGrid, numericColumn } from '@/design-system/grid/NexusGrid'
+import { gridDensity } from '@/design-system/tokens/grid'
 import { registerLabModules } from './labModules'
-import { workspaceGridTheme } from '@/design-system/patterns/workspace-grid/engine/theme'
-import { useAgThemeMode } from '@/design-system/patterns/workspace-grid/engine/useAgThemeMode'
+import { workspaceGridTheme } from '@/design-system/grid/theme/theme'
+import { useAgThemeMode } from '@/design-system/grid/hooks/useAgThemeMode'
 import { BIG_ROWS, FEATURE_ROWS, type AdGroupRow, type FeatureRow } from './featureFixture'
 
 registerLabModules()
@@ -53,7 +54,7 @@ function Grid<T>({ height = 380, ...props }: { height?: number } & AgGridReactPr
   const mode = useAgThemeMode()
   return (
     <div className="nds-ag-wrap" style={{ height, width: '100%' }} data-ag-theme-mode={mode}>
-      <AgGridReact<T> theme={workspaceGridTheme} animateRows={false} {...props} />
+      <AgGridReact<T> theme={workspaceGridTheme} animateRows={false} rowHeight={gridDensity.cozy.rowText} headerHeight={gridDensity.cozy.header} {...props} />
     </div>
   )
 }
@@ -200,8 +201,18 @@ const TREE_COLUMNS: ColDef<TreeRow>[] = [
   },
 ]
 
+/* PN.1 demo options at module scope: an option object handed to <NexusGrid> keeps ONE identity
+   (GDS decision 12 — scripts/check-grid-option-identity.mjs holds the labs to it too). */
+const TREE_ROW_ID = (p: { data: TreeRow }) => p.data.id
+const TREE_PATH = (d: TreeRow) => d.path
+const TREE_AUTO_GROUP: ColDef<TreeRow> = { headerName: 'Campaign / Ad group', minWidth: 320, pinned: 'left' }
+const TREE_SELECTION = { mode: 'multiRow' as const, checkboxes: true, headerCheckbox: true, enableClickSelection: false }
+const TREE_SIDEBAR = { toolPanels: ['columns', 'filters'] }
+const TREE_CELL_SELECTION = { handle: { mode: 'fill' as const } }
+
 function OneGridDemo() {
   const [selCount, setSelCount] = useState(0)
+  const onTreeSelection = useCallback((e: { api: GridApi<TreeRow> }) => setSelCount(e.api.getSelectedNodes().length), [])
   return (
     <>
       <div className="text-md" style={{ color: 'var(--nds-text-2)' }}>
@@ -209,18 +220,18 @@ function OneGridDemo() {
       </div>
       <NexusGrid<TreeRow>
         height={460}
-        size="md"
+        density="cozy"
         rowData={TREE_ROWS}
         columnDefs={TREE_COLUMNS}
-        getRowId={(p) => p.data.id}
+        getRowId={TREE_ROW_ID}
         treeData
-        getDataPath={(d) => d.path}
+        getDataPath={TREE_PATH}
         groupDefaultExpanded={1}
-        autoGroupColumnDef={{ headerName: 'Campaign / Ad group', minWidth: 320, pinned: 'left' }}
-        rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, enableClickSelection: false }}
-        onSelectionChanged={(e) => setSelCount(e.api.getSelectedNodes().length)}
-        sideBar={{ toolPanels: ['columns', 'filters'] }}
-        cellSelection={{ handle: { mode: 'fill' } }}
+        autoGroupColumnDef={TREE_AUTO_GROUP}
+        rowSelection={TREE_SELECTION}
+        onSelectionChanged={onTreeSelection}
+        sideBar={TREE_SIDEBAR}
+        cellSelection={TREE_CELL_SELECTION}
       />
     </>
   )

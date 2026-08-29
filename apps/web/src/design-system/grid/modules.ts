@@ -50,6 +50,7 @@ import {
   GridStateModule,
   LicenseManager,
   LocaleModule,
+  MasterDetailModule,
   NumberEditorModule,
   PaginationModule,
   PinnedRowModule,
@@ -77,6 +78,8 @@ const PRODUCTION_MODULES = [
   RowGroupingModule,
   AggregationModule,
   PinnedRowModule,
+  // GDS: expandable detail rows (9 DataGrid sites use `renderExpanded`; wave 1 needs it)
+  MasterDetailModule,
   // interaction
   ColumnMenuModule,
   CustomFilterModule,

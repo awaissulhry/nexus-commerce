@@ -15,10 +15,9 @@ import { AlertTriangle, ArrowLeft, Copy, Download, MoreHorizontal, Plus, Search,
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import type { ProductRow, Tag as ProductTag } from '@/app/products/_types'
-import { DensityContext } from '@/app/_shared/grid-lens'
 
-import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
-import { Banner, EmptyState, Listbox, Menu, MetricStrip, Modal, Pagination, ToastProvider, type MenuItemDef, type Metric, useToast } from '@/design-system/components'
+import { Button, Input, Pill } from '@/design-system/primitives'
+import { Banner, EmptyState, Menu, MetricStrip, Modal, ToastProvider, type MenuItemDef, type Metric, useToast } from '@/design-system/components'
 import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
 import { eur0 } from '@/design-system/lib'
 
@@ -26,9 +25,9 @@ import { eur0 } from '@/design-system/lib'
 // product owns around it: the theme and defaults (NexusGrid), the server contract
 // (productsServerContract), the Customise bridge (columnPrefs) and state persistence
 // (useGridViews). Nothing else.
-import { NexusGrid, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
-import { createProductsDatasource, isFamilyFooter, type ProductsListStats } from '@/design-system/patterns/workspace-grid/engine/productsDatasource'
-import { gridFilterDef } from '@/design-system/patterns/workspace-grid/engine/filters/gridFilters'
+import { GridDensityProvider, NexusGrid, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
+import { createProductsDatasource, isFamilyFooter, type ProductsListStats } from '@/app/products/next/productsDatasource'
+import { gridFilterDef } from '@/design-system/grid/filters/gridFilters'
 import {
   buildGridRequest,
   EMPTY_CONTEXT_FILTERS,
@@ -36,9 +35,9 @@ import {
   type GridFilterModel,
   type GridFilterModelEntry,
   type ProductGridContextFilters,
-} from '@/design-system/patterns/workspace-grid/engine/productsServerContract'
-import { useGridViews } from '@/design-system/patterns/workspace-grid/engine/useGridViews'
-import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type PrefsBridgeOptions } from '@/design-system/patterns/workspace-grid/engine/columnPrefs'
+} from '@/app/products/next/productsServerContract'
+import { GridDensityToggle, GridPager, useGridState } from '@/design-system/grid'
+import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
 import { buildPageColumns, columnLabel, isGroupRow, projectColDefs, CHANNEL_OPTS, SALES_WINDOW_DAYS, STATUS_OPTS } from './columns'
@@ -50,7 +49,8 @@ import { BulkEditModal, type BulkEditChanges } from './BulkEditModal'
 import { TagDialog } from './TagDialog'
 import { InventoryEditorModal } from './InventoryEditorModal'
 import { ProductsSkeleton } from './ProductsSkeleton'
-import { DEFAULT_DENSITY, DENSITY_OPTIONS, DENSITY_ROW_PX, GRID_SIZE, mapDensity, type DensityMode } from './density'
+import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
+import { DEFAULT_DENSITY, type DensityMode } from './density'
 
 // ─────────────────────────────────────────────────────────────────
 // Constants
@@ -70,9 +70,8 @@ const WARNING_DISMISS_KEY = 'products-next:dismissed-warning'
 /** One server block — the unit the datasource fetches, whatever page size the operator picks. */
 const BLOCK_SIZE = 100
 /** The family footer row: a single line with a small button, not a data-row-tall band. */
-const FAMILY_FOOTER_PX = 48
+const FAMILY_FOOTER_PX = gridGeometry.footerRowH
 /** Rows per page, set in the footer as on Ad Manager. */
-const PAGE_SIZE_CHOICES = [50, 100, 200, 500]
 const NO_ROWS_TEMPLATE = '<span style="color: var(--nds-text-muted)">No products match this filter.</span>'
 
 /** Market names for publish-destination labels. */
@@ -201,7 +200,7 @@ function ProductsNextInner() {
   const [pager, setPager] = useState<{ page: number; pageCount: number }>({ page: 1, pageCount: 1 })
 
   // ── Saved views: ONE object, server-side, per operator ──────────
-  const gridViews = useGridViews<PageViewState>({
+  const gridViews = useGridState<PageViewState>({
     surface: 'products-next',
     getPageState: () => ({ filters, tile: activeTile, density, lockedColumns, pageSize }),
     applyPageState: (pg) => {
@@ -213,6 +212,10 @@ function ProductsNextInner() {
     },
   })
   const gridViewsBind = gridViews.bind
+  // What AG's state cannot hold — density, page size, the accordion, a tile, the padlocks — is the
+  // page's; the state hook is told when it moves so the last-used state carries it too.
+  const gridViewsMarkDirty = gridViews.markDirty
+  useEffect(() => { gridViewsMarkDirty() }, [gridViewsMarkDirty, filters, activeTile, density, lockedColumns, pageSize])
 
   // ── Data the page fetches itself ───────────────────────────────
   // The grid asks the server for blocks (see the datasource below). The page's own fetches are
@@ -351,8 +354,8 @@ function ProductsNextInner() {
   const columns = useMemo(
     // The Channels cell reads `activeChannels`; omitting it froze the column on the empty roster
     // it was built with, so every row read "no channels" while /api/connections answered 200.
-    () => buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow }),
-    [activeChannels, onDuplicate],
+    () => buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow, navigate: (href) => router.push(href) }),
+    [activeChannels, onDuplicate, router],
   )
 
   /**
@@ -539,6 +542,8 @@ function ProductsNextInner() {
     gridViewsBind(e.api)
   }, [gridViewsBind])
 
+  const onPage = useCallback((n: number) => gridApi?.paginationGoToPage(n - 1), [gridApi])
+  const onPageSize = useCallback((n: number) => { setPageSize(n); gridApi?.paginationGoToPage(0) }, [gridApi])
   const onPaginationChanged = useCallback((e: { api: GridApi<ProductRow> }) => {
     setPager({ page: e.api.paginationGetCurrentPage() + 1, pageCount: Math.max(1, e.api.paginationGetTotalPages()) })
   }, [])
@@ -710,11 +715,11 @@ function ProductsNextInner() {
     [],
   )
   // The DS grid's checkbox column measures 43px; AG's default is 50.
-  const selectionColumnDef = useMemo(() => ({ width: 43, maxWidth: 43, resizable: false }), [])
+  const selectionColumnDef = useMemo(() => ({ width: gridGeometry.selectColW, maxWidth: gridGeometry.selectColW, resizable: false }), [])
   const columnDialog = useMemo(() => ({ customise: openCustomize, reset: resetColumns }), [openCustomize, resetColumns])
   // AG's own words for the aggregate submenu; the operator sees what it does.
   const localeText = useMemo(() => ({ valueAggregation: 'Total on group rows' }), [])
-  const getRowHeight = useCallback((p: { data?: ProductRow }) => (isFamilyFooter(p.data) ? FAMILY_FOOTER_PX : DENSITY_ROW_PX[density]), [density])
+  const getRowHeight = useCallback((p: { data?: ProductRow }) => (isFamilyFooter(p.data) ? FAMILY_FOOTER_PX : gridDensity[density].rowMedia), [density])
   const isFullWidthRow = useCallback((p: { rowNode: { data?: ProductRow } }) => isFamilyFooter(p.rowNode.data), [])
   // Families are a TREE the server serves lazily: a row that can expand asks for its children by
   // its own id. Tree OR groups: while a grouping is active the auto column is the group column.
@@ -728,7 +733,7 @@ function ProductsNextInner() {
   const onColumnRowGroupChanged = useCallback((e: { api: GridApi<ProductRow> }) => { setGrouped(e.api.getRowGroupColumns().length > 0); syncPrefsFromGrid() }, [syncPrefsFromGrid])
   const onColumnMoved = useCallback((e: { finished: boolean }) => { if (e.finished) syncPrefsFromGrid() }, [syncPrefsFromGrid])
   // The live page opens sorted by Product ↑; a saved default view overrides it. Initial-only.
-  const initialState = useMemo<GridState>(() => gridViews.defaultView?.payload?.gridState ?? { sort: { sortModel: [{ colId: AG_AUTO_COL, sort: 'asc' }] } }, [gridViews.defaultView])
+  const initialState = useMemo<GridState>(() => gridViews.initialState ?? { sort: { sortModel: [{ colId: AG_AUTO_COL, sort: 'asc' }] } }, [gridViews.initialState])
 
   // ── Render ────────────────────────────────────────────────────
   return (
@@ -801,7 +806,7 @@ function ProductsNextInner() {
           the PAGE scrolls, as Seller Central's and Ad Manager's tables do. Expand a family and
           the page gets longer. Owner decision, stated twice (PN.6, PN.9): the grid is never
           bounded to the viewport with a scrollbar of its own. */}
-      <div className={`nds-gridcard ${styles.gridCard}`}>
+      <div className="nds-gridcard nds-grid-card">
         <GridToolbar
           count={
             selectedCount > 0 ? (
@@ -826,7 +831,7 @@ function ProductsNextInner() {
             <>
               {/* Density steps aside while rows are selected: the bulk actions need the room. */}
               {selectedCount === 0 && (
-                <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={(v) => setDensity(v as DensityMode)} size="sm" />
+                <GridDensityToggle value={density} onChange={setDensity} />
               )}
               <Button size="sm" onClick={openCustomize} disabled={!gridApi}>
                 <SlidersHorizontal size={13} /> Customise
@@ -890,10 +895,9 @@ function ProductsNextInner() {
           )}
         </GridToolbar>
 
-        {/* DensityContext keeps the shared Thumbnail size-aware (compact 32 / comfortable 40 /
-            spacious 56); the grid's own row density is the DS `size` tier plus this page's
-            measured row height. */}
-        <DensityContext.Provider value={mapDensity(density)}>
+        {/* GridDensityProvider: the grid, the DS Thumbnail and the inventory editor all follow this
+            one density (compact 32 / cozy 40 / spacious 56 thumbs; rows 52 / 68 / 85). */}
+        <GridDensityProvider value={density}>
           {error ? (
             // A failed fetch is NOT an empty catalogue and NOT a slow one.
             <EmptyState
@@ -913,7 +917,8 @@ function ProductsNextInner() {
                 // and hands scrolling to the page. Rows are rendered per page, not per screen —
                 // the cost of a 500-row page is 500 rows, which is the trade the footer offers.
                 domLayout="autoHeight"
-                size={GRID_SIZE[density]}
+                density={density}
+                rows="media"
                 getRowHeight={getRowHeight}
                 isFullWidthRow={isFullWidthRow}
                 fullWidthCellRenderer={FamilyFooter}
@@ -953,23 +958,10 @@ function ProductsNextInner() {
                 overlayNoRowsTemplate={NO_ROWS_TEMPLATE}
               />
               {/* The footer as Ad Manager's: pages on the left of the control, rows per page on the right. */}
-              <div className={styles.pager}>
-                <span className={styles.grow} />
-                <Pagination page={pager.page} pageCount={pager.pageCount} onPage={(n) => gridApi?.paginationGoToPage(n - 1)} />
-                <div className={styles.rpp}>
-                  Rows per page:
-                  <Listbox
-                    width={84}
-                    options={PAGE_SIZE_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
-                    value={String(pageSize)}
-                    onChange={(v) => { setPageSize(Number(v)); gridApi?.paginationGoToPage(0) }}
-                    ariaLabel="Rows per page"
-                  />
-                </div>
-              </div>
+              <GridPager page={pager.page} pageCount={pager.pageCount} pageSize={pageSize} onPage={onPage} onPageSize={onPageSize} />
             </>
           )}
-        </DensityContext.Provider>
+        </GridDensityProvider>
       </div>
 
       {/* Customise — the DS dialog over AG's column state (see openCustomize). */}

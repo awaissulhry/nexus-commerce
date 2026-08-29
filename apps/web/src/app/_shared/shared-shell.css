@@ -486,4 +486,47 @@ body:has(.h10-shell),
   --nds-warning-strong: var(--nds-amber-700);
   --nds-warning-text: #6d3f10;
   --nds-wash-primary: var(--nds-blue-50);
+
+  /* GDS grid aliases (design-system/tokens/grid.ts). Same trap as the entries above: a `var(X)`
+     alias resolves where it is DECLARED, so the .dark re-declarations of these would inherit
+     dark literals into a light shell. Re-declared here in the same form; check-shell-pin-fresh.mjs
+     holds them equal to the DS light values. These lines are the `.dark` grid block of the generated
+     tokens.css — regenerate from it, never hand-edit. */
+  --nds-grid-bg: var(--nds-surface);
+  --nds-grid-header-bg: var(--nds-surface-raised);
+  --nds-grid-strip-bg: var(--nds-surface-sunken);
+  --nds-grid-totals-bg: var(--nds-surface-raised);
+  --nds-grid-hover-bg: var(--nds-surface-raised);
+  --nds-grid-selected-bg: var(--nds-wash-primary);
+  --nds-grid-child-bg: var(--nds-surface-sunken);
+  --nds-grid-child-hover-bg: var(--nds-surface-hover);
+  --nds-grid-child-rail: var(--nds-border);
+  --nds-grid-chrome-bg: var(--nds-surface-raised);
+  --nds-grid-row-rule: var(--nds-border-subtle);
+  --nds-grid-header-rule: var(--nds-border);
+  --nds-grid-partition: var(--nds-border-subtle);
+  --nds-grid-strip-rule: var(--nds-border-subtle);
+  --nds-grid-frame: var(--nds-border);
+  --nds-grid-header-fg: var(--nds-text-strong);
+  --nds-grid-cell-fg: var(--nds-text);
+  --nds-grid-muted-fg: var(--nds-text-muted);
+  --nds-grid-strip-fg: var(--nds-text-2);
+  --nds-grid-empty-fg: var(--nds-text-2);
+  --nds-grid-accent: var(--nds-primary);
+  --nds-grid-drag-handle: var(--nds-primary);
+  --nds-grid-fill-handle: var(--nds-primary);
+  --nds-grid-editable-ring: var(--nds-border);
+  --nds-grid-editor-ring: var(--nds-primary);
+  --nds-grid-pending-bg: color-mix(in srgb, var(--nds-warning) 14%, transparent);
+  --nds-grid-refused-bg: color-mix(in srgb, var(--nds-danger) 10%, transparent);
+  --nds-grid-refused-ring: var(--nds-danger);
+  --nds-grid-saving-bg: color-mix(in srgb, var(--nds-info) 10%, transparent);
+  --nds-grid-delta-bg: var(--nds-warning);
+  --nds-grid-delta-neg-bg: var(--nds-danger);
+  --nds-grid-delta-fg: var(--nds-text-inverse);
+  --nds-grid-locked-fg: var(--nds-text-muted);
+  --nds-grid-skeleton-bg: var(--nds-surface-sunken);
+  --nds-grid-skeleton-shine: var(--nds-border-subtle);
+  --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
+  --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
 }

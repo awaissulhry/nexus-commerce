@@ -26,7 +26,7 @@ import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { emitPrefsChanged } from '../prefs-bus'
 import { enabledRank } from './enabledRank'
 import { filterRows } from './filterRows'
-import { compareSortValues } from './sortValues'
+import { compareSortValues } from '../../grid/sortValues'
 import { isInteractiveChild } from './rowInteraction'
 import { collectEdits, draftValue } from './editDrafts'
 

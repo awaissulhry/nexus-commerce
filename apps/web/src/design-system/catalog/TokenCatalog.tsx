@@ -11,7 +11,8 @@
  * (.analysis/ds-catalog-verify.mjs captures it @2x).
  */
 
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { GridCard, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
 import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Settings2, Filter, Download, Trash2, Columns } from 'lucide-react'
 import {
   palette,
@@ -334,7 +335,29 @@ const GRID_COLS: Column<GridRow>[] = [
   { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (r) => r.acos, render: (r) => `${r.acos}%` },
 ]
 
+
+/* ── GDS demo — module-scope constants: every option handed to <NexusGrid> keeps ONE identity ── */
+interface GdsRow { id: string; campaign: string; status: 'ACTIVE' | 'PAUSED'; spendCents: number; salesCents: number; acos: number | null; clicks: number }
+const GDS_ROWS: GdsRow[] = [
+  { id: 'g1', campaign: 'SP | Brand Defense | Exact', status: 'ACTIVE', spendCents: 41255, salesCents: 210430, acos: 0.196, clicks: 1204 },
+  { id: 'g2', campaign: 'SP | Category | Broad', status: 'ACTIVE', spendCents: 98812, salesCents: 341088, acos: 0.2897, clicks: 2988 },
+  { id: 'g3', campaign: 'SB | Headline | Top of Search', status: 'PAUSED', spendCents: 22000, salesCents: 64010, acos: 0.3437, clicks: 604 },
+  { id: 'g4', campaign: 'SD | Retargeting | Views', status: 'ACTIVE', spendCents: 0, salesCents: 0, acos: null, clicks: 0 },
+  { id: 'g5', campaign: 'SP | Competitor ASINs', status: 'ACTIVE', spendCents: 64071, salesCents: 118802, acos: 0.5393, clicks: 1811 },
+]
+const GDS_TOTALS: GdsRow[] = [{ id: '__total', campaign: 'Total', status: 'ACTIVE', spendCents: GDS_ROWS.reduce((a, r) => a + r.spendCents, 0), salesCents: GDS_ROWS.reduce((a, r) => a + r.salesCents, 0), acos: null, clicks: GDS_ROWS.reduce((a, r) => a + r.clicks, 0) }]
+const GDS_ROW_ID = (p: { data: GdsRow }) => p.data.id
+const GDS_COLS: ColDef<GdsRow>[] = [
+  { colId: 'campaign', headerName: 'Campaign', flex: 1, minWidth: 260, ...textColumn<GdsRow>('campaign') },
+  { colId: 'status', headerName: 'Status', width: 96, ...statusColumn<GdsRow>('status', { tones: { ACTIVE: { tone: 'success', label: 'Active' }, PAUSED: { tone: 'neutral', label: 'Paused' } } }) },
+  { colId: 'spendCents', headerName: 'Spend', width: 110, ...moneyColumn<GdsRow>('spendCents', { decimals: true }) },
+  { colId: 'salesCents', headerName: 'Sales', width: 120, ...moneyColumn<GdsRow>('salesCents', { decimals: true, zero: 'dash', zeroTitle: 'No attributed sales' }) },
+  { colId: 'acos', headerName: 'ACoS', width: 96, ...percentColumn<GdsRow>('acos') },
+  { colId: 'clicks', headerName: 'Clicks', width: 96, ...integerColumn<GdsRow>('clicks') },
+]
+
 export function TokenCatalog() {
+  const gdsSelection = useMemo(() => gridSelection<GdsRow>(), [])
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState('overview')
   const [pg, setPg] = useState(2)
@@ -801,9 +824,23 @@ export function TokenCatalog() {
         </div>
       </section>
 
+      <section data-cat="grid" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Grid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· GDS · the one grid</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
+          <code>NexusGrid</code> on AG Grid Enterprise: the DS theme from <code>tokens/grid.ts</code>, three densities, the cell library
+          (a null is a dash, a measured zero is not), presets, a toolbar and a pager. Every scenario is rendered and measured in{' '}
+          <a href="/design/grid-lab?tab=gds">/design/grid-lab → GDS scenarios</a>; the spec is <code>design-system/docs/GRID.md</code>.
+        </p>
+        <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
+          <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} pinnedBottomRowData={GDS_TOTALS} />
+        </GridCard>
+      </section>
+
       <section data-cat="datagrid" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · finale</span>
+          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · RETIRING — rebuild on NexusGrid above</span>
         </h2>
         <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           The universal grid — sortable headers, row selection, a pinned Campaign column, and a sticky totals row.

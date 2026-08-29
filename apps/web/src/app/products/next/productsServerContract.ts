@@ -20,11 +20,11 @@
  *
  * Pure, so it is unit-tested; the datasource is a thin caller.
  */
-import type { SortModelItem } from 'ag-grid-community'
+import type { SortModelItem } from '@/design-system/grid'
 
 import { PRODUCT_COLUMN_ID, type GridColumnVO, type GridFilterModel, type ProductsGridContext, type ProductsGridRequest } from '@nexus/shared/products-grid'
 
-import { AG_AUTO_COL } from './columnPrefs'
+import { AG_AUTO_COL } from '@/design-system/grid/columns/columnPrefs'
 
 export type {
   AggFunc,

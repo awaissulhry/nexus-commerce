@@ -29,7 +29,8 @@ import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { WorkspaceGrid, AdsFilterBar } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
 import type { FilterState, GridFilter } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
-import { AgWorkspaceGrid } from '@/design-system/patterns/workspace-grid/engine/AgWorkspaceGrid'
+import { LabNexusGrid } from './LabNexusGrid'
+import { GdsScenarios } from './GdsScenarios'
 import { LAB_COLUMNS, LAB_ROWS, LAB_ROW_ID, type LabRow } from './fixture'
 import { GridFeatureLab } from './GridFeatureLab'
 
@@ -163,13 +164,18 @@ function measure(rowSel: string, cellSel: string, headSel: string): Probe {
 
 export function GridLabClient() {
   const [selLegacy, setSelLegacy] = useState<Set<string>>(new Set())
-  const [selAg, setSelAg] = useState<Set<string>>(new Set())
   const [sideBar, setSideBar] = useState(false)
   const [setFilters, setSetFilters] = useState(false)
   const [probes, setProbes] = useState<{ legacy: Probe; ag: Probe } | null>(null)
   const [fstate, setFstate] = useState<FilterState>({})
   const [lastClicked, setLastClicked] = useState<string | null>(null)
-  const [tab, setTab] = useState<'parity' | 'features'>('parity')
+  type LabTab = 'parity' | 'features' | 'gds'
+  // `?tab=gds` opens the GDS scenarios directly — the conformance runner needs a URL, not a click.
+  const [tab, setTab] = useState<LabTab>(() => {
+    if (typeof window === 'undefined') return 'parity'
+    const t = new URLSearchParams(window.location.search).get('tab')
+    return t === 'features' || t === 'gds' ? t : 'parity'
+  })
 
   const runProbe = useCallback(() => {
     // Measured in a frame of its own, after any pending style/layout work — reading in the same
@@ -214,6 +220,26 @@ export function GridLabClient() {
    *
    * `height: auto` + `overflow: visible` hands scrolling back to the app's own #main-content.
    */
+  if (tab === 'gds') {
+    return (
+      <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh' }}>
+        <header style={{ display: 'grid', gap: 6 }}>
+          <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>Grid design system — scenarios</h1>
+          <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
+            Every scenario the GDS spec names, from frozen fixtures, rendered OUTSIDE the console shell so light and
+            dark can both be measured. <code>design-system/docs/GRID.md</code> is written from these numbers.
+          </p>
+        </header>
+        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
+          <Button variant="ghost" size="sm" onClick={() => setTab('parity')}>Engine parity</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('features')}>Enterprise features</Button>
+          <Button variant="primary" size="sm" onClick={() => setTab('gds')}>GDS scenarios</Button>
+        </div>
+        <GdsScenarios />
+      </main>
+    )
+  }
+
   return (
     <div
       className="h10-shell"
@@ -239,6 +265,10 @@ export function GridLabClient() {
           </Button>
           <Button variant={tab === 'features' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('features')}>
             Enterprise features
+          </Button>
+          {/* never active here — the GDS tab returned above, outside the shell */}
+          <Button variant="ghost" size="sm" onClick={() => setTab('gds')}>
+            GDS scenarios
           </Button>
         </div>
 
@@ -312,30 +342,14 @@ export function GridLabClient() {
 
         <section className="gl-ag" style={{ display: 'grid', gap: 8 }}>
           <h2 className="text-lg font-heading" style={{ margin: 0 }}>
-            AG Grid Enterprise 36.1.0 — same props
+            AG Grid Enterprise — the DS grid (<code>NexusGrid</code>), same fixture
           </h2>
-          <AgWorkspaceGrid<LabRow>
-            rows={LAB_ROWS}
-            rowId={LAB_ROW_ID}
-            firstColLabel="Campaign"
-            renderFirst={renderFirst}
-            firstSortValue={firstSortValue}
-            columns={LAB_COLUMNS}
-            selectable
-            selected={selAg}
-            onSelectedChange={setSelAg}
-            selectionActions={selectionActions}
-            onRowClick={(r) => setLastClicked(`${r.name} (AG Grid)`)}
-            editMode={LAB_EDIT}
+          <LabNexusGrid
             filters={LAB_FILTERS}
             filterState={fstate}
-            onFilterStateChange={setFstate}
-            hideFilterPanel
-            showTotal
-            defaultSort={{ key: 'spend', dir: 'desc' }}
-            enableSideBar={sideBar}
-            enableSetFilters={setFilters}
-            height={560}
+            onRowClick={(r) => setLastClicked(`${r.name} (AG Grid)`)}
+            sideBar={sideBar}
+            setFilters={setFilters}
           />
         </section>
           </>

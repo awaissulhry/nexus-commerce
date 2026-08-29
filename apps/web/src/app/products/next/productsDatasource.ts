@@ -18,7 +18,7 @@
  * The datasource is stateless. The page calls `api.refreshServerSide(...)` on an invalidation
  * event and AG re-asks for whatever is on screen.
  */
-import type { IServerSideDatasource, IServerSideGetRowsParams } from 'ag-grid-community'
+import type { IServerSideDatasource, IServerSideGetRowsParams } from '@/design-system/grid'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { buildGridRequest, type ProductsGridContext, type ProductsGridResponse, type ProductsListStats } from './productsServerContract'

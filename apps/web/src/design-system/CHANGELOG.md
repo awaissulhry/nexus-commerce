@@ -4,6 +4,142 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [GDS-3] — 2026-08-29 — Every scenario rendered and MEASURED; the spec; the chrome guard
+
+Phase 3 of the Grid Design System. Local, uncommitted until the Owner says so.
+
+- **`/design/grid-lab?tab=gds`** — a third lab tab, rendered OUTSIDE the light-pinned console shell so both
+  themes can be measured. Sixteen grids from frozen fixtures (`grid-lab/gdsFixtures.ts`, an in-memory SSRM
+  datasource that pages, sorts, sinks blanks and caps a family at 10) cover the spec's §6: catalogue (SSRM tree,
+  autoHeight + pager, selection swap, export) · family page · row grouping with aggregates · the editor in a
+  modal (column-group strip, a matrix, pending → Apply with refusals) · a drawer · a tab panel · read-only
+  reporting with totals · per-cell round trip (saving / saved / refused) · frozen-right actions · master/detail ·
+  0 rows · 1 row · 10,000 rows · long text · loading skeleton · keyboard-only; and the five stated cases (saved
+  views, viewports, screen readers, RTL/mobile out of scope, the ads console's local blindness).
+  `window.__gdsProbe()` returns what every grid computed.
+- **`design-system/grid/spec.json`** — the numbers: per-density row/header/thumb/pad, geometry, type, and the
+  resolved light/dark colours.
+- **`scripts/check-grid-chrome.mjs`** (`npm run grid:conformance`, in pre-push when :3000 answers, `--strict`
+  otherwise): Playwright opens the tab and holds every scenario to the spec at compact/cozy/spacious × light/dark ×
+  1440/1280-wide — **12 probes, ~20 assertions each, green.**
+- **Two engine rules the runner found missing** (grid chrome lives in the engine): a pinned totals row is the
+  HEADER's height — `NexusGrid` now supplies the `getRowHeight` unless the page brings its own (the inventory
+  editor dropped its hand-rolled one); and rows are re-measured when the density changes (`resetRowHeights` + a
+  pinned-data re-set — AG caches row heights and does not re-read a changed `getRowHeight` on its own).
+- **`design-system/docs/GRID.md`** — the spec a new engineer builds a grid from: folder, decisions, tokens, density
+  table, header chrome, cell types and the null rule, row kinds, selection/toolbar/footer, editing, row models and
+  state, hosts, themes/a11y/locale/performance, empty/loading/error, guards. Every number in it is one the runner
+  confirmed.
+- **`/design-system`** catalog: a **Grid** section on `NexusGrid` (cozy, presets, totals, selection) above the
+  retiring `DataGrid` one, linking to the lab.
+
+**Migration:** none. Pages that hand `getRowHeight` keep it; pages with pinned rows and no function now get the
+header-height totals row for free.
+
+## [GDS-2] — 2026-08-29 — The grid becomes a system: `design-system/grid/`
+
+Phase 2 of the Grid Design System (`docs/2026-08-28-grid-design-system-gds.md` §0c, §6). Local,
+uncommitted until the Owner says so. **Both live grids re-measured identical** on every geometry
+and colour after each step (expander x=178 · thumb x=209/56px · title x=276 · header 46 · row 85 ·
+partition 13.8 · strip 30 · totals 46/700 · identity 344 · footer strip 10/14).
+
+- **One folder, the Owner's five-layer layout.** `patterns/workspace-grid/engine/` → `design-system/grid/`
+  (`NexusGrid.tsx`, `theme/`, `modules.ts`, `renderers/`, `editors/`, `columns/`, `toolbars/`, `hosts/`,
+  `filters/`, `hooks/`, `sortValues.ts`), one barrel `@/design-system/grid`. The products-page datasource
+  and server contract moved OUT to `app/products/next/` (they were page code inside the engine).
+  `AgWorkspaceGrid` — the props-compatibility spike — is deleted; the parity lab's AG panel is now
+  `NexusGrid` with the fixture projected to `ColDef[]` (`grid-lab/LabNexusGrid.tsx`). `sortValues`
+  moved in; the legacy `WorkspaceGrid` imports it from here until wave 3 retires it.
+- **One density vocabulary.** `density: compact | cozy | spacious` + `rows: text | media` replace `size`
+  (xs/sm/md/lg/xl). Row/header heights come from `tokens/grid.ts`; a modal FOLLOWS its page through
+  `GridDensityProvider` (the inventory editor opened from a Cozy page is Cozy — verified). The theme
+  carries no row height any more; `sm`/`xl` retired with zero consumers.
+- **`Thumbnail` is a DS component** (`components/Thumbnail`, both apps, `nds-thumb-*` in
+  `components.css`, additions hashed identical): lifted from the Tailwind grid-lens kit with its CDN
+  sizing (Amazon `._SL{px}_`, Cloudinary transforms), fallback, skeleton and hover preview. The DS grid
+  imports nothing from `app/_shared/grid-lens` any more.
+- **The cell library** (`grid/renderers`, class namespace `.nds-cell-*`): `EmptyValue` (the dash —
+  muted; a `title` ONLY on a measured zero), `NumericCell` (integer · money cents · money2 · **eur** ·
+  percent · delta), `DateCell`, `BadgeCell` (Pill), `LockedCell`, `LinkCell`, `StockCell`, `DeltaChip`,
+  `GroupCell`, `TagsCell`, `CoverageCell`, `ActionsCell`, `IdentityCell` (+ `SkuTag`, `ExpandButton`,
+  `ExpandSlot`), and the `GridLoadingOverlay` (density-aware skeleton) / `GridNoRowsOverlay`. All
+  memoised. `formatGridValue` is the pure core with a test per kind: **a `null` is never a `0`**.
+- **Column presets** (`grid/columns/presets.ts`): `gridSelection()`, `integerColumn`, `moneyColumn`,
+  `euroColumn`, `percentColumn`, `deltaColumn`, `dateColumn`, `statusColumn`, `textColumn`,
+  `stockColumn`, `lockedColumn`, `holdColumn`, `actionsColumn`.
+- **Editors** (`grid/editors`): `numericEditor()` (AG's, configured as the inventory editor had it),
+  `textEditor()`, `SelectCellEditor` (a DS `Listbox` in a cell), and the per-cell **round-trip state
+  machine** the ads bid/budget cells need — `CellSaveTracker` + `roundTripClassRules` + `saveCell`
+  (`saving → saved | refused`; a refusal is a result that stays). Tested.
+- **Toolbars and hosts**: `GridPager` (the DS pager, 50/100/200/500), `GridFooterStrip` + spacer,
+  `GridDensityToggle`, `GridToolbar` re-exported; `GridCard` (page, a size container) and `GridPanel`
+  (modal/drawer). `/products/next` and the editor use them.
+- **`useGridState`** (Q4): last-used state auto-persisted to `nds-grid:<surface>:v1` on AG's
+  `stateUpdated` + the page's `markDirty()`, restored on mount unless a server default view exists;
+  named views unchanged. Verified: switch to Cozy → reload → Cozy. No legacy-key adapters (§0b).
+- `MasterDetailModule` registered (9 sites in wave 1 need it).
+- **Guards, wired into pre-push:** `check-grid-option-identity.mjs` (TS AST: no inline object/arrow on
+  a `<NexusGrid>` option or handler — it caught the inventory editor's five and the feature lab's six
+  on its first run), `check-grid-kit-ratchet.mjs` (the rebuild backlog may only shrink: DataGrid 71 ·
+  grid-lens 60 · AdsDataGrid 56 · WorkspaceGrid 4 · TanStack 17 · raw `<table>` 194),
+  `check-ds-gaps-append-only.mjs`, and a stylesheet pass in the AG boundary guard (no `.ag-*`,
+  `.nds-ag-*`, `.nds-cell-*` or GDS host selectors outside `design-system/grid/`).
+- `/products/next` page stylesheet: 31 cell classes deleted (the DS owns them); `density.ts` is
+  three lines of vocabulary.
+
+**Found and fixed on the way:** the cell library first used `.nds-grid-*` — the RETIRING DS
+`DataGrid`'s own namespace (`.nds-grid-empty` is its 40px-padded empty state) — so `EmptyValue`
+would have inherited that padding; the library is `.nds-cell-*` and the guard scopes `.nds-grid-*`
+to the hosts. Also: BSD `sed -E` silently ignores `\b`, renaming nothing — a Python pass did it.
+
+**Migration:** `size` → `density` + `rows` on `NexusGrid` (three call sites, all updated).
+`@/design-system/patterns/workspace-grid/engine/*` → `@/design-system/grid`.
+
+## [GDS-1] — 2026-08-28 — Grid tokens: the AG grid's colours and numbers become one table
+
+Phase 1 of the Grid Design System (`docs/2026-08-28-grid-design-system-gds.md`). Local, uncommitted
+until the Owner says so. **Zero visual change on the two live grids, by measurement** (below), plus
+one intended fix.
+
+- **`tokens/grid.ts`** (new, byte-identical in web and factory): 69 `--nds-grid-*` custom
+  properties — surfaces, rules, type, the three density tiers (compact 28/52 · cozy 43/68 ·
+  spacious 49/85 text/media rows; headers 28/38/46; thumbs 32/40/56), geometry (strip 30, footer
+  row 48, selection column 43, identity 320, partition 2px × 30 %), controls, editing states
+  (pending / refused / saving / delta / locked), overlays. Emitted through `css-vars.ts` into
+  `tokens.css` and `tokens-global.css` (311 vars + 91 dark). The TypeScript numbers a page hands AG
+  (`gridDensity`, `gridGeometry`) and the CSS the theme binds are the same objects.
+- **Every colour is a semantic role** (`--nds-surface-*`, `--nds-border-*`, `--nds-text-*`,
+  `--nds-primary`, status hues) — never a ramp step. `engine/theme.ts` now binds only grid tokens;
+  `theme.vitest.test.ts` reads the EMITTED css and fails on any `--nds-grey-*` / `--nds-white` / hex.
+  Before this the theme bound `--nds-white` / `--nds-grey-25/150/200` directly and claimed to be
+  dark-aware; measured, none of those flip. **Dark mode now flips the grid** — verified in
+  `/design/grid-lab` with the shell pin lifted: ground `#18263b`, text `#e7ebf1`, rules `#26323f`.
+- 🔴 **Two guards caught two real errors in this change before it shipped.** `check-dark-alias-scope`:
+  a `var(X)` alias resolves where it is DECLARED, so the 37 colour aliases had to be re-declared in
+  `.dark` (`gridVarsDark`) — "derives from a semantic token" is not enough on its own.
+  `check-shell-pin-fresh`: the same 37 must be pinned inside `.h10-shell` (`shared-shell.css`,
+  generated from the `.dark` block) or a light console would inherit dark literals.
+- `engine/ag-grid.css` speaks grid tokens only; the four `nds-ag-nexus` colour overrides are gone
+  (the theme binds the same roles). `NexusGrid` reads its tiers from `gridDensity` and stamps
+  `--nds-grid-header-h` on its wrapper. `/products/next` (`density.ts`, `InventoryGrid`,
+  `ProductsNextClient`, `styles.module.css`) reads every grid number and editing colour from the
+  table; no bare `48`, `43`, `320`, `30` or `#fff` remains.
+- **Intended fix:** the header partition is now `calc(var(--nds-grid-header-h) * 0.3)` — 30 % of
+  the HEADER ROW. Quartz's `30%` was 30 % of the CELL, so the inventory editor's two cells that span
+  the column-group strip drew 22.8px marks beside 13.8px ones. Now 13.8 everywhere (measured).
+- **Factory:** its `tokens.css` was AHEAD of its own `css-vars.ts` (hand-edited; the generator
+  reported it stale). Converged: `--nds-warning-border` and the dark tone/link roles ported into
+  `css-vars.ts`, `--nds-fchip-on-bg` and `--nds-pill-neutral-fg` (`#6b7480` → `var(--nds-text-2)`)
+  aligned with web, then regenerated — so factory's tokens are generator-owned again.
+
+**Measured before/after** (`/products/next` Spacious, 1728×962, and the inventory editor):
+header 46 · row 85 · partition 2 × 13.8 · header `#3a4452` · cell `#1c2530` 13px/500 · row rule
+`#e6e9ee` · header rule `#d8dde4` · hover `#f7f9fb` · selected `#eef5ff` · checkbox 16 · selection
+column 43 · thumb 56 · strip 30 `#eef1f5` 11px/700 · totals row 46/700 · identity 344 · locked
+`#626c7b` — identical on every value except the spanning-cell partition above.
+
+**Migration:** none. `size` on `NexusGrid` is unchanged (the `density` API is Phase 2). New names only.
+
 ## [9.3-css] — 2026-08-24 — The design system is loaded once, for the whole app
 
 Until now the DS stylesheets arrived only where an individual file imported them:

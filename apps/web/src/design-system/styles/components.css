@@ -2166,3 +2166,19 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-savedchip-main:focus-visible, .nds-savedchip-act:focus-visible {
   outline: 2px solid var(--nds-primary); outline-offset: -2px;
 }
+
+/* ── Thumbnail (GDS Phase 2 — lifted from app/_shared/grid-lens) ─────────────────────────────
+   The box is sized inline from the grid density (32 / 40 / 56); the sheet carries only the
+   surface, the corner and the fade. `.nds-thumb-preview` portals to <body>, above the grid. */
+.nds-thumb { position: relative; flex-shrink: 0; display: inline-block; line-height: 0; }
+.nds-thumb-btn { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--nds-radius-sm); }
+.nds-thumb-btn:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); }
+.nds-thumb-img { display: block; object-fit: cover; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); opacity: 0; transition: opacity 150ms ease; }
+.nds-thumb-img.is-loaded { opacity: 1; }
+.nds-thumb-skel { position: absolute; inset: 0; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); animation: nds-thumb-pulse 1.6s ease-in-out infinite; }
+.nds-thumb-empty { display: flex; align-items: center; justify-content: center; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); color: var(--nds-text-3); }
+.nds-thumb-preview { position: fixed; z-index: var(--nds-z-tooltip); padding: 4px; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); box-shadow: var(--nds-shadow-pop); pointer-events: none; }
+.nds-thumb-preview img { display: block; border-radius: var(--nds-radius-sm); }
+.nds-thumb-preview-count { padding: 2px 4px; font-size: var(--nds-font-size-micro); color: var(--nds-text-muted); }
+@keyframes nds-thumb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .nds-thumb-skel { animation: none; } .nds-thumb-img { transition: none; } }

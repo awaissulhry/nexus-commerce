@@ -16,14 +16,14 @@
  * definition, not in a renderer.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { ColGroupDef, IRowNode, ValueGetterParams, ValueSetterParams } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
+import type { ColGroupDef, IRowNode, ValueGetterParams, ValueSetterParams } from '@/design-system/grid'
 
-import { Thumbnail, DensityContext } from '@/app/_shared/grid-lens'
 import { Pill } from '@/design-system/primitives'
-import { NexusGrid, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
+import { DeltaChip, GridDensityProvider, IdentityCell, NexusGrid, SkuTag, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/grid'
 
 import styles from './styles.module.css'
-import { DENSITY_ROW_PX, GRID_SIZE, THUMB_PX, mapDensity, type DensityMode } from './density'
+import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
+import type { DensityMode } from './density'
 import {
   availableOf, deltaOf, onHandOf, pendingKey, rowSyncStatus, rowTotalAvailable, stockLevelOf, totalsOf,
   type LevelCell, type MatrixModel, type MatrixRow, type PendingEdits,
@@ -37,11 +37,10 @@ const isTotals = (d: GridRow | undefined): d is TotalsRow => !!d && (d as Totals
 // Fits a 962px-tall window (the DS modal is 82vh) with the modal's header, toolbar, hint and footer.
 const MAX_GRID_HEIGHT = 480
 /** Header height per engine size tier — the engine's own numbers (NexusGrid HEADER_HEIGHT). */
-const HEADER_PX = { xs: 28, md: 38, lg: 46 } as const
 /** The location strip above the header — a band, not a header row (engine CSS, IE.4). */
-const STRIP_PX = 30
+const STRIP_PX = gridGeometry.stripH
 /** Identity column at the Compact thumbnail; wider tiers add the thumbnail's extra width. */
-const IDENTITY_BASE_PX = 320
+const IDENTITY_BASE_PX = gridGeometry.identityW
 
 /** The columns an operator may hide from the Columns control; `onhand` and the identity never hide. */
 export const OPTIONAL_COLUMN_KINDS = ['reserved', 'available', 'totalAvailable', 'sync'] as const
@@ -66,21 +65,12 @@ export interface InventoryGridProps {
 }
 
 /** The page's product cell, SKU first: the same classes the products grid draws its cell with. */
-function IdentityCell({ data }: ICellRendererParams<GridRow>) {
+function RowIdentity({ data }: ICellRendererParams<GridRow>) {
   if (!data) return null
   if (isTotals(data)) return <span className={styles.ieTotalsLabel}>{data.sku}</span>
-  return (
-    <div className={styles.productCell}>
-      <Thumbnail src={data.thumbnailUrl} alt={data.name} />
-      <div className={styles.pmeta}>
-        <div className={styles.ptitleRow}><span className={styles.skuTag}>{data.sku}</span></div>
-        <div className={styles.psub}><span className={styles.ieName} title={data.name}>{data.name}</span></div>
-      </div>
-    </div>
-  )
+  return <IdentityCell image={data.thumbnailUrl} title={<SkuTag>{data.sku}</SkuTag>} sub={<span className={styles.ieName} title={data.name}>{data.name}</span>} />
 }
 
-/** The channel push state, as the DS Pill the rest of the product uses for states. */
 function SyncCell({ data }: ICellRendererParams<GridRow>) {
   if (!data || isTotals(data)) return null
   const s = rowSyncStatus(data)
@@ -131,8 +121,8 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
       suppressMovable: true,
       // 34-character SKUs are normal in this catalogue; the thumbnail and the mono SKU need 320px
       // at the Compact thumbnail, and the thumbnail's extra width at the wider tiers.
-      width: IDENTITY_BASE_PX + (THUMB_PX[density] - THUMB_PX.compact),
-      cellRenderer: IdentityCell,
+      width: IDENTITY_BASE_PX + (gridDensity[density].thumb - gridDensity.compact.thumb),
+      cellRenderer: RowIdentity,
       getQuickFilterText: (p) => `${p.data?.sku ?? ''} ${p.data?.name ?? ''}`,
       cellClass: 'nds-ag-cell',
       sortable: false,
@@ -161,16 +151,16 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
           return (
             <span className={styles.ieOnHand} title={err ?? undefined}>
               {p.value}
-              {delta !== 0 && <span className={`${styles.ieDelta} ${delta < 0 ? styles.ieDeltaNeg : ''}`}>{delta > 0 ? `+${delta}` : delta}</span>}
-              {!loc.editable && <span className={styles.ieLockGlyph} aria-label="Read-only">🔒</span>}
+              <DeltaChip delta={delta} />
+              {!loc.editable && <span className="nds-cell-lock-glyph" role="img" aria-label="Read-only">🔒</span>}
             </span>
           )
         },
         cellClassRules: {
-          [styles.iePending]: (p) => !!p.data && !isTotals(p.data) && deltaOf(p.data, loc.locationId, pendingRef.current) !== 0,
-          [styles.ieFailed]: (p) => !!p.data && !isTotals(p.data) && failedRef.current.has(pendingKey(p.data.productId, loc.locationId)),
-          [styles.ieLocked]: () => !loc.editable,
-          [styles.ieEditable]: (p) => loc.editable && !p.node.rowPinned,
+          'nds-cell-is-pending': (p) => !!p.data && !isTotals(p.data) && deltaOf(p.data, loc.locationId, pendingRef.current) !== 0,
+          'nds-cell-is-refused': (p) => !!p.data && !isTotals(p.data) && failedRef.current.has(pendingKey(p.data.productId, loc.locationId)),
+          'nds-cell-is-locked': () => !loc.editable,
+          'nds-cell-is-editable': (p) => loc.editable && !p.node.rowPinned,
         },
         ...numericColumn,
         sortable: false,
@@ -180,7 +170,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
         headerName: 'Reserved',
         width: 84,
         valueGetter: (p) => p.data?.cells[loc.locationId]?.reserved ?? 0,
-        cellClass: [...numericColumn.cellClass, styles.ieMuted],
+        cellClass: [...numericColumn.cellClass, 'nds-cell-muted'],
         headerClass: numericColumn.headerClass,
         type: 'rightAligned',
         sortable: false,
@@ -191,9 +181,9 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
         width: 86,
         valueGetter: (p: ValueGetterParams<GridRow>) => (!p.data ? null : isTotals(p.data) ? (p.data.cells[loc.locationId]?.available ?? 0) : availableOf(p.data, loc.locationId, pendingRef.current)),
         cellClassRules: {
-          [styles.ieOut]: (p) => !!p.data && !isTotals(p.data) && stockLevelOf(Number(p.value), p.data.lowStockThreshold) === 'out',
-          [styles.ieLow]: (p) => !!p.data && !isTotals(p.data) && stockLevelOf(Number(p.value), p.data.lowStockThreshold) === 'low',
-          [styles.ieOk]: (p) => !!p.data && !isTotals(p.data) && stockLevelOf(Number(p.value), p.data.lowStockThreshold) === 'ok',
+          'nds-cell-stock-out': (p) => !!p.data && !isTotals(p.data) && stockLevelOf(Number(p.value), p.data.lowStockThreshold) === 'out',
+          'nds-cell-stock-low': (p) => !!p.data && !isTotals(p.data) && stockLevelOf(Number(p.value), p.data.lowStockThreshold) === 'low',
+          'nds-cell-stock-ok': (p) => !!p.data && !isTotals(p.data) && stockLevelOf(Number(p.value), p.data.lowStockThreshold) === 'ok',
         },
         ...numericColumn,
         sortable: false,
@@ -211,7 +201,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
       headerName: 'Total avail.',
       width: 96,
       valueGetter: (p: ValueGetterParams<GridRow>) => (!p.data ? null : isTotals(p.data) ? p.data.totalAvailable : rowTotalAvailable(p.data, model.columns, pendingRef.current)),
-      cellClass: [...numericColumn.cellClass, styles.ieStrong],
+      cellClass: [...numericColumn.cellClass, 'nds-cell-strong'],
       headerClass: numericColumn.headerClass,
       type: 'rightAligned',
       sortable: false,
@@ -231,6 +221,9 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
   }, [onReady, applyHidden])
 
   const history = useCallback((api: GridApi<GridRow>) => onHistoryChanged({ undo: api.getCurrentUndoSize(), redo: api.getCurrentRedoSize() }), [onHistoryChanged])
+  // ONE stable handler for the five edit-history events (GDS decision 12: an inline arrow is a new
+  // identity every render, and AG re-runs its column model for each changed option).
+  const onHistory = useCallback((e: { api: GridApi<GridRow> }) => history(e.api), [history])
 
   const rowSelection = useMemo(() => ({
     mode: 'multiRow' as const,
@@ -239,7 +232,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
     enableClickSelection: false,
     isRowSelectable: (n: IRowNode<GridRow>) => !n.rowPinned && !isTotals(n.data),
   }), [])
-  const selectionColumnDef = useMemo(() => ({ width: 43, maxWidth: 43, resizable: false, pinned: 'left' as const }), [])
+  const selectionColumnDef = useMemo(() => ({ width: gridGeometry.selectColW, maxWidth: gridGeometry.selectColW, resizable: false, pinned: 'left' as const }), [])
   const cellSelection = useMemo(() => ({ handle: { mode: 'fill' as const } }), [])
   // No header menus or sorting in the editor — the columns are the locations, fixed. Resizing
   // stays on (it is harmless), and the header partitions are the THEME's, never a per-grid option.
@@ -247,21 +240,19 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
   const getRowId = useCallback((p: { data: GridRow }) => p.data.productId, [])
   const onSel = useCallback((e: { api: GridApi<GridRow> }) => onSelectionChanged(e.api.getSelectedNodes().map((n) => n.data!.productId).filter((id) => id !== '__total')), [onSelectionChanged])
 
-  const size = GRID_SIZE[density]
-  const rowPx = DENSITY_ROW_PX[density]
+  const rowPx = gridDensity[density].rowMedia
   // The location strip, the header, the rows, and a totals row the height of the header — the
   // page's header is shorter than its rows, and the totals row reads as a footer, not a row.
-  const totalsPx = HEADER_PX[size]
-  const height = Math.min(MAX_GRID_HEIGHT, STRIP_PX + HEADER_PX[size] + model.rows.length * rowPx + totalsPx + 2)
-  // Client-side row model: a row-height function costs nothing here (AG #203 is an SSRM rule).
-  const getRowHeight = useCallback((p: { node: { rowPinned?: string | null } }) => (p.node.rowPinned ? totalsPx : rowPx), [totalsPx, rowPx])
+  // The totals row is the HEADER's height (IE.4), never a data row's.
+  const totalsPx = gridDensity[density].header
+  const height = Math.min(MAX_GRID_HEIGHT, STRIP_PX + totalsPx + model.rows.length * rowPx + totalsPx + 2)
 
   return (
-    <DensityContext.Provider value={mapDensity(density)}>
+    <GridDensityProvider value={density}>
       <NexusGrid<GridRow>
         height={height}
-        size={size}
-        getRowHeight={getRowHeight}
+        density={density}
+        rows="media"
         groupHeaderHeight={STRIP_PX}
         rowData={model.rows}
         getRowId={getRowId}
@@ -283,12 +274,12 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
         // must be what the grid holds now, not what it held before.
         onRowDataUpdated={onSel}
         onGridReady={onGridReady}
-        onCellValueChanged={(e) => history(e.api)}
-        onUndoEnded={(e) => history(e.api)}
-        onRedoEnded={(e) => history(e.api)}
-        onPasteEnd={(e) => history(e.api)}
-        onFillEnd={(e) => history(e.api)}
+        onCellValueChanged={onHistory}
+        onUndoEnded={onHistory}
+        onRedoEnded={onHistory}
+        onPasteEnd={onHistory}
+        onFillEnd={onHistory}
       />
-    </DensityContext.Provider>
+    </GridDensityProvider>
   )
 }

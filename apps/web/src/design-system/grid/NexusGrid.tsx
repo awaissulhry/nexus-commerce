@@ -13,33 +13,37 @@
  * need fixing; it needed the compatibility layer removed.
  *
  * WHAT IT DOES ADD, and why each earns its place:
- *   - the DS theme + light/dark mode attribute, so a grid looks like this product;
- *   - row and header heights MEASURED off the retiring grid, so density is not a regression;
+ *   - the DS theme (`theme/theme.ts`, bound to `--nds-grid-*`) + light/dark mode attribute;
+ *   - density: ONE vocabulary (compact / cozy / spacious, `tokens/grid.ts`) and a row KIND (text /
+ *     media), so the row and header heights a page gets are the measured ones and a modal follows
+ *     its page through `GridDensityProvider`;
  *   - a default comparator that sinks blanks in BOTH directions (KT.3). AG's default leads them
  *     ascending, which turns "sort by spend ascending" into a list of everything never measured.
  *     A null must never read as a zero here — that rule is older than the grid.
- *   - tabular figures on numeric columns, which the DS learned the hard way it must state.
+ *   - the DS Customise dialog in place of AG's column chooser, and the selection column kept first.
  *
  * Everything else is AG's. `columnDefs`, `treeData`, `getDataPath`, `masterDetail`, `sideBar`,
  * `rowSelection`, `cellSelection`, `initialState` — pass them straight through.
  */
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
-import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, GetMainMenuItems, GridApi, MenuItemDef } from 'ag-grid-community'
+import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, GetMainMenuItems, GridApi, GridReadyEvent, MenuItemDef } from 'ag-grid-community'
 
-import { compareSortValues, type SortValue } from '../sortValues'
+import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
+import { compareSortValues, type SortValue } from './sortValues'
 import { registerGridModules } from './modules'
-import { workspaceGridTheme } from './theme'
-import { useAgThemeMode } from './useAgThemeMode'
-import './ag-grid.css'
+import { workspaceGridTheme } from './theme/theme'
+import { useAgThemeMode } from './hooks/useAgThemeMode'
+import { useGridDensity } from './hooks/useGridDensity'
+import './theme/grid.css'
 
 registerGridModules()
 
 /**
- * The AG types a page needs, re-exported. A page imports these from HERE, never from
- * `ag-grid-community` — `scripts/check-ag-grid-import-boundary.mjs` fails the push otherwise.
- * That is the point of the boundary: exactly one file in the product knows AG's package names,
- * so an upgrade or a swap is one file's problem.
+ * The AG types a page needs, re-exported. A page imports these from HERE (or the `grid` barrel),
+ * never from `ag-grid-community` — `scripts/check-ag-grid-import-boundary.mjs` fails the push
+ * otherwise. That is the point of the boundary: exactly one folder in the product knows AG's
+ * package names, so an upgrade or a swap is one folder's problem.
  */
 export type {
   ColDef,
@@ -51,25 +55,15 @@ export type {
   ICellRendererParams,
   IRowNode,
   IServerSideDatasource,
+  IServerSideGetRowsParams,
   SortModelItem,
   ValueGetterParams,
   ValueSetterParams,
 } from 'ag-grid-community'
 
-export type GridDensity = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-
-/**
- * MEASURED off the DS grid in /design/grid-lab on 2026-08-28, not derived from the stylesheet.
- * Deriving is how the workspace theme shipped a 6.95px error on every row: it read `padding` from
- * `workspace-grid.css` lines 24 and 32 while lines 186 and 189 overrode both.
- *
- *   size   header   row        (raw: xs 27.5/28.25 · sm 32.25/33.75 · md 38.25/42.5
- *   lg     46       49          lg 46.25/48.5 · xl 56.25/58.5)
- *
- * Rows are integers: AG virtualises off a fixed row height and a fraction accumulates down a list.
- */
-const ROW_HEIGHT: Record<GridDensity, number> = { xs: 28, sm: 34, md: 43, lg: 49, xl: 59 }
-const HEADER_HEIGHT: Record<GridDensity, number> = { xs: 28, sm: 32, md: 38, lg: 46, xl: 56 }
+export type GridDensity = GridDensityName
+/** `text`: a one-line row. `media`: the identity cell carries a thumbnail (photo · title · sub-line). */
+export type GridRowKind = 'text' | 'media'
 
 /** KT.3 — a blank sinks to the BOTTOM in both directions, pre-inverted for AG's descending flip. */
 const blankSafeComparator = (a: SortValue, b: SortValue, _na: unknown, _nb: unknown, desc: boolean) => {
@@ -78,8 +72,14 @@ const blankSafeComparator = (a: SortValue, b: SortValue, _na: unknown, _nb: unkn
 }
 
 export interface NexusGridProps<T> extends AgGridReactProps<T> {
-  /** DS density. Drives row and header height; nothing else. */
-  size?: GridDensity
+  /**
+   * Row and header height tier. Omit it and the grid follows the nearest `GridDensityProvider`
+   * (a modal follows its page); with no provider, Spacious. Every number comes from
+   * `tokens/grid.ts`, so what the grid draws is what the spec prints.
+   */
+  density?: GridDensity
+  /** What a row holds — drives the row height. Default `text`. */
+  rows?: GridRowKind
   /** Container height for the normal (virtualised) layout. Ignored under `domLayout="autoHeight"`,
    *  where the grid grows with its rows and the page scrolls instead. */
   height?: number | string
@@ -115,7 +115,8 @@ const agIcon = (name: string) => `<span class="ag-icon ag-icon-${name}" unselect
  * A prop that only forwards children is surface with no job. */
 
 export function NexusGrid<T>({
-  size = 'md',
+  density: densityProp,
+  rows = 'text',
   height = 640,
   className,
   flatTree = false,
@@ -123,9 +124,52 @@ export function NexusGrid<T>({
   defaultColDef,
   selectionColumnDef,
   onColumnPinned,
+  onGridReady,
   ...agProps
 }: NexusGridProps<T>) {
   const themeMode = useAgThemeMode()
+  const contextDensity = useGridDensity()
+  const density = densityProp ?? contextDensity
+  const tier = gridDensity[density]
+  const rowHeight = agProps.rowHeight ?? (rows === 'media' ? tier.rowMedia : tier.rowText)
+  const headerHeight = agProps.headerHeight ?? tier.header
+
+  /**
+   * A pinned (totals) row is the HEADER's height, never a data row's (IE.4): it reads as a footer,
+   * and the spec's conformance runner holds every grid to it. AG has no pinned-row-height option —
+   * only `getRowHeight` — so the engine supplies one unless the page brings its own (the products
+   * page does, for its 48px family footer). Under SSRM a row-height FUNCTION disables block purging
+   * when `maxBlocksInCache` is also set (AG #203); a page that sets that passes its own function.
+   */
+  const pinnedAwareRowHeight = useCallback(
+    (p: { node: { rowPinned?: string | null } }) => (p.node.rowPinned ? headerHeight : rowHeight),
+    [headerHeight, rowHeight],
+  )
+  const getRowHeight = agProps.getRowHeight ?? pinnedAwareRowHeight
+
+  /**
+   * AG caches every row's height; changing `rowHeight` / `getRowHeight` as an option does not
+   * re-measure the rows it already holds. When the density moves, the engine asks it to — measured:
+   * without this the totals row kept its Spacious 46px after a switch to Compact.
+   */
+  const apiRef = useRef<GridApi<T> | null>(null)
+  const handleGridReady = useCallback(
+    (e: GridReadyEvent<T>) => {
+      apiRef.current = e.api
+      onGridReady?.(e)
+    },
+    [onGridReady],
+  )
+  useEffect(() => {
+    const api = apiRef.current
+    if (!api || api.isDestroyed()) return
+    api.resetRowHeights()
+    // Pinned rows are measured when their data is set, not by `resetRowHeights` — re-set them.
+    for (const key of ['pinnedTopRowData', 'pinnedBottomRowData'] as const) {
+      const data = api.getGridOption(key)
+      if (data && data.length) api.setGridOption(key, [...data])
+    }
+  }, [rowHeight, headerHeight, getRowHeight])
 
   /**
    * The checkbox column stays at the EXTREME left. AG pins a column by moving it into the
@@ -153,8 +197,16 @@ export function NexusGrid<T>({
     keepSelectionFirst(e.api)
     onColumnPinned?.(e)
   }, [keepSelectionFirst, onColumnPinned])
+  // The DS grid's checkbox column measures 43px (`gridGeometry.selectColW`); AG's default is 50.
   const mergedSelectionColumnDef = useMemo(
-    () => ({ lockPosition: 'left' as const, lockPinned: true, ...selectionColumnDef }),
+    () => ({
+      lockPosition: 'left' as const,
+      lockPinned: true,
+      width: gridGeometry.selectColW,
+      maxWidth: gridGeometry.selectColW,
+      resizable: false,
+      ...selectionColumnDef,
+    }),
     [selectionColumnDef],
   )
 
@@ -186,24 +238,40 @@ export function NexusGrid<T>({
     [defaultColDef],
   )
 
+  const wrapStyle = useMemo<CSSProperties>(
+    () => ({
+      // An auto-height grid sizes itself to its rows and hands scrolling to the page; a fixed
+      // wrapper height would clip it. Only the normal layout is bounded.
+      height: agProps.domLayout === 'autoHeight' ? undefined : height,
+      width: '100%',
+      // The theme's header partition is 30% of the HEADER ROW (`theme/theme.ts`), and a theme
+      // param cannot know the row's height — a spanning cell under a column-group strip is taller
+      // than the row. The wrapper tells it.
+      ['--nds-grid-header-h' as string]: `${headerHeight}px`,
+    }),
+    [agProps.domLayout, height, headerHeight],
+  )
+
   return (
     <>
       <div
-        // `nds-ag-nexus` marks the DS grid: ag-grid.css keys the DataGrid tokens on it, so EVERY
-        // NexusGrid — in a card, in a modal, anywhere — speaks the same header and body tokens.
+        // `nds-ag-nexus` marks the DS grid: the column-group strip and the DataGrid-parity rules
+        // in grid.css key on it, so EVERY NexusGrid — in a card, in a modal, anywhere — reads
+        // the same.
         className={['nds-ag-wrap', 'nds-ag-nexus', flatTree ? 'nds-ag-flat-tree' : '', className].filter(Boolean).join(' ')}
-        // An auto-height grid sizes itself to its rows and hands scrolling to the page; a fixed
-        // wrapper height would clip it. Only the normal layout is bounded.
-        style={{ height: agProps.domLayout === 'autoHeight' ? undefined : height, width: '100%' }}
+        style={wrapStyle}
         data-ag-theme-mode={themeMode}
-        // Read by ag-grid.css for the per-density knobs the Theming API sets once globally
-        // (cell horizontal padding tightens at `xs`, as the DS grid's does).
-        data-size={size}
+        // Read by grid.css for the per-density knobs the Theming API sets once globally
+        // (cell horizontal padding tightens at `compact`, as the DS grid's does).
+        data-density={density}
+        data-rows={rows}
       >
         <AgGridReact<T>
           theme={workspaceGridTheme}
-          rowHeight={ROW_HEIGHT[size]}
-          headerHeight={HEADER_HEIGHT[size]}
+          rowHeight={rowHeight}
+          headerHeight={headerHeight}
+          getRowHeight={getRowHeight}
+          onGridReady={handleGridReady}
           defaultColDef={mergedDefaultColDef}
           animateRows={false}
           suppressCellFocus

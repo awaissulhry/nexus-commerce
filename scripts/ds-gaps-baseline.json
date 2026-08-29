@@ -1,0 +1,31 @@
+{
+  "note": "DS-GAPS.md is append-only: lines and headings may only grow.",
+  "updatedAt": "2026-08-29",
+  "lines": 768,
+  "headings": [
+    "## ✅ RESOLVED — `DataGrid`: `Column` carries no per-cell `className`, and `td` has no `vertical-align`",
+    "## `Button variant=\"link\"` underlines on hover only, and the link token is 1.03:1 against body text",
+    "## `SegmentedOption` has no per-option `disabled`",
+    "## No disclosure primitive, and `TabItem` has no `title`",
+    "## `Button variant=\"primary\"` is 4.79:1 — the console's hand-rolled CTAs were higher",
+    "## `Menu` cannot express a destructive item, or explain a disabled one",
+    "## The last raw controls in `ads/ebay` are shared anatomies with out-of-scope twins",
+    "## `.h10-editpen` is 1.89:1 — the DS reveals it, `ads.css` colours it, and the colour fails",
+    "## `.h10-cd-subnav` in `ads.css` is now dead — 4 rules, 1 raw hex",
+    "## `DataGrid` has no density tier ABOVE `md` — it blocks the console's Comfortable/Spacious",
+    "## `DataGrid` cannot express a column-DRAGGING grid — `CampaignsGrid` is not convertible",
+    "## A selectable card with a trailing badge has no DS answer",
+    "## More `ads.css` rules went dead this session",
+    "## Correction — the density gap above is real, but SOFTER than I wrote it",
+    "## No colour-input primitive",
+    "## 🔴 `Pill onClick` renders at the AMBIENT font size — its own `font-size` is defeated",
+    "## Three tokens in a row pass on white and miss on a ground the system defines",
+    "## workspace-grid.css ramp→role conversion — SIZED AND FILED, deliberately not done",
+    "## A token-name sweep has a blind spot by construction, and it is the aliased half",
+    "## `SegmentedOption` has no per-option `disabled` — it blocks the fourth call site",
+    "## /products/next DS alignment · 2026-08-26",
+    "## GDS Phase 1 · 2026-08-28 · grid tokens",
+    "## GDS Phase 2 · 2026-08-29 · the grid folder, the cell library, the hosts",
+    "## GDS Phase 3 · 2026-08-29 · the lab measured what the pages had by hand"
+  ]
+}

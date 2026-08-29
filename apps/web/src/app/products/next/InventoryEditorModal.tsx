@@ -15,7 +15,7 @@ import { Redo2, Search, Undo2 } from 'lucide-react'
 import { Modal, Combobox, Listbox, MultiSelect } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { Input, Button, Pill } from '@/design-system/primitives'
-import type { GridApi } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
+import { GridFooterSpacer, GridFooterStrip, GridPanel, type GridApi } from '@/design-system/grid'
 import type { ProductRow } from '../_types'
 
 import { useInventoryEditor } from './useInventoryEditor'
@@ -137,11 +137,11 @@ export function InventoryEditorModal({ row, density, onClose }: { row: ProductRo
 
   /** The card's footer strip — the page's pager row, carrying the batch's reason, notes and Apply. */
   const footerStrip = (
-    <div className={styles.ieFootStrip}>
+    <GridFooterStrip>
       {confirmDiscard ? (
         <>
           <span className={styles.ieDiscard}>Discard {pendingCount} unapplied {pendingCount === 1 ? 'change' : 'changes'}?</span>
-          <span className={styles.ieGrow} />
+          <GridFooterSpacer />
           <Button size="sm" variant="secondary" onClick={() => setConfirmDiscard(false)}>Keep editing</Button>
           <Button size="sm" variant="danger" onClick={onClose}>Discard</Button>
         </>
@@ -150,7 +150,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: ProductRo
           <span className={styles.ieSetLabel}>Reason</span>
           <Combobox options={[...REASON_OPTIONS]} value={reason} onChange={setReason} placeholder="Select reason" className={styles.ieReason} />
           <Input fieldClassName={styles.ieNotes} placeholder="Notes (optional) — stored on every movement in this batch" value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Adjustment notes" />
-          <span className={styles.ieGrow} />
+          <GridFooterSpacer />
           {message && <span className={message.tone === 'danger' ? styles.ieMsgDanger : styles.ieMsgSuccess} role="status">{message.text}</span>}
           <Button size="sm" variant="secondary" onClick={requestClose}>{pendingCount ? 'Cancel' : 'Close'}</Button>
           <Button size="sm" variant="primary" disabled={!pendingCount || applying} onClick={() => void apply()}>
@@ -158,7 +158,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: ProductRo
           </Button>
         </>
       )}
-    </div>
+    </GridFooterStrip>
   )
 
   return (
@@ -181,7 +181,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: ProductRo
         ) : (
           <>
             {/* The page's own grid card and toolbar: the editor is the products grid, in a modal. */}
-            <div className="nds-gridcard">
+            <GridPanel footer={footerStrip}>
               <GridToolbar
                 count={
                   pendingCount
@@ -232,8 +232,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: ProductRo
                 quickFilterText={search}
                 single={single}
               />
-              {footerStrip}
-            </div>
+            </GridPanel>
             <p className={styles.ieHint}>Type into a cell to edit · <kbd>Enter</kbd> moves down · <kbd>Tab</kbd> moves right · <kbd>Esc</kbd> reverts · drag a cell's corner to fill · paste a column from a sheet · <kbd>⌘Z</kbd> undo</p>
           </>
         )

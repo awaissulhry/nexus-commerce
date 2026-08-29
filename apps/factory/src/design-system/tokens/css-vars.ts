@@ -8,6 +8,7 @@
  * shadow / structural / type / the dark block are literals here (their only home).
  */
 import { palette, pill, badge } from './colors'
+import { gridVars, gridVarsDark } from './grid'
 
 export interface CssVar {
   /** when set, a section-comment is emitted before this row */
@@ -124,6 +125,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-warning-soft', value: '#fff6e8' },
   { name: '--nds-warning', value: 'var(--nds-amber-600)' },
   { name: '--nds-warning-strong', value: 'var(--nds-amber-700)' },
+  { name: '--nds-warning-border', value: '#f0d9a8' },
   { name: '--nds-info-soft', value: 'var(--nds-blue-100)' },
   { name: '--nds-info', value: 'var(--nds-blue-600)' },
 
@@ -133,7 +135,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { section: 'Tonal', name: '--nds-tonal-bg', value: 'var(--nds-blue-50)' },
   { name: '--nds-tonal-border', value: 'var(--nds-blue-200)' },
   { name: '--nds-tonal-fg', value: 'var(--nds-blue-900)' },
-  { section: 'FilterChip', name: '--nds-fchip-on-bg', value: 'var(--nds-blue-50)' },
+  { section: 'FilterChip', name: '--nds-fchip-on-bg', value: 'var(--nds-tonal-bg)' },
   { name: '--nds-fchip-on-border', value: 'var(--nds-tonal-border)' },
   { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
@@ -218,6 +220,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-font-smoothing', value: 'auto' },
 
   // ── Platform-semantic aliases (components consume THESE; bridge to globals.css) ──
+  // ── Tier 3: grid (GDS) — defined once in ./grid.ts; every colour a semantic role, no .dark entry ──
+  ...gridVars,
+
   { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--nds-text)' },
   { name: '--text-secondary', value: 'var(--nds-text-2)' },
   { name: '--text-tertiary', value: 'var(--nds-text-3)' },
@@ -325,6 +330,11 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-border-subtle', value: '#26323f' },
   { name: '--nds-border-strong', value: '#46505f' },
   { name: '--nds-rail-border', value: '#26323f' },
+  { section: 'Dark tone + link roles (AA on the dark canvas)', name: '--nds-success-strong', value: '#6ee7a8' },
+  { name: '--nds-warning-strong', value: '#f0b46a' },
+  { name: '--nds-danger-strong', value: '#f79289' },
+  { name: '--nds-text-link', value: '#8ab6f0' },
+
   { section: 'Dark rail palette (app-wide rail only; shells pin light)', name: '--nds-rail-text', value: '#aab6c2' },
   { name: '--nds-rail-text-2', value: '#97a3b1' },
   { name: '--nds-rail-text-strong', value: '#e7ebf1' },
@@ -336,4 +346,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-rail-chip-active-bg', value: '#1d3a5f' },
   { name: '--nds-rail-chip-active-fg', value: '#cfe1fb' },
   { name: '--nds-rail-ft', value: '#6f7b8b' },
+
+  // ── grid aliases, re-declared so they resolve against the dark tier (tokens/grid.ts) ──
+  ...gridVarsDark,
 ]

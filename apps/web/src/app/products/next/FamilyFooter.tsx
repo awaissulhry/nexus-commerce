@@ -12,8 +12,8 @@
 import { ExternalLink } from 'lucide-react'
 
 import { Button } from '@/design-system/primitives'
-import type { ICellRendererParams } from '@/design-system/patterns/workspace-grid/engine/NexusGrid'
-import type { FamilyFooterRow } from '@/design-system/patterns/workspace-grid/engine/productsDatasource'
+import type { ICellRendererParams } from '@/design-system/grid'
+import type { FamilyFooterRow } from '@/app/products/next/productsDatasource'
 
 import styles from './styles.module.css'
 import { familyHref } from './columns'

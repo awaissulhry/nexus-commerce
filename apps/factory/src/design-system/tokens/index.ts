@@ -14,6 +14,7 @@ export * from './shadow'
 export * from './motion'
 export * from './zindex'
 export * from './breakpoints'
+export * from './grid'
 
 import { palette, color, pill, badge } from './colors'
 import { fontFamily, fontSize, fontWeight, letterSpacing, lineHeight, fontSmoothing } from './typography'
@@ -23,6 +24,7 @@ import { shadow, focusRing, shadowColor } from './shadow'
 import { duration, easing, durationMs } from './motion'
 import { zIndex } from './zindex'
 import { breakpoint, mediaQuery } from './breakpoints'
+import { grid } from './grid'
 
 /** Aggregate accessor for ergonomic destructuring: `const { color } = tokens`. */
 export const tokens = {
@@ -48,4 +50,5 @@ export const tokens = {
   zIndex,
   breakpoint,
   mediaQuery,
+  grid,
 } as const

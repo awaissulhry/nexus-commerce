@@ -48,3 +48,6 @@ export type { BenchmarkBarProps, BenchmarkVerdict } from './BenchmarkBar'
 // grow by 22px every time a channel is connected.
 export { CoverageSummary } from './CoverageSummary'
 export type { CoverageSummaryProps, CoverageChannel, CoverageState } from './CoverageSummary'
+
+// A product image in a cell, sized by the grid's density (GDS Phase 2 — lifted from grid-lens).
+export { Thumbnail, type ThumbnailProps } from './Thumbnail'

@@ -11,9 +11,9 @@ import { ChevronDown } from 'lucide-react'
 
 import { Button, Input } from '@/design-system/primitives'
 import { Menu, useToast, type MenuItemDef } from '@/design-system/components'
-import type { useGridViews } from '@/design-system/patterns/workspace-grid/engine/useGridViews'
+import type { GridStateApi } from '@/design-system/grid'
 
-export function GridViewsMenu<TPage>({ views }: { views: ReturnType<typeof useGridViews<TPage>> }) {
+export function GridViewsMenu<TPage>({ views }: { views: GridStateApi<TPage> }) {
   const { toast } = useToast()
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')

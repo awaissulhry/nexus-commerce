@@ -14,7 +14,7 @@ import { ModuleRegistry } from 'ag-grid-community'
 import { AllEnterpriseModule } from 'ag-grid-enterprise'
 import { AgChartsCommunityModule } from 'ag-charts-community'
 
-import { registerGridModules } from '@/design-system/patterns/workspace-grid/engine/modules'
+import { registerGridModules } from '@/design-system/grid/modules'
 
 let registered = false
 

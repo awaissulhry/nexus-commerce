@@ -248,6 +248,34 @@ node scripts/check-ag-grid-import-boundary.mjs || {
   exit 1
 }
 
+# GDS (2026-08-29) — three gates for the grid design system (docs/2026-08-28-grid-design-system-gds.md §8).
+#   option identity — an inline object/arrow on <NexusGrid> re-runs AG's column model every render.
+#   grid-kit ratchet — the rebuild backlog may only shrink: no retiring kit gains an importer.
+#   DS-GAPS append-only — the ledger only grows.
+echo "→ Checking grid option identity (GDS §8.5)..."
+node scripts/check-grid-option-identity.mjs || {
+  echo "❌ grid option identity FAILED — see message above"
+  exit 1
+}
+echo "→ Checking grid-kit ratchet (GDS §8.7)..."
+node scripts/check-grid-kit-ratchet.mjs --check || {
+  echo "❌ grid-kit ratchet FAILED — see message above"
+  exit 1
+}
+# GDS §8.2 — chrome conformance is MEASURED in a browser against the lab; it needs :3000. When no
+# dev server answers it says so and skips (never a silent pass) — run `npm run grid:conformance`
+# by hand before showing grid work. `--strict` turns a missing server into a failure.
+echo "→ Checking grid chrome conformance (GDS §8.2, needs :3000)..."
+node scripts/check-grid-chrome.mjs || {
+  echo "❌ grid chrome conformance FAILED — see message above"
+  exit 1
+}
+echo "→ Checking DS-GAPS append-only (GDS §8.6)..."
+node scripts/check-ds-gaps-append-only.mjs --check || {
+  echo "❌ DS-GAPS append-only FAILED — see message above"
+  exit 1
+}
+
 echo "→ Checking DS barrel/API consistency..."
 node apps/web/src/design-system/tools/api-guard.mjs || {
   echo "❌ DS api-guard FAILED — see message above"
