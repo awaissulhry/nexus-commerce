@@ -60,6 +60,7 @@ import {
 import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 
 import { BulkSetControl } from './BulkSetControl'
+import { PublishControl } from './PublishControl'
 import { coordKey, type SheetColumn, type SheetRow } from './types'
 import { bulkSetCells, saveSheetCell, useMasterSheet } from './useMasterSheet'
 
@@ -402,6 +403,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
           {selected.length > 0 ? (
             <GridSelectionActions>
               <BulkSetControl rows={selectedRows} columns={data?.columns ?? []} applies={appliesFor} onApply={applyBulk} />
+              <PublishControl rows={selectedRows} coordinates={data?.coordinates ?? []} onDone={reload} />
               <Button size="sm" variant="link" onClick={() => apiRef.current?.deselectAll()}>Clear</Button>
             </GridSelectionActions>
           ) : (

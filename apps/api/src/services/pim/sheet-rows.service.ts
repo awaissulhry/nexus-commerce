@@ -112,6 +112,13 @@ export interface GetSheetRowsInput {
   productTypes?: string[]
   /** Restrict to these families (the sheet's "selection only" view). */
   parentIds?: string[]
+  /**
+   * Load EXACTLY these product rows, ignoring family paging — what a publish preview needs, where
+   * the operator has ticked a specific set and a family expansion would judge rows nobody selected.
+   * Parents are still fetched (never returned) because a variation's global values resolve through
+   * them.
+   */
+  ids?: string[]
 }
 
 export const coordKey = (c: { channel: string; marketplace: string }) => `${c.channel}:${c.marketplace}`
@@ -277,24 +284,42 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     if (q) familyWhere.OR = [{ sku: { contains: q, mode: 'insensitive' } }, { name: { contains: q, mode: 'insensitive' } }]
   }
 
-  const [total, families] = await Promise.all([
-    prisma.product.count({ where: familyWhere }),
-    prisma.product.findMany({
-      where: familyWhere,
-      select: { ...PRODUCT_SELECT, children: { where: { deletedAt: null }, select: PRODUCT_SELECT, orderBy: { sku: 'asc' } } },
-      orderBy: { sku: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-  ])
-
   const flat: Array<Record<string, unknown>> = []
   const parentById = new Map<string, ProductLike>()
-  for (const f of families as Array<Record<string, unknown>>) {
-    const { children, ...parent } = f as { children?: Array<Record<string, unknown>> } & Record<string, unknown>
-    parentById.set(parent.id as string, parent as unknown as ProductLike)
-    flat.push({ ...parent, __childCount: children?.length ?? 0 })
-    for (const c of children ?? []) flat.push({ ...c, __childCount: 0 })
+  let total: number
+
+  if (input.ids?.length) {
+    // Exact rows, no family expansion. Their parents are loaded for resolution only.
+    const picked = await prisma.product.findMany({ where: { id: { in: input.ids }, deletedAt: null }, select: PRODUCT_SELECT })
+    const parentIds = [...new Set(picked.map((r) => r.parentId).filter((v): v is string => !!v))]
+    const parents = parentIds.length
+      ? await prisma.product.findMany({ where: { id: { in: parentIds } }, select: PRODUCT_SELECT })
+      : []
+    for (const p of parents) parentById.set(p.id, p as unknown as ProductLike)
+    for (const p of picked) {
+      // A picked row that is itself a parent resolves against itself for its own global values.
+      if (!p.parentId) parentById.set(p.id, p as unknown as ProductLike)
+      flat.push({ ...p, __childCount: 0 })
+    }
+    total = picked.length
+  } else {
+    const [count, families] = await Promise.all([
+      prisma.product.count({ where: familyWhere }),
+      prisma.product.findMany({
+        where: familyWhere,
+        select: { ...PRODUCT_SELECT, children: { where: { deletedAt: null }, select: PRODUCT_SELECT, orderBy: { sku: 'asc' } } },
+        orderBy: { sku: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ])
+    total = count
+    for (const f of families as Array<Record<string, unknown>>) {
+      const { children, ...parent } = f as { children?: Array<Record<string, unknown>> } & Record<string, unknown>
+      parentById.set(parent.id as string, parent as unknown as ProductLike)
+      flat.push({ ...parent, __childCount: children?.length ?? 0 })
+      for (const c of children ?? []) flat.push({ ...c, __childCount: 0 })
+    }
   }
 
   // ── 2. the columns for this market (once, not per row) ────────────

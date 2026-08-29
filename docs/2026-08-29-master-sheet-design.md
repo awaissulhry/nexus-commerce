@@ -1,6 +1,6 @@
 # The Master Sheet — design (GDS-4)
 
-**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1 + MS.2 (reads), MS.3 (the component) and MS.4 (bulk fill) are BUILT** — see §9, §10, §12. Where the sheet lives is still open and blocks only the mount.
+**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1–MS.5 are BUILT** — reads (§9), the component (§10), bulk fill (§12), publish preview (§13). Where the sheet lives is still open and blocks only the mount.
 
 **Ask (2026-08-28):** "a proper grid where I can actually make changes cell by cell. That would be used as the source of data, which would then be mapped, converted, or directly pushed to multiple channels of a specific market."
 
@@ -321,9 +321,58 @@ is the bottleneck; publishing is the step after it. Publish is now MS.5.
 | Restore | All three set back to `null`; `updated: 3`, no errors |
 | Not-applicable path, verified WITHOUT writing | Parent + 2 variations selected, column `EAN` (per-variant) → the button reads **"Set 2 rows"**: the parent is excluded before anything is sent |
 
-## 13. MS.5 — next
+## 13. MS.5 as built — publish, preflight-first (2026-08-30)
 
-Publish fan-out (`POST /api/products/sheet/publish` over the existing per-channel routes) and
-follows-master for the six fields that actually carry a flag. **Publishing is outward-facing and hard
-to reverse**, so it will be built preflight-first: a dry run that reports per row what *would* be sent
-and refuses anything whose readiness is not green, with the real send behind an explicit confirm.
+Publishing is outward-facing and hard to reverse, so **nothing leaves the sheet as a side effect of
+one click.** The flow is two deliberate steps, and the send reuses the route that already owns
+publishing rather than adding a second way to reach a marketplace.
+
+**Step 1 — preview.** `POST /api/products/sheet/publish-preview { ids[], channel, marketplace }`
+(`services/pim/sheet-publish.service.ts`). Makes **no channel call at all**. Each row gets a verdict:
+
+| Verdict | Meaning |
+|---|---|
+| `blocked` | Readiness has errors. Refused here with the fields named, rather than spending an API call to be told the same thing. |
+| `unlisted` | Nothing on the channel yet. Still sendable — that is how a listing is born — but flagged as a create, not an update. |
+| `warned` | Sendable, but something would probably be rejected downstream (an off-list value). |
+| `ready` | Already listed, every required field present. |
+
+**Step 2 — send.** A separate button that appears only after a preview, names how many rows and to
+where, and **defaults to a dry run**. It calls the existing `POST /api/products/:id/publish-amazon`
+per row. The platform's own gate is reported beside it: `AMAZON_PUBLISH_MODE` defaults to `dry-run`
+and is currently `gated`, so a live send needs *both* the switch and the env. A green result in
+dry-run mode means "this would have worked", never "this is listed", and the pill says which.
+
+**eBay is preview-only from the sheet, deliberately.** Its publish route updates an *existing* offer
+("No offer found — push first") and takes no dry-run parameter, so there is no way to rehearse it.
+Wiring a one-click send to a live marketplace call that cannot be simulated is not something this
+sheet should do. The preview is still useful; the eBay flat-file surface still owns the send.
+
+The publish mode comes from the SAME gates the publish routes consult (`getAmazonPublishMode` /
+`getEbayPublishMode`), never re-derived from env here — a preview that said "live" while the gate
+said "dry-run" would have an operator believe a listing went out.
+
+**14 tests**, four rules mutation-tested: errors no longer blocking, blocked rows counted as
+sendable, eBay silently becoming sendable, and a family page replacing the exact id list (which
+would judge — and offer to publish — rows nobody selected).
+
+### Verified on the real IT catalogue
+
+| Check | Result |
+|---|---|
+| Amazon preview, 3 rows | **3 blocked**, each naming `Descrizione del prodotto is required by Amazon · IT` — matching the raw records |
+| eBay preview, same rows | **3 sendable** (1 ready, 2 new) with **preview only** and the reason on hover; no send button, no dry-run toggle rendered |
+| Send affordance | With 0 sendable the button reads **"Rehearse 0"** and is **disabled**; dry run defaults to checked |
+| Platform state | `platform: gated` surfaced in the toolbar — publishing is switched off for this channel entirely |
+
+**No live publish has been performed.** The send path is wired and type-checked but has never been
+fired against a marketplace, by design — that needs the Owner's word and an ungated env.
+
+## 14. What is left
+
+* **Follows-master** for the six fields that carry a flag (title, description, price, quantity,
+  images, bulletPoints). Attribute cells have no flag and must derive it from
+  `resolveAttributes().source` — designed in §5, not built.
+* **The mount** — §8.3 is still open. The sheet lives at `/design/grid-lab?tab=sheet` until then.
+* **The web component still has no automated tests** beyond the shared rules; the column builder and
+  the save dispatch are browser-verified only.
