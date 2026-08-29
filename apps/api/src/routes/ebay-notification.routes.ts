@@ -360,16 +360,24 @@ ${eventXml}
       // The old path returned 204 and wrote nothing, so a rejected notification and a
       // notification that never arrived were indistinguishable afterwards. Record it.
       const rejected = req.body as any
+      const claimedId = rejected?.metadata?.notificationId ?? null
       await recordInbound({
         channel: 'EBAY',
         eventType: rejected?.metadata?.topic ?? 'unverified',
-        externalId: rejected?.metadata?.notificationId ?? null,
+        // NOT the notificationId the payload claims. Nothing about an unverified
+        // body is trustworthy, and `(channel, externalId)` is a UNIQUE key: a forged
+        // notification naming a real id would sit in that slot and make the genuine
+        // delivery look like a duplicate, suppressing it. Passing null keys the row on
+        // the body digest instead, which no attacker can use to collide with a
+        // verified event. The claimed id is still kept — in the payload and in the
+        // reason — it just cannot occupy the identity.
+        externalId: null,
         rawBody: body,
         payload: rejected ?? {},
         signatureOk: false,
         verifiedBy: 'ebay_ecdsa',
         status: 'failed',
-        lastError: `signature rejected: ${verdict.reason}${verdict.kid ? ` (kid ${verdict.kid})` : ''}`,
+        lastError: `signature rejected: ${verdict.reason}${verdict.kid ? ` (kid ${verdict.kid})` : ''}${claimedId ? ` (claimed id ${String(claimedId).slice(0, 60)})` : ''}`,
       })
       logger.warn('[eBay notification] signature rejected', { reason: verdict.reason, kid: verdict.kid })
       // 412 is what eBay's own SDK answers on a failed check. The 204 that stood here
