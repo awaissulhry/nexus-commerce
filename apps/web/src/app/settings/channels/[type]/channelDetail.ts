@@ -123,8 +123,23 @@ const COUNTRY_NAMES: Record<string, string> = {
   UK: 'United Kingdom',
 }
 
-/** Shared with the loading skeleton so the two states do not jump. */
-export const PAGE_MAX_WIDTH = 880
+/**
+ * Shared with the loading skeleton so the two states do not jump.
+ *
+ * `none`: a fixed cap left 502px of measured dead space on the right at 1728px
+ * (`feedback_no_dead_space_layouts` — the operator's standing rule). The page fills
+ * its column and the cards pair up on wide viewports instead.
+ */
+export const PAGE_MAX_WIDTH = 'none'
+
+/**
+ * A scope reads as its distinctive tail, not as the same 38-character prefix 22 times.
+ * The full value stays in the chip's `title` — it is what you paste into a bug report.
+ */
+export function shortScope(scope: string): string {
+  const tail = scope.replace(/^https?:\/\/[^/]+\/oauth\/api_scope\/?/, '')
+  return tail === '' ? 'api_scope (base)' : tail
+}
 
 // ─── Status ──────────────────────────────────────────────────────────────
 

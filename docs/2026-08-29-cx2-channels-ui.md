@@ -101,3 +101,13 @@ Also: the ledger's Actor column printed a raw cuid; it now prints the actor *kin
 **Verified live on prod** (`nexus-commerce-three.vercel.app`, API `ddc4ddba9`): three tabs render with URL sync; Accounts shows the status pill from `authStatus`, region and 12 Amazon marketplace chips / "All eBay sites", "22 permissions not granted" with Reconnect relabelled to match, and the four timestamps; Connect renders five catalogue cards + Ads; Diagnostics loads the ledger on `NexusGrid` — real `heartbeat_ok` rows every 15 minutes — and **Run heartbeat wrote a new ledger row `heartbeat_ok · actorKind: operator · 3087 ms`** attributed to the operator's user id. That is the round trip the honesty rule asks for: the button made a real call, the channel answered, the row landed.
 
 **A note on the poll that said this was not deployed for an hour:** `useSearchParams` inside the `Suspense` boundary makes the page client-rendered, so its text never appears in the server HTML. A `curl | grep` for the new copy therefore reported "not deployed" while the page had been live the whole time. Measure a client-rendered page in a browser, never in `curl`.
+
+### 11a. Three more, measured on the detail page (same session)
+
+| # | Defect | Fix |
+|---|---|---|
+| 8 | **502px of dead space on the right**, measured (`getBoundingClientRect`: cards 880px wide inside a 1662px main at a 1728px viewport). A fixed `PAGE_MAX_WIDTH = 880` — the one layout defect the operator has ruled out outright (`feedback_no_dead_space_layouts`) | the cap is gone; Connection and Permissions pair up in `.nds-cd-pair` (`auto-fit, minmax(420px, 1fr)`) and stack again below that |
+| 9 | The Permissions card printed the same 38-character scope prefix 22 times and repeated "· not granted" on every chip | two labelled groups (Granted / Not granted — reconnect to grant them), each chip showing the scope's distinctive tail with the full value in `title` |
+| 10 | **`--nds-space-*` is a literal PIXEL scale, not a step scale.** My page CSS used `--nds-space-1…4` meaning "steps" and got 1–4px gaps throughout the Channels page | rescaled to 6 / 8 / 12 / 16px — the values the DS's own stylesheets use |
+
+Defect 10 is the one worth carrying forward: `--nds-space-3` is **3px**, not "step 3". Read the token file before using a scale, and measure the gap you got.

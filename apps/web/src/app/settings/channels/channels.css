@@ -4,7 +4,7 @@
 .nds-channels {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-4);
+  gap: var(--nds-space-16);
   width: 100%;
   min-width: 0;
 }
@@ -19,8 +19,8 @@
 .nds-connect-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--nds-space-2) var(--nds-space-4);
-  margin: 0 0 var(--nds-space-3);
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0 0 var(--nds-space-12);
 }
 .nds-connect-facts > div {
   display: grid;
@@ -43,20 +43,20 @@
 .nds-connect-region {
   display: flex;
   align-items: center;
-  gap: var(--nds-space-2);
-  margin-bottom: var(--nds-space-3);
+  gap: var(--nds-space-8);
+  margin-bottom: var(--nds-space-12);
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text-muted);
 }
 .nds-connect-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--nds-space-2);
+  gap: var(--nds-space-8);
   align-items: center;
 }
 .nds-connect-reason {
-  margin: var(--nds-space-2) 0 0;
-  padding: var(--nds-space-2) var(--nds-space-3);
+  margin: var(--nds-space-8) 0 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
   border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-md);
   background: var(--nds-surface-sunken);
@@ -67,11 +67,11 @@
 .nds-connect-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--nds-space-1);
-  margin-bottom: var(--nds-space-3);
+  gap: var(--nds-space-6);
+  margin-bottom: var(--nds-space-12);
 }
 .nds-connect-note {
-  margin: 0 0 var(--nds-space-3);
+  margin: 0 0 var(--nds-space-12);
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text-muted);
   line-height: 1.45;
@@ -84,7 +84,7 @@
   margin: 0;
   padding-left: 1.1em;
   display: grid;
-  gap: var(--nds-space-1);
+  gap: var(--nds-space-6);
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text);
   line-height: 1.5;
@@ -95,22 +95,22 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-2);
+  gap: var(--nds-space-8);
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text-muted);
 }
 .nds-diag-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--nds-space-2);
-  margin-bottom: var(--nds-space-3);
+  gap: var(--nds-space-8);
+  margin-bottom: var(--nds-space-12);
 }
 .nds-diag-result {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-2);
-  margin: 0 0 var(--nds-space-3);
+  gap: var(--nds-space-8);
+  margin: 0 0 var(--nds-space-12);
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text);
 }
@@ -125,4 +125,23 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--nds-font-size-xs);
   line-height: 1.5;
+}
+
+/* ── /settings/channels/[type] ─────────────────────────────────────────────
+   The detail page fills its column. A fixed 880px cap left 502px of measured
+   dead space on the right at 1728px, which is the one layout defect the
+   operator has ruled out outright. The two reference cards pair up as soon as
+   there is room for both; below that they stack. */
+.nds-cd-pair {
+  display: grid;
+  gap: var(--nds-space-12);
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  align-items: start;
+}
+.nds-cd-grouplabel {
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-muted);
 }

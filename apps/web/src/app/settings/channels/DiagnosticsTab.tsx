@@ -152,7 +152,7 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
 
   if (loading && accounts.length === 0) {
     return (
-      <div style={{ display: 'grid', gap: 'var(--nds-space-3)' }}>
+      <div style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
         <Skeleton height={44} />
         <Skeleton height={160} />
         <Skeleton height={240} />
@@ -166,7 +166,7 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   const status = STATUS_LABEL[account.authStatus ?? 'unknown'] ?? STATUS_LABEL.unknown
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--nds-space-3)' }}>
+    <div style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
       <div className="nds-diag-picker">
         <span id="diag-account-label">Account</span>
         <Listbox

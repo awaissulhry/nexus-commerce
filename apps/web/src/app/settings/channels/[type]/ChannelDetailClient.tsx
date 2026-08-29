@@ -36,6 +36,7 @@ import { PageHeader } from '@/design-system/patterns'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useSettingsForm } from '../../_shell/SettingsSaveBar'
+import '../channels.css'
 import { InboundGrid } from '../ChannelEventsGrid'
 import {
   type ActionNote,
@@ -57,6 +58,7 @@ import {
   marketplacesDescription,
   patchMarketplaces,
   permissionsCopy,
+  shortScope,
   reconnectHold,
   reconnectLabel,
   runHeartbeat,
@@ -325,8 +327,12 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         </Banner>
       )}
 
-      <ConnectionCard connection={connection} status={status} />
-      <PermissionsCard scopes={detail.scopes} drift={drift} />
+      {/* The two reference cards sit side by side once there is room for both
+          (measured: a single 880px column left 502px empty at 1728px). */}
+      <div className="nds-cd-pair">
+        <ConnectionCard connection={connection} status={status} />
+        <PermissionsCard scopes={detail.scopes} drift={drift} />
+      </div>
       <MarketplacesCard
         channelType={channelType}
         participation={detail.connectionScopes ?? []}
@@ -478,18 +484,37 @@ function ConnectionCard({
 }
 
 function PermissionsCard({ scopes, drift }: { scopes: string[]; drift: string[] }) {
+  // Two labelled groups, not one mixed list with "· not granted" repeated on every
+  // chip: the state belongs to the group, and the chip shows the scope's distinctive
+  // tail with the full value in its title (22 identical 38-char prefixes read as noise).
   return (
     <Card header="Permissions" description={permissionsCopy(scopes.length, drift.length)}>
       {scopes.length === 0 && drift.length === 0 ? null : (
-        <div style={row('var(--nds-space-6)')}>
-          {scopes.map((s) => (
-            <Tag key={s}>{s}</Tag>
-          ))}
-          {drift.map((s) => (
-            <Pill key={`missing:${s}`} tone="warning">
-              {s} · not granted
-            </Pill>
-          ))}
+        <div style={stack('var(--nds-space-10)')}>
+          {scopes.length > 0 && (
+            <div style={stack('var(--nds-space-6)')}>
+              <span className="nds-cd-grouplabel">Granted</span>
+              <div style={row('var(--nds-space-6)')}>
+                {scopes.map((s) => (
+                  <Tag key={s}>
+                    <span title={s}>{shortScope(s)}</span>
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
+          {drift.length > 0 && (
+            <div style={stack('var(--nds-space-6)')}>
+              <span className="nds-cd-grouplabel">Not granted — reconnect to grant them</span>
+              <div style={row('var(--nds-space-6)')}>
+                {drift.map((s) => (
+                  <Pill key={`missing:${s}`} tone="warning">
+                    <span title={s}>{shortScope(s)}</span>
+                  </Pill>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Card>

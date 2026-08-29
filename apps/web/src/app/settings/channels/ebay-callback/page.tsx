@@ -6,7 +6,7 @@ import EbayCallbackContent from './EbayCallbackContent'
 // thing it renders on the design system.
 function Forwarding() {
   return (
-    <div style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--nds-space-2)', color: 'var(--nds-text-muted)' }}>
+    <div style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--nds-space-8)', color: 'var(--nds-text-muted)' }}>
       <Spinner size={16} />
       <span>Finishing eBay sign-in…</span>
     </div>

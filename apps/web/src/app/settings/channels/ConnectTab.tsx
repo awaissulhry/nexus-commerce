@@ -55,7 +55,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
   }
   if (!catalogue) {
     return (
-      <div style={{ display: 'grid', gap: 'var(--nds-space-3)', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: 'var(--nds-space-12)', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} height={168} />
         ))}
@@ -73,8 +73,8 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
   const connectedFor = (channelType: string) => accounts.filter((a) => a.channel === channelType)
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--nds-space-3)' }}>
-      <div style={{ display: 'grid', gap: 'var(--nds-space-3)', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+    <div style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
+      <div style={{ display: 'grid', gap: 'var(--nds-space-12)', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
         {sorted.map((c) => {
           const have = connectedFor(c.channelType)
           const chosenRegion = region[c.key] ?? c.defaultRegion ?? c.regions[0]?.key ?? null
