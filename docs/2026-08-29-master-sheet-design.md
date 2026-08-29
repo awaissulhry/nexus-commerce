@@ -179,9 +179,14 @@ existing `PATCH /api/products/bulk`.
 * `services/pim/sheet-rows.service.ts` — one page of FAMILIES, `resolveAttributes` per row (pure),
   `computeReadiness` per row × coordinate (pure), completeness through the existing MA.4 function.
 
-**82 unit tests**, every load-bearing rule mutation-tested (a cap that is not the tightest, a strict
-list that blocks instead of warning, a parent flagged for a per-variant field, an unlisted row
-reported as ready, a Prisma Decimal read as null — each mutation fails at least one test).
+**79 unit tests** — 65 in `apps/api` (schema-caps 17, sheet-columns 24, sheet-rows 24) and 14 in
+`packages/shared`. Every load-bearing rule is mutation-tested: a cap that is not the tightest, a
+strict list that blocks instead of warning, a parent flagged for a per-variant field, an unlisted row
+reported as ready, a Prisma Decimal read as null — each mutation fails at least one test.
+
+> **Corrected 2026-08-30.** The commit message for `225771677` and the first version of this section
+> both claimed "82 unit tests". The real count at that commit was 65. Nothing else in the number was
+> wrong, but a test count nobody can reproduce is the kind of claim that makes the rest suspect.
 
 ### What building it against the real catalogue exposed
 
@@ -234,3 +239,47 @@ Self-contained by design: it takes a market and nothing else, so **where it live
 62 s, so `/design/grid-lab?tab=gds` never reached `networkidle` and `check-grid-chrome.mjs` timed out
 for *every* session on the machine. The grid was innocent; one hung request in the app chrome is
 enough to break a `networkidle` gate.
+
+
+---
+
+## 11. Verification pass (2026-08-30)
+
+Re-checked every claim rather than restating it. Three of my own claims were wrong:
+
+| Claim | Reality |
+|---|---|
+| "82 unit tests" | **65.** Corrected above and in §9. |
+| "Prod has the routes — 401 proves it, not 404" | **Invalid inference.** `/api/products/sheet-nonexistent` returns the *identical* 401, because the RBAC hook matches the `/api/products` prefix before routing resolves. The routes ARE deployed, but the evidence given was worthless; the Railway deployment record is the real proof. |
+| "MS.3 not found in the served Vercel chunks" | **My grep was wrong.** Four strings unique to MS.3 all resolve to `/_next/static/chunks/02l2uhpnymwn9.js`. |
+
+One real defect, now fixed: **an unknown market returned a sheet instead of an error.**
+`market=XX` came back HTTP 200 with zero coordinates and a full page of rows, so a typo'd link
+rendered as a real market that merely had no channels. `UnknownMarketError` → **400** naming the
+markets that exist. A market that exists but has no listings yet (`PL`) is still reachable by URL and
+simply not offered in the switcher.
+
+One structural fix: the applicability rules were **duplicated** in the API and the sheet after MS.3.
+They now live once in `packages/shared/master-sheet.ts` (14 tests). A drift there is invisible and
+vicious — the cell would say "required" while the readiness pill said "not applicable".
+
+### What the pass confirmed
+
+* Both commits on `origin/main`; Railway `SUCCESS` for both; Vercel serving MS.3.
+* **All four markets work**, not just the one it was built against: IT/DE/ES/FR return the right
+  locale, the right coordinates (IT has Amazon + eBay, the rest Amazon only), and `schemaMissing:
+  ["GLOVES"]` correctly on ES/FR.
+* **The readiness verdicts are true.** Claims were checked against the raw records: every field the
+  sheet reports missing is genuinely absent from the row *and* its parent. Zero false accusations.
+* **The production data touched during MS.3 verification is restored** — `manufacturer` is `null`,
+  and the audit trail holds exactly two bulk operations (the write and the restore), both SUCCESS.
+* Prod end to end: the deployed sheet loaded with a real session — 37 products, 251 rows, the
+  deployed API answering in 3.1 s.
+
+### Still open
+
+* **The web component has no automated tests.** Its two rules are now covered in `packages/shared`,
+  but the column builder, the save dispatch and the round-trip painting are browser-verified only.
+* **Only the failing readiness path is proven on real data.** 3 of 58 verdicts on one page came back
+  `ready`; no passing row has been checked end to end against a channel.
+* Reads take 3–6.6 s per market from a laptop (mostly Neon latency), unmeasured on Railway.

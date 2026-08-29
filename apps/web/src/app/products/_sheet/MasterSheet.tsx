@@ -56,6 +56,8 @@ import {
   type ValueSetterParams,
 } from '@/design-system/grid'
 
+import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
+
 import { coordKey, type SheetColumn, type SheetRow } from './types'
 import { saveSheetCell, useMasterSheet } from './useMasterSheet'
 
@@ -150,23 +152,10 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
     const rt = roundTripClassRules<SheetRow>(tracker, (r) => r.id)
     const locale = data.locale
 
-    /** A cell is not applicable when a parent has no per-variant value, or the type differs. */
-    const applies = (row: SheetRow, col: SheetColumn) => {
-      if (row.isParent && col.scope === 'per_variant') return false
-      if (col.applicableProductTypes?.length) {
-        const pt = (row.productType ?? '').toUpperCase()
-        if (!pt || !col.applicableProductTypes.map((t) => t.toUpperCase()).includes(pt)) return false
-      }
-      return true
-    }
-    const requiredHere = (row: SheetRow, col: SheetColumn) => {
-      if (col.requiredBy.length === 0) return false
-      if (col.requiredForProductTypes?.length) {
-        const pt = (row.productType ?? '').toUpperCase()
-        return !!pt && col.requiredForProductTypes.map((t) => t.toUpperCase()).includes(pt)
-      }
-      return true
-    }
+    // The SAME rules the API uses to compute readiness (`@nexus/shared/master-sheet`). Re-implementing
+    // them here would let the cell say "required" while the readiness pill says "not applicable".
+    const applies = (row: SheetRow, col: SheetColumn) => columnApplies(col, row)
+    const requiredHere = (row: SheetRow, col: SheetColumn) => columnRequiredByAny(col, row)
 
     const build = (col: SheetColumn): ColDef<SheetRow> => {
       const base = col.kind === 'select'

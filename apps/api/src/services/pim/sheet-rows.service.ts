@@ -22,6 +22,7 @@
 import { resolveAttributes, type ProductLike, type ChannelListingLike, type ResolvedAttributes } from './attribute-resolver.js'
 import { computeMasterCompleteness, type MasterCompleteness } from './master-completeness.service.js'
 import type { MasterAttribute } from './master-schema.service.js'
+import { columnApplies as applies, columnRequiredHere as requiredHere } from '@nexus/shared/master-sheet'
 import { coordinatesFor, getSheetColumns, type SheetColumn, type SheetCoordinate, type SheetColumnSet } from './sheet-columns.service.js'
 
 // ────────────────────────────────────────────────────────────────────
@@ -169,26 +170,12 @@ function normaliseColumnValue(v: unknown, kind: SheetColumn['kind']): unknown {
 // Readiness — pure, per row × coordinate
 // ────────────────────────────────────────────────────────────────────
 
-/** Does this column apply to this row at all? */
-export function columnApplies(col: SheetColumn, row: { isParent: boolean; productType: string | null }): boolean {
-  // A parent has no colour, size or EAN of its own — the cell is locked, never flagged.
-  if (row.isParent && col.scope === 'per_variant') return false
-  if (col.applicableProductTypes && col.applicableProductTypes.length > 0) {
-    const pt = (row.productType ?? '').toUpperCase()
-    if (!pt || !col.applicableProductTypes.map((t) => t.toUpperCase()).includes(pt)) return false
-  }
-  return true
-}
-
-function requiredHere(col: SheetColumn, coordinateLabel: string, productType: string | null): boolean {
-  if (!col.requiredBy.includes(coordinateLabel)) return false
-  // A union manifest can require a column for SOME of its types only.
-  if (col.requiredForProductTypes && col.requiredForProductTypes.length > 0) {
-    const pt = (productType ?? '').toUpperCase()
-    return !!pt && col.requiredForProductTypes.map((t) => t.toUpperCase()).includes(pt)
-  }
-  return true
-}
+/**
+ * The applicability rules live in `@nexus/shared/master-sheet` because the SHEET needs the same
+ * answer to decide editable / locked / required. Re-exported here so this service's callers and its
+ * tests keep one import surface.
+ */
+export { columnApplies, columnRequiredHere } from '@nexus/shared/master-sheet'
 
 export function computeReadiness(input: {
   columns: SheetColumn[]
@@ -201,7 +188,7 @@ export function computeReadiness(input: {
   const issues: ReadinessIssue[] = []
 
   for (const col of columns) {
-    if (!columnApplies(col, row)) continue
+    if (!applies(col, row)) continue
     const v = values[col.key]?.value
     const required = requiredHere(col, coordinate.label, row.productType)
 
@@ -246,7 +233,7 @@ export function computeReadiness(input: {
 // ────────────────────────────────────────────────────────────────────
 
 export function completenessFor(columns: SheetColumn[], row: { isParent: boolean; productType: string | null }, values: Record<string, SheetCellValue>): MasterCompleteness {
-  const applicable = columns.filter((c) => columnApplies(c, row))
+  const applicable = columns.filter((c) => applies(c, row))
   const asMaster: MasterAttribute[] = applicable.map((c) => ({
     key: c.key,
     label: c.label,

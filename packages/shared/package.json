@@ -41,6 +41,10 @@
     "./products-grid": {
       "types": "./dist/products-grid.d.ts",
       "default": "./dist/products-grid.js"
+    },
+    "./master-sheet": {
+      "types": "./dist/master-sheet.d.ts",
+      "default": "./dist/master-sheet.js"
     }
   },
   "scripts": {

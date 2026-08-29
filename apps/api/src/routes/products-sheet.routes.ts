@@ -19,7 +19,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify'
 
-import { getSheetColumns } from '../services/pim/sheet-columns.service.js'
+import { getSheetColumns, UnknownMarketError } from '../services/pim/sheet-columns.service.js'
 import { getSheetRows } from '../services/pim/sheet-rows.service.js'
 import { TtlCache } from '../utils/ttl-cache.js'
 
@@ -60,6 +60,7 @@ const productsSheetRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header('Cache-Control', 'private, max-age=300')
       return set
     } catch (err) {
+      if (err instanceof UnknownMarketError) return reply.code(400).send({ error: err.code, message: err.message, knownMarkets: err.known })
       request.log.error({ err, market, productTypes }, '[sheet] column build failed')
       return reply.code(500).send({ error: 'sheet_columns_failed', message: err instanceof Error ? err.message : String(err) })
     }
@@ -95,6 +96,7 @@ const productsSheetRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header('Server-Timing', `sheet;dur=${Date.now() - t0}`)
       return result
     } catch (err) {
+      if (err instanceof UnknownMarketError) return reply.code(400).send({ error: err.code, message: err.message, knownMarkets: err.known })
       request.log.error({ err, market }, '[sheet] row read failed')
       return reply.code(500).send({ error: 'sheet_rows_failed', message: err instanceof Error ? err.message : String(err) })
     }

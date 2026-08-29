@@ -395,6 +395,20 @@ function titleCase(s: string): string {
 // DB-backed wrapper
 // ────────────────────────────────────────────────────────────────────
 
+/**
+ * A market the platform does not have. Thrown rather than returning an empty sheet: a typo'd or
+ * stale `?market=` used to come back HTTP 200 with zero coordinates and a full set of rows, so a
+ * broken link rendered as a real market that simply had no channels — the operator's only clue was
+ * an absence, which is exactly the failure mode this sheet exists to remove.
+ */
+export class UnknownMarketError extends Error {
+  readonly code = 'unknown_market'
+  constructor(readonly market: string, readonly known: string[]) {
+    super(`Unknown market "${market}". This platform has: ${known.join(', ')}`)
+    this.name = 'UnknownMarketError'
+  }
+}
+
 export interface GetSheetColumnsInput {
   market: string
   productTypes: string[]
@@ -441,6 +455,11 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   // A market is offered only when something is listed there; GLOBAL is the webstore's placeholder,
   // not a market an operator can pick.
   const availableMarkets = [...new Set(presentRows.map((r) => String(r.marketplace).toUpperCase()).filter((m) => m && m !== 'GLOBAL' && m !== 'DEFAULT'))].sort()
+  // A market is a country code that at least one marketplace row uses. GLOBAL/DEFAULT are the
+  // webstore's placeholders, not markets an operator can open a sheet on.
+  const knownMarkets = [...new Set(marketplaceRows.map((m) => String(m.code).toUpperCase()).filter((c) => c && c !== 'GLOBAL' && c !== 'DEFAULT'))].sort()
+  if (!knownMarkets.includes(market)) throw new UnknownMarketError(market, knownMarkets)
+
   const coordinates = coordinatesFor(market, marketplaceRows, { present, channels: input.channels })
   const locale = (marketplaceRows.find((m) => String(m.code).toUpperCase() === market)?.language ?? 'en').toLowerCase()
 
