@@ -12040,6 +12040,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       data: { writesEnabledAt: new Date() },
       select: { profileId: true, marketplace: true, writesEnabledAt: true, mode: true },
     })
+    // CX.3b — permission to spend is an OPERATOR decision, and the write gate now reads
+    // it from the connection core. Mirror it as we write, or the gate reads a snapshot.
+    const { recordOperatorDecision } = await import('../services/advertising/ads-profile-resolver.js')
+    await recordOperatorDecision(conn.profileId, { writesEnabledAt: conn.writesEnabledAt })
     return { ok: true, connection: conn }
   })
 
@@ -12054,6 +12058,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       data: { writesEnabledAt: null },
       select: { profileId: true, writesEnabledAt: true },
     })
+    // Disabling must reach the gate's source immediately — a stale "enabled" is the
+    // one direction of this mirror that could cost money.
+    const { recordOperatorDecision } = await import('../services/advertising/ads-profile-resolver.js')
+    await recordOperatorDecision(conn.profileId, { writesEnabledAt: null })
     return { ok: true, connection: conn }
   })
 
@@ -12083,6 +12091,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       },
       select: { profileId: true, marketplace: true, mode: true, writesEnabledAt: true },
     })
+    const { recordOperatorDecision } = await import('../services/advertising/ads-profile-resolver.js')
+    await recordOperatorDecision(conn.profileId, { mode: conn.mode, writesEnabledAt: conn.writesEnabledAt })
     logger.warn('[ADS-CONNECTION-SET-MODE]', {
       profileId: conn.profileId,
       marketplace: conn.marketplace,

@@ -177,28 +177,31 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       deniedAt: 'connection',
     }
   }
-  const conn = await prisma.amazonAdsConnection.findFirst({
-    where: { marketplace: ctx.marketplace, isActive: true },
-    select: { profileId: true, mode: true, writesEnabledAt: true },
-  })
+  // CX.3b — through the one resolver. It reads the connection core's ConnectionScope
+  // and falls back to this exact row query, so the gate's decision is unchanged while
+  // the source moves. `mode` and `writesEnabledAt` are the OPERATOR's permission to
+  // spend, so the routes that set them mirror onto the scope as they write — this gate
+  // must never read a snapshot that nothing keeps current.
+  const { adsProfileFor } = await import('./ads-profile-resolver.js')
+  const conn = await adsProfileFor(ctx.marketplace)
   if (!conn) {
     return {
       allowed: false,
-      reason: `no active AmazonAdsConnection for marketplace=${ctx.marketplace}`,
+      reason: `no active Amazon Ads profile for marketplace=${ctx.marketplace}`,
       deniedAt: 'connection',
     }
   }
   if (conn.mode !== 'production') {
     return {
       allowed: false,
-      reason: `AmazonAdsConnection.mode=${conn.mode} (needs production)`,
+      reason: `Amazon Ads connection mode=${conn.mode} (needs production)`,
       deniedAt: 'connection',
     }
   }
   if (conn.writesEnabledAt == null) {
     return {
       allowed: false,
-      reason: 'AmazonAdsConnection.writesEnabledAt is null — operator must explicitly enable writes',
+      reason: 'writes are not enabled for this Amazon Ads profile — the operator must enable them explicitly',
       deniedAt: 'connection_writes',
     }
   }
@@ -746,10 +749,15 @@ export function logGateDeny(
  */
 export async function recordSuccessfulWrite(marketplace: string | null): Promise<void> {
   if (!marketplace) return
+  const at = new Date()
+  // Mirror onto the scope as well as the row: the row is still the system of record
+  // for `lastWriteAt` until CX.3c, and the two must not drift while both are read.
+  const { recordWriteForMarket } = await import('./ads-profile-resolver.js')
+  void recordWriteForMarket(marketplace, at)
   await prisma.amazonAdsConnection
     .updateMany({
       where: { marketplace, isActive: true },
-      data: { lastWriteAt: new Date() },
+      data: { lastWriteAt: at },
     })
     .catch((err) => {
       logger.warn('[ads-write-gate] failed to update lastWriteAt', {
