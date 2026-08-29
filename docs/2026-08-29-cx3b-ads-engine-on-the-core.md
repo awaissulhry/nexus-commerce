@@ -83,3 +83,32 @@ Untouched: `ads-debug-probe.service.ts`, the Ads API surface, every UI contract 
 | The leased refresh misbehaves on the money path | `NEXUS_CX_ADS_LEASED_TOKEN=0` reverts to the in-process cache, which is today's behaviour |
 | The archive removes a credential we still need | the inverse job restores it from the envelope; C runs only after A and B are proven live |
 | A marketplace code mismatch silently resolves nothing | the shim normalises both sides through the canonical map and returns `null` rather than guessing; the gate then refuses with `connection` rather than writing to the wrong market |
+
+## 8. Verified on prod (2026-08-29)
+
+All three steps shipped and were verified in order, each gating the next.
+
+**A — the resolver and the write gate.** `cx3b-ads-decisions-reseed` → `profiles=9 written=9`. The gate-field diff then agreed for **every market where writes are enabled** (DE, ES, FR, IT — all `production`, all `writes ON`) and for four of the five sandbox markets. Gate decisions read back correctly from prod: IT and DE `already_enabled` with real timestamps, UK refused as `connection_mode_not_production`.
+
+**B — the leased refresh.** A live Amazon call returned `{ok:true, mode:"live", profileCount:9}`, and the log named both sources rather than leaving it to inference:
+
+```
+[ADS-LIVE] credential source  {"source":"core"}
+[ADS-LIVE] access token source {"source":"leased"}
+```
+
+**C — the duplicate secrets.** `rows=9 archived=9 mismatched=0 unreadable=0`. **Zero credentials remain in `AmazonAdsConnection`; one envelope remains on the connection.** Then, because an inverse that has never run is not a rollback: `cx3b-ads-credentials-restore` → `restored=9` (nine rows, one distinct blob, exactly as before), a live call still succeeded, and the archive was re-run to leave prod in the intended state. Both directions are in the ledger.
+
+And the failure this step was designed around, proven *not* to happen: `POST /advertising/v1/export-cycle` → **`created=9 · skipped=0`** with no row holding a credential. Before the `adsAccountHasCredential()` change that would have been `created=0` — no error, no failing test, just an ingestion pipeline quietly producing nothing.
+
+### The mismatch was real data, and its root cause was ours
+
+One market disagreed: the row said profile `4392237479209848` was **IE**; Amazon's own `/v2/profiles` says `countryCode: BE`, `Europe/Brussels`, `AMEN7PMS3EDWL`. There is no Irish profile on this account.
+
+`AMEN7PMS3EDWL` is amazon.com.be. Four files already had it right; `utils/marketplace-code.ts` — the map **38 call sites normalise through** — was the only one calling it Ireland, and Ireland's real id (`A28R8C7NBKEWEA`) was missing entirely. Fixed in `2c209a0c5`. The old code would have resolved an "IE" request to a *Belgian* profile; the new code resolves nothing and the gate refuses.
+
+That is the third wrong marketplace id this phase has turned up, after the two in the Ads callback. All three were found the same way: asking the channel what it has instead of trusting what we stored.
+
+## 9. Not done, and why
+
+The other ~39 read sites stay on the legacy row. The inventory showed the scope metadata does not carry `accountLabel`, `lastError` or the token timestamps that four endpoints select, and that the CX.3a migration and the OAuth callback write **different metadata shapes**. Reconciling that is its own unit; converting blind would have broken `/api/advertising/connections`, which nine web call sites depend on.
