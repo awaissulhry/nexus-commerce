@@ -132,6 +132,7 @@ export interface ReportRow {
   id: string
   campaign: string
   kind: 'SP' | 'SB' | 'SD'
+  targeting: 'A' | 'M'
   live: boolean
   spendCents: number
   salesCents: number
@@ -154,6 +155,7 @@ export function makeReport(n = 24, seed = 11): ReportRow[] {
       id: `c${i}`,
       campaign: `${['SP', 'SB', 'SD'][i % 3]} | ${['Brand Defense', 'Category Broad', 'Competitor ASINs', 'Long Tail', 'Retargeting', 'Store Spotlight'][i % 6]} | ${['Exact', 'Phrase', 'Broad'][i % 3]}`,
       kind: (['SP', 'SB', 'SD'] as const)[i % 3],
+      targeting: i % 4 === 0 ? 'A' : 'M',
       live: i % 5 !== 4,
       spendCents: spend,
       salesCents: sales,
@@ -173,6 +175,7 @@ export const reportTotals = (rows: ReportRow[]): ReportRow => ({
   id: '__total',
   campaign: 'Total',
   kind: 'SP',
+  targeting: 'M',
   live: false,
   spendCents: rows.reduce((a, r) => a + r.spendCents, 0),
   salesCents: rows.reduce((a, r) => a + r.salesCents, 0),

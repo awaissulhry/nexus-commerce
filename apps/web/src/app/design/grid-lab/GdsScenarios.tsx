@@ -42,6 +42,8 @@ import {
   GroupCell,
   IdentityCell,
   NexusGrid,
+  ProgramChip,
+  TargetingChip,
   SkuTag,
   actionsColumn,
   dateColumn,
@@ -328,15 +330,16 @@ function CampaignCell(p: ICellRendererParams<ReportRow>) {
   if (!p.data) return null
   if (p.node.rowPinned) return <b>Total</b>
   return (
-    <span className="nds-ag-cell-first" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+    <span className="nds-cell-identity" style={{ gap: 7 }}>
       <span style={{ width: 7, height: 7, borderRadius: 999, flex: 'none', background: p.data.live ? 'var(--nds-live)' : 'var(--nds-text-disabled)' }} />
+      <TargetingChip targeting={p.data.targeting} />
+      <ProgramChip program={p.data.kind} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }} title={p.data.campaign}>{p.data.campaign}</span>
     </span>
   )
 }
 const REPORT_COLS: ColDef<ReportRow>[] = [
   { colId: 'campaign', field: 'campaign', headerName: 'Campaign', pinned: 'left', width: 320, cellRenderer: CampaignCell, cellClass: 'nds-ag-cell' },
-  { colId: 'kind', headerName: 'Type', width: 80, ...textColumn<ReportRow>('kind') },
   { colId: 'spendCents', headerName: 'Spend', width: 110, ...moneyColumn<ReportRow>('spendCents', { decimals: true }) },
   { colId: 'salesCents', headerName: 'Sales', width: 120, ...moneyColumn<ReportRow>('salesCents', { decimals: true, zero: 'dash', zeroTitle: 'No attributed sales' }) },
   { colId: 'acos', headerName: 'ACoS', width: 96, ...percentColumn<ReportRow>('acos') },
@@ -559,7 +562,7 @@ export function GdsScenarios() {
           </GridCard>
         </Scenario>
 
-        <Scenario id="reporting" title="Read-only reporting grid with a pinned totals row" hint="Money in cents through eur(); a percent is a fraction; ACoS with no sales is unmeasured — a dash with no title — while zero sales is a measured zero with a title. The totals row is the header's height at every density.">
+        <Scenario id="reporting" title="Read-only reporting grid with a pinned totals row" hint="The campaign cell carries its marks as 20px chips — targeting A/M, programme SP/SB/SD, each with a hover explanation — never as columns of their own. Money in cents through eur(); a percent is a fraction; ACoS with no sales is unmeasured (a dash, no title), zero sales a measured zero (a dash with a title). The totals row is the header's height at every density. The checkbox column is first even though Campaign is pinned.">
           <GridCard toolbar={<GridToolbar count={<><b>{REPORT.length}</b> campaigns</>} right={<Button size="sm"><Download size={13} /> Export</Button>} />}>
             <NexusGrid<ReportRow> domLayout="autoHeight" rowData={REPORT} getRowId={rowId} columnDefs={REPORT_COLS} pinnedBottomRowData={REPORT_TOTALS} rowSelection={REPORT_SELECTION} initialState={REPORT_SORT} />
           </GridCard>

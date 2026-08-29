@@ -147,29 +147,6 @@ export function NexusGrid<T>({
   )
   const getRowHeight = agProps.getRowHeight ?? pinnedAwareRowHeight
 
-  /**
-   * AG caches every row's height; changing `rowHeight` / `getRowHeight` as an option does not
-   * re-measure the rows it already holds. When the density moves, the engine asks it to — measured:
-   * without this the totals row kept its Spacious 46px after a switch to Compact.
-   */
-  const apiRef = useRef<GridApi<T> | null>(null)
-  const handleGridReady = useCallback(
-    (e: GridReadyEvent<T>) => {
-      apiRef.current = e.api
-      onGridReady?.(e)
-    },
-    [onGridReady],
-  )
-  useEffect(() => {
-    const api = apiRef.current
-    if (!api || api.isDestroyed()) return
-    api.resetRowHeights()
-    // Pinned rows are measured when their data is set, not by `resetRowHeights` — re-set them.
-    for (const key of ['pinnedTopRowData', 'pinnedBottomRowData'] as const) {
-      const data = api.getGridOption(key)
-      if (data && data.length) api.setGridOption(key, [...data])
-    }
-  }, [rowHeight, headerHeight, getRowHeight])
 
   /**
    * The checkbox column stays at the EXTREME left. AG pins a column by moving it into the
@@ -197,6 +174,42 @@ export function NexusGrid<T>({
     keepSelectionFirst(e.api)
     onColumnPinned?.(e)
   }, [keepSelectionFirst, onColumnPinned])
+
+  /**
+   * AG caches every row's height; changing `rowHeight` / `getRowHeight` as an option does not
+   * re-measure the rows it already holds. When the density moves, the engine asks it to — measured:
+   * without this the totals row kept its Spacious 46px after a switch to Compact.
+   */
+  const apiRef = useRef<GridApi<T> | null>(null)
+  const handleGridReady = useCallback(
+    (e: GridReadyEvent<T>) => {
+      apiRef.current = e.api
+      // A column pinned in its DEFINITION (a reporting grid's campaign column) sits in the pinned
+      // area from the first render, ahead of an unpinned selection column — the `columnPinned`
+      // hook only sees pins made at runtime. Measured: checkboxes after the first column.
+      keepSelectionFirst(e.api)
+      onGridReady?.(e)
+    },
+    [onGridReady, keepSelectionFirst],
+  )
+  const handleNewColumnsLoaded = useCallback(
+    (e: { api: GridApi<T> }) => {
+      keepSelectionFirst(e.api)
+      agProps.onNewColumnsLoaded?.(e as never)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [keepSelectionFirst, agProps.onNewColumnsLoaded],
+  )
+  useEffect(() => {
+    const api = apiRef.current
+    if (!api || api.isDestroyed()) return
+    api.resetRowHeights()
+    // Pinned rows are measured when their data is set, not by `resetRowHeights` — re-set them.
+    for (const key of ['pinnedTopRowData', 'pinnedBottomRowData'] as const) {
+      const data = api.getGridOption(key)
+      if (data && data.length) api.setGridOption(key, [...data])
+    }
+  }, [rowHeight, headerHeight, getRowHeight])
   // The DS grid's checkbox column measures 43px (`gridGeometry.selectColW`); AG's default is 50.
   const mergedSelectionColumnDef = useMemo(
     () => ({
@@ -272,6 +285,7 @@ export function NexusGrid<T>({
           headerHeight={headerHeight}
           getRowHeight={getRowHeight}
           onGridReady={handleGridReady}
+          onNewColumnsLoaded={handleNewColumnsLoaded}
           defaultColDef={mergedDefaultColDef}
           animateRows={false}
           suppressCellFocus

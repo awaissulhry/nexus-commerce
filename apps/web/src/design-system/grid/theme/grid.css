@@ -286,6 +286,20 @@
 .nds-cell-sub { font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
 .nds-cell-sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); }
 
+/* the 20×20 chips beside a name — targeting A/M (filled), programme SP/SB/SD (outlined), an accent */
+.nds-cell-chip {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box;
+  width: 20px; height: 20px; padding: 0; border-radius: var(--nds-radius-sm); line-height: 1; font-weight: 800;
+  font-size: 11px; color: var(--nds-text-inverse);
+}
+.nds-cell-chip-auto { background: var(--nds-targeting-auto); }
+.nds-cell-chip-manual { background: var(--nds-targeting-manual); }
+.nds-cell-chip-accent { background: var(--nds-rail-text); }
+.nds-cell-chip-program { font-size: 9px; letter-spacing: -0.3px; color: var(--nds-grid-muted-fg); background: var(--nds-grid-bg); border: 1px solid var(--nds-grid-frame); }
+.nds-cell-chip-neutral { color: var(--nds-text-2); background: var(--nds-surface-sunken); }
+/* a chip's tooltip wrapper must not add a line box of its own */
+.nds-cell-identity .h10-tipwrap { display: inline-flex; line-height: 0; }
+
 /* the 20px expander and the slot that keeps a leaf aligned under its siblings */
 .nds-cell-expand {
   width: 20px; height: 20px; flex: none; display: inline-flex; align-items: center; justify-content: center;

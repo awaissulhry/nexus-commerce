@@ -257,6 +257,43 @@ function ActionsCellImpl<T>(p: ICellRendererParams<T> & ActionsCellParams<T>) {
 }
 export const ActionsCell = memo(ActionsCellImpl) as typeof ActionsCellImpl
 
+/* ── chips: the 20px squares beside a name (the Ad Manager's A/M + SP/SB/SD) ──────────────── */
+
+export type IdentityChipTone = 'auto' | 'manual' | 'program' | 'neutral' | 'accent'
+
+export interface IdentityChipProps {
+  /** One or two characters — `A`, `M`, `SP`. */
+  label: ReactNode
+  tone?: IdentityChipTone
+  /** The hover explanation; a chip with no tip is a mark nobody can read. */
+  tip?: string
+}
+
+/**
+ * A 20×20 square chip that sits BEFORE the title in an identity cell, never in a column of its
+ * own: targeting (A/M, filled), programme (SP/SB/SD, outlined), an accent mark (a lightbulb).
+ * The Ad Manager drew these in its campaign cell; this is that cell's chip, on the tokens.
+ */
+export const IdentityChip = memo(function IdentityChip({ label, tone = 'neutral', tip }: IdentityChipProps) {
+  const chip = (
+    <span className={`nds-cell-chip nds-cell-chip-${tone}`} aria-label={tip} role={tip ? 'img' : undefined}>
+      {label}
+    </span>
+  )
+  return tip ? <InfoTip tip={tip}>{chip}</InfoTip> : chip
+})
+
+export const TargetingChip = memo(function TargetingChip({ targeting }: { targeting: 'A' | 'M' | 'AUTO' | 'MANUAL' }) {
+  const auto = targeting === 'A' || targeting === 'AUTO'
+  return <IdentityChip label={auto ? 'A' : 'M'} tone={auto ? 'auto' : 'manual'} tip={auto ? 'Targeting: Automatic' : 'Targeting: Manual'} />
+})
+
+const PROGRAM_NAMES: Record<string, string> = { SP: 'Sponsored Products', SB: 'Sponsored Brands', SD: 'Sponsored Display' }
+
+export const ProgramChip = memo(function ProgramChip({ program }: { program: 'SP' | 'SB' | 'SD' | string }) {
+  return <IdentityChip label={program} tone="program" tip={PROGRAM_NAMES[program] ?? program} />
+})
+
 /* ── identity ─────────────────────────────────────────────────────────────────────────────── */
 
 export interface IdentityCellProps {

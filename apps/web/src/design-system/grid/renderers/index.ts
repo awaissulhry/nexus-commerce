@@ -14,6 +14,9 @@ export {
   CoverageCell,
   ActionsCell,
   IdentityCell,
+  IdentityChip,
+  TargetingChip,
+  ProgramChip,
   SkuTag,
   ExpandButton,
   ExpandSlot,
@@ -30,6 +33,8 @@ export {
   type TagsCellParams,
   type ActionsCellParams,
   type IdentityCellProps,
+  type IdentityChipProps,
+  type IdentityChipTone,
   type ExpandButtonProps,
 } from './cells'
 export { GridLoadingOverlay, GridNoRowsOverlay, type GridLoadingOverlayParams, type GridNoRowsOverlayParams } from './overlays'

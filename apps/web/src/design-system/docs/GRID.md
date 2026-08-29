@@ -46,7 +46,8 @@ No stylesheet outside it may address `.ag-*`, `.nds-ag-*`, `.nds-cell-*` or the 
    tool panel are not shown. The `FilterBar` accordion writes `api.setFilterModel`; the three DS column filters live
    in the column menu; `suppressHeaderFilterButton` engine-wide.
 8. Selection is the grid's: pages read it (`onSelectionChanged` → `api.getSelectedNodes()`), clear it
-   (`api.deselectAll()`), never mirror it back down.
+   (`api.deselectAll()`), never mirror it back down. **The checkbox column is always the first thing on the
+   left** — the engine pins it ahead of any left-pinned column at every column load.
 9. `ag-Grid-AutoColumn` never leaves the browser; the server sees the page's own column id.
 10. A locked column (FBA quantity) is locked in the column DEFINITION (`lockedColumn`), never in a renderer.
 11. Every option object and callback handed to `<NexusGrid>` has a stable identity
@@ -110,6 +111,7 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
 | `actionsColumn({primary, items, pinned})` | `ActionsCell` | Edit + ⋯ `Menu`; held at the right end, pinned on request |
 | `holdColumn(col, end, pinned)` | — | cannot be hidden or moved |
 | identity | `IdentityCell` | expander slot · `Thumbnail` · title link + hover "Open" pill · sub-line (`SkuTag`, `Tag`s) |
+| chips | `IdentityChip` · `TargetingChip` · `ProgramChip` | 20×20 squares BEFORE the title, each with a tip — targeting A/M filled (`--nds-targeting-*`), programme SP/SB/SD outlined. Never a column of their own. |
 | tags | `TagsCell` | one named chip, or ≤6 glyph chips + "+N", `InfoTip` |
 | coverage | `CoverageCell` | `CoverageSummary` from a `CoverageChannel[]` value |
 | group row | `GroupCell` | label + count |

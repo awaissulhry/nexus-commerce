@@ -4,6 +4,20 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [GDS-3.2] — 2026-08-29 — Identity chips; the checkbox column is first at every column load
+
+Two things the Owner saw on the lab.
+
+- **Chips, not columns.** The Ad Manager's campaign cell carries its marks as 20px squares — targeting A/M
+  (filled), programme SP/SB/SD (outlined), each with a hover explanation — where the lab had spread them into
+  a Type column. `IdentityChip` · `TargetingChip` · `ProgramChip` join the cell library (`.nds-cell-chip-*`, on
+  `--nds-targeting-*` and the grid tokens, 20×20 · 11/800 filled · 9/800 outlined, `InfoTip` for the tip); the
+  reporting scenarios use them and the Type column is gone.
+- **The checkbox column is always first.** The engine only enforced it on a runtime pin; a column pinned in
+  its DEFINITION (the reporting grid's Campaign) sat ahead of an unpinned selection column from the first
+  render. `NexusGrid` now runs the rule on grid ready and on every `newColumnsLoaded` too — measured first in
+  every selectable scenario, including the pinned-Campaign one.
+
 ## [GDS-3.1] — 2026-08-29 — The toolbar keeps its height when rows are selected
 
 Reported by the Owner on the lab: ticking a row swapped the toolbar's search for the bulk actions and
