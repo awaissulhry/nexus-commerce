@@ -111,3 +111,11 @@ Also: the ledger's Actor column printed a raw cuid; it now prints the actor *kin
 | 10 | **`--nds-space-*` is a literal PIXEL scale, not a step scale.** My page CSS used `--nds-space-1…4` meaning "steps" and got 1–4px gaps throughout the Channels page | rescaled to 6 / 8 / 12 / 16px — the values the DS's own stylesheets use |
 
 Defect 10 is the one worth carrying forward: `--nds-space-3` is **3px**, not "step 3". Read the token file before using a scale, and measure the gap you got.
+
+### 11b. One "defect" that was not — and the control that proved it
+
+The spec's §8.5 check ("the held Connect buttons are reachable by Tab and produce their reason on Enter") reported a failure on prod: the button was focused, a real `Return` was sent, and no reason appeared. Before filing it, I ran the same keypress against a **known-good enabled button** — the Diagnostics tab, whose activation changes `?tab=`. It did nothing either.
+
+So the finding is about the probe, not the page: **the Chrome harness's key action does not activate a focused button.** What is genuinely measured on prod: the held button carries `aria-disabled="true"` with **no** `disabled` attribute, is focusable (`tabIndex 0`, `document.activeElement === el`), draws at 0.62 opacity from the new DS rule, has `cursor: default` (never `help`), and its handler produces the reason (`el.click()` → "Amazon sign-in arrives with CX.3 …"). Keyboard *activation* could not be verified with this tooling and is recorded here as unverified rather than claimed.
+
+Nearly filing this was the false-positive failure mode aimed at correct code. The control is what stopped it.
