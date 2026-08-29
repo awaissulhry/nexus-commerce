@@ -27,6 +27,8 @@ import { logger } from '../utils/logger.js'
 import { registerRawJsonParser } from '../utils/webhook.js'
 import type { RawBodyRequest } from '../utils/webhook.js'
 import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
+import { verifyEbayNotification, ebayChallengeResponse } from '../services/cx/ingress/ebay-signature.js'
+import { recordInbound } from '../services/cx/ingress/ledger.js'
 
 // ── Trading API helpers ────────────────────────────────────────────────
 
@@ -85,25 +87,6 @@ async function callTradingApi(callName: string, xmlBody: string): Promise<{
   return { ack, shortMessage, longMessage, rawXml }
 }
 
-function verifyEbaySignature(
-  body: Buffer,
-  signatureHeader: string | undefined,
-  token: string,
-): boolean {
-  if (!signatureHeader) return false
-  try {
-    const expected = crypto
-      .createHmac('sha256', token)
-      .update(body)
-      .digest('base64')
-    const a = Buffer.from(expected, 'base64')
-    const b = Buffer.from(signatureHeader, 'base64')
-    if (a.length === 0 || a.length !== b.length) return false
-    return crypto.timingSafeEqual(a, b)
-  } catch {
-    return false
-  }
-}
 
 // P4 — legacy Trading-API sale topics (what setup-ebay-notifications subscribes
 // to). Module-scope so the hot webhook handler doesn't re-allocate per request.
@@ -344,34 +327,54 @@ ${eventXml}
     const token = process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN ?? ''
     const endpoint = process.env.EBAY_NOTIFICATION_ENDPOINT_URL ?? ''
 
-    // eBay challenge response = SHA256(challenge_code + verificationToken + endpoint)
-    const hash = crypto
-      .createHash('sha256')
-      .update(challengeCode + token + endpoint)
-      .digest('hex')
+    // CX.4a — an unset token or endpoint still produces a well-formed hash, and it is
+    // the WRONG hash. eBay reads that as a failed ownership check and marks the
+    // endpoint down after 24 hours, taking every topic with it. Answering anyway is
+    // right (silence fails too), but it must not be silent to us.
+    if (!token || !endpoint) {
+      logger.error('[eBay notification] challenge answered with an incomplete configuration', {
+        hasToken: Boolean(token),
+        hasEndpoint: Boolean(endpoint),
+      })
+    }
 
-    return reply.send({ challengeResponse: hash })
+    // SHA256(challenge_code + verificationToken + endpoint), hex.
+    return reply.send({ challengeResponse: ebayChallengeResponse(challengeCode, token, endpoint) })
   })
 
   // POST /api/webhooks/ebay-notification — receives push events from eBay.
   app.post('/webhooks/ebay-notification', async (req, reply) => {
-    const token = process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN ?? ''
     const body = (req as RawBodyRequest).rawBody
 
-    // CX.0 (S6): fail CLOSED. Without a verification token this endpoint would
-    // accept unauthenticated JSON that cancels orders and injects stock events.
-    // (eBay's real ECDSA/public-key verification + subscriptions land in CX.4.)
-    if (!token) {
-      logger.error('[eBay notification] EBAY_NOTIFICATION_VERIFICATION_TOKEN is not set — refusing notification')
-      return reply.status(503).send({ error: 'notification verification not configured' })
-    }
     if (!body) {
       return reply.status(400).send({ error: 'raw body unavailable' })
     }
+
+    // CX.4a — eBay's real scheme: an ECC signature over the payload, verified with a
+    // public key fetched by the key id in the header. What stood here checked an
+    // HMAC of the verification token, which eBay never sends, so every genuine
+    // notification failed it. Still fail-closed: an unfetchable key is a rejection.
     const sig = req.headers['x-ebay-signature'] as string | undefined
-    if (!verifyEbaySignature(body, sig, token)) {
-      logger.warn('[eBay notification] invalid signature')
-      return reply.status(204).send()  // eBay requires 204 even on rejection to stop retries
+    const verdict = await verifyEbayNotification({ rawBody: body, header: sig })
+    if (!verdict.ok) {
+      // The old path returned 204 and wrote nothing, so a rejected notification and a
+      // notification that never arrived were indistinguishable afterwards. Record it.
+      const rejected = req.body as any
+      await recordInbound({
+        channel: 'EBAY',
+        eventType: rejected?.metadata?.topic ?? 'unverified',
+        externalId: rejected?.metadata?.notificationId ?? null,
+        rawBody: body,
+        payload: rejected ?? {},
+        signatureOk: false,
+        verifiedBy: 'ebay_ecdsa',
+        status: 'failed',
+        lastError: `signature rejected: ${verdict.reason}${verdict.kid ? ` (kid ${verdict.kid})` : ''}`,
+      })
+      logger.warn('[eBay notification] signature rejected', { reason: verdict.reason, kid: verdict.kid })
+      // 412 is what eBay's own SDK answers on a failed check. The 204 that stood here
+      // told eBay the notification had been accepted.
+      return reply.status(412).send({ error: 'signature verification failed' })
     }
 
     const payload = req.body as any
@@ -399,28 +402,34 @@ ${eventXml}
       typeof publishDateRaw === 'string' && !Number.isNaN(Date.parse(publishDateRaw))
         ? new Date(publishDateRaw)
         : null
-    try {
-      await prisma.webhookEvent.upsert({
-        where: { channel_externalId: { channel: 'EBAY', externalId } },
-        create: {
-          channel: 'EBAY',
-          eventType: topic || 'unknown',
-          externalId,
-          payload: payload ?? {},
-          isProcessed: true,
-          processedAt: new Date(),
-          providerTimestamp,
-        },
-        update: { processedAt: new Date() },
+    // CX.4a — through the shared ledger writer, so an accepted notification and a
+    // rejected one are the same kind of record and can be counted together.
+    // `recordInbound` swallows its own failures for the reason the old try/catch
+    // gave: eBay retries forever if we stop answering.
+    await recordInbound({
+      channel: 'EBAY',
+      eventType: topic || 'unknown',
+      externalId: externalId || null,
+      rawBody: body,
+      payload: payload ?? {},
+      signatureOk: true,
+      verifiedBy: 'ebay_ecdsa',
+      status: 'done',
+      providerTimestamp,
+    })
+
+    // MARKETPLACE_ACCOUNT_DELETION — eBay's erasure notice, and a condition of
+    // holding production keys. Acknowledging it is mandatory and is done here.
+    // Carrying out the erasure is NOT done here: it deletes real customer data, so it
+    // is the Owner's decision and its own unit, and doing it as a side effect of an
+    // inbound message would be the most destructive thing in this codebase.
+    // Logged at error level so it cannot pass unseen while that decision is pending.
+    if (topic === 'MARKETPLACE_ACCOUNT_DELETION') {
+      logger.error('[eBay notification] MARKETPLACE_ACCOUNT_DELETION received — acknowledged and recorded; erasure is NOT automated', {
+        notificationId: notificationId || null,
+        username: notifData?.username ?? null,
       })
-    } catch (recordErr) {
-      // Recording failure mustn't block the webhook ack — eBay would
-      // retry forever and we don't want that on a logging hiccup.
-      logger.warn('[eBay notification] WebhookEvent persist failed', {
-        topic,
-        ebayOrderId,
-        error: recordErr instanceof Error ? recordErr.message : String(recordErr),
-      })
+      return reply.status(200).send()
     }
 
     // RT.10 — ItemRevised carries quantity changes (operator edits in

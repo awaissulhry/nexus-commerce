@@ -18,6 +18,7 @@ import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import prisma from '../db.js'
+import { recordInbound } from '../services/cx/ingress/ledger.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -65,20 +66,24 @@ async function runSqsPoll(): Promise<void> {
               ? new Date(eventTimeRaw)
               : null
           try {
-            const we = await prisma.webhookEvent.upsert({
-              where: { channel_externalId: { channel: 'AMAZON', externalId: msg.messageId } },
-              create: {
-                channel: 'AMAZON',
-                eventType: msg.notificationType,
-                externalId: msg.messageId,
-                payload: msg.rawPayload as any,
-                isProcessed: false,
-                providerTimestamp,
-              },
-              update: {},  // don't overwrite if already persisted
-              select: { id: true },
+            // CX.4a — through the shared ledger so Amazon and eBay arrivals are the
+            // same kind of record. Behaviour is unchanged for this path: a redelivery
+            // still does not overwrite the original row, it now counts itself.
+            const written = await recordInbound({
+              channel: 'AMAZON',
+              eventType: msg.notificationType,
+              externalId: msg.messageId,
+              payload: msg.rawPayload,
+              // SP-API notifications arrive as plain JSON on a queue we own; there is
+              // no signature on them, and the queue's IAM policy is what establishes
+              // trust (research R1). `null` says exactly that — `false` would claim a
+              // check failed, `true` would claim one happened.
+              signatureOk: null,
+              verifiedBy: 'sqs_iam',
+              providerTimestamp,
+              status: 'pending',
             })
-            webhookEventId = we.id
+            webhookEventId = written.id
           } catch {
             // Non-fatal — proceed with processing regardless
           }

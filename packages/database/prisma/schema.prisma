@@ -4630,10 +4630,34 @@ model WebhookEvent {
   // percentile queries on /api/admin/push-latency.
   providerTimestamp DateTime?
 
+  // ── CX.4a — the inbound ledger ──────────────────────────────────
+  // WebhookEvent IS the programme's InboundEvent (§3.4.3), extended rather
+  // than replaced so the 5,158 rows already here stay part of the history.
+  connectionId  String?
+  // pending | done | failed | dlq. Derived from isProcessed at migration time
+  // so the two can never disagree about the rows that predate this.
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+  // Tri-state on purpose: true = checked and passed, false = checked and
+  // failed, null = this transport carries no signature. Amazon's SQS
+  // notifications are unsigned JSON trusted via the queue's IAM policy, so
+  // neither true nor false would be honest about them.
+  signatureOk   Boolean?
+  // 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'none'
+  verifiedBy    String?
+  payloadDigest String?
+  lastError     String?
+  // Decision 9 — archive, never delete.
+  archivedAt    DateTime?
+  archiveUri    String?
+
   @@unique([channel, externalId])
   @@index([isProcessed])
   @@index([channel])
   @@index([channel, providerTimestamp])
+  @@index([status, nextAttemptAt])
+  @@index([connectionId])
 }
 
 // ── CS.1: Channel → us inbound stock event ───────────────────────────
