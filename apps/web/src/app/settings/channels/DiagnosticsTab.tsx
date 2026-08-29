@@ -9,27 +9,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Card, Banner, DataGrid, Listbox, MetricStrip, EmptyState } from '@/design-system/components'
+import { Card, Banner, Listbox, MetricStrip, EmptyState } from '@/design-system/components'
 import { Button, Pill, Tag, Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { channelName, relativeTime, STATUS_LABEL, type AccountRow } from './channels-data'
+import { LedgerGrid, InboundGrid, type LedgerRow, type InboundRow } from './ChannelEventsGrid'
 
-interface LedgerRow {
-  id: string
-  type: string
-  actorUserId: string | null
-  detail: Record<string, unknown> | null
-  createdAt: string
-}
-interface InboundRow {
-  id: string
-  eventType: string
-  externalId: string | null
-  isProcessed: boolean
-  processedAt: string | null
-  error: string | null
-  createdAt: string
-}
 interface HeartbeatResult {
   ok: boolean
   latencyMs: number
@@ -37,15 +22,6 @@ interface HeartbeatResult {
   scopeDrift: string[]
   message?: string
   errorClass?: string
-}
-
-function summarise(detail: Record<string, unknown> | null): string {
-  if (!detail) return ''
-  return Object.entries(detail)
-    .filter(([, v]) => v !== null && v !== undefined && v !== '')
-    .slice(0, 5)
-    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(' · ')
 }
 
 export interface DiagnosticsTabProps {
@@ -249,18 +225,7 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
         {ledger.rows === null ? (
           <Skeleton height={160} />
         ) : (
-          <DataGrid<LedgerRow>
-            size="sm"
-            columns={[
-              { key: 'time', label: 'When', width: 170, render: (r) => <span title={r.createdAt}>{relativeTime(r.createdAt)}</span> },
-              { key: 'type', label: 'Event', width: 160, render: (r) => <Tag>{r.type}</Tag> },
-              { key: 'actor', label: 'Actor', width: 120, render: (r) => r.actorUserId ?? 'system' },
-              { key: 'detail', label: 'Detail', render: (r) => <span className="nds-diag-detail">{summarise(r.detail)}</span> },
-            ]}
-            rows={ledger.rows}
-            rowKey={(r) => r.id}
-            emptyState={<EmptyState title="No ledger rows yet" description="The first heartbeat or refresh writes the first row." />}
-          />
+          <LedgerGrid rows={ledger.rows} emptyTitle="No ledger rows yet" emptyDescription="The first heartbeat or refresh writes the first row." />
         )}
       </Card>
 
@@ -283,28 +248,7 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
         {inbound.rows === null ? (
           <Skeleton height={160} />
         ) : (
-          <DataGrid<InboundRow>
-            size="sm"
-            columns={[
-              { key: 'time', label: 'When', width: 170, render: (r) => <span title={r.createdAt}>{relativeTime(r.createdAt)}</span> },
-              { key: 'type', label: 'Type', width: 220, render: (r) => r.eventType },
-              { key: 'ext', label: 'External id', width: 200, render: (r) => r.externalId ?? '—' },
-              {
-                key: 'state',
-                label: 'Processed',
-                width: 120,
-                render: (r) => (
-                  <Pill tone={r.error ? 'danger' : r.isProcessed ? 'success' : 'neutral'} size="sm">
-                    {r.error ? 'failed' : r.isProcessed ? 'yes' : 'pending'}
-                  </Pill>
-                ),
-              },
-              { key: 'error', label: 'Error', render: (r) => r.error ?? '' },
-            ]}
-            rows={inbound.rows}
-            rowKey={(r) => r.id}
-            emptyState={<EmptyState title="No inbound events yet" description={`${channelName(account.channel)} has not sent a notification we recorded.`} />}
-          />
+          <InboundGrid rows={inbound.rows} emptyTitle="No inbound events yet" emptyDescription={`${channelName(account.channel)} has not sent a notification we recorded.`} />
         )}
       </Card>
 

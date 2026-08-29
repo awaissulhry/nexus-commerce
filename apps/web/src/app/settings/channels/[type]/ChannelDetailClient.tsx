@@ -27,10 +27,8 @@ import { ArrowLeft } from 'lucide-react'
 import {
   Banner,
   Card,
-  DataGrid,
   KeyValue,
   MetricStrip,
-  type Column,
   type KeyValueItem,
 } from '@/design-system/components'
 import { Button, CheckboxCard, Pill, Tag } from '@/design-system/primitives'
@@ -38,6 +36,7 @@ import { PageHeader } from '@/design-system/patterns'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useSettingsForm } from '../../_shell/SettingsSaveBar'
+import { InboundGrid } from '../ChannelEventsGrid'
 import {
   type ActionNote,
   type ChannelConnection,
@@ -52,7 +51,6 @@ import {
   channelLabel,
   disconnectAccount,
   disconnectHold,
-  eventTone,
   fetchDetail,
   identityLine,
   marketplaceOptions,
@@ -575,46 +573,6 @@ function MarketplacesCard({
   )
 }
 
-const EVENT_COLUMNS: Array<Column<RecentEvent>> = [
-  {
-    key: 'time',
-    label: 'Time',
-    sortable: true,
-    sortValue: (e) => e.createdAt,
-    render: (e) => <When cell={timestampText(e.createdAt, 'event')} />,
-  },
-  {
-    key: 'type',
-    label: 'Type',
-    sortable: true,
-    sortValue: (e) => e.eventType,
-    render: (e) => e.eventType,
-  },
-  {
-    key: 'externalId',
-    label: 'External id',
-    render: (e) => <span title={e.externalId}>{e.externalId}</span>,
-  },
-  {
-    key: 'processed',
-    label: 'Processed',
-    render: (e) => {
-      const t = eventTone(e)
-      return (
-        <span style={row('var(--nds-space-6)')}>
-          <Pill tone={t.tone}>{t.label}</Pill>
-          {e.processedAt && <When cell={timestampText(e.processedAt, 'event')} />}
-        </span>
-      )
-    },
-  },
-  {
-    key: 'error',
-    label: 'Error',
-    render: (e) => (e.error ? <span title={e.error}>{e.error}</span> : <span style={muted}>—</span>),
-  },
-]
-
 function InboundEventsCard({
   events,
   stats,
@@ -633,14 +591,7 @@ function InboundEventsCard({
             { label: 'Total', value: stats.total, hint: 'of the last 50' },
           ]}
         />
-        <DataGrid
-          columns={EVENT_COLUMNS}
-          rows={events}
-          rowKey={(e) => e.id}
-          size="sm"
-          initialSort={{ key: 'time', dir: 'desc' }}
-          emptyState="No inbound events yet."
-        />
+        <InboundGrid rows={events} emptyTitle="No inbound events yet" emptyDescription="Nothing this channel sent us has been recorded." />
       </div>
     </Card>
   )
