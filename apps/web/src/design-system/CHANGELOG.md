@@ -4,6 +4,28 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [GDS-4] — 2026-08-29 — The master sheet: a bounded sheet host, sheet cells, sheet validation
+
+The Owner asked for "a proper grid where I can actually make changes cell by cell… the source of data… mapped,
+converted, or directly pushed to multiple channels of a specific market". Designed in the DS, prototyped in the lab
+(`#sheet`, a XAVIA fixture: 4 families, 38 colour × size variations, market IT); the approach and the open
+questions are in `docs/2026-08-29-master-sheet-design.md`.
+
+- **`GridSheet`** — the one bounded, virtualised page host (decision Q15): fills the viewport below its own top
+  (or a `height` when embedded), compact by default, `NexusGrid fill` inside, `SHEET_GRID_OPTIONS` as the shared
+  editing contract (Enter ↓ · Tab → · fill handle · clipboard · 200 undo steps), `GridSheetStatus` below.
+- **Sheet cells** — `LongTextCell` (counter against the tightest channel cap), `ReadinessCell` (per channel × market:
+  Ready · Missing · Errors · Live · id · Unlisted, issues on hover), `FollowsCell` (Follows master / Pinned).
+- **Sheet validation** (`editors/sheet.ts`) — `sheetClassRules` → `.nds-cell-is-invalid` / `-warned` / `-inherited`
+  (corner triangle + tint, never colour alone), `selectValidation` (strict lists WARN, never block),
+  `lengthValidation`, `longTextEditor`, `sheetPasteProcessor` (header-matched paste). Tests beside it.
+- **Measured in the browser:** a 5-digit EAN → saving → refused (red, reason, "1 refused" in the strip); corrected →
+  saved, eBay readiness Errors → Live; a variation's Origin pinned from the parent's; Price · IT edit → Pinned;
+  a parent title edit repaints every variation; Publish → Amazon · IT on two rows → "1 published · 1 refused" with
+  the refused row's reason in its readiness cell. Conformance: `sheet` probed at compact (12/12 green).
+- **A trap, recorded in GRID.md §9:** a value setter must mutate `params.data` synchronously — one that only
+  scheduled React state handed the fake server the OLD value.
+
 ## [GDS-3.2] — 2026-08-29 — Identity chips; the checkbox column is first at every column load
 
 Two things the Owner saw on the lab.

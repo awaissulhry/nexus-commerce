@@ -26,3 +26,4 @@ export const textEditor = (): Pick<ColDef, 'editable' | 'cellEditor'> => ({ edit
 
 export { SelectCellEditor, selectEditor, type SelectEditorParams } from './SelectCellEditor'
 export { CellSaveTracker, roundTripClassRules, saveCell, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
+export { longTextEditor, sheetClassRules, selectValidation, lengthValidation, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type SheetValidation } from './sheet'

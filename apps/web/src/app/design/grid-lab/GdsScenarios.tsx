@@ -66,6 +66,7 @@ import {
 } from '@/design-system/grid'
 
 import { registerLabModules } from './labModules'
+import { GdsSheetScenario } from './GdsSheetScenario'
 import {
   BIG, CATALOGUE, CATALOGUE_PARENTS, LOCATIONS, LONG_TEXT, MATRIX, REPORT, createCatalogueDatasource, isFamilyParent, reportTotals,
   type CatalogueRow, type MatrixRow, type ReportRow,
@@ -545,6 +546,10 @@ export function GdsScenarios() {
 
         <Scenario id="editor" title="A grid inside a modal — the editor: column-group strip, a matrix, pending → Apply" hint={<>Rows × locations under a 30px location strip; a locked FBA group; edits are pending (amber + delta chip) until Apply, and a refused cell stays red with its reason. <Button size="sm" variant="secondary" onClick={() => setEditorOpen(true)}>Open the editor</Button></>}>
           <MatrixEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
+        </Scenario>
+
+        <Scenario id="sheet" title="The master sheet — one market, cell by cell (Q15 GridSheet)" hint="The SOURCE of product data for market IT, on the one bounded, virtualised page host. Parents and their variations as a family; a global attribute is inherited by variations (tinted) and pinned when edited; content cells carry a counter against the tightest channel cap; a strict list warns on an off-list value and never blocks; the market price sits beside its follows-master control; readiness per channel recomputes on every edit; Publish sends the selection and each row answers. Every edit round-trips per cell: saving → saved | refused (an EAN that is not 13 digits, a title over 200). Paste a block from Excel with a header row — the columns are matched by name.">
+          <GdsSheetScenario />
         </Scenario>
 
         <Scenario id="drawer" title="A grid inside a drawer" hint={<>A bounded grid in a DS Drawer, cozy rows. <Button size="sm" variant="secondary" onClick={() => setDrawerOpen(true)}>Open the drawer</Button></>}>

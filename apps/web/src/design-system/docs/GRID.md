@@ -115,6 +115,9 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
 | tags | `TagsCell` | one named chip, or ≤6 glyph chips + "+N", `InfoTip` |
 | coverage | `CoverageCell` | `CoverageSummary` from a `CoverageChannel[]` value |
 | group row | `GroupCell` | label + count |
+| long text | `LongTextCell` `{maxLength, countBytes, required}` | one line + a counter against the tightest channel cap (ok / near / over); `⚠ required` when empty and required |
+| readiness | `ReadinessCell` (`ReadinessValue`) | `Ready` · `Missing · n` · `Errors · n` · `Live · <channel id>` · `Unlisted`, the issues on hover — computed by the validator, never by the grid |
+| follows | `FollowsCell` | `Follows master` / `Pinned` — the market's follows-master control beside the market value |
 
 **The null rule.** `formatGridValue` decides: `null` / `undefined` / `NaN` → `EmptyValue` — a muted dash with
 **no** title (`aria-label="Not measured"`); a measured zero prints (`0`, `€0`) or, with `zero: 'dash'`, draws the
@@ -145,6 +148,16 @@ editor. Two models: **batch** — edits are pending (`.nds-cell-is-pending`, `De
 results, a refused cell stays `.nds-cell-is-refused` with its reason on hover; **per-cell round trip** —
 `saveCell(api, tracker, rowId, colId, save)` paints `saving → saved (fades 1.5s) | refused (stays)`.
 
+**A sheet** (`editors/sheet.ts`): `longTextEditor({maxLength})` (AG's large-text popup), `sheetClassRules(validation,
+inherited)` → `.nds-cell-is-invalid` (a channel WILL refuse — red tint + corner triangle) · `.nds-cell-is-warned`
+(accepted, a channel MAY reject — amber) · `.nds-cell-is-inherited` (the value is the parent's; edit to pin);
+`selectValidation(options, 'strict' | 'open', required)` — an off-list value on a strict list WARNS, never blocks;
+`lengthValidation(max, required, countBytes)`; `sheetPasteProcessor(columns)` — a pasted block whose first row
+matches ≥2 header names is reordered by name, so the spreadsheet's column order does not matter.
+**A value setter is synchronous and mutates `params.data`**: AG computes `cellValueChanged.newValue` by re-running
+the getter on that object right after the setter returns — a setter that only schedules React state hands the
+server the OLD value (measured 2026-08-29).
+
 ## 10. Row models · state · hosts
 
 SSRM: the verbatim `IServerSideGetRowsRequest` goes to the page's endpoint; the server owns column-id → sort/filter
@@ -152,7 +165,11 @@ maps and reports `unsupported`; block size 100; `maxBlocksInCache` only with a f
 data and modals. State: `useGridState(surface)` — a server default view wins; else the last-used
 `{gridState, page}` from `nds-grid:<surface>:v1`; else the page's default; named views on `SavedView`.
 Hosts: `GridCard` (page, autoHeight, a size container for the toolbar's container queries), `GridPanel`
-(modal/drawer, bounded). Popups parent to `document.body`; `data-ag-theme-mode` is stamped on `<html>`.
+(modal/drawer, bounded), **`GridSheet`** (the one bounded, virtualised PAGE host — a sheet is pasted into and
+tabbed across, nobody pastes into page 3 of 4; fills the viewport below its own measured top, or `height` when
+embedded; default density compact; `<NexusGrid fill {...SHEET_GRID_OPTIONS}>` inside; `GridSheetStatus` below:
+rows · selected · unsaved · refused · last saved). Popups parent to `document.body`; `data-ag-theme-mode` is
+stamped on `<html>`.
 
 ## 11. Themes · accessibility · locale · performance
 

@@ -355,6 +355,24 @@
 .nds-ag-wrap .ag-cell.nds-cell-is-refused { background: var(--nds-grid-refused-bg) !important; box-shadow: inset 0 0 0 1px var(--nds-grid-refused-ring); }
 .nds-cell-select-editor { width: 100%; padding: 0 4px; }
 
+/* sheet validation — a tint AND a corner triangle (never colour alone); the reason is the cell's title */
+.nds-ag-wrap .ag-cell.nds-cell-is-invalid { background: var(--nds-grid-refused-bg) !important; }
+.nds-ag-wrap .ag-cell.nds-cell-is-invalid::after, .nds-ag-wrap .ag-cell.nds-cell-is-warned::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--nds-danger) transparent transparent; }
+.nds-ag-wrap .ag-cell.nds-cell-is-warned { background: var(--nds-grid-pending-bg) !important; }
+.nds-ag-wrap .ag-cell.nds-cell-is-warned::after { border-color: transparent var(--nds-warning) transparent transparent; }
+/* a value inherited from the parent: readable, and quietly not the row's own */
+.nds-ag-wrap .ag-cell.nds-cell-is-inherited { color: var(--nds-grid-muted-fg); background: color-mix(in srgb, var(--nds-info) 6%, transparent); }
+.nds-cell-required { color: var(--nds-danger-text); font-style: italic; font-size: var(--nds-font-size-xs); }
+/* long text: the text ellipsises, the counter keeps its place */
+.nds-cell-longtext { display: inline-flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.nds-cell-longtext-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+.nds-cell-longtext-count { flex: none; font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--nds-grid-muted-fg); }
+.nds-cell-longtext-count-near { color: var(--nds-warning-strong); }
+.nds-cell-longtext-count-over { color: var(--nds-danger-text); font-weight: 700; }
+/* follows-master control */
+.nds-cell-follows { font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); white-space: nowrap; }
+.nds-cell-follows-pinned { color: var(--nds-text-2); font-weight: 600; }
+
 /* overlays */
 .nds-grid-skel { display: flex; flex-direction: column; width: 100%; padding: 0 14px; }
 .nds-grid-skel-row { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--nds-grid-row-rule); }
@@ -393,3 +411,12 @@
 .nds-ag-wrap, .nds-gridcard { --nds-grid-toolbar-slot-h: 36px; }
 @container (max-width: 1320px) { .nds-grid-selbar-lbl { display: none; } }
 @container (max-width: 1100px) { .nds-grid-selbar-note { display: none; } }
+
+/* ══ the SHEET host (`../hosts/GridSheet`) ═══════════════════════════════════════════════════
+   The one page-level grid that is bounded and virtualised: it fills the viewport below its own top
+   edge (measured, stamped as --nds-grid-sheet-top) and the grid inside scrolls both ways. */
+.nds-grid-sheet { display: flex; flex-direction: column; height: calc(100dvh - var(--nds-grid-sheet-top, 0px) - var(--nds-grid-sheet-gutter, 24px)); min-height: 360px; }
+.nds-ag-fill { flex: 1 1 0; min-height: 0; }
+.nds-grid-sheet-status { font-size: 12.5px; color: var(--nds-text-2); }
+.nds-grid-sheet-status-pending { color: var(--nds-warning-strong); }
+.nds-grid-sheet-status-refused { color: var(--nds-danger-text); }

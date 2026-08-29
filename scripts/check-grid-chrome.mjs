@@ -35,7 +35,7 @@ if (!alive) {
 const DENSITIES = ['compact', 'cozy', 'spacious']
 const VIEWPORTS = [{ w: 1440, h: 900, name: 'monitor' }, { w: 1280, h: 962, name: 'laptop' }]
 // Scenarios whose grid pins its own density (the spec still applies at that tier).
-const FIXED = { roundtrip: 'cozy', 'actions-right': 'cozy', detail: 'cozy', drawer: 'cozy', keyboard: 'cozy', big: 'compact' }
+const FIXED = { roundtrip: 'cozy', 'actions-right': 'cozy', detail: 'cozy', drawer: 'cozy', keyboard: 'cozy', big: 'compact', sheet: 'compact' }
 const MEDIA = new Set(['catalogue', 'family', 'editor', 'loading'])
 const EPS = 0.06
 

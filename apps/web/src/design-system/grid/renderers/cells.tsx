@@ -294,6 +294,86 @@ export const ProgramChip = memo(function ProgramChip({ program }: { program: 'SP
   return <IdentityChip label={program} tone="program" tip={PROGRAM_NAMES[program] ?? program} />
 })
 
+/* ── sheet cells: long text, readiness, follows-master, required ─────────────────────────── */
+
+export interface LongTextCellParams {
+  /** The tightest cap across the channels this field ships to — the counter turns amber at 80%, red at the cap. */
+  maxLength?: number
+  /** Bytes, not characters (Amazon counts UTF-8 bytes on some fields). */
+  countBytes?: boolean
+  /** Shown when the cell is empty and the field is required. */
+  required?: boolean
+}
+
+const byteLength = (s: string) => new TextEncoder().encode(s).length
+
+/** A title / bullet / description cell: one line, ellipsis, a length counter against the tightest channel cap. */
+export const LongTextCell = memo(function LongTextCell(p: ICellRendererParams & LongTextCellParams) {
+  const text = p.value == null ? '' : String(p.value)
+  if (!text) return p.required ? <span className="nds-cell-required" role="img" aria-label="Required">⚠ required</span> : <EmptyValue />
+  const n = p.countBytes ? byteLength(text) : text.length
+  const max = p.maxLength
+  const tone = max ? (n >= max ? 'over' : n >= max * 0.8 ? 'near' : 'ok') : 'ok'
+  return (
+    <span className="nds-cell-longtext" title={text}>
+      <span className="nds-cell-longtext-text">{text}</span>
+      {max && <span className={`nds-cell-longtext-count nds-cell-longtext-count-${tone}`}>{n}/{max}</span>}
+    </span>
+  )
+})
+
+export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+
+export interface ReadinessValue {
+  state: ReadinessState
+  /** What is missing or wrong — the tooltip and the count. */
+  issues?: string[]
+  /** A live listing's channel id (ASIN, eBay item id) when `live`. */
+  ref?: string
+}
+
+const READINESS: Record<ReadinessState, { tone: Tone; label: string }> = {
+  ready: { tone: 'success', label: 'Ready' },
+  live: { tone: 'success', label: 'Live' },
+  missing: { tone: 'warning', label: 'Missing' },
+  errors: { tone: 'danger', label: 'Errors' },
+  unlisted: { tone: 'neutral', label: 'Not listed' },
+}
+
+/**
+ * Per channel × market: can this row ship? `value` is a `ReadinessValue` the page computes (from the
+ * publish validator / readiness service). A count on the pill, the reasons on hover.
+ */
+export const ReadinessCell = memo(function ReadinessCell(p: ICellRendererParams) {
+  const v = p.value as ReadinessValue | null | undefined
+  if (!v) return <EmptyValue />
+  const meta = READINESS[v.state]
+  const n = v.issues?.length ?? 0
+  const label = n && v.state !== 'live' && v.state !== 'ready' ? `${meta.label} · ${n}` : v.state === 'live' && v.ref ? `${meta.label} · ${v.ref}` : meta.label
+  const pill = <Pill tone={meta.tone} size="sm">{label}</Pill>
+  return n ? <InfoTip tip={v.issues!.join(' · ')}>{pill}</InfoTip> : pill
+})
+
+export interface FollowsCellParams {
+  /** The label of what is followed (default "master"). */
+  of?: string
+}
+
+/**
+ * The follows-master control beside a per-market value (FFD10): a per-market cell is a PROJECTION,
+ * and writing it while the market still follows master is a silent no-op. This cell says which it
+ * is — `Follows master` or `Pinned` — and the page flips the flag when the value is edited.
+ */
+export const FollowsCell = memo(function FollowsCell(p: ICellRendererParams & FollowsCellParams) {
+  if (p.value == null) return <EmptyValue />
+  const follows = !!p.value
+  return (
+    <span className={follows ? 'nds-cell-follows' : 'nds-cell-follows nds-cell-follows-pinned'} title={follows ? `Follows ${p.of ?? 'master'} — edit the value to pin it` : `Pinned for this market — clear to follow ${p.of ?? 'master'} again`}>
+      {follows ? `Follows ${p.of ?? 'master'}` : 'Pinned'}
+    </span>
+  )
+})
+
 /* ── identity ─────────────────────────────────────────────────────────────────────────────── */
 
 export interface IdentityCellProps {

@@ -83,6 +83,8 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
   /** Container height for the normal (virtualised) layout. Ignored under `domLayout="autoHeight"`,
    *  where the grid grows with its rows and the page scrolls instead. */
   height?: number | string
+  /** Take the host's remaining height (`GridSheet`): a flex child, no fixed height. */
+  fill?: boolean
   className?: string
   /**
    * A tree whose child rows read as children the DS way: a tint and a 3px rail on every row
@@ -118,6 +120,7 @@ export function NexusGrid<T>({
   density: densityProp,
   rows = 'text',
   height = 640,
+  fill = false,
   className,
   flatTree = false,
   columnDialog,
@@ -255,14 +258,14 @@ export function NexusGrid<T>({
     () => ({
       // An auto-height grid sizes itself to its rows and hands scrolling to the page; a fixed
       // wrapper height would clip it. Only the normal layout is bounded.
-      height: agProps.domLayout === 'autoHeight' ? undefined : height,
+      height: agProps.domLayout === 'autoHeight' || fill ? undefined : height,
       width: '100%',
       // The theme's header partition is 30% of the HEADER ROW (`theme/theme.ts`), and a theme
       // param cannot know the row's height — a spanning cell under a column-group strip is taller
       // than the row. The wrapper tells it.
       ['--nds-grid-header-h' as string]: `${headerHeight}px`,
     }),
-    [agProps.domLayout, height, headerHeight],
+    [agProps.domLayout, height, fill, headerHeight],
   )
 
   return (
@@ -271,7 +274,7 @@ export function NexusGrid<T>({
         // `nds-ag-nexus` marks the DS grid: the column-group strip and the DataGrid-parity rules
         // in grid.css key on it, so EVERY NexusGrid — in a card, in a modal, anywhere — reads
         // the same.
-        className={['nds-ag-wrap', 'nds-ag-nexus', flatTree ? 'nds-ag-flat-tree' : '', className].filter(Boolean).join(' ')}
+        className={['nds-ag-wrap', 'nds-ag-nexus', flatTree ? 'nds-ag-flat-tree' : '', fill ? 'nds-ag-fill' : '', className].filter(Boolean).join(' ')}
         style={wrapStyle}
         data-ag-theme-mode={themeMode}
         // Read by grid.css for the per-density knobs the Theming API sets once globally
