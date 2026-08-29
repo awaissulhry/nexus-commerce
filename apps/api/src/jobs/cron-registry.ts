@@ -34,6 +34,7 @@ import { runHeartbeatSweep as runCxHeartbeat } from './cx-heartbeat.job.js'
 import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials-backfill.job.js'
 import { runAdsCredentialAdopt } from './cx3a-ads-credentials.job.js'
 import { runAdsDecisionsReseed } from './cx3b-ads-decisions-reseed.job.js'
+import { runAdsCredentialsArchive, runAdsCredentialsRestore } from './cx3b-ads-credentials-archive.job.js'
 import { runSyncDriftDetection } from './sync-drift-detection.job.js'
 import { runAutoPoCronOnce } from './auto-po-replenishment.job.js'
 import { runYesterdayIngest as runSalesReportIngest } from './sales-report-ingest.job.js'
@@ -177,6 +178,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'cx1-credentials-restore': () => runCredentialsRestore(),
   'cx3a-ads-credentials': () => runAdsCredentialAdopt(),
   'cx3b-ads-decisions-reseed': () => runAdsDecisionsReseed(),
+  'cx3b-ads-credentials-archive': () => runAdsCredentialsArchive(),
+  'cx3b-ads-credentials-restore': () => runAdsCredentialsRestore(),
   'sync-drift-detection': () => runSyncDriftDetection(),
   'auto-po': () => runAutoPoCronOnce(),
   'sales-report-ingest': () => runSalesReportIngest(),

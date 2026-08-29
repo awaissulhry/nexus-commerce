@@ -767,16 +767,29 @@ export async function runV1ExportCycle(args: {
   const resources = args.resources ?? ALL_RESOURCES
   const adProducts = args.adProducts ?? ALL_AD_PRODUCTS
 
-  // Default: every active connection with credentials
+  // Default: every active connection we can actually authenticate as.
+  //
+  // CX.3b — "has credentials" is no longer a property of the ROW. One grant covers
+  // every profile and the credential lives once on the connection, so a per-row
+  // `credentialsEncrypted != null` test would return NOTHING the moment the duplicate
+  // blobs are archived — and this cycle would stop creating export jobs in silence,
+  // which is the quietest way an ingestion pipeline can die.
   const profiles = args.profileIds
     ? await prisma.amazonAdsConnection.findMany({
         where: { profileId: { in: args.profileIds }, isActive: true },
         select: { profileId: true },
       })
-    : await prisma.amazonAdsConnection.findMany({
-        where: { isActive: true, credentialsEncrypted: { not: null } },
-        select: { profileId: true },
-      })
+    : await (async () => {
+        const rows = await prisma.amazonAdsConnection.findMany({
+          where: { isActive: true },
+          select: { profileId: true, credentialsEncrypted: true },
+        })
+        const { adsAccountHasCredential } = await import('./ads-profile-resolver.js')
+        const accountHas = await adsAccountHasCredential()
+        return rows
+          .filter((r) => accountHas || r.credentialsEncrypted != null)
+          .map((r) => ({ profileId: r.profileId }))
+      })()
 
   for (const profile of profiles) {
     for (const resource of resources) {

@@ -30,6 +30,10 @@ export type ConnectionEventType =
   | 'secret_rotated'
   | 'signing_key_created'
   | 'kms_fallback'
+  // CX.3b — duplicate copies of a credential emptied from the legacy rows, and the
+  // inverse. The ledger is archive-never-delete, so both directions leave a record.
+  | 'credentials_archived'
+  | 'credentials_restored'
 
 export interface Actor {
   userId?: string | null

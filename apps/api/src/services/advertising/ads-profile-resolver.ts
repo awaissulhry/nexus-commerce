@@ -267,6 +267,28 @@ export async function recordWriteForMarket(marketplace: string, at: Date = new D
   if (ref?.source === 'scope') await recordOperatorDecision(ref.profileId, { lastWriteAt: at })
 }
 
+/**
+ * Can we authenticate as this Ads account at all?
+ *
+ * "Has credentials" stopped being a property of a ROW at CX.3a: one grant covers every
+ * profile and the credential lives once on the connection. Callers that used to test
+ * `credentialsEncrypted != null` per row ask this instead — otherwise archiving the
+ * duplicate blobs would make them all answer "no" and stop working in silence.
+ */
+export async function adsAccountHasCredential(): Promise<boolean> {
+  try {
+    const connectionId = await adsConnectionId()
+    if (!connectionId) return false
+    const row = await prisma.channelConnection.findUnique({
+      where: { id: connectionId },
+      select: { credentialsEnc: true },
+    })
+    return !!row?.credentialsEnc
+  } catch {
+    return false
+  }
+}
+
 export const __adsResolverTest = {
   sameMarket,
   fromScopes,
