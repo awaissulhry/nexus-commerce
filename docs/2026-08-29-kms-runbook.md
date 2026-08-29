@@ -46,6 +46,22 @@ NEXUS_KMS_KEY_ID=alias/nexus-credentials-production
 
 The service restarts. **New** encryptions are KMS-wrapped from that moment.
 
+## 3b. Prove the key works BEFORE anything real is wrapped in it
+
+```
+POST /api/sync-logs/cron/cx-credentials-preflight/trigger
+```
+
+It wraps and unwraps a throwaway marker — no real credential is touched — and reports one of three things:
+
+- `ok mode=kms keyId=…` — wrap and unwrap both work. Proceed.
+- `WARNING kmsConfigured=true but encryption used mode=env` — **the key is set and is not being used.** A wrong key id or a missing `kms:GenerateDataKey` falls back silently, so this is the state that looks fine and is not.
+- `FAILED … do NOT rotate` — the key cannot round-trip.
+
+**Why this step exists.** `encryptCredentials` degrades safely when KMS cannot *wrap*, but it never checked that what it wrote can be *read back* — and those are different IAM permissions. A policy granting `kms:GenerateDataKey` without `kms:Decrypt` stores envelopes perfectly and can never open them. Since CX.1 nulled the plaintext columns, an unreadable envelope means re-consenting that channel.
+
+`cx-credentials-rotate` runs this check itself and **refuses** if it fails, because it rewrites every channel's credential — a wrap-only key would take out all of them at once. The refusal changes nothing.
+
 ## 4. Migrate what already exists — this is the step that is easy to skip
 
 Existing envelopes stay on the environment key until something rewrites them. `writeCredentials` runs on every token refresh, so eBay and Ads would migrate on their own within an hour or two — but "probably, eventually" is not a security posture, and a connection that has stopped refreshing (revoked, degraded, needs re-auth) would keep its env-keyed envelope indefinitely.

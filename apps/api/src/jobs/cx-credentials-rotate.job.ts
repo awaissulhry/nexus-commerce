@@ -27,8 +27,51 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { reencryptCredentials, credentialsKeyIdOf } from '../lib/crypto.js'
+import { reencryptCredentials, credentialsKeyIdOf, encryptCredentials, decryptCredentials } from '../lib/crypto.js'
 import { recordConnectionEvent, SYSTEM_ACTOR } from '../services/cx/events.service.js'
+
+/**
+ * Prove the configured key can BOTH wrap and unwrap, using a throwaway payload.
+ *
+ * `encryptCredentials` degrades safely when KMS cannot wrap — it falls back to the
+ * environment key and alerts. It does NOT check that what it just wrote can be read
+ * back, and those are different permissions: an IAM policy granting
+ * `kms:GenerateDataKey` but not `kms:Decrypt` is an easy thing to write, and it
+ * produces envelopes that store perfectly and can never be opened. Since CX.1 nulled
+ * the plaintext columns, an unreadable envelope means re-consenting the channel.
+ *
+ * Touches no real credential — it wraps and unwraps a marker object.
+ */
+export async function verifyCurrentKey(): Promise<{ ok: boolean; mode: string; keyId: string; error?: string }> {
+  const marker = { preflight: 'nexus-credential-key-check', at: new Date().toISOString() }
+  try {
+    const { blob, keyId, mode } = await encryptCredentials(marker)
+    const back = (await decryptCredentials(blob)) as typeof marker
+    const ok = back?.preflight === marker.preflight && back?.at === marker.at
+    return ok
+      ? { ok: true, mode, keyId }
+      : { ok: false, mode, keyId, error: 'the decrypted marker did not match what was encrypted' }
+  } catch (err) {
+    return { ok: false, mode: 'unknown', keyId: 'unknown', error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** Report whether the configured credential key can wrap AND unwrap. Changes nothing. */
+export async function runCredentialsPreflight(): Promise<string> {
+  return recordCronRun('cx-credentials-preflight', async () => {
+    const kmsConfigured = !!process.env.NEXUS_KMS_KEY_ID
+    const v = await verifyCurrentKey()
+    if (!v.ok) {
+      logger.error('[cx-preflight] the configured credential key cannot round-trip', { mode: v.mode, error: v.error })
+      return `FAILED kmsConfigured=${kmsConfigured} mode=${v.mode} error=${v.error ?? 'unknown'} — do NOT rotate`
+    }
+    if (kmsConfigured && v.mode !== 'kms') {
+      // Configured but silently falling back is the one state that looks fine and is not.
+      return `WARNING kmsConfigured=true but encryption used mode=${v.mode} — the key is set and NOT being used; check the key id and kms:GenerateDataKey`
+    }
+    return `ok mode=${v.mode} keyId=${v.keyId} kmsConfigured=${kmsConfigured}`
+  })
+}
 
 export async function runCredentialsRotate(): Promise<string> {
   return recordCronRun('cx-credentials-rotate', async () => {
@@ -38,7 +81,18 @@ export async function runCredentialsRotate(): Promise<string> {
     })
     if (rows.length === 0) return 'no stored credentials — nothing to rotate'
 
+    // Refuse to touch anything unless the target key can wrap AND unwrap. This job
+    // re-encrypts EVERY channel's credential, so a key that wraps but cannot unwrap
+    // would take out every connection at once — and the plaintext columns are gone.
+    const preflight = await verifyCurrentKey()
+    if (!preflight.ok) {
+      return `REFUSED — the configured key failed a round-trip (mode=${preflight.mode}): ${preflight.error ?? 'unknown'}. Nothing was changed.`
+    }
+
     const targetIsKms = !!process.env.NEXUS_KMS_KEY_ID
+    if (targetIsKms && preflight.mode !== 'kms') {
+      return `REFUSED — NEXUS_KMS_KEY_ID is set but encryption fell back to mode=${preflight.mode}. Rotating now would rewrite every credential under the ENV key while appearing to enable KMS. Nothing was changed.`
+    }
     let rotated = 0
     let alreadyCurrent = 0
     let failed = 0
