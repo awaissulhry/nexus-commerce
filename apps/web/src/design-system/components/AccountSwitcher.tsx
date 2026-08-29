@@ -120,6 +120,8 @@ export interface AccountSwitcherProps {
 
 const CHANNEL_LABEL: Record<string, string> = {
   AMAZON: 'Amazon',
+  // CX.3a — Amazon Ads is its own channel: one grant, N advertising profiles.
+  AMAZON_ADS: 'Amazon Ads',
   EBAY: 'eBay',
   SHOPIFY: 'Shopify',
   WOOCOMMERCE: 'WooCommerce',

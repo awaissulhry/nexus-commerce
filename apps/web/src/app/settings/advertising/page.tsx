@@ -181,7 +181,7 @@ export default function AdvertisingSettingsPage() {
           </div>
           <p className="text-sm text-slate-500">
             Connect your Amazon Advertising account to sync campaigns, pull metrics, and enable
-            automated bid management. Credentials are encrypted with AES-256-GCM before storage.
+            automated bid management. Profiles are connected through Amazon’s own sign-in on Settings → Channels; credentials live on the connection, never on this page.
           </p>
         </div>
         <div className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs">

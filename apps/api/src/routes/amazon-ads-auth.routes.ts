@@ -6,15 +6,24 @@
  *                                       discovers profiles, saves connections
  *
  * After a successful callback all active AmazonAdsConnection rows are
- * created/updated with the encrypted refresh token. The operator then
- * goes to Settings → Advertising to test + enable live mode.
+ * created/updated with the encrypted refresh token.
+ *
+ * CX.3a: the same callback then DUAL-WRITES the grant into the connection core
+ * (one `ChannelConnection` + one `ConnectionScope` per discovered profile), so
+ * a reconnect updates both stores. This route keeps working because the Ads
+ * console's allowed return URL points here and only the Owner can change it —
+ * the dual-write is what lets the core catch up without waiting on that.
  */
 
 import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyPluginAsync } from 'fastify'
+import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { encryptSecret } from '../lib/crypto.js'
 import { logger } from '../utils/logger.js'
+import { normalizeMarketplaceCode } from '../utils/marketplace-code.js'
+import type { ConnectionIdentity } from '../services/cx/catalog.js'
+import type { GrantResult } from '../services/cx/token.service.js'
 
 // In-memory PKCE store — keyed by random state param, expires in 15 min.
 // Acceptable for a single-operator setup flow (connect→callback in one session).
@@ -61,17 +70,141 @@ interface AdsProfile {
   }
 }
 
-// Marketplace string ID → our short marketplace code
-const MARKETPLACE_COUNTRY: Record<string, string> = {
+// CX.3a — this file used to carry its own marketplace map and two of its
+// entries were WRONG: `A1RKKUPIHCS9HS` was mapped to 'DE' when it is ES, and
+// `APJ6JRA9NG5V4` to 'ES' when it is IT. The canonical map in
+// `utils/marketplace-code.ts` is the single source the rest of the codebase
+// already uses, so the local one is deleted and this resolves through it.
+//
+// One id survives locally because the canonical map does not have it:
+const MARKETPLACE_ID_NOT_IN_CANONICAL_MAP: Record<string, string> = {
   A1PA7PVP2ZEA0: 'IT',
-  A1RKKUPIHCS9HS: 'DE',
-  A13V1IB3VIYZZH: 'FR',
-  APJ6JRA9NG5V4: 'ES',
-  A1F83G8C2ARO7P: 'UK',
-  ATVPDKIKX0DER: 'US',
-  A2EUQ1WTGCTBG2: 'CA',
-  A1VC38T7YXB528: 'JP',
-  A39IBJ37TRP1C6: 'AU',
+}
+
+/** SP-API marketplace id → 2-letter code, 'EU' when nothing can name it. */
+function marketplaceCountry(marketplaceStringId: string): string {
+  const canonical = normalizeMarketplaceCode(marketplaceStringId, '')
+  if (canonical) return canonical
+  return MARKETPLACE_ID_NOT_IN_CANONICAL_MAP[marketplaceStringId] ?? 'EU'
+}
+
+// The two scopes the live consent URL asks for. Recorded on the grant as
+// `grantedScopes` so the Channels page compares like with like.
+const ADS_SCOPES = ['profile', 'advertising::campaign_management']
+
+/** What one discovered profile becomes in the core: a `ConnectionScope`. */
+interface AdsScopeInput {
+  externalId: string
+  label: string
+  region: string
+  isActive: boolean
+  metadata: Record<string, unknown>
+}
+
+/**
+ * The account this grant belongs to, as the profiles report it.
+ *
+ * One Ads account fans out over N marketplace profiles, and every profile
+ * carries the same `accountInfo.id` for that account — so the most common id
+ * IS the account. Ties and empties resolve to null rather than to a guess:
+ * `externalAccountId` is load-bearing for the active-account unique index, so
+ * an invented value is worse than no value.
+ */
+function dominantIdentity(profiles: AdsProfile[]): ConnectionIdentity | null {
+  const counts = new Map<string, { count: number; name: string }>()
+  for (const p of profiles) {
+    const id = p.accountInfo?.id
+    if (!id) continue
+    const hit = counts.get(id)
+    if (hit) hit.count++
+    else counts.set(id, { count: 1, name: p.accountInfo?.name ?? id })
+  }
+  let bestId: string | null = null
+  let best: { count: number; name: string } | null = null
+  for (const [id, v] of counts) {
+    if (!best || v.count > best.count) {
+      bestId = id
+      best = v
+    }
+  }
+  if (!bestId || !best) return null
+  return { userId: bestId, username: best.name, extra: { distinctAccountIds: counts.size } }
+}
+
+/**
+ * CX.3a — write the same grant into the connection core.
+ *
+ * One `ChannelConnection` for AMAZON_ADS plus one `ConnectionScope` per
+ * discovered profile: a grant that covers N profiles is ONE grant, not nine
+ * connections (which is exactly how nine copies of one client secret happened).
+ * The credential itself goes through `storeGrant`, so it lands as an envelope
+ * and no plaintext column is written.
+ *
+ * Called best-effort by the callback: the operator's connect has already
+ * succeeded by this point, and the legacy rows remain the engine's fallback.
+ */
+async function dualWriteGrantToCore(input: {
+  accessToken: string
+  refreshToken: string
+  expiresInSec: number
+  identity: ConnectionIdentity | null
+  scopes: AdsScopeInput[]
+}): Promise<{ connectionId: string; scopeCount: number; event: 'grant' | 'reconsent' }> {
+  // Registers the catalogue entries `storeGrant` reads. Idempotent — src/index.ts
+  // already imports it at boot; this makes the route independent of that ordering.
+  await import('../services/cx/connectors/index.js')
+  const { storeGrant } = await import('../services/cx/token.service.js')
+
+  const existing = await prisma.channelConnection.findFirst({
+    where: { channelType: 'AMAZON_ADS' },
+    orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
+    select: { id: true, credentialsEnc: true },
+  })
+  const connectionId =
+    existing?.id ??
+    (
+      await prisma.channelConnection.create({
+        data: {
+          channelType: 'AMAZON_ADS',
+          managedBy: 'oauth',
+          // storeGrant flips isActive once the credentials are actually stored,
+          // and authStatus is left 'unknown' for the heartbeat to decide — a
+          // connect never gets to claim its own health.
+          isActive: false,
+          authStatus: 'unknown',
+          region: 'EU',
+          isPrimary: true,
+        },
+        select: { id: true },
+      })
+    ).id
+
+  const event: 'grant' | 'reconsent' = existing?.credentialsEnc ? 'reconsent' : 'grant'
+  const grant: GrantResult = {
+    accessToken: input.accessToken,
+    refreshToken: input.refreshToken,
+    expiresInSec: input.expiresInSec,
+    grantedScopes: ADS_SCOPES,
+    identity: input.identity,
+    region: 'EU',
+  }
+  await storeGrant(connectionId, grant, { kind: 'operator', userId: null }, event)
+
+  for (const scope of input.scopes) {
+    const data = {
+      label: scope.label,
+      region: scope.region,
+      isActive: scope.isActive,
+      metadata: scope.metadata as Prisma.InputJsonValue,
+    }
+    await prisma.connectionScope.upsert({
+      where: { connectionId_kind_externalId: { connectionId, kind: 'profile', externalId: scope.externalId } },
+      create: { connectionId, kind: 'profile', externalId: scope.externalId, ...data },
+      update: data,
+    })
+  }
+
+  return { connectionId, scopeCount: input.scopes.length, event }
 }
 
 const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
@@ -97,7 +230,7 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
-      scope: 'profile advertising::campaign_management',
+      scope: ADS_SCOPES.join(' '),
       response_type: 'code',
       redirect_uri: REDIRECT_URI,
       state,
@@ -192,6 +325,8 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Save each profile as an AmazonAdsConnection
     const saved: Array<{ profileId: string; marketplace: string; country: string }> = []
+    // …and, in the same pass, the shape the connection core wants.
+    const coreScopes: AdsScopeInput[] = []
     const credentialsEncrypted = encryptSecret(
       JSON.stringify({
         clientId: CLIENT_ID,
@@ -212,10 +347,10 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     for (const profile of profiles) {
       const profileId = String(profile.profileId)
       const marketplaceStringId = profile.accountInfo?.marketplaceStringId ?? ''
-      const country = profile.countryCode ?? MARKETPLACE_COUNTRY[marketplaceStringId] ?? 'EU'
+      const country = profile.countryCode ?? marketplaceCountry(marketplaceStringId)
       const accountLabel = profile.accountInfo?.name ?? `Account ${profileId}`
 
-      await prisma.amazonAdsConnection.upsert({
+      const row = await prisma.amazonAdsConnection.upsert({
         where: { profileId },
         create: {
           profileId,
@@ -244,11 +379,59 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       saved.push({ profileId, marketplace: marketplaceStringId, country })
+      coreScopes.push({
+        externalId: profileId,
+        label: `${accountLabel} · ${country}`,
+        region: row.region ?? 'EU',
+        // A sandbox profile is a real profile we deliberately do not act on, so
+        // it is recorded and marked inactive rather than dropped.
+        isActive: row.mode === 'production',
+        metadata: {
+          marketplace: country,
+          marketplaceStringId,
+          mode: row.mode,
+          writesEnabledAt: row.writesEnabledAt?.toISOString() ?? null,
+          lastWriteAt: row.lastWriteAt?.toISOString() ?? null,
+          legacyRowId: row.id,
+        },
+      })
       logger.info('[amazon-ads-auth] saved connection', { profileId, country, accountLabel })
     }
 
-    const accessTokenPrefix = tokens.access_token?.slice(0, 10) ?? '?'
-    const isJwt = tokens.access_token?.startsWith('eyJ')
+    // ── CX.3a — dual-write the same grant into the connection core ────────
+    // Best effort ON PURPOSE: the operator's connect has already succeeded and
+    // the engine reads the rows above, so a core write that fails must be a log
+    // line, never a failed connect. The one-shot adopt job and the next
+    // reconnect both close the gap.
+    try {
+      const core = await dualWriteGrantToCore({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresInSec: tokens.expires_in,
+        identity: dominantIdentity(profiles),
+        scopes: coreScopes,
+      })
+      logger.info('[amazon-ads-auth] grant dual-written to the connection core', {
+        connectionId: core.connectionId,
+        scopes: core.scopeCount,
+        event: core.event,
+      })
+    } catch (err) {
+      logger.error('[amazon-ads-auth] connection-core dual-write failed; legacy rows are saved', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+
+    // CX.3a — this page used to render the first 10 characters of the access
+    // token. No token material reaches a response body: the format check below
+    // needs the token's SHAPE, and none of its characters.
+    const isJwt = tokens.access_token?.startsWith('eyJ') === true
+
+    // CX.3a — the old link pointed at https://nexus-commerce-web.up.railway.app,
+    // a host that no longer resolves. Amazon Ads is an account in Settings →
+    // Channels now, so that is where the operator lands.
+    const webBase = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/+$/, '')
+    const channelsUrl = `${webBase}/settings/channels?tab=accounts`
 
     // Return a simple success page the operator can read in the browser
     const html = `<!DOCTYPE html>
@@ -261,7 +444,7 @@ code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px}</style
 <body>
 <h2 class="ok">✓ Amazon Advertising API Connected</h2>
 <p class="${isJwt ? 'ok' : 'warn'}">
-  Token format: <code>${accessTokenPrefix}...</code> — ${isJwt ? '✓ JWT (will work with SP v3 campaign endpoints)' : '⚠ Legacy Atza| opaque token (SP v3 campaign endpoints may reject this)'}
+  Token format: ${isJwt ? '✓ JWT (works with SP v3 campaign endpoints)' : '⚠ Legacy Atza| opaque token (SP v3 campaign endpoints may reject it)'}
 </p>
 <p>${saved.length} profile(s) saved and encrypted.</p>
 ${saved.map(p => `<div class="card">
@@ -271,8 +454,7 @@ ${saved.map(p => `<div class="card">
 <hr>
 <p><strong>Next steps:</strong></p>
 <ol>
-  <li>Go to <a href="https://nexus-commerce-web.up.railway.app/settings/advertising">Settings → Advertising</a></li>
-  <li>Click <strong>Test</strong> to verify the connection</li>
+  <li>Go to <a href="${channelsUrl}">Settings → Channels → Accounts</a> and check the Amazon Ads row</li>
   <li>Set <code>NEXUS_AMAZON_ADS_MODE=live</code> in Railway env vars</li>
   <li>Set <code>NEXUS_ENABLE_AMAZON_ADS_CRON=1</code> in Railway env vars</li>
   <li>Click <strong>Enable writes</strong> when ready for bid automation</li>

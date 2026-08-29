@@ -20,8 +20,10 @@
  * end-to-end without Amazon credentials.
  *
  * Live-mode auth flow (when wired):
- *   1. Resolve AmazonAdsConnection.credentialsEncrypted → { clientId,
- *      clientSecret, refreshToken } via apps/api/src/lib/crypto.ts
+ *   1. Resolve { clientId, clientSecret, refreshToken } — since CX.3a the
+ *      connection core answers first (ChannelApp + the AMAZON_ADS
+ *      ChannelConnection envelope) and AmazonAdsConnection.credentialsEncrypted
+ *      is the fallback, behind NEXUS_CX_ADS_CREDENTIALS. See resolveCredentials.
  *   2. POST to https://api.amazon.com/auth/o2/token with the refresh
  *      token to get a 1-hour access_token
  *   3. Attach Authorization: Bearer + Amazon-Advertising-API-ClientId
@@ -382,7 +384,82 @@ async function fetchWithRetry(
   }
 }
 
+// ── CX.3a — where the Ads credential comes from ───────────────────────────────
+// Measured on prod 2026-08-29: nine `AmazonAdsConnection` rows carried ONE
+// identical `{clientId, clientSecret, refreshToken}` blob — the same client
+// secret encrypted nine times, last verified 2026-05-18. The connection core
+// holds it once instead: the client id/secret on `ChannelApp` (ours), the
+// refresh token in the `AMAZON_ADS` `ChannelConnection` envelope (the
+// operator's grant). Which store answered is logged once per process, never
+// per call, and never with any credential material in it.
+type AdsCredentialSource = 'core' | 'row'
+const _credentialSourceLogged = new Set<AdsCredentialSource>()
+
+/** Once per process per source — a per-call log would be 9k lines an hour. */
+function logCredentialSource(source: AdsCredentialSource, detail: Record<string, unknown> = {}): void {
+  if (_credentialSourceLogged.has(source)) return
+  _credentialSourceLogged.add(source)
+  logger.info('[ADS-LIVE] credential source', { source, ...detail })
+}
+
+/**
+ * The connection core, or null when it cannot answer completely.
+ *
+ * Null — never a throw and never a half-answer: a missing ChannelApp secret, an
+ * envelope without a refresh token or no connection row at all all mean "the
+ * core is not ready", and the caller falls back to the legacy row.
+ */
+async function credentialsFromCore(): Promise<AdsCredentials | null> {
+  const { default: prisma } = await import('../../db.js')
+  const conn = await prisma.channelConnection.findFirst({
+    where: { channelType: 'AMAZON_ADS', isActive: true },
+    select: { id: true, credentialsEnc: true },
+  })
+  if (!conn?.credentialsEnc) return null
+
+  // The token service is the only module that decrypts a connection envelope;
+  // `readRefreshToken` is its narrow accessor for exactly this caller (CX.3b
+  // replaces it with the leased refresh).
+  const { readRefreshToken } = await import('../cx/token.service.js')
+  const refreshToken = await readRefreshToken(conn.id)
+  if (!refreshToken) return null
+
+  const { getChannelApp } = await import('../cx/apps.service.js')
+  const app = await getChannelApp('AMAZON_ADS', 'production')
+  if (!app.clientId || !app.clientSecret) return null
+
+  return { clientId: app.clientId, clientSecret: app.clientSecret, refreshToken }
+}
+
+/**
+ * CX.3a — the one function on the money path that changes.
+ *
+ * Nine `AmazonAdsConnection` rows carried one identical credential blob
+ * (measured on prod, 2026-08-29). The connection core now holds it once, so
+ * this asks the core first and falls back to the row it always read. The row
+ * blobs are deliberately left in place: `NEXUS_CX_ADS_CREDENTIALS=0` is the
+ * whole revert, and it restores byte-for-byte today's behaviour.
+ *
+ * Nothing else about the live path moves — `getLwaToken` keeps its own cache
+ * and in-flight dedupe, and the deliberate bypass in `ads-debug-probe.service`
+ * is left alone so a debug probe never shares production's token cache.
+ */
 async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
+  if (process.env.NEXUS_CX_ADS_CREDENTIALS !== '0') {
+    try {
+      const fromCore = await credentialsFromCore()
+      if (fromCore) {
+        logCredentialSource('core')
+        return fromCore
+      }
+    } catch (err) {
+      // A core lookup that fails must never take the bid engine down with it.
+      logger.warn('[ADS-LIVE] connection-core credential lookup failed; using the legacy row', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
   const { default: prisma } = await import('../../db.js')
   const { decryptSecret } = await import('../../lib/crypto.js')
   // profileId='n/a' means profile-agnostic call (e.g. GET /v2/profiles).
@@ -394,7 +471,14 @@ async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
   if (!conn?.credentialsEncrypted) {
     throw new Error(`[ADS-LIVE] no credentials for profileId=${profileId}`)
   }
+  logCredentialSource('row', { flag: process.env.NEXUS_CX_ADS_CREDENTIALS ?? null })
   return JSON.parse(decryptSecret(conn.credentialsEncrypted)) as AdsCredentials
+}
+
+/** Narrow seam for ads-credentials-source.vitest.test.ts. Never exported to callers. */
+export const __adsCredentialsTest = {
+  resolveCredentials,
+  resetSourceLog: () => _credentialSourceLogged.clear(),
 }
 
 export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {

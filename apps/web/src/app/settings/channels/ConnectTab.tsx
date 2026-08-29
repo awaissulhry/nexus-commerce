@@ -11,7 +11,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Card, Banner, Listbox } from '@/design-system/components'
 import { Button, Tag, Pill, Skeleton } from '@/design-system/primitives'
-import { relativeTime, type AccountRow, type AdsConnection, type CatalogueChannel } from './channels-data'
+import { type AccountRow, type AdsConnection, type CatalogueChannel } from './channels-data'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY']
@@ -63,19 +63,17 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
     )
   }
 
-  // AMAZON_ADS has its own card below (it carries the profiles and the live LWA
-  // sign-in), so the catalogue entry must not ALSO render: on prod it produced two
-  // Amazon Ads cards that disagreed — "Not yet" beside "9 active".
-  const adsSpec = catalogue.find((c) => c.key === 'AMAZON_ADS') ?? null
-  const sorted = catalogue
-    .filter((c) => c.key !== 'AMAZON_ADS')
-    .sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
+  // CX.3a — Amazon Ads is a catalogue channel like the rest now; its profiles render
+  // inside its own card rather than in a second card that disagreed with the first.
+  const sorted = [...catalogue].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
   const connectedFor = (channelType: string) => accounts.filter((a) => a.channel === channelType)
 
   return (
     <div style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
       <div style={{ display: 'grid', gap: 'var(--nds-space-12)', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
         {sorted.map((c) => {
+          const isAds = c.key === 'AMAZON_ADS'
+          const adsItems = isAds ? (ads?.items ?? []) : []
           const have = connectedFor(c.channelType)
           const chosenRegion = region[c.key] ?? c.defaultRegion ?? c.regions[0]?.key ?? null
           const held = !c.available
@@ -139,6 +137,16 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 )}
               </dl>
 
+              {isAds && adsItems.length > 0 && (
+                <div className="nds-connect-chips">
+                  {adsItems.map((i) => (
+                    <Tag key={i.id} tone={i.tokenExpiryStatus === 'expired' ? 'danger' : i.mode === 'live' || i.mode === 'production' ? 'success' : 'neutral'}>
+                      {i.accountLabel ?? 'Profile'} · {i.marketplace} · {i.mode}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+
               {c.regions.length > 1 && (
                 <div className="nds-connect-region">
                   <span id={`region-${c.key}`}>Region</span>
@@ -165,7 +173,14 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                       setReasonShown((s) => (s === c.key ? null : c.key))
                       return
                     }
-                    onStart(c.key, { intent: 'connect', region: chosenRegion })
+                    onStart(c.key, {
+                      intent: 'connect',
+                      region: chosenRegion,
+                      // Amazon Ads signs in through its own live route until the Ads
+                      // console's allowed return URL is re-pointed at the shared
+                      // callback — that is a setting only the Owner can change.
+                      url: isAds ? `${getBackendUrl()}/api/amazon-ads/auth/connect` : undefined,
+                    })
                   }}
                 >
                   {busy
@@ -191,84 +206,6 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
           )
         })}
 
-        {/* Amazon Ads — a separate connection universe until CX.3 merges it. Read from
-            its own table, connected through its own (already live) LWA route. */}
-        <Card
-          header="Amazon Ads"
-          description={
-            ads
-              ? ads.items.length > 0
-                ? `${ads.items.length} advertising profile${ads.items.length === 1 ? '' : 's'} · server mode ${ads.adsMode}`
-                : 'No advertising profile connected yet.'
-              : 'Loading advertising profiles…'
-          }
-          headerAction={
-            ads && ads.items.some((i) => i.isActive) ? (
-              <Pill tone="success" dot size="sm">
-                {ads.items.filter((i) => i.isActive).length} active
-              </Pill>
-            ) : (
-              <Pill tone="neutral" size="sm">
-                Not connected
-              </Pill>
-            )
-          }
-        >
-          {adsSpec && (
-            <dl className="nds-connect-facts">
-              <div>
-                <dt>Signs in with</dt>
-                <dd>{adsSpec.authMode.replace(/_/g, ' ')}</dd>
-              </div>
-              <div>
-                <dt>Permissions</dt>
-                <dd>
-                  {adsSpec.requiredScopes.length} requested
-                  {adsSpec.reviewGatedScopes.length > 0 ? ` · ${adsSpec.reviewGatedScopes.length} need channel review` : ''}
-                </dd>
-              </div>
-              {lifetimeLine(adsSpec) && (
-                <div>
-                  <dt>Renewal</dt>
-                  <dd>{lifetimeLine(adsSpec)}</dd>
-                </div>
-              )}
-              {adsSpec.apiVersion && (
-                <div>
-                  <dt>API version</dt>
-                  <dd>{adsSpec.apiVersion}</dd>
-                </div>
-              )}
-            </dl>
-          )}
-          {ads && ads.items.length > 0 && (
-            <div className="nds-connect-chips">
-              {ads.items.map((i) => (
-                <Tag key={i.id} tone={i.tokenExpiryStatus === 'expired' ? 'danger' : i.mode === 'live' ? 'success' : 'neutral'}>
-                  {i.accountLabel ?? 'Profile'} · {i.marketplace} · {i.mode}
-                  {i.tokenExpiresAt ? ` · token ${relativeTime(i.tokenExpiresAt)}` : ''}
-                </Tag>
-              ))}
-            </div>
-          )}
-          <p className="nds-connect-note">
-            Ads profiles keep their own health for now (mode, writes, allowlists live on{' '}
-            <Link href="/settings/advertising">Advertising</Link>). CX.3 folds them into Accounts.
-          </p>
-          <div className="nds-connect-actions">
-            <Button
-              variant="primary"
-              size="sm"
-              aria-disabled={connecting === 'AMAZON_ADS' || undefined}
-              onClick={() => {
-                if (connecting === 'AMAZON_ADS') return
-                onStart('AMAZON_ADS', { intent: 'connect', url: `${getBackendUrl()}/api/amazon-ads/auth/connect` })
-              }}
-            >
-              {connecting === 'AMAZON_ADS' ? 'Opening sign-in…' : 'Connect with Amazon Ads'}
-            </Button>
-          </div>
-        </Card>
       </div>
 
       <Card header="About channel connections">

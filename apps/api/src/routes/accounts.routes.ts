@@ -44,12 +44,14 @@ import {
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 import { ebayAuthService } from "../services/ebay-auth.service.js";
 
-type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
+type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
 /** Xavia's operational scope (`project_active_channels`): Amazon + eBay + Shopify. */
 const ACTIVE_CHANNELS: Channel[] = ["AMAZON", "EBAY", "SHOPIFY"];
 const CHANNEL_ORDER: Record<string, number> = {
   AMAZON: 0,
+  // CX.3a — next to Amazon, because that is where the operator looks for it.
+  AMAZON_ADS: 0.5,
   EBAY: 1,
   SHOPIFY: 2,
   WOOCOMMERCE: 3,
@@ -259,7 +261,11 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       // CX.1 — the markets / marketplaces each grant reaches, one query for the page.
       const scopeRows = rows.length
         ? await prisma.connectionScope.findMany({
-            where: { connectionId: { in: rows.map((r) => r.id) }, isActive: true },
+            // EVERY scope, not just the live ones: an account that reaches nine Ads
+            // profiles of which four are production reaches nine. Filtering to the
+            // live ones under-reports the account's own reach; the label carries the
+            // distinction ("· sandbox").
+            where: { connectionId: { in: rows.map((r) => r.id) } },
             orderBy: [{ kind: "asc" }, { externalId: "asc" }],
             select: { connectionId: true, kind: true, externalId: true, label: true },
           })

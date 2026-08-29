@@ -418,7 +418,7 @@ export function AccountsPanel({
                       ) : permissions ? (
                         <span>{permissions.text}</span>
                       ) : null}
-                      <Stamp label="Refreshed" iso={a.lastRefreshAt} />
+                      <Stamp label="Refreshed" iso={a.lastRefreshAt} kind={a.managedBy === 'env' ? 'na' : 'tracked'} />
                       <Stamp label="Heartbeat" iso={a.lastHeartbeatAt} />
                       <Stamp label="Inbound" iso={a.lastInboundAt} kind="untracked" />
                       <Stamp label="Outbound" iso={a.lastOutboundAt} kind="untracked" />

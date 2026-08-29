@@ -156,6 +156,25 @@ async function writeCredentials(connectionId: string, creds: Credentials, extraD
   })
 }
 
+/**
+ * CX.3a — the ONE narrow public read of a stored credential, and deliberately
+ * only one field of it.
+ *
+ * `readCredentials` stays private: nothing outside this module may hold a
+ * connection's access token. The Amazon Ads client is not on the leased refresh
+ * yet — it runs its own LWA exchange behind its own in-process token cache
+ * (`services/advertising/ads-api-client.ts`), and CX.3b is what moves it onto
+ * `getAccessToken`. Until then it needs exactly one field to read the core
+ * instead of the nine duplicated `AmazonAdsConnection` credential blobs, so this
+ * returns the refresh token and nothing else. Delete it when CX.3b lands.
+ */
+export async function readRefreshToken(connectionId: string): Promise<string | null> {
+  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
+  if (!row) return null
+  const creds = await readCredentials(row)
+  return creds?.refreshToken ?? null
+}
+
 function specFor(row: Pick<ConnRow, 'channelType'>) {
   const key = channelKeyOf(row.channelType)
   if (!key) throw new Error(`No catalogue entry for channelType ${row.channelType}`)

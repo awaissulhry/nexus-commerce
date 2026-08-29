@@ -32,6 +32,7 @@ import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
 import { runHeartbeatSweep as runCxHeartbeat } from './cx-heartbeat.job.js'
 import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials-backfill.job.js'
+import { runAdsCredentialAdopt } from './cx3a-ads-credentials.job.js'
 import { runSyncDriftDetection } from './sync-drift-detection.job.js'
 import { runAutoPoCronOnce } from './auto-po-replenishment.job.js'
 import { runYesterdayIngest as runSalesReportIngest } from './sales-report-ingest.job.js'
@@ -173,6 +174,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'cx-heartbeat': () => runCxHeartbeat(),
   'cx1-credentials-backfill': () => runCredentialsBackfill(),
   'cx1-credentials-restore': () => runCredentialsRestore(),
+  'cx3a-ads-credentials': () => runAdsCredentialAdopt(),
   'sync-drift-detection': () => runSyncDriftDetection(),
   'auto-po': () => runAutoPoCronOnce(),
   'sales-report-ingest': () => runSalesReportIngest(),

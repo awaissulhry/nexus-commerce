@@ -103,7 +103,7 @@ export function relativeTime(iso: string | null | undefined, now: number = Date.
  * `untracked` — `lastInboundAt` / `lastOutboundAt`, which have NO writer until CX.4; `null`
  * reads "not tracked yet" because nobody is counting, not because nothing happened.
  */
-export type StampKind = 'tracked' | 'untracked'
+export type StampKind = 'tracked' | 'untracked' | 'na'
 
 export const NOT_TRACKED_TEXT = 'not tracked yet'
 export const NOT_TRACKED_REASON = 'No receiver or sender writes this column until CX.4'
@@ -114,13 +114,18 @@ export function timestampText(
   now: number = Date.now(),
 ): string {
   if (!iso && kind === 'untracked') return NOT_TRACKED_TEXT
+  // An env-managed account holds no refresh token of ours: the environment supplies
+  // it and refreshes it on its own. "never" would read as a failure to refresh.
+  if (!iso && kind === 'na') return 'not applicable'
   return relativeTime(iso, now)
 }
 
 /** The `title` behind a stamp: the absolute instant, or the reason there is none. */
 export function timestampTitle(label: string, iso: string | null | undefined, kind: StampKind = 'tracked'): string {
   if (iso) return iso
-  return kind === 'untracked' ? NOT_TRACKED_REASON : `${label}: never`
+  if (kind === 'untracked') return NOT_TRACKED_REASON
+  if (kind === 'na') return `${label}: not applicable — the environment supplies and refreshes this token`
+  return `${label}: never`
 }
 
 /** "Last sync 3 h ago (ok)" — the old health dot encoded `lastSyncStatus`; the text keeps it. */

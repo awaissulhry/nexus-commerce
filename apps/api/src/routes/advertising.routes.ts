@@ -12263,43 +12263,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // ── POST /advertising/connections — create or update credentials ─────
-  fastify.post('/advertising/connections', async (request, reply) => {
-    const {
-      profileId, marketplace, region, accountLabel,
-      clientId, clientSecret, refreshToken,
-    } = request.body as {
-      profileId: string; marketplace: string; region?: string; accountLabel?: string
-      clientId: string; clientSecret: string; refreshToken: string
-    }
-    if (!profileId || !clientId || !clientSecret || !refreshToken || !marketplace) {
-      return reply.code(400).send({ error: 'missing_required_fields' })
-    }
-    const { encryptSecret } = await import('../lib/crypto.js')
-    const credentialsEncrypted = encryptSecret(
-      JSON.stringify({ clientId, clientSecret, refreshToken }),
-    )
-    const conn = await prisma.amazonAdsConnection.upsert({
-      where: { profileId },
-      create: {
-        profileId,
-        marketplace,
-        region: region ?? 'EU',
-        accountLabel: accountLabel ?? null,
-        credentialsEncrypted,
-        mode: 'sandbox',
-        isActive: true,
-      },
-      update: {
-        marketplace,
-        region: region ?? 'EU',
-        accountLabel: accountLabel ?? null,
-        credentialsEncrypted,
-        updatedAt: new Date(),
-      },
-      select: { id: true, profileId: true, marketplace: true, mode: true, isActive: true },
+  // ── POST /advertising/connections — RETIRED (CX.3a) ──────────────────
+  //
+  // It took `{ profileId, clientId, clientSecret, refreshToken }` over JSON and
+  // encrypted them into an AmazonAdsConnection row. The web credential form that
+  // called it was removed in CX.2, and it has had no caller since. A route that
+  // accepts a client secret in a request body and has nobody calling it is a
+  // liability, not a feature.
+  //
+  // It stays REGISTERED so the answer is 410 Gone — an explicit "this was removed
+  // and here is what replaced it" — rather than a 404 that reads like a typo.
+  // Credentials now arrive only through the LWA sign-in.
+  fastify.post('/advertising/connections', async (_request, reply) => {
+    return reply.code(410).send({
+      success: false,
+      code: 'ADS_CREDENTIAL_PASTE_RETIRED',
+      error:
+        'Pasting Amazon Ads credentials is retired. Connect the account by signing in with Amazon: Settings → Channels → Connect.',
     })
-    return { ok: true, connection: conn }
   })
 
   // ── DELETE /advertising/connections/:profileId ───────────────────────

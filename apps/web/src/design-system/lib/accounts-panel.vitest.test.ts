@@ -216,3 +216,12 @@ describe('runHeartbeat — the Test action', () => {
     expect(out).toEqual({ ok: false, text: 'Failed · network · ECONNREFUSED' })
   })
 })
+
+describe('timestampText — not applicable', () => {
+  it('an env-managed account has no refresh token of ours: "never" would read as a failure', () => {
+    expect(timestampText(null, 'na')).toBe('not applicable')
+    expect(timestampTitle('Refreshed', null, 'na')).toContain('the environment supplies')
+    // A real timestamp always wins over the kind.
+    expect(timestampText('2026-08-29T10:00:00Z', 'na', Date.parse('2026-08-29T10:01:00Z'))).toBe('1 min ago')
+  })
+})
