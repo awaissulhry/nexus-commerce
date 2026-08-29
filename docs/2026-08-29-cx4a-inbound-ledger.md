@@ -69,11 +69,33 @@ The first live rejection came back `public_key_unavailable` — and that reason 
 
 Split into `app_token_unavailable`, `public_key_forbidden` and `public_key_not_found`, the first two logged at error level. This also makes the prod probe self-answering: a forged key id now reports `public_key_not_found` **only if** our application credential works, so one rejected row settles a question nobody could otherwise answer without eBay sending something.
 
+## 4b. Verified ON PROD after deploy
+
+| Check | Result |
+|---|---|
+| Forged notification | `HTTP 412` (was `204` — "accepted") |
+| Ownership challenge still answers | `HTTP 200` with a hash, unchanged |
+| Ledger rows for eBay | **7** — the first eBay inbound records this system has ever held, all `status=failed · signatureOk=false · verifiedBy=ebay_ecdsa`, each with a reason |
+| Rejected row identity | `sha256:ab215d4c…` — **not** the `notificationId` the unverified payload claimed |
+| Amazon rows | 5,158, all `status=done · verifiedBy=sqs_iam · signatureOk=null` — unchanged |
+| SQS poller | `SUCCESS` every minute, "no messages"; no failed cron in 2 h |
+
+**And the credential question answered itself.** A forged key id now returns `public_key_not_found` — which is only reachable *after* eBay accepts our application token. So the client-credentials exchange works, eBay honours it on the notification key endpoint, and the whole chain from header parse → key fetch → verdict runs correctly in production. That was unobservable an hour ago.
+
+The 7 eBay rows are deliberate probes and say so (`claimed id cx4a-*`). They are left in place: they are genuine records of rejected requests, and decision 9 is archive, never delete.
+
+**A 15.2 h quiet spell on Amazon is ordinary, not a regression** — the last 30 days contain gaps of 17.6 h and 16.7 h, and the gap began before this shipped.
+
 ## 5. What is NOT verified, and cannot be yet
 
 **No eBay notification has been verified end to end, because nothing is subscribed.** No code creates a Notification API destination or topic subscription (audit: `grep commerce/notification` → 0). Until CX.4b creates one, eBay sends nothing and the new verifier has nothing real to check. The honest statement is: the algorithm is right, proven against real keys; whether eBay accepts our destination is untested.
 
 Creating that subscription is an outward-facing write that makes eBay start pushing live traffic, so it is a decision to take deliberately rather than a side effect of this commit.
+
+What remains unproven, precisely:
+
+- **A genuine eBay signature has never been checked.** The algorithm, the digest and the choice of signed bytes are right per eBay's own SDK and proven against real EC keys — but not against eBay's actual output. The first real notification is the test.
+- **The Amazon ledger write has not run in production.** The queue has been empty since before the deploy, so `recordInbound` has not been exercised on that path outside the test suite. The next real notification proves it. Note that a failure there logs at error level but does not fail the cron — deliberately, since blocking ingestion on an audit-write failure would be worse, but it means this one wants an eye on it rather than an assumption.
 
 ## 6. Deliberately not done
 
