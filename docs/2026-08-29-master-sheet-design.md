@@ -1,6 +1,6 @@
 # The Master Sheet — design (GDS-4)
 
-**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1 + MS.2 (the reads) are BUILT** — see §9. Where the sheet lives is still open and blocks only the mount.
+**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1 + MS.2 (the reads) and MS.3 (the component) are BUILT** — see §9 and §10. Where the sheet lives is still open and blocks only the mount.
 
 **Ask (2026-08-28):** "a proper grid where I can actually make changes cell by cell. That would be used as the source of data, which would then be mapped, converted, or directly pushed to multiple channels of a specific market."
 
@@ -195,3 +195,42 @@ reported as ready, a Prisma Decimal read as null — each mutation fails at leas
 | Amazon gives `color` a 1000-character cap and `product_tax_code` 949. | `longtext` is decided by the KEY, never by cap size — a cap-based rule opened a textarea for a one-word colour. |
 | 174 columns come back for four product types. | Every column is returned; `defaultVisible` marks the master's own shape plus whatever a channel requires (~25), and the rest are one Customise click away. |
 | The webstore channels are seeded `marketplace = 'GLOBAL'` and have **zero listings**. | A coordinate is included only where the market actually has a presence (Amazon · IT, eBay · IT), unless a channel is explicitly forced in — three dead "Unlisted" columns teach an operator to stop reading the readiness strip. |
+
+
+---
+
+## 10. MS.3 as built (2026-08-29)
+
+`apps/web/src/app/products/_sheet/` — `MasterSheet.tsx`, `useMasterSheet.ts`, `types.ts`.
+
+```tsx
+<MasterSheet market="IT" />
+```
+
+Self-contained by design: it takes a market and nothing else, so **where it lives is still one mount**
+(§8.3 is open). Until the Owner decides, it is verifiable at `/design/grid-lab?tab=sheet`.
+
+* Columns and rows come from MS.2 in ONE request; only `defaultVisible` columns are rendered
+  (26 of 111 for the real IT catalogue), the rest are a Customise click away.
+* Autosave per cell, through **existing** endpoints — no new write route:
+  `column` + `categoryAttributes` → `PATCH /api/products/bulk` (with `expectedVersion`);
+  `localizedContent` → `PATCH /api/products/:id/global` (the bulk endpoint has no route into a locale).
+* Cell states are the GDS ones: inherited tint, locked, `⚠ required`, warn/error corner triangles,
+  and `saving → saved | refused` per cell with the server's reason on hover.
+* A market switcher built from `availableMarkets` (only markets that actually carry listings), and a
+  `caps` pill that says when the cap data was fetched or that a type has no cached schema at all.
+
+### Verified in the browser against the real IT catalogue
+
+| Check | Result |
+|---|---|
+| Renders live | 37 products / 251 rows on page 1, groups `Identity · Master · Attributes · Readiness · IT` |
+| Write round trip | Typed `Xavia Racing` into an empty `manufacturer` → cell went `saving` → status "1 unsaved cell" → **server read back `"Xavia Racing"`, version 1 → 2** → "Saved" |
+| Restore | Set back to `null`; the field is as it was (version 3 — an audit counter, not data) |
+| Optimistic concurrency | A write with a stale `expectedVersion` was **refused 409 `VERSION_CONFLICT`** and did not land |
+| Two defects found and fixed | A `marryChildren` group straddling the pinned boundary renders TWICE in AG (two adjacent `IDENTITY` headers) — the pinned pair keeps `Identity`, the rest became `Master`. And the tree column repeated the product name read-only beside the editable `name` cell; it is now the tree control alone (76px). |
+
+**A trap worth remembering:** pointing the web dev server at a local API made `GET /api/accounts` take
+62 s, so `/design/grid-lab?tab=gds` never reached `networkidle` and `check-grid-chrome.mjs` timed out
+for *every* session on the machine. The grid was innocent; one hung request in the app chrome is
+enough to break a `networkidle` gate.

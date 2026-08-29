@@ -105,6 +105,12 @@ export interface SheetColumnSet {
   schemaMissing: string[]
   /** When each type's cap data was fetched — the sheet says "caps as of …" rather than implying now. */
   schemaAge: Array<{ productType: string; fetchedAt: string }>
+  /**
+   * The markets that actually carry listings, for the sheet's market switcher. Derived from the
+   * presence query this service already runs, so the client needs no second round trip and cannot
+   * offer a market with nothing in it.
+   */
+  availableMarkets: string[]
 }
 
 export interface BuildSheetColumnsInput {
@@ -432,6 +438,9 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   const present = input.includeEmptyChannels
     ? undefined
     : new Set(presentRows.map((r) => `${String(r.channel).toUpperCase()}:${String(r.marketplace).toUpperCase()}`))
+  // A market is offered only when something is listed there; GLOBAL is the webstore's placeholder,
+  // not a market an operator can pick.
+  const availableMarkets = [...new Set(presentRows.map((r) => String(r.marketplace).toUpperCase()).filter((m) => m && m !== 'GLOBAL' && m !== 'DEFAULT'))].sort()
   const coordinates = coordinatesFor(market, marketplaceRows, { present, channels: input.channels })
   const locale = (marketplaceRows.find((m) => String(m.code).toUpperCase() === market)?.language ?? 'en').toLowerCase()
 
@@ -493,7 +502,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   }
 
   const { columns, droppedKeys } = buildSheetColumns({ fields: [...fields, ...dynamicFields], amazon, ebayAspects, coordinates, variationAxes: input.variationAxes })
-  const value: SheetColumnSet = { market, locale, coordinates, productTypes, columns, droppedKeys, schemaMissing, schemaAge }
+  const value: SheetColumnSet = { market, locale, coordinates, productTypes, columns, droppedKeys, schemaMissing, schemaAge, availableMarkets }
   columnSetCache.set(cacheKey, { at: Date.now(), value })
   return value
 }

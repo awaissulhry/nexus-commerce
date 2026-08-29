@@ -97,6 +97,8 @@ export interface SheetPage {
   schemaMissing: string[]
   /** When each type's cap data was fetched. */
   schemaAge: Array<{ productType: string; fetchedAt: string }>
+  /** Markets that actually carry listings — the switcher's options. */
+  availableMarkets: string[]
 }
 
 export interface GetSheetRowsInput {
@@ -314,7 +316,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
   // the parent — the catalogue's own answer, not a hardcoded guess.
   const variationAxes = [...new Set(flat.flatMap((r) => (Array.isArray(r.variationAxes) ? (r.variationAxes as string[]) : [])))]
   const columnSet: SheetColumnSet = await getSheetColumns({ market, productTypes, variationAxes })
-  const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge } = columnSet
+  const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets } = columnSet
 
   // ── 3. the listings for these products on this market's coordinates ─
   const productIds = flat.map((r) => r.id as string)
@@ -413,7 +415,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     }
   })
 
-  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge }
+  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets }
 }
 
 export { coordinatesFor }

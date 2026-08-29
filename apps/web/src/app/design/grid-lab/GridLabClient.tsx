@@ -30,6 +30,7 @@ import { DataGrid, type Column } from '@/design-system/components'
 import { WorkspaceGrid, AdsFilterBar } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
 import type { FilterState, GridFilter } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
 import { LabNexusGrid } from './LabNexusGrid'
+import { MasterSheet } from '@/app/products/_sheet/MasterSheet'
 import { GdsScenarios } from './GdsScenarios'
 import { LAB_COLUMNS, LAB_ROWS, LAB_ROW_ID, type LabRow } from './fixture'
 import { GridFeatureLab } from './GridFeatureLab'
@@ -169,12 +170,14 @@ export function GridLabClient() {
   const [probes, setProbes] = useState<{ legacy: Probe; ag: Probe } | null>(null)
   const [fstate, setFstate] = useState<FilterState>({})
   const [lastClicked, setLastClicked] = useState<string | null>(null)
-  type LabTab = 'parity' | 'features' | 'gds'
+  type LabTab = 'parity' | 'features' | 'gds' | 'sheet'
   // `?tab=gds` opens the GDS scenarios directly — the conformance runner needs a URL, not a click.
+  // `?tab=sheet` is the MASTER SHEET on live data (MS.3); it lives here until the Owner decides
+  // where it belongs (docs/2026-08-29-master-sheet-design.md §8.3), and moving it is one mount.
   const [tab, setTab] = useState<LabTab>(() => {
     if (typeof window === 'undefined') return 'parity'
     const t = new URLSearchParams(window.location.search).get('tab')
-    return t === 'features' || t === 'gds' ? t : 'parity'
+    return t === 'features' || t === 'gds' || t === 'sheet' ? t : 'parity'
   })
 
   const runProbe = useCallback(() => {
@@ -220,6 +223,27 @@ export function GridLabClient() {
    *
    * `height: auto` + `overflow: visible` hands scrolling back to the app's own #main-content.
    */
+  if (tab === 'sheet') {
+    return (
+      <main style={{ padding: 24, display: 'grid', gap: 16, background: 'var(--nds-bg)', minHeight: '100vh' }}>
+        <header style={{ display: 'grid', gap: 6 }}>
+          <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>The master sheet — live</h1>
+          <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
+            Real products, real channel readiness, real writes. One market at a time; every edit autosaves on its own
+            and paints the server's answer on that cell. <code>docs/2026-08-29-master-sheet-design.md</code>.
+          </p>
+        </header>
+        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
+          <Button variant="ghost" size="sm" onClick={() => setTab('parity')}>Engine parity</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('features')}>Enterprise features</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('gds')}>GDS scenarios</Button>
+          <Button variant="primary" size="sm" onClick={() => setTab('sheet')}>Master sheet</Button>
+        </div>
+        <MasterSheet market="IT" height={720} />
+      </main>
+    )
+  }
+
   if (tab === 'gds') {
     return (
       <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh' }}>
@@ -234,6 +258,7 @@ export function GridLabClient() {
           <Button variant="ghost" size="sm" onClick={() => setTab('parity')}>Engine parity</Button>
           <Button variant="ghost" size="sm" onClick={() => setTab('features')}>Enterprise features</Button>
           <Button variant="primary" size="sm" onClick={() => setTab('gds')}>GDS scenarios</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('sheet')}>Master sheet</Button>
         </div>
         <GdsScenarios />
       </main>
