@@ -4,6 +4,18 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [GDS-3.1] — 2026-08-29 — The toolbar keeps its height when rows are selected
+
+Reported by the Owner on the lab: ticking a row swapped the toolbar's search for the bulk actions and
+the toolbar dropped 8px — `/products/next` did not, because its page stylesheet floored the cluster at
+36px. Measured both: the page ALSO stepped 64.5 → 65 on every tick (a DS field is 35.5px, the floor 36).
+
+- **`GridSelectionActions` · `SelectionLabel` · `SelectionNote` · `GridSearchSlot`** in `grid/toolbars` — the
+  swap's two halves are DS pieces now; the page's `.selActions` / `.lbl` / `.reachNote` / `.searchField`
+  rules and their container queries are deleted and `/products/next` and the lab use the same components.
+- **One shared slot height** (`--nds-grid-toolbar-slot-h: 36px`): the search field and the cluster both sit
+  on it, so the swap is exact by construction — measured **65 → 65 → 65** on both surfaces.
+
 ## [GDS-3] — 2026-08-29 — Every scenario rendered and MEASURED; the spec; the chrome guard
 
 Phase 3 of the Grid Design System. Local, uncommitted until the Owner says so.

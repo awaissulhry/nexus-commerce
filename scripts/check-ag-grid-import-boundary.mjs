@@ -56,12 +56,12 @@ const cssFiles = [...new Set([
 // `.nds-cell-*` is the cell library; `.nds-grid-{pager,footstrip,card,panel,skel,noRows}` the hosts and
 // toolbars. (`.nds-grid`, `.nds-grid-wrap/-sub/-kid/-empty/-prefsbar` are the RETIRING DS DataGrid's,
 // defined in components.css until wave 1 — deliberately not in scope.)
-const SELECTOR_LINE = /^[^/*{}]*\.(ag-[a-z]|nds-ag-|nds-cell-|nds-grid-(pager|footstrip|card|panel|skel|noRows))[\w-]*[^{};]*\{/
+const SELECTOR_LINE = /^[^/*{}]*\.(ag-[a-z]|nds-ag-|nds-cell-|nds-grid-(pager|footstrip|card|panel|skel|noRows|selbar|search))[\w-]*[^{};]*\{/
 for (const f of cssFiles) {
   if (f.startsWith('apps/web/src/design-system/grid/')) continue
   let src
   try { src = readFileSync(f, 'utf8') } catch { continue }
-  if (!/\.(ag-[a-z]|nds-ag-|nds-cell-|nds-grid-(pager|footstrip|card|panel|skel|noRows))/.test(src)) continue
+  if (!/\.(ag-[a-z]|nds-ag-|nds-cell-|nds-grid-(pager|footstrip|card|panel|skel|noRows|selbar|search))/.test(src)) continue
   src.split('\n').forEach((line, i) => {
     if (SELECTOR_LINE.test(line)) offenders.push(`${f}:${i + 1} → stylesheet addresses the grid: ${line.trim().slice(0, 70)}`)
   })

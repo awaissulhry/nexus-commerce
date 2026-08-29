@@ -35,7 +35,10 @@ import {
   GridNoRowsOverlay,
   GridPager,
   GridPanel,
+  GridSearchSlot,
+  GridSelectionActions,
   GridToolbar,
+  SelectionLabel,
   GroupCell,
   IdentityCell,
   NexusGrid,
@@ -164,15 +167,15 @@ function CatalogueScenario({ id, familyId, title, hint }: { id: string; familyId
             }
           >
             {selected ? (
-              <span className="nds-ag-selbar" style={{ padding: 0 }}>
-                <Button size="sm" variant="primary">Bulk edit</Button>
-                <Button size="sm">Tag</Button>
+              <GridSelectionActions>
+                <Button size="sm" variant="primary"><SelectionLabel>Bulk edit</SelectionLabel></Button>
+                <Button size="sm"><SelectionLabel>Tag</SelectionLabel></Button>
                 <Button size="sm" variant="link" onClick={clear}>Clear</Button>
-              </span>
+              </GridSelectionActions>
             ) : (
-              <span style={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
-                <Input leadingIcon={<Search size={13} />} placeholder="Search products…" aria-label="Search" />
-              </span>
+              <GridSearchSlot>
+                <Input leadingIcon={<Search size={13} />} placeholder="Search products…" aria-label="Search" style={{ width: '100%' }} />
+              </GridSearchSlot>
             )}
           </GridToolbar>
         }

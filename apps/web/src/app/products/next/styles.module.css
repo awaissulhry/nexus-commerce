@@ -34,43 +34,7 @@
 }
 
 /* ── Toolbar (inside .nds-gridcard) ───────────────────── */
-.searchField {
-  flex: 1;
-  min-width: 220px;
-  max-width: 340px;
-}
-
-/* Selection actions cluster (shown in the toolbar left slot when rows picked).
-   NEVER wraps: with `flex-wrap: wrap` the last button dropped to a second line and the two-line
-   left block sat off the right group's baseline. Instead the card is a size container and the
-   cluster ADAPTS to its width — icon buttons lose their labels and the reach note hides before
-   anything would need a second line. The status trio keeps its text: a blank button is worse
-   than a narrow one. */
-.selActions {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  min-width: 0;
-  /* The search field it replaces is 36px; the sm buttons are 28. Without this the toolbar
-     dropped 8px on the first tick and rose again on Clear. */
-  min-height: 36px;
-}
-
 /* The grid card is the size container the toolbar adapts to. */
-@container (max-width: 1320px) {
-  .selActions .lbl {
-    display: none;
-  }
-}
-
-@container (max-width: 1100px) {
-  .reachNote {
-    display: none;
-  }
-}
-
 /* ── Filter bar wrapper (DS FilterBar spacing) ───────────── */
 .filterBar {
   margin-bottom: 12px;
@@ -108,7 +72,6 @@
 }
 
 /* The blast radius of the current selection, stated before any action is clicked. */
-.reachNote { color: var(--nds-text-muted); }
 
 /* ── Tag dialog ───────────────────────────────────────────────────────── */
 .tagBody { display: flex; flex-direction: column; gap: 12px; }

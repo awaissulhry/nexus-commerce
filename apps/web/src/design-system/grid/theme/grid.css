@@ -365,3 +365,17 @@
 /* the editor's footer strip inside the card */
 .nds-grid-footstrip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--nds-border); }
 .nds-grid-footstrip-grow { flex: 1; }
+
+/* the toolbar's swapping halves (`../toolbars/GridSelectionActions`). The search field is 36px, an
+   `sm` button 28: the cluster holds the toolbar's height on the first tick and never wraps —
+   labels hide under 1320px and the reach note under 1100px of the CARD (`GridCard` is the container). */
+.nds-grid-selbar { display: inline-flex; align-items: center; gap: 7px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; min-height: var(--nds-grid-toolbar-slot-h); }
+.nds-grid-selbar-note { color: var(--nds-grid-muted-fg); }
+.nds-grid-search { flex: 1; min-width: 220px; max-width: 340px; }
+/* The two halves share ONE height. A DS field is a 1px border + padding + a 19.5px line box = 35.5px;
+   the cluster's floor was 36 — a half-pixel step on every tick (measured 64.5 → 65 on both surfaces).
+   Both sides now sit on the same floor, so the swap is exact by construction. */
+.nds-grid-search .nds-field { min-height: var(--nds-grid-toolbar-slot-h); box-sizing: border-box; }
+.nds-ag-wrap, .nds-gridcard { --nds-grid-toolbar-slot-h: 36px; }
+@container (max-width: 1320px) { .nds-grid-selbar-lbl { display: none; } }
+@container (max-width: 1100px) { .nds-grid-selbar-note { display: none; } }

@@ -36,7 +36,7 @@ import {
   type GridFilterModelEntry,
   type ProductGridContextFilters,
 } from '@/app/products/next/productsServerContract'
-import { GridDensityToggle, GridPager, useGridState } from '@/design-system/grid'
+import { GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, SelectionLabel, SelectionNote, useGridState } from '@/design-system/grid'
 import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
@@ -813,10 +813,10 @@ function ProductsNextInner() {
               <>
                 Selected <b>{selectedCount}</b> {selectedCount === 1 ? 'product' : 'products'}
                 {selectionReach > 0 && (
-                  <span className={styles.reachNote}>
+                  <SelectionNote>
                     {' · '}actions also reach <b>{selectionReach}</b>{' '}
                     {selectionReach === 1 ? 'variation' : 'variations'}
-                  </span>
+                  </SelectionNote>
                 )}
               </>
             ) : familyId ? (
@@ -853,15 +853,15 @@ function ProductsNextInner() {
           }
         >
           {selectedCount > 0 ? (
-            <span className={styles.selActions}>
+            <GridSelectionActions>
               <Button size="sm" variant="primary" disabled={busy} onClick={() => setBulkEditOpen(true)}>
-                <SlidersHorizontal size={13} /> <span className={styles.lbl}>Bulk edit</span>
+                <SlidersHorizontal size={13} /> <SelectionLabel>Bulk edit</SelectionLabel>
               </Button>
               <Button size="sm" disabled={busy} onClick={() => setTagDialogOpen(true)} title="Tag">
-                <TagIcon size={13} /> <span className={styles.lbl}>Tag</span>
+                <TagIcon size={13} /> <SelectionLabel>Tag</SelectionLabel>
               </Button>
               <Button size="sm" disabled={busy} onClick={() => duplicateBulk(selection.ids)} title="Duplicate">
-                <Copy size={13} /> <span className={styles.lbl}>Duplicate</span>
+                <Copy size={13} /> <SelectionLabel>Duplicate</SelectionLabel>
               </Button>
               {confirmDelete ? (
                 <Button size="sm" variant="danger" disabled={busy} onClick={() => { setConfirmDelete(false); void softDeleteBulk(selection.ids) }}>
@@ -869,7 +869,7 @@ function ProductsNextInner() {
                 </Button>
               ) : (
                 <Button size="sm" disabled={busy} onClick={() => setConfirmDelete(true)} title="Delete">
-                  <Trash2 size={13} /> <span className={styles.lbl}>Delete</span>
+                  <Trash2 size={13} /> <SelectionLabel>Delete</SelectionLabel>
                 </Button>
               )}
               <Menu
@@ -881,9 +881,9 @@ function ProductsNextInner() {
               <Button variant="link" size="sm" onClick={clearSelection}>
                 Clear
               </Button>
-            </span>
+            </GridSelectionActions>
           ) : (
-            <span className={styles.searchField}>
+            <GridSearchSlot>
               <Input
                 leadingIcon={<Search size={13} style={{ color: 'var(--nds-text-3)' }} />}
                 placeholder="Search products…"
@@ -891,7 +891,7 @@ function ProductsNextInner() {
                 onChange={(e) => { searchDirty.current = true; setSearchDraft(e.target.value) }}
                 style={{ width: '100%' }}
               />
-            </span>
+            </GridSearchSlot>
           )}
         </GridToolbar>
 
