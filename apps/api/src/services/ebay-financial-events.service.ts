@@ -20,9 +20,13 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { ebayFetch } from './cx/connectors/ebay/client.js'
+import { EBAY_HOSTS } from './cx/connectors/ebay/spec.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 
-const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+// The Sell Finances API is served from apiz.ebay.com (NOT api.ebay.com). Measured on
+// prod 2026-08-29: with the request signed, api.ebay.com answers 404 with an empty body;
+// before signing it answered 403 215001 at the gateway, which hid the wrong host.
+const EBAY_FINANCES_BASE = process.env.EBAY_FINANCES_BASE ?? EBAY_HOSTS.production.apiz
 
 interface EbayTransaction {
   transactionId: string
@@ -54,7 +58,7 @@ async function fetchEbayTransactions(
   let cursor: string | undefined
 
   do {
-    const url = new URL(`${EBAY_API_BASE}/sell/finances/v1/transaction`)
+    const url = new URL(`${EBAY_FINANCES_BASE}/sell/finances/v1/transaction`)
     url.searchParams.set('filter', filterStr)
     url.searchParams.set('limit', '200')
     if (cursor) url.searchParams.set('offset', cursor)
