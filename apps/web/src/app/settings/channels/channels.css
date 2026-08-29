@@ -1,0 +1,128 @@
+/* CX.2 — /settings/channels page-level layout. Tokens only (--nds-*); every
+   control is a design-system component, so this file holds geometry, not chrome. */
+
+.nds-channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+.nds-channels-panel {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Connect cards */
+.nds-connect-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-2) var(--nds-space-4);
+  margin: 0 0 var(--nds-space-3);
+}
+.nds-connect-facts > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.nds-connect-facts dt {
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-muted);
+}
+.nds-connect-facts dd {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+.nds-connect-region {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  margin-bottom: var(--nds-space-3);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+.nds-connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2);
+  align-items: center;
+}
+.nds-connect-reason {
+  margin: var(--nds-space-2) 0 0;
+  padding: var(--nds-space-2) var(--nds-space-3);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+.nds-connect-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-1);
+  margin-bottom: var(--nds-space-3);
+}
+.nds-connect-note {
+  margin: 0 0 var(--nds-space-3);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+  line-height: 1.45;
+}
+.nds-connect-note a {
+  color: var(--nds-primary);
+  text-decoration: underline;
+}
+.nds-connect-about {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: var(--nds-space-1);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+
+/* Diagnostics */
+.nds-diag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+.nds-diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2);
+  margin-bottom: var(--nds-space-3);
+}
+.nds-diag-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2);
+  margin: 0 0 var(--nds-space-3);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+.nds-diag-detail {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+.nds-diag-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.5;
+}

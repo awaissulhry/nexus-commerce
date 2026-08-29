@@ -1,10 +1,11 @@
-/**
- * Marketplace Channels Settings Page
- * Manage connections to various marketplace platforms (eBay, Amazon, Shopify, etc.)
- */
-
+import { Suspense } from 'react'
 import { ChannelsClient } from './ChannelsClient'
 
+// `useSearchParams` (the ?tab= sync) needs a Suspense boundary for static rendering.
 export default function ChannelsPage() {
-  return <ChannelsClient />
+  return (
+    <Suspense fallback={null}>
+      <ChannelsClient />
+    </Suspense>
+  )
 }

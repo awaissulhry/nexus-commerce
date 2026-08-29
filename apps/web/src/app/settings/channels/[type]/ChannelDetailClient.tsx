@@ -1,118 +1,90 @@
 'use client'
 
 /**
- * Settings rebuild — Phase F.5
+ * /settings/channels/[type] — one channel's connection, on the design system (CX.2 §5).
  *
- * /settings/channels/[type] — per-channel deep view. Four cards:
+ * Same route, same two endpoints as the Phase F.5 page it replaces:
+ *   GET   /api/settings/channels/:type/detail        everything rendered here
+ *   PATCH /api/settings/channels/:type/marketplaces  the CheckboxCard grid, through the save bar
+ * plus the three CX.1 actions the old header only promised:
+ *   POST  /api/cx/connections/:id/heartbeat          Test
+ *   POST  /api/cx/connect/ebay/start                 Reconnect (eBay only until CX.3)
+ *   POST  /api/accounts/:id/disconnect               Disconnect (revokes at the channel)
  *
- *   1. Token & connection health — token-expiry countdown (relative
- *      under 24h, absolute past), last sync status, scopes granted
- *      (when the OAuth callback captured them).
- *   2. Per-marketplace toggle grid — IT / DE / FR / ES / UK for the
- *      EU channels; "Marketplaces don't apply" for single-store
- *      connectors (Shopify).
- *   3. Recent webhook events — last 50 inbound deliveries with
- *      success / pending / failed pills and the error message.
- *   4. Reconnect / advanced — link back to the listing-channel
- *      OAuth start URL, raw connectionMetadata for diagnostics.
+ * Every value traces to a column the detail endpoint returns. "Connected" is `authStatus`,
+ * never `isActive`; a null timestamp says "never", and the two columns nothing feeds yet
+ * (`lastInboundAt` / `lastOutboundAt`, CX.4) say "not tracked yet" — "never" would be a lie
+ * about a column no receiver writes.
  *
- * Reads from the Phase F.2 detail endpoint; writes through the
- * Phase F.3 marketplace-scope endpoint. Reuses the SaveBar from
- * Phase A for the marketplace toggle (the scope can stay dirty
- * across other interactions).
+ * The pure half — types, status table, timestamps, holds, the calls — is `./channelDetail.ts`,
+ * which the node-only test suite covers; this file is the markup over it.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
 import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Globe,
-  Inbox,
-  KeyRound,
-  Plug,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react'
+  Banner,
+  Card,
+  DataGrid,
+  KeyValue,
+  MetricStrip,
+  type Column,
+  type KeyValueItem,
+} from '@/design-system/components'
+import { Button, CheckboxCard, Pill, Tag } from '@/design-system/primitives'
+import { PageHeader } from '@/design-system/patterns'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
-import { cn } from '@/lib/utils'
 import { useSettingsForm } from '../../_shell/SettingsSaveBar'
+import {
+  type ActionNote,
+  type ChannelConnection,
+  type ChannelDetail,
+  type ConnectionScopeRow,
+  type RecentEvent,
+  type Tone,
+  type WhenCell,
+  MANAGED_BY,
+  PAGE_MAX_WIDTH,
+  SYNC_TONE,
+  channelLabel,
+  disconnectAccount,
+  disconnectHold,
+  eventTone,
+  fetchDetail,
+  identityLine,
+  marketplaceOptions,
+  marketplacesDescription,
+  patchMarketplaces,
+  permissionsCopy,
+  reconnectHold,
+  reconnectLabel,
+  runHeartbeat,
+  sameSet,
+  showLastError,
+  startReconnect,
+  statusPill,
+  testHold,
+  timestampText,
+  toggleMarketplace,
+} from './channelDetail'
 
-export interface ChannelConnection {
-  id: string
-  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
-  isActive: boolean
-  isManagedBy: 'oauth' | 'env' | 'pending'
-  sellerName: string | null
-  storeName: string | null
-  storeFrontUrl: string | null
-  tokenExpiresAt: string | null
-  lastSyncAt: string | null
-  lastSyncStatus: string | null
-  lastSyncError: string | null
-  createdAt: string
-  updatedAt: string
-}
+export type { ChannelConnection, ChannelDetail, RecentEvent } from './channelDetail'
 
-export interface RecentEvent {
-  id: string
-  eventType: string
-  externalId: string
-  isProcessed: boolean
-  processedAt: string | null
-  error: string | null
-  createdAt: string
-}
+// ─── Layout helpers (tokens only) ────────────────────────────────────────
 
-export interface ChannelDetail {
-  connection: ChannelConnection
-  /** CX.1 — what the grant actually carries (captured at consent, re-read by the heartbeat). */
-  scopes: string[]
-  /** CX.1 — what the catalogue wants that this grant lacks; non-empty ⇒ "Reconnect to grant new permissions". */
-  scopeDrift?: string[]
-  activeMarketplaces: string[]
-  meta: Record<string, unknown> | null
-  recentEvents: RecentEvent[]
-  eventStats: {
-    total: number
-    success: number
-    failed: number
-    pending: number
-  }
-}
+const stack = (gap: string): React.CSSProperties => ({ display: 'grid', gap })
+const row = (gap: string): React.CSSProperties => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap,
+  flexWrap: 'wrap',
+})
+const muted: React.CSSProperties = { color: 'var(--nds-text-muted)' }
 
-const CHANNEL_LABEL: Record<string, string> = {
-  amazon: 'Amazon',
-  ebay: 'eBay',
-  shopify: 'Shopify',
-  woocommerce: 'WooCommerce',
-  etsy: 'Etsy',
-}
-
-// Mirrors the API's ALLOWED_MARKETPLACES — duplicated here so the
-// UI can render the toggle grid without a round-trip. Drift would
-// be caught the moment a non-allowed value is sent; the server
-// returns 400 with the allowed list.
-const ALLOWED_MARKETPLACES_BY_CHANNEL: Record<string, string[]> = {
-  amazon: ['IT', 'DE', 'FR', 'ES', 'UK'],
-  ebay: ['IT', 'DE', 'FR', 'ES', 'UK'],
-  shopify: [],
-  woocommerce: [],
-  etsy: [],
-}
-
-const COUNTRY_NAMES: Record<string, string> = {
-  IT: 'Italy',
-  DE: 'Germany',
-  FR: 'France',
-  ES: 'Spain',
-  UK: 'United Kingdom',
-}
+// ─── Page ────────────────────────────────────────────────────────────────
 
 interface Props {
   channelType: string
@@ -120,56 +92,37 @@ interface Props {
   initialError: string | null
 }
 
-export default function ChannelDetailClient({
-  channelType,
-  initial,
-  initialError,
-}: Props) {
+export default function ChannelDetailClient({ channelType, initial, initialError }: Props) {
   const router = useRouter()
+  const confirm = useConfirm()
+  const label = channelLabel(channelType)
+
   const [detail, setDetail] = useState<ChannelDetail | null>(initial)
   const [error, setError] = useState<string | null>(initialError)
-  const [draftMarkets, setDraftMarkets] = useState<string[]>(
-    initial?.activeMarketplaces ?? [],
-  )
+  const [note, setNote] = useState<ActionNote | null>(null)
+  const [busy, setBusy] = useState<'test' | 'reconnect' | 'disconnect' | null>(null)
+
+  const [draftMarkets, setDraftMarkets] = useState<string[]>(initial?.activeMarketplaces ?? [])
   useEffect(() => {
     setDraftMarkets(detail?.activeMarketplaces ?? [])
   }, [detail?.activeMarketplaces])
 
-  const allowed = ALLOWED_MARKETPLACES_BY_CHANNEL[channelType] ?? []
-
-  const isDirty = useMemo(() => {
-    const saved = detail?.activeMarketplaces ?? []
-    if (saved.length !== draftMarkets.length) return true
-    const set = new Set(saved)
-    return !draftMarkets.every((m) => set.has(m))
-  }, [detail?.activeMarketplaces, draftMarkets])
+  const isDirty = useMemo(
+    () => !sameSet(detail?.activeMarketplaces ?? [], draftMarkets),
+    [detail?.activeMarketplaces, draftMarkets],
+  )
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/settings/channels/${channelType}/detail`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setDetail((await res.json()) as ChannelDetail)
-    } catch (e: any) {
-      setError(e?.message ?? String(e))
+      setDetail(await fetchDetail(channelType))
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }, [channelType])
 
   const onSave = useCallback(async () => {
-    const res = await fetch(
-      `${getBackendUrl()}/api/settings/channels/${channelType}/marketplaces`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketplaces: draftMarkets }),
-      },
-    )
-    if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      throw new Error(body?.error ?? `HTTP ${res.status}`)
-    }
+    await patchMarketplaces(channelType, draftMarkets)
     await refetch()
     router.refresh()
   }, [draftMarkets, channelType, refetch, router])
@@ -178,48 +131,211 @@ export default function ChannelDetailClient({
     setDraftMarkets(detail?.activeMarketplaces ?? [])
   }, [detail?.activeMarketplaces])
 
-  useSettingsForm({
-    id: `settings/channels/${channelType}`,
-    isDirty,
-    onSave,
-    onDiscard,
-  })
+  useSettingsForm({ id: `settings/channels/${channelType}`, isDirty, onSave, onDiscard })
 
-  if (!detail) {
+  // The consent popup reports back through postMessage (own origin, or the API origin where the
+  // callback page is served) and BroadcastChannel('nexus-oauth'); it waits for our ACK to close.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let apiOrigin: string | null = null
+    try {
+      apiOrigin = new URL(getBackendUrl()).origin
+    } catch {
+      apiOrigin = null
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin && e.origin !== apiOrigin) return
+      if (!e.data || e.data.type !== 'nexus:channel-connected') return
+      try {
+        ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack' }, e.origin)
+      } catch {
+        /* the popup may already be gone */
+      }
+      void refetch()
+    }
+    window.addEventListener('message', onMessage)
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('nexus-oauth')
+      bc.onmessage = (e) => {
+        if (!e.data || e.data.type !== 'nexus:channel-connected') return
+        bc?.postMessage({ type: 'nexus:ack' })
+        void refetch()
+      }
+    } catch {
+      bc = null
+    }
+    return () => {
+      window.removeEventListener('message', onMessage)
+      bc?.close()
+    }
+  }, [refetch])
+
+  const connection = detail?.connection ?? null
+
+  const onTest = useCallback(async () => {
+    if (!connection) return
+    const hold = testHold(channelType, connection)
+    if (hold.held) {
+      setNote({ tone: 'info', text: hold.reason })
+      return
+    }
+    setBusy('test')
+    try {
+      setNote(await runHeartbeat(connection.id))
+      await refetch()
+    } catch (e) {
+      setNote({ tone: 'danger', text: `Failed · ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setBusy(null)
+    }
+  }, [channelType, connection, refetch])
+
+  const onReconnect = useCallback(async () => {
+    if (!connection) return
+    const hold = reconnectHold(channelType, connection)
+    if (hold.held) {
+      setNote({ tone: 'info', text: hold.reason })
+      return
+    }
+    // Opened synchronously inside the click so the browser does not block it as a popup.
+    const popup = window.open('about:blank', 'nexus-oauth', 'popup,width=600,height=760')
+    setBusy('reconnect')
+    try {
+      const r = await startReconnect(connection.id)
+      if ('error' in r) {
+        popup?.close()
+        setNote({ tone: 'danger', text: `Reconnect failed · ${r.error}` })
+        return
+      }
+      if (popup) popup.location.href = r.authUrl
+      else window.location.href = r.authUrl
+      setNote({
+        tone: 'info',
+        text: 'Finish signing in with eBay in the popup — this page updates when it reports back.',
+      })
+    } catch (e) {
+      popup?.close()
+      setNote({ tone: 'danger', text: `Reconnect failed · ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setBusy(null)
+    }
+  }, [channelType, connection])
+
+  const onDisconnect = useCallback(async () => {
+    if (!connection) return
+    const hold = disconnectHold(channelType, connection)
+    if (hold.held) {
+      setNote({ tone: 'info', text: hold.reason })
+      return
+    }
+    const ok = await confirm({
+      title: `Disconnect ${label}?`,
+      description:
+        'Revokes the grant at the channel and archives it. Syncs and listings for this account stop until it is reconnected.',
+      confirmLabel: 'Disconnect',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setBusy('disconnect')
+    try {
+      const r = await disconnectAccount(connection.id)
+      if ('error' in r) {
+        setNote({ tone: 'danger', text: `Disconnect failed · ${r.error}` })
+        return
+      }
+      setNote({ tone: 'success', text: 'Disconnected — the grant was revoked at the channel.' })
+      await refetch()
+      router.refresh()
+    } finally {
+      setBusy(null)
+    }
+  }, [channelType, connection, confirm, label, refetch, router])
+
+  if (!detail || !connection) {
     return (
-      <div className="max-w-3xl space-y-4">
+      <div style={{ maxWidth: PAGE_MAX_WIDTH, ...stack('var(--nds-space-16)') }}>
         <BackLink />
-        <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 inline-flex items-start gap-2">
-          <AlertCircle size={14} className="mt-0.5" />
-          {error ?? 'Unable to load channel detail.'}
-        </div>
+        <Banner tone="danger" title="Unable to load channel detail">
+          {error ?? 'The detail endpoint returned nothing.'}
+        </Banner>
       </div>
     )
   }
 
+  const status = statusPill(connection.authStatus, connection.consecutiveFailures)
+  const testH = testHold(channelType, connection)
+  const reconnectH = reconnectHold(channelType, connection)
+  const disconnectH = disconnectHold(channelType, connection)
+  const drift = detail.scopeDrift ?? connection.scopeDrift ?? []
+
   return (
-    <div className="max-w-3xl space-y-6">
-      <BackLink />
+    <div style={{ maxWidth: PAGE_MAX_WIDTH, ...stack('var(--nds-space-20)') }}>
+      <PageHeader
+        eyebrow={<BackLink />}
+        title={label}
+        subtitle={
+          <span style={row('var(--nds-space-8)')}>
+            <Pill tone={status.tone} dot size="md">
+              {status.label}
+            </Pill>
+            <span>{identityLine(connection)}</span>
+            {connection.region && <Tag>{connection.region}</Tag>}
+            {connection.isManagedBy === 'env' && <Tag tone="info">env-managed</Tag>}
+          </span>
+        }
+        actions={
+          <>
+            <Button
+              size="sm"
+              onClick={onTest}
+              aria-disabled={testH.held || busy === 'test'}
+              aria-busy={busy === 'test'}
+            >
+              {busy === 'test' ? 'Testing…' : 'Test'}
+            </Button>
+            <Button
+              size="sm"
+              variant={drift.length > 0 ? 'primary' : 'secondary'}
+              onClick={onReconnect}
+              aria-disabled={reconnectH.held || busy === 'reconnect'}
+              aria-busy={busy === 'reconnect'}
+            >
+              {busy === 'reconnect' ? 'Opening…' : reconnectLabel(drift.length)}
+            </Button>
+            <Button
+              size="sm"
+              variant="danger-outline"
+              onClick={onDisconnect}
+              aria-disabled={disconnectH.held || busy === 'disconnect'}
+              aria-busy={busy === 'disconnect'}
+            >
+              {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+            </Button>
+          </>
+        }
+      />
+
+      {note && (
+        <Banner tone={note.tone} onDismiss={() => setNote(null)}>
+          {note.text}
+        </Banner>
+      )}
       {error && (
-        <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 flex items-start gap-2">
-          <AlertCircle size={14} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <Banner tone="danger" title="Could not refresh" onDismiss={() => setError(null)}>
+          {error}
+        </Banner>
       )}
 
-      <ConnectionHeader detail={detail} channelType={channelType} />
-      <TokenHealthCard detail={detail} />
-      <ScopesCard scopes={detail.scopes} drift={detail.scopeDrift ?? []} />
+      <ConnectionCard connection={connection} status={status} />
+      <PermissionsCard scopes={detail.scopes} drift={drift} />
       <MarketplacesCard
         channelType={channelType}
-        allowed={allowed}
+        participation={detail.connectionScopes ?? []}
         draftMarkets={draftMarkets}
         setDraftMarkets={setDraftMarkets}
       />
-      <RecentEventsCard
-        events={detail.recentEvents}
-        stats={detail.eventStats}
-      />
+      <InboundEventsCard events={detail.recentEvents} stats={detail.eventStats} />
       <AdvancedCard meta={detail.meta} />
     </div>
   )
@@ -227,199 +343,156 @@ export default function ChannelDetailClient({
 
 function BackLink() {
   return (
-    <Link
-      href="/settings/channels"
-      className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-    >
-      <ArrowLeft size={13} /> All channels
-    </Link>
+    <Button asChild variant="link" inline size="sm">
+      <Link href="/settings/channels" style={row('var(--nds-space-4)')}>
+        <ArrowLeft size={13} aria-hidden />
+        All channels
+      </Link>
+    </Button>
   )
 }
 
-// ─── Cards ────────────────────────────────────────────────────────
+// ─── Cards ───────────────────────────────────────────────────────────────
 
-function ConnectionHeader({
-  detail,
-  channelType,
+function When({ cell }: { cell: WhenCell }) {
+  return (
+    <span title={cell.title} style={cell.title ? undefined : muted}>
+      {cell.text}
+    </span>
+  )
+}
+
+function ConnectionCard({
+  connection,
+  status,
 }: {
-  detail: ChannelDetail
-  channelType: string
+  connection: ChannelConnection
+  status: { tone: Tone; label: string }
 }) {
-  const { connection } = detail
-  const label = CHANNEL_LABEL[channelType] ?? channelType
-  const tone = connection.isActive
-    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 w-10 h-10 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
-          <Plug size={18} />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            {label}
-          </h2>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {connection.sellerName ??
-              connection.storeName ??
-              (connection.isManagedBy === 'env' ? 'Env-managed' : '—')}
-          </div>
-        </div>
-      </div>
-      <span
-        className={cn(
-          'inline-flex items-center gap-1 h-6 px-2 rounded-full text-xs font-semibold uppercase tracking-wide',
-          tone,
-        )}
-      >
-        {connection.isActive ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
-        {connection.isActive ? 'Active' : 'Inactive'}
-      </span>
-    </div>
-  )
-}
-
-function relativeTime(iso: string): { text: string; tone: 'ok' | 'warn' | 'danger' } {
-  const target = new Date(iso).getTime()
   const now = Date.now()
-  const deltaMs = target - now
-  const absMs = Math.abs(deltaMs)
-  const absMin = Math.floor(absMs / 60_000)
-  const absHr = Math.floor(absMs / 3_600_000)
-  const absDay = Math.floor(absMs / 86_400_000)
-  if (absDay >= 1) {
-    const formatted = new Date(iso).toLocaleString()
-    return { text: formatted, tone: deltaMs >= 0 ? 'ok' : 'danger' }
-  }
-  let text: string
-  if (deltaMs >= 0) {
-    if (absMin < 1) text = 'in < 1m'
-    else if (absHr < 1) text = `in ${absMin}m`
-    else text = `in ${absHr}h ${absMin % 60}m`
-  } else {
-    if (absMin < 1) text = 'just now'
-    else if (absHr < 1) text = `${absMin}m ago`
-    else text = `${absHr}h ${absMin % 60}m ago`
-  }
-  let tone: 'ok' | 'warn' | 'danger' = 'ok'
-  if (deltaMs < 0) tone = 'danger'
-  else if (absMin < 5) tone = 'danger'
-  else if (absMin < 60) tone = 'warn'
-  return { text, tone }
-}
+  const accessExpiry = timestampText(
+    connection.accessTokenExpiresAt ?? connection.tokenExpiresAt,
+    'expiry',
+    now,
+  )
+  const refreshExpiry = timestampText(connection.refreshTokenExpiresAt, 'expiry', now)
+  const identityEntries = Object.entries(connection.identity ?? {}).filter(
+    ([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+  )
 
-const TONE_PILL: Record<'ok' | 'warn' | 'danger', string> = {
-  ok: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-  warn: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-  danger: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
-}
+  const items: KeyValueItem[] = [
+    {
+      label: 'Status',
+      value: (
+        <Pill tone={status.tone} dot>
+          {status.label}
+        </Pill>
+      ),
+    },
+    { label: 'Managed by', value: MANAGED_BY[connection.isManagedBy] },
+    {
+      label: 'Region',
+      value: connection.region ? <Tag>{connection.region}</Tag> : <span style={muted}>—</span>,
+    },
+    {
+      label: 'Access token expires',
+      value: <When cell={accessExpiry} />,
+      hint: accessExpiry.past ? 'expired — the next call refreshes it' : undefined,
+    },
+    {
+      label: 'Refresh token expires',
+      value: <When cell={refreshExpiry} />,
+      hint: refreshExpiry.past ? 'expired — reconnect to sign in again' : undefined,
+    },
+    { label: 'Last refresh', value: <When cell={timestampText(connection.lastRefreshAt, 'event', now)} /> },
+    { label: 'Last heartbeat', value: <When cell={timestampText(connection.lastHeartbeatAt, 'event', now)} /> },
+    {
+      label: 'Last inbound',
+      value: <When cell={timestampText(connection.lastInboundAt, 'untracked', now)} />,
+      hint: connection.lastInboundAt ? undefined : 'no receiver writes this until CX.4',
+    },
+    {
+      label: 'Last outbound',
+      value: <When cell={timestampText(connection.lastOutboundAt, 'untracked', now)} />,
+      hint: connection.lastOutboundAt ? undefined : 'no sender writes this until CX.4',
+    },
+    {
+      label: 'Last sync',
+      value: (
+        <span style={row('var(--nds-space-6)')}>
+          {connection.lastSyncStatus && (
+            <Pill tone={SYNC_TONE[connection.lastSyncStatus] ?? 'neutral'}>
+              {connection.lastSyncStatus}
+            </Pill>
+          )}
+          <When cell={timestampText(connection.lastSyncAt, 'event', now)} />
+        </span>
+      ),
+      hint: connection.lastSyncError ?? undefined,
+    },
+    {
+      label: 'Connected since',
+      value: (
+        <span title={connection.createdAt}>{new Date(connection.createdAt).toLocaleDateString()}</span>
+      ),
+      hint: timestampText(connection.createdAt, 'event', now).text,
+    },
+    {
+      label: 'Consecutive failures',
+      value: connection.consecutiveFailures,
+      hint: connection.lastErrorAt ? (
+        <>
+          last error <When cell={timestampText(connection.lastErrorAt, 'event', now)} />
+        </>
+      ) : undefined,
+    },
+  ]
+  if (identityEntries.length > 0) {
+    items.push({
+      label: 'Identity',
+      value: (
+        <span style={stack('var(--nds-space-2)')}>
+          {identityEntries.map(([k, v]) => (
+            <span key={k}>
+              <span style={muted}>{k}</span> {String(v)}
+            </span>
+          ))}
+        </span>
+      ),
+    })
+  }
 
-function TokenHealthCard({ detail }: { detail: ChannelDetail }) {
-  const { connection } = detail
-  const expiry = connection.tokenExpiresAt
-    ? relativeTime(connection.tokenExpiresAt)
-    : null
-  const lastSync = connection.lastSyncAt
-    ? relativeTime(connection.lastSyncAt)
-    : null
-  const syncTone =
-    connection.lastSyncStatus === 'SUCCESS'
-      ? 'ok'
-      : connection.lastSyncStatus === 'PARTIAL'
-        ? 'warn'
-        : connection.lastSyncStatus === 'FAILED'
-          ? 'danger'
-          : 'warn'
   return (
-    <Card title="Token & sync health" icon={<ShieldCheck size={14} />}>
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-        <Stat label="Token expires">
-          {expiry ? (
-            <span className={cn('font-mono text-xs px-2 py-0.5 rounded', TONE_PILL[expiry.tone])}>
-              {expiry.text}
-            </span>
-          ) : connection.isManagedBy === 'env' ? (
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              Env-managed (no token rotation)
-            </span>
-          ) : (
-            <span className="text-xs text-slate-500 dark:text-slate-400">—</span>
-          )}
-        </Stat>
-        <Stat label="Last sync">
-          {lastSync ? (
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  'inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold uppercase tracking-wide',
-                  TONE_PILL[syncTone],
-                )}
-              >
-                {connection.lastSyncStatus ?? '—'}
-              </span>
-              <span className="text-xs text-slate-600 dark:text-slate-400">
-                {lastSync.text}
-              </span>
-            </div>
-          ) : (
-            <span className="text-xs text-slate-500 dark:text-slate-400">never</span>
-          )}
-        </Stat>
-        <Stat label="Connected since">
-          <span className="text-xs text-slate-700 dark:text-slate-300">
-            {new Date(connection.createdAt).toLocaleDateString()}
-          </span>
-        </Stat>
-        <Stat label="Managed by">
-          <span className="text-xs font-mono text-slate-700 dark:text-slate-300 uppercase">
-            {connection.isManagedBy}
-          </span>
-        </Stat>
-      </dl>
-      {connection.lastSyncError && (
-        <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 inline-flex items-start gap-2">
-          <AlertCircle size={12} className="mt-0.5 shrink-0" />
-          <span className="font-mono">{connection.lastSyncError}</span>
-        </div>
-      )}
+    <Card
+      header="Connection"
+      description="Sign-in state and the timestamps the heartbeat, refresh and sync jobs write."
+    >
+      <div style={stack('var(--nds-space-14)')}>
+        <KeyValue items={items} columns={3} />
+        {showLastError(connection) && (
+          <Banner tone="danger" title="Last error">
+            {connection.lastError}
+          </Banner>
+        )}
+      </div>
     </Card>
   )
 }
 
-function ScopesCard({ scopes, drift }: { scopes: string[]; drift: string[] }) {
+function PermissionsCard({ scopes, drift }: { scopes: string[]; drift: string[] }) {
   return (
-    <Card
-      title="Permissions"
-      icon={<KeyRound size={14} />}
-      description={
-        scopes.length > 0
-          ? drift.length > 0
-            ? `${scopes.length} granted · ${drift.length} not yet granted — reconnect to grant ${drift.length === 1 ? 'it' : 'them'}.`
-            : `${scopes.length} granted — every permission this channel can give.`
-          : 'No permissions recorded for this grant. Reconnect in Settings → Channels → Accounts to capture what the channel actually granted.'
-      }
-    >
+    <Card header="Permissions" description={permissionsCopy(scopes.length, drift.length)}>
       {scopes.length === 0 && drift.length === 0 ? null : (
-        <ul className="flex flex-wrap gap-1.5">
+        <div style={row('var(--nds-space-6)')}>
           {scopes.map((s) => (
-            <li
-              key={s}
-              className="inline-flex items-center h-6 px-2 rounded-full text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-            >
-              {s}
-            </li>
+            <Tag key={s}>{s}</Tag>
           ))}
           {drift.map((s) => (
-            <li
-              key={`missing:${s}`}
-              title="Not granted — reconnect to grant this permission"
-              className="inline-flex items-center h-6 px-2 rounded-full text-xs font-mono border border-dashed border-amber-400 text-amber-700 dark:text-amber-300"
-            >
-              {s}
-            </li>
+            <Pill key={`missing:${s}`} tone="warning">
+              {s} · not granted
+            </Pill>
           ))}
-        </ul>
+        </div>
       )}
     </Card>
   )
@@ -427,145 +500,148 @@ function ScopesCard({ scopes, drift }: { scopes: string[]; drift: string[] }) {
 
 function MarketplacesCard({
   channelType,
-  allowed,
+  participation,
   draftMarkets,
   setDraftMarkets,
 }: {
   channelType: string
-  allowed: string[]
+  participation: ConnectionScopeRow[]
   draftMarkets: string[]
   setDraftMarkets: (next: string[]) => void
 }) {
-  if (allowed.length === 0) {
+  const label = channelLabel(channelType)
+  const options = marketplaceOptions(channelType)
+  const description = marketplacesDescription(channelType, draftMarkets)
+  if (options.length === 0 && participation.length === 0) {
     return (
-      <Card title="Marketplaces" icon={<Globe size={14} />}>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {CHANNEL_LABEL[channelType] ?? channelType} is a single-store
-          channel — there are no marketplaces to scope.
-        </p>
+      <Card header="Marketplaces" description={description}>
+        {null}
       </Card>
     )
   }
-  const toggle = (m: string) =>
-    draftMarkets.includes(m)
-      ? setDraftMarkets(draftMarkets.filter((x) => x !== m))
-      : setDraftMarkets([...draftMarkets, m].sort())
-  const noneOn = draftMarkets.length === 0
   return (
-    <Card
-      title="Marketplaces"
-      icon={<Globe size={14} />}
-      description={
-        noneOn
-          ? 'No marketplaces selected — defaults to ALL when empty. Pick specific markets to scope syncs + listings.'
-          : `Syncs + listings scoped to ${draftMarkets.length} marketplace${draftMarkets.length === 1 ? '' : 's'}.`
-      }
-    >
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        {allowed.map((m) => {
-          const on = draftMarkets.includes(m)
-          return (
-            <button
-              key={m}
-              type="button"
-              onClick={() => toggle(m)}
-              className={cn(
-                'flex flex-col items-center gap-1 py-2 rounded-md border text-sm transition-colors',
-                on
-                  ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
-                  : 'bg-white border-default text-slate-600 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 hover:border-slate-300',
-              )}
-              aria-pressed={on}
+    <Card header="Marketplaces" description={description}>
+      <div style={stack('var(--nds-space-14)')}>
+        {participation.length > 0 && (
+          <div style={stack('var(--nds-space-6)')}>
+            <p style={{ margin: 0 }}>
+              Participating in — measured from the channel ({participation.length})
+            </p>
+            <div style={row('var(--nds-space-6)')}>
+              {participation.map((s) => (
+                <Tag key={`${s.kind}:${s.externalId}`} tone={s.isActive ? 'success' : 'neutral'}>
+                  {s.label ?? s.externalId}
+                  {s.isActive ? '' : ' · inactive'}
+                </Tag>
+              ))}
+            </div>
+          </div>
+        )}
+        {options.length > 0 && (
+          <div style={stack('var(--nds-space-6)')}>
+            <p style={{ margin: 0 }}>
+              Markets this account can be scoped to
+              <span style={muted}>
+                {' '}
+                — the set the API accepts for {label}; saved as this connection&apos;s
+                active-marketplace scope.
+              </span>
+            </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                gap: 'var(--nds-space-8)',
+              }}
             >
-              <span className="font-mono text-base font-semibold">{m}</span>
-              <span className="text-xs">{COUNTRY_NAMES[m]}</span>
-            </button>
-          )
-        })}
+              {options.map((o) => {
+                const on = draftMarkets.includes(o.code)
+                return (
+                  <CheckboxCard
+                    key={o.code}
+                    title={o.code}
+                    description={o.name}
+                    checked={on}
+                    selected={on}
+                    onChange={() => setDraftMarkets(toggleMarketplace(draftMarkets, o.code))}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   )
 }
 
-function RecentEventsCard({
+const EVENT_COLUMNS: Array<Column<RecentEvent>> = [
+  {
+    key: 'time',
+    label: 'Time',
+    sortable: true,
+    sortValue: (e) => e.createdAt,
+    render: (e) => <When cell={timestampText(e.createdAt, 'event')} />,
+  },
+  {
+    key: 'type',
+    label: 'Type',
+    sortable: true,
+    sortValue: (e) => e.eventType,
+    render: (e) => e.eventType,
+  },
+  {
+    key: 'externalId',
+    label: 'External id',
+    render: (e) => <span title={e.externalId}>{e.externalId}</span>,
+  },
+  {
+    key: 'processed',
+    label: 'Processed',
+    render: (e) => {
+      const t = eventTone(e)
+      return (
+        <span style={row('var(--nds-space-6)')}>
+          <Pill tone={t.tone}>{t.label}</Pill>
+          {e.processedAt && <When cell={timestampText(e.processedAt, 'event')} />}
+        </span>
+      )
+    },
+  },
+  {
+    key: 'error',
+    label: 'Error',
+    render: (e) => (e.error ? <span title={e.error}>{e.error}</span> : <span style={muted}>—</span>),
+  },
+]
+
+function InboundEventsCard({
   events,
   stats,
 }: {
   events: RecentEvent[]
-  stats: { total: number; success: number; failed: number; pending: number }
+  stats: ChannelDetail['eventStats']
 }) {
   return (
-    <Card
-      title="Recent webhook events"
-      icon={<Inbox size={14} />}
-      description="Last 50 inbound deliveries from the channel."
-    >
-      <div className="flex items-center gap-2 mb-3 text-xs">
-        <Pill tone="ok">{stats.success} ok</Pill>
-        {stats.failed > 0 && <Pill tone="danger">{stats.failed} failed</Pill>}
-        {stats.pending > 0 && <Pill tone="warn">{stats.pending} pending</Pill>}
-        <span className="text-tertiary dark:text-slate-500">
-          · {stats.total} total
-        </span>
+    <Card header="Inbound events" description="The last 50 deliveries the channel sent us, newest first.">
+      <div style={stack('var(--nds-space-14)')}>
+        <MetricStrip
+          metrics={[
+            { label: 'OK', value: stats.success, accent: 'var(--nds-success)' },
+            { label: 'Failed', value: stats.failed, accent: 'var(--nds-danger)' },
+            { label: 'Pending', value: stats.pending, accent: 'var(--nds-warning)' },
+            { label: 'Total', value: stats.total, hint: 'of the last 50' },
+          ]}
+        />
+        <DataGrid
+          columns={EVENT_COLUMNS}
+          rows={events}
+          rowKey={(e) => e.id}
+          size="sm"
+          initialSort={{ key: 'time', dir: 'desc' }}
+          emptyState="No inbound events yet."
+        />
       </div>
-      {events.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
-          No inbound webhook events yet.
-        </p>
-      ) : (
-        <div className="overflow-x-auto -mx-1">
-          <table className="w-full text-sm">
-            <thead className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              <tr>
-                <th className="text-left px-2 py-1 font-medium">Type</th>
-                <th className="text-left px-2 py-1 font-medium">External ID</th>
-                <th className="text-left px-2 py-1 font-medium">Status</th>
-                <th className="text-left px-2 py-1 font-medium">Received</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {events.map((e) => {
-                const tone: 'ok' | 'warn' | 'danger' = e.error
-                  ? 'danger'
-                  : e.isProcessed
-                    ? 'ok'
-                    : 'warn'
-                return (
-                  <tr key={e.id}>
-                    <td className="px-2 py-1.5 font-mono text-xs text-slate-700 dark:text-slate-300">
-                      {e.eventType}
-                    </td>
-                    <td className="px-2 py-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 truncate max-w-[160px]" title={e.externalId}>
-                      {e.externalId}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span
-                        className={cn(
-                          'inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold uppercase tracking-wide',
-                          TONE_PILL[tone],
-                        )}
-                      >
-                        {e.error ? 'failed' : e.isProcessed ? 'ok' : 'pending'}
-                      </span>
-                      {e.error && (
-                        <div
-                          className="text-xs text-rose-600 dark:text-rose-400 mt-0.5 truncate max-w-xs"
-                          title={e.error}
-                        >
-                          {e.error}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                      {new Date(e.createdAt).toLocaleString()}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </Card>
   )
 }
@@ -573,91 +649,27 @@ function RecentEventsCard({
 function AdvancedCard({ meta }: { meta: Record<string, unknown> | null }) {
   if (!meta || Object.keys(meta).length === 0) return null
   return (
-    <details className="rounded-lg border border-default dark:border-slate-800 bg-white dark:bg-slate-900">
-      <summary className="px-5 py-3 cursor-pointer flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
-        <Activity size={14} className="text-tertiary dark:text-slate-500" />
-        Advanced — raw connection metadata
-        <ChevronDown size={14} className="ml-auto text-tertiary dark:text-slate-500" />
-      </summary>
-      <pre className="px-5 pb-4 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
-        {JSON.stringify(meta, null, 2)}
-      </pre>
-    </details>
-  )
-}
-
-// ─── shared ───────────────────────────────────────────────────────
-
-function Card({
-  title,
-  description,
-  icon,
-  children,
-}: {
-  title: string
-  description?: string
-  icon?: React.ReactNode
-  children?: React.ReactNode
-}) {
-  return (
-    <section className="bg-white dark:bg-slate-900 border border-default dark:border-slate-800 rounded-lg p-5">
-      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-subtle dark:border-slate-800">
-        {icon && (
-          <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
-            {icon}
-          </div>
-        )}
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {title}
-          </h3>
-          {description && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {description}
-            </p>
-          )}
-        </div>
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function Stat({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium mb-1">
-        {label}
-      </dt>
-      <dd>{children}</dd>
-    </div>
-  )
-}
-
-function Pill({
-  tone,
-  children,
-}: {
-  tone: 'ok' | 'warn' | 'danger'
-  children: React.ReactNode
-}) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold uppercase tracking-wide',
-        TONE_PILL[tone],
-      )}
+    <Card
+      header="Advanced"
+      description="The raw connection metadata the adapter stored on this row — for diagnostics."
     >
-      {children}
-    </span>
+      <details>
+        <summary style={{ cursor: 'pointer', color: 'var(--nds-text-link)' }}>Show JSON</summary>
+        <pre
+          style={{
+            margin: 'var(--nds-space-10) 0 0',
+            padding: 'var(--nds-space-10) var(--nds-space-12)',
+            background: 'var(--nds-surface-sunken)',
+            border: '1px solid var(--nds-border-subtle)',
+            borderRadius: 'var(--nds-radius-md)',
+            color: 'var(--nds-text-2)',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            overflowX: 'auto',
+          }}
+        >
+          {JSON.stringify(meta, null, 2)}
+        </pre>
+      </details>
+    </Card>
   )
 }
-
-// ChevronRight kept around for a follow-up "edit scopes" affordance.
-void ChevronRight

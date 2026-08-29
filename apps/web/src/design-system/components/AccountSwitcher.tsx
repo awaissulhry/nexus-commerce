@@ -74,6 +74,31 @@ export interface AccountRow {
   lastSyncAt: string | null
   lastSyncStatus: string | null
   lastSyncError: string | null
+  /**
+   * CX.1 additions (`61774d222`). All optional so an older API response still types.
+   * `authStatus` is the measured sign-in state — NOT derived from `isActive` or
+   * `managedBy`; a row without it came from an API that predates CX.1.
+   */
+  authStatus?: 'connected' | 'degraded' | 'needs_reauth' | 'revoked' | 'disconnected' | 'unknown' | string
+  region?: string | null
+  /** Permissions recorded at consent. */
+  grantedScopes?: string[]
+  /** Permissions the catalogue requires that the grant does not carry. */
+  scopeDrift?: string[]
+  /** Measured facts from `ConnectionScope` — the marketplaces / sites this grant reaches. */
+  scopes?: { kind: string; externalId: string; label: string | null }[]
+  accessTokenExpiresAt?: string | null
+  refreshTokenExpiresAt?: string | null
+  lastRefreshAt?: string | null
+  lastHeartbeatAt?: string | null
+  /** `null` until CX.4 gives these a writer — render "not tracked yet", never "never". */
+  lastInboundAt?: string | null
+  lastOutboundAt?: string | null
+  lastErrorAt?: string | null
+  /** Already redacted server-side. */
+  lastError?: string | null
+  consecutiveFailures?: number
+  identity?: Record<string, unknown> | null
 }
 
 export interface AccountsPayload {

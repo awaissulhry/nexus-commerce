@@ -1742,20 +1742,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   background: var(--nds-surface); color: var(--nds-text);
 }
 
-.nds-acctp-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.nds-acctp-actions button {
-  font: inherit; font-size: 12px; font-weight: 600;
-  padding: 4px 9px; border-radius: var(--nds-radius-md);
-  border: 1px solid var(--nds-border); background: var(--nds-surface);
-  color: var(--nds-text); cursor: pointer;
-}
-.nds-acctp-actions button:hover:not(:disabled) { background: var(--nds-surface-hover); }
-.nds-acctp-actions button:disabled { color: var(--nds-text-disabled); cursor: not-allowed; }
-.nds-acctp-actions button.is-danger { color: var(--nds-danger-strong); border-color: var(--nds-danger-soft); }
-/* The danger BORDER still needs a dark rule: --nds-danger-soft is a light wash
-   with no dark counterpart, and giving it one would re-tint every danger pill. */
-.dark .nds-acctp-actions button.is-danger { border-color: var(--nds-border); }
-.nds-acctp-actions button.is-danger:disabled { color: var(--nds-text-disabled); border-color: var(--nds-border); }
+/* CX.2 — the row's actions are DS `Button size="sm"` (Disconnect = `danger-outline`), so
+   the hand-rolled `.nds-acctp-actions button` idiom that used to live here is gone: one
+   surface, one button object. Five actions now sit here, so they wrap, right-aligned. */
+.nds-acctp-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; flex-shrink: 0; max-width: 46%; }
 /* Why an action is absent, in words a screen reader and an eye can both reach —
    never a `title` on a disabled control, which fires no pointer events. */
 .nds-acctp-note { font-size: 11.5px; color: var(--nds-text-2); max-width: 20ch; text-align: right; }
@@ -1780,6 +1770,23 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-acctp-swatch[aria-pressed='true'] { border-color: var(--nds-text); }
 .nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
 .nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: 10px; color: var(--nds-text-2); line-height: 1; }
+
+/* CX.2 — the honest row. The status pill sits on the name line; scope chips, the
+   permissions + timestamps line and the error line stack under it in `.nds-acctp-main`'s
+   gap, so the row keeps equal padding top and bottom and no orphan margins. */
+.nds-acctp-status { flex: none; }
+.nds-acctp-scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.nds-acctp-times {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+  font-size: 11.5px; color: var(--nds-text-2); font-variant-numeric: tabular-nums;
+}
+/* The stored `lastError`, verbatim — already redacted server-side. Long tokens wrap
+   inside the column rather than pushing the actions off the row. */
+.nds-acctp-err { margin: 0; font-size: 12px; color: var(--nds-danger-strong); overflow-wrap: anywhere; }
+/* The inline result of Test: "OK · 412 ms" / "Failed · auth_expired · …". */
+.nds-acctp-test { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.nds-acctp-test[data-tone='ok'] { color: var(--nds-success-strong); }
+.nds-acctp-test[data-tone='error'] { color: var(--nds-danger-strong); }
 
 /* ── ColumnGroupModal (2026-08-24) ──────────────────────────────────────────────
    Was the DS's other Tailwind-styled component (see the ToolbarButton note in
@@ -2182,3 +2189,23 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-thumb-preview-count { padding: 2px 4px; font-size: var(--nds-font-size-micro); color: var(--nds-text-muted); }
 @keyframes nds-thumb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .nds-thumb-skel { animation: none; } .nds-thumb-img { transition: none; } }
+
+/* ── KeyValue (CX.2) ──────────────────────────────────────────────────────────
+   A `<dl>` term/value grid — the description list four pages had each spelled by hand
+   (the channels detail page's `Stat` was the fourth). Term 11px uppercase secondary, value
+   13px primary; `data-columns` is a grid that collapses to one column on a narrow viewport
+   so a pair never splits. `.dense` tightens the row gap for a compact card body. */
+.nds-kv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px 20px; margin: 0; }
+.nds-kv[data-columns='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nds-kv[data-columns='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nds-kv.dense { row-gap: 6px; }
+.nds-kv-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nds-kv dt {
+  margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--nds-text-2);
+}
+.nds-kv dd { margin: 0; font-size: 13px; color: var(--nds-text); overflow-wrap: anywhere; }
+.nds-kv-hint { display: block; margin-top: 1px; font-size: 11.5px; color: var(--nds-text-2); }
+@media (max-width: 640px) {
+  .nds-kv[data-columns='2'], .nds-kv[data-columns='3'] { grid-template-columns: minmax(0, 1fr); }
+}

@@ -1,6 +1,8 @@
 export { Card, type CardProps } from './Card'
 export { EmptyState, type EmptyStateProps } from './EmptyState'
 export { Field, type FieldProps } from './Field'
+// CX.2 — the `<dl>` term/value grid; the fourth local spelling of one was the trigger.
+export { KeyValue, type KeyValueProps, type KeyValueItem } from './KeyValue'
 export { Tabs, type TabItem, type TabsProps } from './Tabs'
 export { Pagination, type PaginationProps } from './Pagination'
 export { ProgressBar, type ProgressBarProps } from './ProgressBar'

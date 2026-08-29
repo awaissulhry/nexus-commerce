@@ -22,7 +22,7 @@ export default function EbayCallbackContent() {
   }, []);
   return (
     <div className="flex min-h-[40vh] items-center justify-center">
-      <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+      <p className="text-sm" style={{ color: "var(--nds-text-muted)" }}>
         Finishing eBay sign-in…
       </p>
     </div>

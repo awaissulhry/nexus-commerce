@@ -223,7 +223,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: 'Channels',
         icon: Plug,
         description:
-          'Amazon, eBay, Shopify OAuth connections + token health.',
+          'Marketplace and store accounts — sign-in, permissions, health.',
         keywords: [
           'amazon',
           'ebay',

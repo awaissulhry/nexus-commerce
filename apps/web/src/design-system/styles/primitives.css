@@ -41,6 +41,17 @@
   border-color: var(--nds-border-subtle);
   cursor: default;
 }
+
+/* A HELD button (aria-disabled): still focusable and clickable so it can say WHY it
+   refuses (check-silent-disabled). Looks quieter than a live one, never a help cursor. */
+.nds-btn[aria-disabled="true"] {
+  opacity: 0.62;
+  cursor: default;
+  box-shadow: none;
+}
+.nds-btn[aria-disabled="true"]:hover {
+  filter: none;
+}
 .nds-btn svg {
   flex-shrink: 0;
 }

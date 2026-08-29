@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   BarChart3, CheckCircle2, AlertCircle, Loader2, Shield,
-  Eye, EyeOff, Trash2, RefreshCw, Zap, Lock, Rocket, Undo2, ListChecks,
+  Trash2, RefreshCw, Zap, Lock, Rocket, Undo2, ListChecks,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Listbox } from '@/design-system/components/Listbox'
+import Link from 'next/link'
+import { Banner } from '@/design-system/components'
+import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 
@@ -25,21 +27,6 @@ interface AdsConnection {
   lastErrorAt: string | null
   lastError: string | null
 }
-
-const REGION_OPTIONS = [
-  { value: 'EU', label: 'Europe (IT, DE, FR, ES, UK…)' },
-  { value: 'NA', label: 'North America (US, CA, MX)' },
-  { value: 'FE', label: 'Far East (JP, AU, SG)' },
-]
-
-const MARKETPLACE_OPTIONS = [
-  { value: 'A1PA7PVP2ZEA0', label: 'Amazon.it (Italy)' },
-  { value: 'A1F83G8C2ARO7P', label: 'Amazon.co.uk (UK)' },
-  { value: 'A1RKKUPIHCS9HS', label: 'Amazon.de (Germany)' },
-  { value: 'A13V1IB3VIYZZH', label: 'Amazon.fr (France)' },
-  { value: 'APJ6JRA9NG5V4', label: 'Amazon.es (Spain)' },
-  { value: 'ATVPDKIKX0DER', label: 'Amazon.com (US)' },
-]
 
 function StatusBadge({ mode, writesEnabledAt }: { mode: string; writesEnabledAt: string | null }) {
   if (mode === 'production' && writesEnabledAt) {
@@ -67,23 +54,9 @@ export default function AdvertisingSettingsPage() {
   const [connections, setConnections] = useState<AdsConnection[]>([])
   const [adsMode, setAdsMode] = useState<string>('sandbox')
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
-  const [showSecrets, setShowSecrets] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null) // MM — profileId being promoted/allowlisted
-
-  const [form, setForm] = useState({
-    profileId: '',
-    marketplace: 'A1PA7PVP2ZEA0',
-    region: 'EU',
-    accountLabel: '',
-    clientId: '',
-    clientSecret: '',
-    refreshToken: '',
-  })
 
   const fetchConnections = useCallback(async () => {
     setLoading(true)
@@ -100,32 +73,6 @@ export default function AdvertisingSettingsPage() {
   }, [])
 
   useEffect(() => { fetchConnections() }, [fetchConnections])
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/advertising/connections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error ?? 'Save failed')
-      } else {
-        setSuccess('Connection saved. Use "Test" to verify credentials.')
-        setForm({ profileId: '', marketplace: 'A1PA7PVP2ZEA0', region: 'EU', accountLabel: '', clientId: '', clientSecret: '', refreshToken: '' })
-        fetchConnections()
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleTest = async (profileId: string) => {
     setTesting(profileId)
@@ -359,136 +306,21 @@ export default function AdvertisingSettingsPage() {
         </div>
       ) : null}
 
-      {/* Add / update connection form */}
-      <Card>
-        <h2 className="text-sm font-semibold text-slate-800 mb-4">
-          {connections.length > 0 ? 'Add Another Connection' : 'Connect Amazon Advertising'}
-        </h2>
-
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Profile ID *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. 4141223456789012"
-                value={form.profileId}
-                onChange={(e) => setForm((f) => ({ ...f, profileId: e.target.value }))}
-                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-xs text-tertiary">Find via GET /v2/profiles in sandbox</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Account Label</label>
-              <input
-                type="text"
-                placeholder="e.g. Xavia IT"
-                value={form.accountLabel}
-                onChange={(e) => setForm((f) => ({ ...f, accountLabel: e.target.value }))}
-                className="w-full rounded-md border border-default px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Marketplace *</label>
-              <Listbox
-                value={form.marketplace}
-                onChange={(v) => setForm((f) => ({ ...f, marketplace: v }))}
-                options={MARKETPLACE_OPTIONS}
-                ariaLabel="Marketplace"
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Region *</label>
-              <Listbox
-                value={form.region}
-                onChange={(v) => setForm((f) => ({ ...f, region: v }))}
-                options={REGION_OPTIONS}
-                ariaLabel="Region"
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          <hr className="border-subtle" />
-
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">LWA Credentials</span>
-            <button
-              type="button"
-              onClick={() => setShowSecrets((v) => !v)}
-              className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
-            >
-              {showSecrets ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              {showSecrets ? 'Hide' : 'Show'}
-            </button>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Client ID *</label>
-            <input
-              type={showSecrets ? 'text' : 'password'}
-              required
-              placeholder="amzn1.application-oa2-client...."
-              value={form.clientId}
-              onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
-              className="w-full rounded-md border border-default px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Client Secret *</label>
-            <input
-              type={showSecrets ? 'text' : 'password'}
-              required
-              value={form.clientSecret}
-              onChange={(e) => setForm((f) => ({ ...f, clientSecret: e.target.value }))}
-              className="w-full rounded-md border border-default px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Refresh Token *</label>
-            <input
-              type={showSecrets ? 'text' : 'password'}
-              required
-              placeholder="Atzr|..."
-              value={form.refreshToken}
-              onChange={(e) => setForm((f) => ({ ...f, refreshToken: e.target.value }))}
-              className="w-full rounded-md border border-default px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <p className="mt-1 text-xs text-tertiary">
-              Requires <code className="font-mono">advertising::campaign_management</code> scope — separate from your SP-API refresh token
-            </p>
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-              {success}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-            {saving ? 'Saving…' : 'Save & Encrypt Credentials'}
-          </button>
-        </form>
-      </Card>
+      {/* CX.2 — the manual paste form is retired. Its fields were shaped enough
+          like a login that browser autofill filled Profile ID with an email and
+          Client ID with a saved password (audit A0). Connecting is now the LWA
+          sign-in on Settings → Channels → Connect; nothing here asks for a secret. */}
+      <Banner
+        tone="info"
+        title="Connect Amazon Ads with a sign-in, not a paste"
+        action={
+          <Button asChild variant="primary" size="sm">
+            <Link href="/settings/channels?tab=connect">Open Channels → Connect</Link>
+          </Button>
+        }
+      >
+        Amazon Ads profiles are connected through Amazon’s own sign-in (Login with Amazon). The credential form that used to live here is gone; the mode, writes and allowlist controls above are unchanged.
+      </Banner>
 
       {/* Setup guide */}
       <Card>

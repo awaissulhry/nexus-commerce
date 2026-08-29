@@ -1,632 +1,113 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { ShoppingBag, Plug, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react'
-import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
-import { cn } from '@/lib/utils'
-import { getBackendUrl } from '@/lib/backend-url'
-import { useConfirm } from '@/components/ui/ConfirmProvider'
-import { AccountsPanel } from '@/design-system/components'
-
-interface ChannelConnection {
-  id: string
-  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
-  isActive: boolean
-  // 'oauth'   = real OAuth grant in ChannelConnection table (eBay today, more later)
-  // 'env'     = synthesised from env vars (Amazon today, deprecated by P2-2 LWA OAuth)
-  // 'pending' = adapter not yet shipped (Shopify/Woo/Etsy)
-  isManagedBy: 'oauth' | 'env' | 'pending'
-  sellerName: string | null
-  storeName: string | null
-  storeFrontUrl: string | null
-  tokenExpiresAt: string | null
-  lastSyncAt: string | null
-  lastSyncStatus: string | null
-  lastSyncError: string | null
-}
-
-interface ChannelDef {
-  type: 'EBAY' | 'AMAZON' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
-  name: string
-  description: string
-}
-
 /**
- * Honest time formatter — relative for short deltas (eBay tokens
- * expire in 2h, "next year" was misleading) and absolute for longer
- * ones. Returns a tuple so callers can colour stale/expired states.
+ * CX.2 — /settings/channels on the design system.
+ *
+ * One route, three tabs (URL-synced `?tab=`): Accounts (the honest rows),
+ * Connect (catalogue-driven), Diagnostics (live checks + ledger). The popup
+ * bridge is one hook shared by Accounts' Reconnect and Connect's buttons.
+ * Spec: docs/2026-08-29-cx2-channels-ui.md.
  */
-function formatRelative(iso: string): { text: string; tone: 'ok' | 'warn' | 'danger' } {
-  const target = new Date(iso).getTime()
-  const now = Date.now()
-  const deltaMs = target - now // positive = future, negative = past
-  const absMs = Math.abs(deltaMs)
-  const absMin = Math.floor(absMs / 60000)
-  const absHr = Math.floor(absMs / 3_600_000)
-  const absDay = Math.floor(absMs / 86_400_000)
 
-  // Far future / past — show absolute date+time
-  if (absDay >= 1) {
-    const formatted = new Date(iso).toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    })
-    return { text: formatted, tone: deltaMs >= 0 ? 'ok' : 'warn' }
-  }
+import { useCallback, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Tabs, Banner } from '@/design-system/components'
+import { PageHeader } from '@/design-system/patterns'
+import { useAccounts, useAdsConnections, useCatalogue } from './channels-data'
+import { useConnectPopup } from './useConnectPopup'
+import { AccountsTab } from './AccountsTab'
+import { ConnectTab } from './ConnectTab'
+import { DiagnosticsTab } from './DiagnosticsTab'
+import './channels.css'
 
-  // Within 24h — relative phrasing with hours and minutes
-  let text: string
-  if (deltaMs >= 0) {
-    if (absMin < 1) text = 'in <1m'
-    else if (absHr < 1) text = `in ${absMin}m`
-    else text = `in ${absHr}h ${absMin % 60}m`
-  } else {
-    if (absMin < 1) text = 'just now'
-    else if (absHr < 1) text = `${absMin}m ago`
-    else text = `${absHr}h ${absMin % 60}m ago`
-  }
-
-  // Token-expiry semantics: <5m = danger (client should refresh),
-  // <30m = warn, otherwise ok. Past = danger.
-  let tone: 'ok' | 'warn' | 'danger'
-  if (deltaMs < 0) tone = 'danger'
-  else if (absMin < 5) tone = 'danger'
-  else if (absMin < 30) tone = 'warn'
-  else tone = 'ok'
-  return { text, tone }
-}
-
-const TONE_CLASS: Record<'ok' | 'warn' | 'danger', string> = {
-  ok: 'text-slate-900 dark:text-slate-100',
-  warn: 'text-amber-700 dark:text-amber-300',
-  danger: 'text-red-700 dark:text-red-300',
-}
-
-const CHANNELS: ChannelDef[] = [
-  { type: 'AMAZON', name: 'Amazon', description: 'Connect your Amazon seller account' },
-  { type: 'EBAY', name: 'eBay', description: 'Connect your eBay seller account' },
-  { type: 'SHOPIFY', name: 'Shopify', description: 'Connect your Shopify store' },
-  { type: 'WOOCOMMERCE', name: 'WooCommerce', description: 'Connect your WooCommerce store' },
-  { type: 'ETSY', name: 'Etsy', description: 'Connect your Etsy shop' },
-]
+type Tab = 'accounts' | 'connect' | 'diagnostics'
+const TAB_IDS: Tab[] = ['accounts', 'connect', 'diagnostics']
 
 export function ChannelsClient() {
-  const askConfirm = useConfirm()
-  const [connections, setConnections] = useState<Map<string, ChannelConnection>>(
-    new Map()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const tab: Tab = TAB_IDS.includes(tabParam as Tab) ? (tabParam as Tab) : 'accounts'
+  const setTab = useCallback(
+    (t: string) => {
+      const next = new URLSearchParams(searchParams.toString())
+      if (t === 'accounts') next.delete('tab')
+      else next.set('tab', t)
+      const qs = next.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [router, pathname, searchParams],
   )
-  const [loading, setLoading] = useState(true)
-  const [statusMsg, setStatusMsg] = useState<{ kind: 'error' | 'success' | 'info'; text: string } | null>(null)
-  const [connectingChannel, setConnectingChannel] = useState<string | null>(null)
-  // Bumped when the OAuth popup reports success, so the panel refetches.
-  const [accountsReload, setAccountsReload] = useState(0)
-  const [testingId, setTestingId] = useState<string | null>(null)
-  // HH — diagnostics state for the eBay card. We keep it local rather
-  // than threading through to status banner so the result sits next
-  // to the Connection it describes (some workspaces have multiple
-  // channels and the global statusMsg would be ambiguous).
-  const [diagnosing, setDiagnosing] = useState(false)
-  const [diagnostics, setDiagnostics] = useState<{
-    ok: boolean
-    recommendation: string
-    details: string
-  } | null>(null)
 
-  // The connect flow runs in a POPUP, so success happens in a window this one
-  // cannot see. CX.1: the popup ends on the API host (`/api/cx/callback/:channel`),
-  // which posts to THIS origin and also broadcasts on `nexus-oauth` for the case
-  // where `window.opener` was severed. We accept the API origin and our own,
-  // reply with an ACK so the popup knows it was heard and may close, then refresh.
-  useEffect(() => {
-    const apiOrigin = (() => {
-      try { return new URL(getBackendUrl(), window.location.href).origin } catch { return null }
-    })()
-    type ConnectedMsg = { type?: string; channel?: string; sellerName?: string; scopeDrift?: string[] } | null
-    const handle = (data: ConnectedMsg): boolean => {
-      if (data?.type !== 'nexus:channel-connected') return false
-      setConnectingChannel(null)
-      setAccountsReload((n) => n + 1)
-      const driftCount = data.scopeDrift?.length ?? 0
-      const drift = driftCount
-        ? ` ${driftCount} permission${driftCount === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${driftCount === 1 ? 'it' : 'them'}.`
-        : ''
-      // Confirm LAST. loadConnections sets its own error banner on failure, and a
-      // refresh that stumbles must not erase the news that the connection worked
-      // — the connection is the fact, the refresh is just the view catching up.
-      void loadConnections().finally(() => {
-        setStatusMsg({
-          kind: drift ? 'info' : 'success',
-          text: `${data.channel === 'EBAY' ? 'eBay' : data.channel} account connected${data.sellerName ? `: ${data.sellerName}` : ''}.${drift}`,
-        })
+  const [reload, setReload] = useState(0)
+  const bump = useCallback(() => setReload((n) => n + 1), [])
+  const [notice, setNotice] = useState<{ tone: 'success' | 'info' | 'danger'; title: string; text?: string } | null>(null)
+
+  const accounts = useAccounts(reload)
+  const catalogue = useCatalogue()
+  const ads = useAdsConnections(reload)
+
+  const popup = useConnectPopup(
+    (m) => {
+      bump()
+      const drift = m.scopeDrift?.length ?? 0
+      setNotice({
+        tone: drift ? 'info' : 'success',
+        title: `${m.channel === 'EBAY' ? 'eBay' : m.channel} account ${m.placement === 'reconsent' ? 'reconnected' : m.placement === 'adopt' ? 'adopted' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
+        text: drift ? `${drift} permission${drift === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${drift === 1 ? 'it' : 'them'}.` : undefined,
       })
-      return true
-    }
-    const onMessage = (e: MessageEvent) => {
-      if (e.origin !== window.location.origin && e.origin !== apiOrigin) return
-      if (handle(e.data as ConnectedMsg)) {
-        try { (e.source as Window | null)?.postMessage({ type: 'nexus:ack' }, e.origin) } catch { /* popup already gone */ }
-      }
-    }
-    window.addEventListener('message', onMessage)
-    let bc: BroadcastChannel | null = null
-    try {
-      bc = new BroadcastChannel('nexus-oauth')
-      bc.onmessage = (e) => { if (handle(e.data as ConnectedMsg)) bc?.postMessage({ type: 'nexus:ack' }) }
-    } catch { /* no BroadcastChannel — the postMessage path above still works */ }
-    return () => { window.removeEventListener('message', onMessage); bc?.close() }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    },
+    // A legacy popup (Amazon Ads) closes without a message; refetch so whatever it
+    // wrote shows, and say only what we know.
+    () => {
+      bump()
+    },
+  )
 
-  useEffect(() => {
-    loadConnections()
-  }, [])
-
-  async function loadConnections() {
-    try {
-      setLoading(true)
-      setStatusMsg(null)
-      // The unified /api/connections endpoint returns one row per
-      // supported channel — eBay from the OAuth-backed table, Amazon
-      // synthesised from env vars, Shopify/Woo/Etsy as 'pending'
-      // placeholders. Server already deduplicates active-vs-inactive
-      // and most-recent so we just key the Map on `channel`.
-      const res = await fetch(
-        `${getBackendUrl()}/api/connections`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) {
-        throw new Error(`Failed to load connections (HTTP ${res.status})`)
-      }
-      const data = (await res.json()) as {
-        success: boolean
-        connections?: ChannelConnection[]
-      }
-      const list = data.connections ?? []
-      const newConnections = new Map<string, ChannelConnection>()
-      for (const conn of list) {
-        newConnections.set(conn.channel, conn)
-      }
-      setConnections(newConnections)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load connections'
-      setStatusMsg({ kind: 'error', text: message })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleConnectEbay(adoptConnectionId?: string) {
-    // Opened SYNCHRONOUSLY, inside the click, before any await. A popup opened
-    // after an await has lost the user gesture that authorises it and is blocked.
-    const authWindow = window.open('', '_blank', 'width=1000,height=800')
-    try {
-      setConnectingChannel('EBAY')
-      setStatusMsg(null)
-
-      // CX.1 — the shared connect flow. The server mints the state + PKCE pair,
-      // stores the intent (connect / reconnect-this-row) against the state, and
-      // sets a double-submit cookie scoped to its own callback path, so the
-      // browser proves on the way back that it is the one that started this.
-      const response = await fetch(`${getBackendUrl()}/api/cx/connect/ebay/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          intent: adoptConnectionId ? 'reconnect' : 'connect',
-          targetConnectionId: adoptConnectionId,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to initiate eBay connection')
-      }
-
-      const data = await response.json()
-
-      if (!data.success || !data.authUrl) {
-        throw new Error(data.error || 'Failed to generate authorization URL')
-      }
-
-      // Open eBay in a SEPARATE window, not this tab. Two reasons, and the
-      // second is why the window is opened before the await above rather than
-      // here: you keep Nexus open behind the sign-in, and a `window.open` that
-      // happens after an await has lost its user-gesture and is blocked by every
-      // popup blocker. `authWindow` was opened synchronously inside the click;
-      // all that is left is to point it at eBay.
-      if (authWindow && !authWindow.closed) {
-        authWindow.location.href = data.authUrl
-      } else {
-        // The popup was blocked, or the operator closed it. Fall back to this
-        // tab rather than leaving the click doing nothing at all.
-        window.location.href = data.authUrl
-      }
-    } catch (err) {
-      authWindow?.close()
-      const message = err instanceof Error ? err.message : 'Connection failed'
-      setStatusMsg({ kind: 'error', text: message })
-      setConnectingChannel(null)
-    }
-  }
-
-  async function handleRevokeConnection(connectionId: string) {
-    if (!(await askConfirm({ title: 'Disconnect this channel?', description: 'Existing listings stay live but new syncs will fail until you reconnect.', confirmLabel: 'Disconnect', tone: 'danger' }))) return
-
-    try {
-      const response = await fetch(`${getBackendUrl()}/api/ebay/auth/revoke`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to revoke connection')
-      }
-
-      // Refetch from the server rather than mutating local state.
-      // Original code did `newConnections.delete(connectionId)` but
-      // the Map is keyed by channelType ('EBAY'), not connectionId,
-      // so the delete was a no-op and the UI kept rendering the old
-      // active state. Refetch matches server state exactly and picks
-      // up isActive=false on the now-revoked row.
-      await loadConnections()
-      setStatusMsg({ kind: 'success', text: 'Connection revoked.' })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Revocation failed'
-      setStatusMsg({ kind: 'error', text: message })
-    }
-  }
-
-  async function handleDiagnoseEbay() {
-    setDiagnosing(true)
-    setDiagnostics(null)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/ebay/diagnostics?marketplaceId=EBAY_IT`,
-        { cache: 'no-store' },
-      )
-      const json = (await res.json()) as {
-        success?: boolean
-        recommendation?: string
-        connection?: { tokenOk?: boolean; tokenError?: string }
-        envCredentials?: { looksLikePlaceholder?: boolean }
-        sampleSearch?: { ok?: boolean; itemCount?: number; error?: string }
-      }
-      const ok = !!json?.sampleSearch?.ok
-      const detailParts: string[] = []
-      detailParts.push(
-        `Connection token: ${json?.connection?.tokenOk ? 'OK' : json?.connection?.tokenError ?? 'unavailable'}`,
-      )
-      detailParts.push(
-        `Env credentials: ${
-          json?.envCredentials?.looksLikePlaceholder
-            ? 'placeholder/missing'
-            : 'set'
-        }`,
-      )
-      detailParts.push(
-        `Sample category search: ${
-          ok
-            ? `OK (${json?.sampleSearch?.itemCount ?? 0} matches)`
-            : json?.sampleSearch?.error ?? 'failed'
-        }`,
-      )
-      setDiagnostics({
-        ok,
-        recommendation: json?.recommendation ?? 'No recommendation returned.',
-        details: detailParts.join('\n'),
-      })
-    } catch (err) {
-      setDiagnostics({
-        ok: false,
-        recommendation: 'Diagnostics endpoint unreachable.',
-        details: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      setDiagnosing(false)
-    }
-  }
-
-  async function handleTestConnection(connectionId: string) {
-    try {
-      setTestingId(connectionId)
-      const response = await fetch(
-        `${getBackendUrl()}/api/ebay/auth/test?connectionId=${connectionId}`,
-      )
-
-      if (!response.ok) {
-        throw new Error('Connection test failed')
-      }
-
-      const data = await response.json()
-      setStatusMsg({
-        kind: 'success',
-        text: `Connection OK. Seller: ${data.seller?.signInName ?? '(unknown)'}`,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Test failed'
-      setStatusMsg({ kind: 'error', text: `Connection test failed: ${message}` })
-    } finally {
-      setTestingId(null)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded-lg p-4 animate-pulse"
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
-                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded w-3/4" />
-              </div>
-            </div>
-            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded" />
-          </div>
-        ))}
-      </div>
-    )
-  }
+  const tabs = [
+    { id: 'accounts', label: 'Accounts', count: accounts.data ? accounts.data.accounts.length : null },
+    { id: 'connect', label: 'Connect', count: catalogue.data ? catalogue.data.filter((c) => c.available).length : null },
+    { id: 'diagnostics', label: 'Diagnostics' },
+  ]
 
   return (
-    <div className="space-y-4">
-      {statusMsg && (
-        <div
-          className={cn(
-            'border rounded-lg px-4 py-3 text-base flex items-start gap-2',
-            statusMsg.kind === 'success' && 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900 text-green-700 dark:text-green-300',
-            statusMsg.kind === 'error' && 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300',
-            statusMsg.kind === 'info' && 'bg-slate-50 dark:bg-slate-800 border-default dark:border-slate-700 text-slate-700 dark:text-slate-300'
-          )}
-        >
-          {statusMsg.kind === 'error' && (
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          )}
-          <span>{statusMsg.text}</span>
-        </div>
+    <div className="nds-channels">
+      <PageHeader
+        title="Channels"
+        subtitle="Marketplace and store accounts — sign-in, permissions, health."
+      />
+      <Tabs ariaLabel="Channels sections" tabs={tabs} active={tab} onChange={setTab} />
+
+      {(popup.error || accounts.error) && (
+        <Banner tone="danger" title={popup.error ? 'Connection failed' : 'Accounts could not be loaded'} onDismiss={popup.error ? popup.clearError : undefined}>
+          {popup.error ?? accounts.error}
+        </Banner>
+      )}
+      {notice && (
+        <Banner tone={notice.tone} title={notice.title} onDismiss={() => setNotice(null)}>
+          {notice.text}
+        </Banner>
       )}
 
-      {/* MAP.4 — the accounts each channel holds. The cards below stay as they
-          are: they own the OAuth kickoff and the diagnostics, and replacing them
-          was not what this phase is for. This panel is what can express a SECOND
-          account, which a grid keyed by channelType cannot. */}
-      <AccountsPanel
-        apiBase={getBackendUrl()}
-        onConnect={{ EBAY: handleConnectEbay }}
-        // Name the account the grant is for, so the server adopts onto it rather
-        // than refusing an identity it cannot match. It travels inside the signed
-        // state, not sessionStorage — a popup does not inherit storage written
-        // after it was opened.
-        onReconnect={(a) => void handleConnectEbay(a.id)}
-        reloadSignal={accountsReload}
-        confirm={askConfirm}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {CHANNELS.map((channel) => {
-          const connection = connections.get(channel.type)
-          const isConnected = !!connection?.isActive
-          const isConnecting = connectingChannel === channel.type
-
-          return (
-            <Card key={channel.type}>
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-md flex items-center justify-center flex-shrink-0">
-                    <ShoppingBag className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                      {channel.name}
-                    </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      {channel.description}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {isConnected && connection?.isManagedBy === 'env' ? (
-                    <Badge variant="info" size="md">
-                      Env-managed
-                    </Badge>
-                  ) : isConnected ? (
-                    <Badge variant="success" size="md">
-                      Connected
-                    </Badge>
-                  ) : connection?.isManagedBy === 'pending' ? (
-                    <Badge variant="default" size="md">
-                      Coming soon
-                    </Badge>
-                  ) : connection?.isManagedBy === 'env' ? (
-                    <Badge variant="danger" size="md">
-                      Misconfigured
-                    </Badge>
-                  ) : (
-                    <Badge variant="default" size="md">
-                      Not connected
-                    </Badge>
-                  )}
-                  {/* Phase F.4 — deep-view entry point. Only shown when
-                      the connector is real (oauth or env). Pending
-                      channels skip the link since the detail page would
-                      only repeat "not connected yet". */}
-                  {connection?.isManagedBy !== 'pending' && (
-                    <Link
-                      href={`/settings/channels/${channel.type.toLowerCase()}`}
-                      className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:underline"
-                      aria-label={`Open ${channel.name} details`}
-                    >
-                      Details
-                      <ArrowRight size={11} />
-                    </Link>
-                  )}
-                </div>
-              </div>
-
-              {isConnected && connection && (
-                <div className="space-y-1.5 mb-3 text-base border-t border-subtle dark:border-slate-800 pt-3">
-                  {connection.sellerName && (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-slate-500 dark:text-slate-400">Seller</span>
-                      <span className="text-slate-900 dark:text-slate-100 truncate">{connection.sellerName}</span>
-                    </div>
-                  )}
-                  {connection.storeName && (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-slate-500 dark:text-slate-400">Store</span>
-                      <span className="text-slate-900 dark:text-slate-100 truncate">{connection.storeName}</span>
-                    </div>
-                  )}
-                  {connection.tokenExpiresAt && (() => {
-                    const r = formatRelative(connection.tokenExpiresAt)
-                    return (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-slate-500 dark:text-slate-400">Token expires</span>
-                        <span className={cn('tabular-nums', TONE_CLASS[r.tone])}>
-                          {r.text}
-                        </span>
-                      </div>
-                    )
-                  })()}
-                  {connection.lastSyncAt && (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-slate-500 dark:text-slate-400">Last sync</span>
-                      <span className="text-slate-900 dark:text-slate-100 tabular-nums">
-                        {formatRelative(connection.lastSyncAt).text}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* HH — diagnostics result panel on the eBay card. Surfaces
-                  the auth-vs-network-vs-API breakdown next to the
-                  connection it describes. */}
-              {channel.type === 'EBAY' && diagnostics && (
-                <div
-                  className={cn(
-                    'mt-2 mb-3 border rounded-md px-3 py-2 text-sm',
-                    diagnostics.ok
-                      ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800'
-                      : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800',
-                  )}
-                >
-                  <div className="font-semibold mb-1 flex items-center gap-1">
-                    {diagnostics.ok ? (
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    ) : (
-                      <AlertCircle className="w-3.5 h-3.5" />
-                    )}
-                    {diagnostics.recommendation}
-                  </div>
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {diagnostics.details}
-                  </pre>
-                </div>
-              )}
-
-              {/* Env-managed connections (currently Amazon) are
-                  read-only from the UI: there's nothing to revoke and
-                  no per-tenant auth flow yet. The lastSyncError row
-                  above already surfaces "credentials missing" when
-                  isActive is false. */}
-              <div className="flex gap-2 flex-wrap">
-                {connection?.isManagedBy === 'env' ? (
-                  isConnected ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">
-                      Managed via API server env vars. Disconnect by removing creds in Railway.
-                    </p>
-                  ) : (
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      {connection.lastSyncError ?? 'Credentials missing — set env vars in Railway.'}
-                    </p>
-                  )
-                ) : connection?.isManagedBy === 'pending' ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled
-                    className="flex-1"
-                  >
-                    Connector deferred
-                  </Button>
-                ) : isConnected && connection ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={testingId === connection.id}
-                      onClick={() => handleTestConnection(connection.id)}
-                      className="flex-1"
-                    >
-                      Test
-                    </Button>
-                    {channel.type === 'EBAY' && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={diagnosing}
-                        onClick={() => handleDiagnoseEbay()}
-                        className="flex-1"
-                      >
-                        Diagnose
-                      </Button>
-                    )}
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleRevokeConnection(connection.id)}
-                      className="flex-1"
-                    >
-                      Disconnect
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    loading={isConnecting}
-                    icon={<Plug className="w-3.5 h-3.5" />}
-                    onClick={() => {
-                      if (channel.type === 'EBAY') {
-                        handleConnectEbay()
-                      } else {
-                        setStatusMsg({
-                          kind: 'info',
-                          text: `${channel.name} connector is deferred.`,
-                        })
-                      }
-                    }}
-                    className="flex-1"
-                  >
-                    Connect
-                  </Button>
-                )}
-              </div>
-            </Card>
-          )
-        })}
-      </div>
-
-      <Card title="About marketplace connections">
-        <ul className="text-base text-slate-600 dark:text-slate-400 space-y-1.5">
-          <li>· Each connection authorizes Nexus to read products, listings, and orders from that channel.</li>
-          <li>· OAuth tokens are refreshed automatically every 30 minutes before expiry.</li>
-          <li>· Disconnecting revokes the token and stops all syncs for that channel.</li>
-          <li>· Currently live: <strong>eBay OAuth</strong> + <strong>Amazon (env-managed)</strong>. Shopify, WooCommerce, and Etsy connectors are deferred.</li>
-        </ul>
-      </Card>
+      <section className="nds-channels-panel" role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.label as string}>
+        {tab === 'accounts' && (
+          <AccountsTab catalogue={catalogue.data} reloadSignal={reload} onStart={(key, opts) => void popup.start(key, opts)} />
+        )}
+        {tab === 'connect' && (
+          <ConnectTab
+            catalogue={catalogue.data}
+            catalogueError={catalogue.error}
+            accounts={accounts.data?.accounts ?? []}
+            ads={ads.data}
+            connecting={popup.connecting}
+            onStart={(key, opts) => void popup.start(key, opts)}
+          />
+        )}
+        {tab === 'diagnostics' && (
+          <DiagnosticsTab accounts={accounts.data?.accounts ?? []} loading={accounts.loading} onChanged={bump} />
+        )}
+      </section>
     </div>
   )
 }

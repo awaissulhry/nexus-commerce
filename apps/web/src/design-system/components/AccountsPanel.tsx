@@ -15,9 +15,35 @@
  * Channel-agnostic by requirement (operator decision 1, 2026-08-19): nothing here
  * names a channel. `onConnect` is supplied per channel by the page, so adding
  * Amazon multi-account later costs a connect flow and nothing in this file.
+ *
+ * ── CX.2 — the honest row ──────────────────────────────────────────────────
+ *
+ * Before CX.2 the row's only health signal was a dot encoding `lastSyncStatus`,
+ * while `/api/accounts` already returned `authStatus`, the granted scopes, the
+ * drift against the catalogue and every CX.1 timestamp — and no client rendered
+ * them. The row now reads `authStatus` for its status pill, prints the measured
+ * scopes as chips, says how many permissions are missing and relabels Reconnect
+ * accordingly, and carries a real **Test** (`POST …/heartbeat`) whose result
+ * lands inline. A row from an older API (no `authStatus`) renders exactly as it
+ * did, so nothing regresses.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Button, Pill, Tag } from '../primitives'
+import {
+  authStatusPill,
+  errorLineVisible,
+  lastSyncText,
+  permissionsLine,
+  rowActions,
+  runHeartbeat,
+  scopeChipLabel,
+  timestampText,
+  timestampTitle,
+  visibleScopes,
+  type HeartbeatOutcome,
+  type StampKind,
+} from '../lib/accounts-panel'
 import '../styles/tokens.css'
 import '../styles/components.css'
 import { ACCOUNT_COLORS, type AccountRow, type AccountsPayload } from './AccountSwitcher'
@@ -52,6 +78,11 @@ export interface AccountsPanelProps {
     tone?: 'danger' | 'warning' | 'info'
   }) => Promise<boolean>
   className?: string
+  /**
+   * Test seam — when provided, the initial fetch is skipped and the panel renders
+   * this payload. Mutations and Test still refetch. Same seam as `AccountSwitcher`.
+   */
+  initialData?: AccountsPayload
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -69,6 +100,9 @@ const HEALTH_TEXT: Record<string, string> = {
   error: 'Failing',
   unknown: 'Not yet reported',
 }
+
+/* The row's wording and decisions live in `../lib/accounts-panel` (pure, tested); this file
+   only places what they return. */
 
 interface BlastRadius {
   counts: Record<string, number>
@@ -94,14 +128,35 @@ function describeBlastRadius(b: BlastRadius): string {
   return `${parts.join(', ')} are attributed to it. They are kept — the account is deactivated, never deleted, so history still says which account each row came from.`
 }
 
-export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, className, reloadSignal }: AccountsPanelProps) {
-  const [data, setData] = useState<AccountsPayload | null>(null)
+/** A timestamp segment: relative text, the absolute instant (or the reason) in `title`.
+ *  `untracked` is for `lastInboundAt` / `lastOutboundAt`, which have NO writer until CX.4 —
+ *  a `null` there is "nobody is counting yet", not "never happened", and the row says so. */
+function Stamp({ label, iso, kind = 'tracked' }: { label: string; iso: string | null | undefined; kind?: StampKind }) {
+  return (
+    <span title={timestampTitle(label, iso, kind)}>
+      {label} {timestampText(iso, kind)}
+    </span>
+  )
+}
+
+export function AccountsPanel({
+  apiBase,
+  onConnect,
+  onReconnect,
+  confirm,
+  className,
+  reloadSignal,
+  initialData,
+}: AccountsPanelProps) {
+  const [data, setData] = useState<AccountsPayload | null>(initialData ?? null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialData)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [draftLabel, setDraftLabel] = useState('')
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [expandedScopes, setExpandedScopes] = useState<Record<string, boolean>>({})
+  const [testResult, setTestResult] = useState<Record<string, HeartbeatOutcome>>({})
 
   const load = useCallback(async () => {
     try {
@@ -118,7 +173,13 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
     }
   }, [apiBase])
 
+  // The seam skips only the FIRST fetch; a later `reloadSignal` still refetches.
+  const skipFirstLoad = useRef(Boolean(initialData))
   useEffect(() => {
+    if (skipFirstLoad.current) {
+      skipFirstLoad.current = false
+      return
+    }
     void load()
   }, [load, reloadSignal])
 
@@ -202,6 +263,20 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
     await mutate(a.id, '/disconnect', { method: 'POST' }, `${a.label} disconnected.`)
   }
 
+  /** Test — a real heartbeat. On success the list refetches so `lastHeartbeatAt`
+   *  on the row is the column, not a guess. */
+  const test = async (a: AccountRow) => {
+    setBusyId(a.id)
+    setNotice(null)
+    try {
+      const outcome = await runHeartbeat(apiBase, a.id)
+      setTestResult((prev) => ({ ...prev, [a.id]: outcome }))
+      if (outcome.ok) await load()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   if (loading) return <div className={`nds-acctp${className ? ` ${className}` : ''}`}><span className="nds-acct-skeleton" aria-hidden /></div>
 
   if (error) {
@@ -244,121 +319,198 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
 
           {rows.length === 0 && <p className="nds-acctp-empty">No account connected yet.</p>}
 
-          {rows.map((a) => (
-            <div key={a.id} className="nds-acctp-row" data-busy={busyId === a.id || undefined}>
-              <span className="nds-acct-dot" data-health={a.health} aria-hidden />
-              <div className="nds-acctp-main">
-                {editing === a.id ? (
-                  <input
-                    className="nds-acctp-input"
-                    autoFocus
-                    value={draftLabel}
-                    placeholder={a.label}
-                    onChange={(e) => setDraftLabel(e.target.value)}
-                    onBlur={() => void saveLabel(a)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void saveLabel(a)
-                      if (e.key === 'Escape') setEditing(null)
-                    }}
-                    aria-label={`Name for this ${channelName(a.channel)} account`}
-                  />
-                ) : (
-                  <span className="nds-acctp-name">
-                    {a.label}
-                    {a.isPrimary && <span className="nds-acctp-badge">Primary</span>}
-                    {a.managedBy === 'env' && <span className="nds-acct-tag">env-managed</span>}
-                  </span>
-                )}
-                <span className="nds-acctp-sub">
-                  {HEALTH_TEXT[a.health] ?? a.health}
-                  {a.healthReason ? ` · ${a.healthReason}` : ''}
-                  {a.labelIsPlaceholder && ' · no name from the channel — rename it'}
-                  {!a.externalAccountId && (
-                    <>
-                      {' · '}
-                      <span className="nds-acctp-warn">
-                        identity unavailable — reconnect to enable multi-account
-                      </span>
-                    </>
+          {rows.map((a) => {
+            const busy = busyId === a.id
+            // An older API (no `authStatus`) keeps the health dot: the CX.1 fields
+            // are all absent together, so there is nothing else to draw.
+            const hasCx = a.authStatus !== undefined
+            const status = a.authStatus !== undefined ? authStatusPill(a.authStatus, a.consecutiveFailures ?? 0) : null
+            const scopesOpen = expandedScopes[a.id] === true
+            const chips = visibleScopes(a.scopes ?? [], scopesOpen)
+            const permissions = permissionsLine(a.grantedScopes, a.scopeDrift)
+            const showError = errorLineVisible(a.authStatus, a.lastError)
+            const actions = rowActions(a, Boolean(onReconnect))
+            const result = testResult[a.id]
+            // The sub line: health text only for a pre-CX.1 row (the pill carries it
+            // otherwise), then whatever the row still needs to say about itself.
+            const sub: ReactNode[] = []
+            if (!hasCx) sub.push(HEALTH_TEXT[a.health] ?? a.health)
+            if (a.healthReason) sub.push(a.healthReason)
+            if (a.labelIsPlaceholder) sub.push('no name from the channel — rename it')
+            if (!a.externalAccountId) {
+              sub.push(
+                <span className="nds-acctp-warn">identity unavailable — reconnect to enable multi-account</span>,
+              )
+            }
+
+            return (
+              <div key={a.id} className="nds-acctp-row" data-busy={busy || undefined}>
+                {!hasCx && <span className="nds-acct-dot" data-health={a.health} aria-hidden />}
+                <div className="nds-acctp-main">
+                  {editing === a.id ? (
+                    <input
+                      className="nds-acctp-input"
+                      autoFocus
+                      value={draftLabel}
+                      placeholder={a.label}
+                      onChange={(e) => setDraftLabel(e.target.value)}
+                      onBlur={() => void saveLabel(a)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void saveLabel(a)
+                        if (e.key === 'Escape') setEditing(null)
+                      }}
+                      aria-label={`Name for this ${channelName(a.channel)} account`}
+                    />
+                  ) : (
+                    <span className="nds-acctp-name">
+                      {status && (
+                        <Pill tone={status.tone} dot size="sm" className="nds-acctp-status" data-tone={status.tone}>
+                          {status.label}
+                        </Pill>
+                      )}
+                      {a.label}
+                      {a.isPrimary && <span className="nds-acctp-badge">Primary</span>}
+                      {a.managedBy === 'env' && <span className="nds-acct-tag">env-managed</span>}
+                      {a.region && <Tag>{a.region}</Tag>}
+                    </span>
                   )}
-                </span>
-              </div>
 
-              {/* A fixed palette, not a colour picker: identity has to read the
-                  same on every surface, and an arbitrary hex can land unreadable
-                  against one of the two themes. */}
-              <div className="nds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
-                {ACCOUNT_COLORS.map((c) => (
-                  <button
-                    key={c.hex}
-                    type="button"
-                    className="nds-acctp-swatch"
-                    style={{ background: c.hex }}
-                    aria-label={c.name}
-                    aria-pressed={a.accountColor === c.hex}
-                    disabled={busyId === a.id}
-                    onClick={() => void setColor(a, c.hex)}
-                  />
-                ))}
-                {a.accountColor && (
-                  <button
-                    type="button"
-                    className="nds-acctp-swatch is-clear"
-                    aria-label="Clear colour"
-                    disabled={busyId === a.id}
-                    onClick={() => void setColor(a, null)}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
+                  {sub.length > 0 && (
+                    <span className="nds-acctp-sub">
+                      {sub.map((part, i) => (
+                        <Fragment key={i}>
+                          {i > 0 && ' · '}
+                          {part}
+                        </Fragment>
+                      ))}
+                    </span>
+                  )}
 
-              <div className="nds-acctp-actions">
-                <button
-                  type="button"
-                  disabled={busyId === a.id}
-                  onClick={() => {
-                    setEditing(a.id)
-                    setDraftLabel(a.labelIsPlaceholder ? '' : a.label)
-                  }}
-                >
-                  Rename
-                </button>
-                {!a.isPrimary && (
-                  <button type="button" disabled={busyId === a.id} onClick={() => void makePrimary(a)}>
-                    Make primary
-                  </button>
-                )}
-                {onReconnect && a.managedBy !== 'env' && (
-                  <button
-                    type="button"
-                    disabled={busyId === a.id}
-                    onClick={() => void onReconnect(a)}
+                  {/* Measured facts from ConnectionScope — never the marketplace allowlist. */}
+                  {hasCx && chips.visible.length > 0 && (
+                    <div className="nds-acctp-scopes" aria-label={`Scopes of ${a.label}`}>
+                      {chips.visible.map((s) => (
+                        <Tag key={`${s.kind}:${s.externalId}`}>{scopeChipLabel(s)}</Tag>
+                      ))}
+                      {chips.foldable && (
+                        <Button
+                          variant="link"
+                          size="xs"
+                          inline
+                          aria-expanded={scopesOpen}
+                          onClick={() => setExpandedScopes((prev) => ({ ...prev, [a.id]: !scopesOpen }))}
+                        >
+                          {chips.toggleText}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {hasCx && (
+                    <div className="nds-acctp-times">
+                      {permissions?.tone === 'warning' ? (
+                        <Pill tone="warning" size="sm" data-tone="warning">
+                          {permissions.text}
+                        </Pill>
+                      ) : permissions ? (
+                        <span>{permissions.text}</span>
+                      ) : null}
+                      <Stamp label="Refreshed" iso={a.lastRefreshAt} />
+                      <Stamp label="Heartbeat" iso={a.lastHeartbeatAt} />
+                      <Stamp label="Inbound" iso={a.lastInboundAt} kind="untracked" />
+                      <Stamp label="Outbound" iso={a.lastOutboundAt} kind="untracked" />
+                      <span title={timestampTitle('Last sync', a.lastSyncAt)}>
+                        {lastSyncText(a.lastSyncAt, a.lastSyncStatus)}
+                      </span>
+                    </div>
+                  )}
+
+                  {showError && (
+                    <p className="nds-acctp-err" title={a.lastErrorAt ?? undefined}>
+                      {a.lastError}
+                    </p>
+                  )}
+
+                  {result && (
+                    <span className="nds-acctp-test" data-tone={result.ok ? 'ok' : 'error'} role="status">
+                      {result.text}
+                    </span>
+                  )}
+                </div>
+
+                {/* A fixed palette, not a colour picker: identity has to read the
+                    same on every surface, and an arbitrary hex can land unreadable
+                    against one of the two themes. */}
+                <div className="nds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
+                  {ACCOUNT_COLORS.map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      className="nds-acctp-swatch"
+                      style={{ background: c.hex }}
+                      aria-label={c.name}
+                      aria-pressed={a.accountColor === c.hex}
+                      disabled={busy}
+                      onClick={() => void setColor(a, c.hex)}
+                    />
+                  ))}
+                  {a.accountColor && (
+                    <button
+                      type="button"
+                      className="nds-acctp-swatch is-clear"
+                      aria-label="Clear colour"
+                      disabled={busy}
+                      onClick={() => void setColor(a, null)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="nds-acctp-actions">
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setEditing(a.id)
+                      setDraftLabel(a.labelIsPlaceholder ? '' : a.label)
+                    }}
                   >
-                    Reconnect
-                  </button>
-                )}
-                {/* An env-managed account has no OAuth grant to revoke, so there is
-                    nothing here to disconnect. It renders as a REASON, not as a
-                    disabled button: a `title` on a disabled control is unreachable
-                    (a disabled element fires no pointer events), so the explanation
-                    would be written where nobody can read it — and a disabled
-                    control's colours are dim enough to fail contrast besides. */}
-                {a.managedBy === 'env' ? (
-                  <span className="nds-acctp-note">Set by environment — no grant to revoke</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="is-danger"
-                    disabled={busyId === a.id}
-                    onClick={() => void disconnect(a)}
-                  >
-                    Disconnect
-                  </button>
-                )}
+                    Rename
+                  </Button>
+                  {actions.makePrimary && (
+                    <Button size="sm" disabled={busy} onClick={() => void makePrimary(a)}>
+                      Make primary
+                    </Button>
+                  )}
+                  {/* A real call, not a status read: the server writes `lastHeartbeatAt`
+                      and a ledger row, then the list refetches. Works for env-managed
+                      rows too (Amazon participations). */}
+                  <Button size="sm" variant="secondary" disabled={busy} onClick={() => void test(a)}>
+                    Test
+                  </Button>
+                  {actions.reconnect && onReconnect && (
+                    <Button size="sm" disabled={busy} onClick={() => void onReconnect(a)}>
+                      {actions.reconnect}
+                    </Button>
+                  )}
+                  {/* An env-managed account has no OAuth grant to revoke, so there is
+                      nothing here to disconnect. It renders as a REASON, not as a
+                      disabled button: a `title` on a disabled control is unreachable
+                      (a disabled element fires no pointer events), so the explanation
+                      would be written where nobody can read it — and a disabled
+                      control's colours are dim enough to fail contrast besides. */}
+                  {actions.envNote ? (
+                    <span className="nds-acctp-note">Set by environment — no grant to revoke</span>
+                  ) : (
+                    <Button size="sm" variant="danger-outline" disabled={busy} onClick={() => void disconnect(a)}>
+                      Disconnect
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
           {onConnect?.[channel] && (
             <button type="button" className="nds-acctp-add" onClick={() => void onConnect[channel]!()}>

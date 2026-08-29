@@ -7,10 +7,10 @@
 
 import { useEffect, useState } from 'react'
 import { notFound, useParams } from 'next/navigation'
+import { Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
-import ChannelDetailClient, {
-  type ChannelDetail,
-} from './ChannelDetailClient'
+import ChannelDetailClient from './ChannelDetailClient'
+import { CHANNEL_LABEL, PAGE_MAX_WIDTH, type ChannelDetail } from './channelDetail'
 
 const KNOWN = new Set(['amazon', 'ebay', 'shopify', 'woocommerce', 'etsy'])
 
@@ -53,22 +53,21 @@ export default function ChannelDetailPage() {
   if (!known) notFound()
 
   if (!state) {
+    // Same width and rhythm as the loaded page (header, then four cards) so nothing jumps.
     return (
-      <div className="max-w-3xl space-y-6" aria-busy="true">
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          All channels
+      <div
+        style={{ maxWidth: PAGE_MAX_WIDTH, display: 'grid', gap: 'var(--nds-space-20)' }}
+        aria-busy="true"
+        aria-label={`Loading ${CHANNEL_LABEL[lower] ?? lower}`}
+      >
+        <div style={{ display: 'grid', gap: 'var(--nds-space-8)' }}>
+          <Skeleton width={96} height={12} />
+          <Skeleton width={200} height={22} />
+          <Skeleton width={260} height={14} />
         </div>
-        <h1 className="text-base font-semibold capitalize text-slate-900 dark:text-slate-100">
-          {lower}
-        </h1>
-        <div className="space-y-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 rounded-md border border-default dark:border-slate-800 bg-slate-100 dark:bg-slate-800 animate-pulse"
-            />
-          ))}
-        </div>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} height={120} radius="var(--nds-radius-lg)" />
+        ))}
       </div>
     )
   }
