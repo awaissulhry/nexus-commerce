@@ -119,3 +119,17 @@ The spec's §8.5 check ("the held Connect buttons are reachable by Tab and produ
 So the finding is about the probe, not the page: **the Chrome harness's key action does not activate a focused button.** What is genuinely measured on prod: the held button carries `aria-disabled="true"` with **no** `disabled` attribute, is focusable (`tabIndex 0`, `document.activeElement === el`), draws at 0.62 opacity from the new DS rule, has `cursor: default` (never `help`), and its handler produces the reason (`el.click()` → "Amazon sign-in arrives with CX.3 …"). Keyboard *activation* could not be verified with this tooling and is recorded here as unverified rather than claimed.
 
 Nearly filing this was the false-positive failure mode aimed at correct code. The control is what stopped it.
+
+### 11c. "Last sync" was never a sync — the fossil, and the fix
+
+Verifying the detail page turned up the deepest of these: `xaviaracing` showed **"Last sync FAILED 8h ago — eBay tokens not configured for this connection"** while the eBay orders sync had *just run successfully for that very account* (`connections=2 ok=2 partial=0 failed=0`).
+
+The chain, each link measured:
+1. `ebay-auth.service.ts:298` — the **legacy token refresh** wrote `lastSyncAt: new Date(), lastSyncStatus: 'SUCCESS'` on every refresh. So on an eBay connection "Last sync" was the last *token refresh*. Audit A6 §0.2 suspected this; this is the line that proves it.
+2. `xaviaracing`'s 01:42Z "FAILED · eBay tokens not configured" was therefore a failed **refresh** on the pre-CX.1 plaintext path, wearing the word "sync".
+3. CX.1's token service correctly stopped stamping sync fields on a refresh (`lastRefreshAt` is its own column, and the token test asserts `lastSyncAt` is never written).
+4. But the scheduled `ebay-orders-sync` job never wrote them either — only the manual route did. So the field became a **fossil**: frozen at the last legacy refresh, and never updated again, no matter how many real syncs succeeded.
+
+Fix: the cron records the same fact the manual route does — per connection, `lastSyncAt` / `lastSyncStatus` / `lastSyncError` from that connection's actual result, on success, partial, failure and throw. The field is live again and means what its name says.
+
+This is the class the honesty rule exists for: not a wrong number, but **a true value under the wrong name**, which then outlives the thing that wrote it.

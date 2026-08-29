@@ -69,6 +69,37 @@ async function runOrdersPoll(): Promise<void> {
       inventoryDeducted: 0,
     }
 
+    /**
+     * Record each connection's own outcome on the connection.
+     *
+     * Until CX.1 the only thing writing `lastSyncAt`/`lastSyncStatus` on an eBay
+     * ChannelConnection was the LEGACY TOKEN REFRESH (`ebay-auth.service.ts`
+     * stamped `lastSyncStatus: 'SUCCESS'` on every refresh) — so "Last sync" was
+     * the last refresh, not a sync, which is what audit A6 §0.2 suspected. CX.1's
+     * token service correctly stopped doing that, and this cron never did it, so
+     * the field became a fossil: measured on prod 2026-08-29, `xaviaracing` showed
+     * "Last sync FAILED — eBay tokens not configured" while THIS job had just
+     * synced it successfully. The manual route already writes it; the scheduled
+     * job must write the same fact, or the screen and the sync disagree.
+     */
+    const recordOutcome = async (
+      connectionId: string,
+      status: 'SUCCESS' | 'PARTIAL' | 'FAILED',
+      error: string | null,
+    ) => {
+      try {
+        await prisma.channelConnection.update({
+          where: { id: connectionId },
+          data: { lastSyncAt: new Date(), lastSyncStatus: status, lastSyncError: error?.slice(0, 500) ?? null },
+        })
+      } catch (err) {
+        logger.warn('ebay-orders cron: could not record the connection outcome', {
+          connectionId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
     let firstError: string | null = null
     for (const conn of connections) {
       try {
@@ -82,6 +113,12 @@ async function runOrdersPoll(): Promise<void> {
         else if (result.status === 'PARTIAL') totals.connectionsPartial++
         else totals.connectionsFailed++
 
+        await recordOutcome(
+          conn.id,
+          result.status === 'SUCCESS' ? 'SUCCESS' : result.status === 'PARTIAL' ? 'PARTIAL' : 'FAILED',
+          result.status === 'SUCCESS' ? null : (result.errors[0]?.error ?? null),
+        )
+
         if (result.status !== 'SUCCESS') {
           firstError ??= result.errors[0]?.error ?? null
           logger.warn('ebay-orders cron: connection completed with errors', {
@@ -94,6 +131,7 @@ async function runOrdersPoll(): Promise<void> {
       } catch (err) {
         totals.connectionsFailed++
         firstError ??= err instanceof Error ? err.message : String(err)
+        await recordOutcome(conn.id, 'FAILED', err instanceof Error ? err.message : String(err))
         logger.error('ebay-orders cron: connection threw', {
           connectionId: conn.id,
           displayName: conn.displayName,
