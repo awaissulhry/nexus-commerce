@@ -71,7 +71,10 @@ export interface RecentEvent {
 
 export interface ChannelDetail {
   connection: ChannelConnection
+  /** CX.1 — what the grant actually carries (captured at consent, re-read by the heartbeat). */
   scopes: string[]
+  /** CX.1 — what the catalogue wants that this grant lacks; non-empty ⇒ "Reconnect to grant new permissions". */
+  scopeDrift?: string[]
   activeMarketplaces: string[]
   meta: Record<string, unknown> | null
   recentEvents: RecentEvent[]
@@ -206,7 +209,7 @@ export default function ChannelDetailClient({
 
       <ConnectionHeader detail={detail} channelType={channelType} />
       <TokenHealthCard detail={detail} />
-      <ScopesCard scopes={detail.scopes} />
+      <ScopesCard scopes={detail.scopes} drift={detail.scopeDrift ?? []} />
       <MarketplacesCard
         channelType={channelType}
         allowed={allowed}
@@ -384,23 +387,34 @@ function TokenHealthCard({ detail }: { detail: ChannelDetail }) {
   )
 }
 
-function ScopesCard({ scopes }: { scopes: string[] }) {
+function ScopesCard({ scopes, drift }: { scopes: string[]; drift: string[] }) {
   return (
     <Card
-      title="OAuth scopes"
+      title="Permissions"
       icon={<KeyRound size={14} />}
       description={
         scopes.length > 0
-          ? undefined
-          : 'No scopes captured. The OAuth callback writes them to connectionMetadata.scopes when granted — Amazon SP-API v2 and eBay sign-in both expose this; older grants may need a reconnect to populate.'
+          ? drift.length > 0
+            ? `${scopes.length} granted · ${drift.length} not yet granted — reconnect to grant ${drift.length === 1 ? 'it' : 'them'}.`
+            : `${scopes.length} granted — every permission this channel can give.`
+          : 'No permissions recorded for this grant. Reconnect in Settings → Channels → Accounts to capture what the channel actually granted.'
       }
     >
-      {scopes.length === 0 ? null : (
+      {scopes.length === 0 && drift.length === 0 ? null : (
         <ul className="flex flex-wrap gap-1.5">
           {scopes.map((s) => (
             <li
               key={s}
               className="inline-flex items-center h-6 px-2 rounded-full text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+            >
+              {s}
+            </li>
+          ))}
+          {drift.map((s) => (
+            <li
+              key={`missing:${s}`}
+              title="Not granted — reconnect to grant this permission"
+              className="inline-flex items-center h-6 px-2 rounded-full text-xs font-mono border border-dashed border-amber-400 text-amber-700 dark:text-amber-300"
             >
               {s}
             </li>

@@ -170,6 +170,12 @@ import reviewSendWindowsRoutes from "./routes/review-send-windows.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 // MAP.0/MAP.1 — uncollapsed account list + the single-account diagnostics proof.
 import accountsRoutes from "./routes/accounts.routes.js";
+// CX.1 — connection core
+import "./services/cx/connectors/index.js";
+import cxConnectRoutes from "./routes/cx-connect.routes.js";
+import cxConnectionsRoutes from "./routes/cx-connections.routes.js";
+import { seedChannelApps } from "./services/cx/apps.service.js";
+import { startCxHeartbeatCron } from "./jobs/cx-heartbeat.job.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import reconciliationRoutes from "./routes/reconciliation.routes.js";
 import ebayPhase3Routes from "./routes/ebay-phase3.routes.js";
@@ -204,7 +210,6 @@ import { startPricingCron } from "./jobs/pricing-refresh.job.js";
 import { startRepricerCron } from "./jobs/repricer.job.js";
 import { startCatalogRefreshCron } from "./jobs/catalog-refresh.job.js";
 import { startSchemaRefreshCron } from "./jobs/schema-refresh.job.js";
-import { startEbayTokenRefreshCron } from "./jobs/ebay-token-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startFlatFileFeedPollCron } from "./jobs/amazon-flat-file-feed-poll.job.js";
@@ -366,13 +371,16 @@ async function seedEnvManagedConnections(): Promise<void> {
       select: { id: true },
     });
 
+    // CX.1 — no more `lastSyncStatus: "SUCCESS"` stamped at boot (audit S-honesty):
+    // the row starts `unknown` and the heartbeat decides within a minute of boot.
     const data = {
       channelType: "AMAZON",
       marketplace: null,
       managedBy: "env",
       isActive: amazonConfigured,
       displayName: sellerId,
-      lastSyncStatus: amazonConfigured ? "SUCCESS" : "FAILED",
+      region: "EU",
+      authStatus: amazonConfigured ? "unknown" : "disconnected",
       lastSyncError: amazonConfigured
         ? null
         : "Amazon credentials not configured (AMAZON_LWA_* and AWS_* env vars required)",
@@ -760,6 +768,8 @@ app.register(reviewInsertsRoutes, { prefix: '/api' });
 app.register(reviewSendWindowsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 app.register(accountsRoutes, { prefix: '/api' });
+app.register(cxConnectRoutes, { prefix: '/api' });
+app.register(cxConnectionsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });
 app.register(ebayPhase3Routes, { prefix: '/api' });
 // IS.2 — real-time cross-channel inventory sync routes
@@ -806,6 +816,10 @@ async function start() {
     // read uniformly. Idempotent: upsert keyed on (channelType,
     // managedBy='env').
     await seedEnvManagedConnections();
+    // CX.1 — our per-channel app credentials become rows (once), so connection rows never carry them.
+    await seedChannelApps().catch((err) =>
+      logger.error("seedChannelApps failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) }),
+    );
 
     // Phase S2 (RBAC engine) — converge the six system roles to the
     // registry on every boot (idempotent, prod-safe). Runs here (post-
@@ -1034,7 +1048,8 @@ async function start() {
       // default-ON behaviour is safe in fresh / dev environments.
       // Set NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON=0 to opt out.
       if (process.env.NEXUS_ENABLE_EBAY_TOKEN_REFRESH_CRON !== '0') {
-        startEbayTokenRefreshCron();
+        // CX.1 — one heartbeat for every channel replaces the eBay-only refresh sweep.
+        startCxHeartbeatCron();
       }
 
       // R4.2 — eBay returns poller. Default-OFF because it makes a

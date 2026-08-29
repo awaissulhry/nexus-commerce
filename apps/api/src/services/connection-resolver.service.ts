@@ -31,8 +31,30 @@
  * connect flow and no changes to this file.
  */
 
-import type { ChannelConnection } from "@prisma/client";
+import type { ChannelConnection, Prisma } from "@prisma/client";
 import prisma from "../db.js";
+
+/**
+ * CX.1 — the resolver never returns credentials. Every column EXCEPT the token
+ * material is selected; a caller that needs a bearer asks the token service
+ * (`services/cx/token.service.ts`) with the connection id. `tsc` is the audit:
+ * a site that read `.accessToken` off a resolver row no longer compiles.
+ */
+export const CONNECTION_PUBLIC_SELECT = {
+  id: true, channelType: true, marketplace: true, managedBy: true, displayName: true,
+  ebayDevId: true, ebayAppId: true, ebaySignInName: true, ebayStoreName: true, ebayStoreFrontUrl: true,
+  tokenExpiresAt: true, ebayTokenExpiresAt: true,
+  isActive: true, lastSyncAt: true, lastSyncStatus: true, lastSyncError: true,
+  accountLabel: true, accountColor: true, isPrimary: true, sortOrder: true, externalAccountId: true,
+  connectionMetadata: true, createdAt: true, updatedAt: true,
+  authStatus: true, region: true, credentialsKeyId: true, grantedScopes: true,
+  accessTokenExpiresAt: true, refreshTokenExpiresAt: true,
+  lastRefreshAt: true, lastHeartbeatAt: true, lastInboundAt: true, lastOutboundAt: true,
+  lastErrorAt: true, lastError: true, consecutiveFailures: true, identity: true, apiVersion: true,
+} satisfies Prisma.ChannelConnectionSelect;
+
+/** A connection row without credentials — what every caller outside the token service sees. */
+export type ConnectionRow = Prisma.ChannelConnectionGetPayload<{ select: typeof CONNECTION_PUBLIC_SELECT }>;
 
 /** Thrown when the scope does not identify one account and more than one is live. */
 export class AmbiguousConnectionError extends Error {
@@ -132,15 +154,16 @@ export function chooseConnection(
 }
 
 /** Every active connection for a channel, in the operator's own order. */
-export async function listActiveConnections(channel: string): Promise<ChannelConnection[]> {
+export async function listActiveConnections(channel: string): Promise<ConnectionRow[]> {
   return prisma.channelConnection.findMany({
     where: { channelType: channel, isActive: true },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+    select: CONNECTION_PUBLIC_SELECT,
   });
 }
 
-async function byId(id: string, whatFor: string): Promise<ChannelConnection> {
-  const row = await prisma.channelConnection.findUnique({ where: { id } });
+async function byId(id: string, whatFor: string): Promise<ConnectionRow> {
+  const row = await prisma.channelConnection.findUnique({ where: { id }, select: CONNECTION_PUBLIC_SELECT });
   if (!row) throw new NoConnectionError(`ChannelConnection ${id} not found (${whatFor}).`);
   if (!row.isActive) {
     throw new NoConnectionError(
@@ -160,7 +183,7 @@ async function byId(id: string, whatFor: string): Promise<ChannelConnection> {
  * there is more than one. That is the fail-closed rule doing its job rather than
  * a gap: an unattributed row genuinely does not know which store it belongs to.
  */
-export async function resolveConnection(scope: ConnectionScope): Promise<ChannelConnection> {
+export async function resolveConnection(scope: ConnectionScope): Promise<ConnectionRow> {
   if ("accountId" in scope) return byId(scope.accountId, "explicit accountId");
 
   if ("listingId" in scope) {
@@ -229,7 +252,7 @@ export async function resolveConnection(scope: ConnectionScope): Promise<Channel
 }
 
 /** The channel's single active account, or its primary when several are live. */
-async function resolveDeclared(channel: string, hint?: string): Promise<ChannelConnection> {
+async function resolveDeclared(channel: string, hint?: string): Promise<ConnectionRow> {
   const active = await listActiveConnections(channel);
   const chosen = chooseConnection(active, { channel, wantPrimary: true, hint });
   return active.find((c) => c.id === chosen.id)!;
@@ -251,7 +274,7 @@ async function resolveDeclared(channel: string, hint?: string): Promise<ChannelC
  */
 export async function tryResolveConnection(
   scope: ConnectionScope,
-): Promise<ChannelConnection | null> {
+): Promise<ConnectionRow | null> {
   try {
     return await resolveConnection(scope);
   } catch {
@@ -310,8 +333,9 @@ export async function findAccountByExternalId(
   channel: string,
   externalAccountId: string,
   excludeConnectionId?: string,
-): Promise<ChannelConnection | null> {
+): Promise<ConnectionRow | null> {
   return prisma.channelConnection.findFirst({
+    select: CONNECTION_PUBLIC_SELECT,
     where: {
       channelType: channel,
       isActive: true,

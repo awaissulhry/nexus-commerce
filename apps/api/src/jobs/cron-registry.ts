@@ -30,7 +30,8 @@ import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js
 import { evaluateEbayAdsRules, runAnomalyGuard, generateWeeklyDigest } from '../services/marketing/ebay-ads-automation.service.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
-import { runRefreshSweep as runEbayTokenRefresh } from './ebay-token-refresh.job.js'
+import { runHeartbeatSweep as runCxHeartbeat } from './cx-heartbeat.job.js'
+import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials-backfill.job.js'
 import { runSyncDriftDetection } from './sync-drift-detection.job.js'
 import { runAutoPoCronOnce } from './auto-po-replenishment.job.js'
 import { runYesterdayIngest as runSalesReportIngest } from './sales-report-ingest.job.js'
@@ -167,7 +168,11 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'amazon-settlement-sync': () => runAmazonSettlementSync(),
   'amazon-aplus-sync': () => runAmazonAplusSync(),
   'ebay-orders-sync': () => runEbayOrdersPoll(),
-  'ebay-token-refresh': () => runEbayTokenRefresh(),
+  // CX.1 — the heartbeat replaced the eBay-only token refresh sweep; the old key stays as an alias.
+  'ebay-token-refresh': () => runCxHeartbeat(),
+  'cx-heartbeat': () => runCxHeartbeat(),
+  'cx1-credentials-backfill': () => runCredentialsBackfill(),
+  'cx1-credentials-restore': () => runCredentialsRestore(),
   'sync-drift-detection': () => runSyncDriftDetection(),
   'auto-po': () => runAutoPoCronOnce(),
   'sales-report-ingest': () => runSalesReportIngest(),

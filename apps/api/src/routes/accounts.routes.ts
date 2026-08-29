@@ -34,10 +34,14 @@
  */
 
 import type { FastifyPluginAsync } from "fastify";
-import type { ChannelConnection } from "@prisma/client";
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
-import { listActiveConnections } from "../services/connection-resolver.service.js";
+import {
+  listActiveConnections,
+  CONNECTION_PUBLIC_SELECT,
+  type ConnectionRow as ChannelConnection,
+} from "../services/connection-resolver.service.js";
+import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 import { ebayAuthService } from "../services/ebay-auth.service.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
@@ -85,6 +89,25 @@ export interface AccountRow {
   lastSyncAt: string | null;
   lastSyncStatus: string | null;
   lastSyncError: string | null;
+  // ── CX.1 — the connection core, all measured ────────────────────────────
+  /** connected | degraded | needs_reauth | revoked | disconnected | unknown */
+  authStatus: string;
+  region: string | null;
+  grantedScopes: string[];
+  /** Scopes the catalog wants that this grant lacks — non-empty means "Reconnect to grant new permissions". */
+  scopeDrift: string[];
+  /** Markets / marketplaces this grant reaches (ConnectionScope rows). */
+  scopes: Array<{ kind: string; externalId: string; label: string | null }>;
+  accessTokenExpiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  lastRefreshAt: string | null;
+  lastHeartbeatAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+  identity: Record<string, unknown> | null;
 }
 
 const EBAY_PLACEHOLDER_LABELS = new Set(["eBay seller (verified)", "eBay seller"]);
@@ -128,6 +151,21 @@ function deriveLabel(r: ChannelConnection): Pick<AccountRow, "label" | "labelSou
  */
 function deriveHealth(r: ChannelConnection): { health: Health; healthReason: string | null } {
   if (!r.isActive) return { health: "error", healthReason: "Connection is not active" };
+  // CX.1 — the auth state machine is measured by the heartbeat and by every real
+  // call; it outranks the last sync outcome because a sync can succeed on a token
+  // that is one refresh away from dying, and can fail for reasons that are not auth.
+  switch (r.authStatus) {
+    case "needs_reauth":
+      return { health: "error", healthReason: r.lastError ?? "Sign-in expired or was revoked — reconnect" };
+    case "revoked":
+      return { health: "error", healthReason: "Access was revoked at the channel — reconnect" };
+    case "disconnected":
+      return { health: "error", healthReason: "Disconnected" };
+    case "degraded":
+      return { health: "warn", healthReason: r.lastError ?? ` consecutive failures` };
+    default:
+      break;
+  }
   switch (r.lastSyncStatus) {
     case "SUCCESS":
       return { health: "ok", healthReason: null };
@@ -150,7 +188,12 @@ function readMarkets(r: ChannelConnection): string[] {
     : [];
 }
 
-function toAccountRow(r: ChannelConnection, isPrimary: boolean): AccountRow {
+function toAccountRow(
+  r: ChannelConnection,
+  isPrimary: boolean,
+  scopes: Array<{ kind: string; externalId: string; label: string | null }> = [],
+): AccountRow {
+  const spec = tryGetChannelSpec(channelKeyOf(r.channelType));
   return {
     id: r.id,
     channel: r.channelType as Channel,
@@ -166,6 +209,21 @@ function toAccountRow(r: ChannelConnection, isPrimary: boolean): AccountRow {
     lastSyncAt: r.lastSyncAt?.toISOString() ?? null,
     lastSyncStatus: r.lastSyncStatus,
     lastSyncError: r.lastSyncError,
+    authStatus: r.authStatus,
+    region: r.region,
+    grantedScopes: r.grantedScopes,
+    scopeDrift: spec ? scopeDriftOf(spec, r.grantedScopes) : [],
+    scopes,
+    accessTokenExpiresAt: r.accessTokenExpiresAt?.toISOString() ?? null,
+    refreshTokenExpiresAt: r.refreshTokenExpiresAt?.toISOString() ?? null,
+    lastRefreshAt: r.lastRefreshAt?.toISOString() ?? null,
+    lastHeartbeatAt: r.lastHeartbeatAt?.toISOString() ?? null,
+    lastInboundAt: r.lastInboundAt?.toISOString() ?? null,
+    lastOutboundAt: r.lastOutboundAt?.toISOString() ?? null,
+    lastErrorAt: r.lastErrorAt?.toISOString() ?? null,
+    lastError: r.lastError,
+    consecutiveFailures: r.consecutiveFailures,
+    identity: (r.identity as Record<string, unknown> | null) ?? null,
   };
 }
 
@@ -198,8 +256,23 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       // MAP.2a made isPrimary a real column, backfilled and constrained to one
       // true row per channelType by a partial unique index — so it is read, not
       // derived. Ordering honours the operator's sortOrder, primary first.
+      // CX.1 — the markets / marketplaces each grant reaches, one query for the page.
+      const scopeRows = rows.length
+        ? await prisma.connectionScope.findMany({
+            where: { connectionId: { in: rows.map((r) => r.id) }, isActive: true },
+            orderBy: [{ kind: "asc" }, { externalId: "asc" }],
+            select: { connectionId: true, kind: true, externalId: true, label: true },
+          })
+        : [];
+      const scopesByConnection = new Map<string, Array<{ kind: string; externalId: string; label: string | null }>>();
+      for (const s of scopeRows) {
+        const list = scopesByConnection.get(s.connectionId) ?? [];
+        list.push({ kind: s.kind, externalId: s.externalId, label: s.label });
+        scopesByConnection.set(s.connectionId, list);
+      }
+
       const accounts = rows
-        .map((r) => toAccountRow(r, r.isPrimary))
+        .map((r) => toAccountRow(r, r.isPrimary, scopesByConnection.get(r.id) ?? []))
         .sort(
           (a, b) =>
             (CHANNEL_ORDER[a.channel] ?? 99) - (CHANNEL_ORDER[b.channel] ?? 99) ||

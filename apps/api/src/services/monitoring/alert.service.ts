@@ -24,6 +24,8 @@ export enum AlertType {
   SYNC_FAILURE = 'SYNC_FAILURE',
   DATA_CORRUPTION = 'DATA_CORRUPTION',
   PERFORMANCE_DEGRADATION = 'PERFORMANCE_DEGRADATION',
+  /** CX.1 — a channel connection needs reconnecting / is degraded / recovered / a credential is about to expire. */
+  CONNECTION_HEALTH = 'CONNECTION_HEALTH',
 }
 
 export interface AlertConfig {
@@ -42,6 +44,7 @@ export interface AlertConfig {
  */
 const ALERT_TYPE_TO_WEBHOOK_EVENT: Partial<Record<AlertType, string>> = {
   [AlertType.SYNC_FAILURE]: 'SYNC_FAILURE',
+  [AlertType.CONNECTION_HEALTH]: 'SYNC_FAILURE',
 }
 
 export interface AlertChannel {
@@ -130,6 +133,22 @@ export class AlertService {
         channels: [
           { type: 'IN_APP', destination: 'admin', enabled: true },
           { type: 'EMAIL', destination: 'admin@nexus.local', enabled: false },
+        ],
+      },
+      {
+        // CX.1 — connection health. In-app always; email when NEXUS_CONNECTION_ALERT_EMAIL is set
+        // (outbound email is live on prod — never default to a placeholder recipient).
+        type: AlertType.CONNECTION_HEALTH,
+        severity: AlertSeverity.ERROR,
+        threshold: 1,
+        enabled: true,
+        channels: [
+          { type: 'IN_APP', destination: 'admin', enabled: true },
+          {
+            type: 'EMAIL',
+            destination: process.env.NEXUS_CONNECTION_ALERT_EMAIL ?? '',
+            enabled: !!process.env.NEXUS_CONNECTION_ALERT_EMAIL,
+          },
         ],
       },
     ]
@@ -362,3 +381,6 @@ export class AlertService {
     return Array.from(this.alertConfigs.values())
   }
 }
+
+/** CX.1 — process-wide singleton (monitoring.service still constructs its own; both share the same defaults). */
+export const alertService = new AlertService()

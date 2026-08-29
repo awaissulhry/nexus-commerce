@@ -120,27 +120,47 @@ export function ChannelsClient() {
   } | null>(null)
 
   // The connect flow runs in a POPUP, so success happens in a window this one
-  // cannot see. The popup posts back to our origin; we verify the origin, then
-  // refresh instead of leaving the operator on a stale list.
+  // cannot see. CX.1: the popup ends on the API host (`/api/cx/callback/:channel`),
+  // which posts to THIS origin and also broadcasts on `nexus-oauth` for the case
+  // where `window.opener` was severed. We accept the API origin and our own,
+  // reply with an ACK so the popup knows it was heard and may close, then refresh.
   useEffect(() => {
-    const onMessage = (e: MessageEvent) => {
-      if (e.origin !== window.location.origin) return
-      const data = e.data as { type?: string; channel?: string; sellerName?: string } | null
-      if (data?.type !== 'nexus:channel-connected') return
+    const apiOrigin = (() => {
+      try { return new URL(getBackendUrl(), window.location.href).origin } catch { return null }
+    })()
+    type ConnectedMsg = { type?: string; channel?: string; sellerName?: string; scopeDrift?: string[] } | null
+    const handle = (data: ConnectedMsg): boolean => {
+      if (data?.type !== 'nexus:channel-connected') return false
       setConnectingChannel(null)
       setAccountsReload((n) => n + 1)
+      const driftCount = data.scopeDrift?.length ?? 0
+      const drift = driftCount
+        ? ` ${driftCount} permission${driftCount === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${driftCount === 1 ? 'it' : 'them'}.`
+        : ''
       // Confirm LAST. loadConnections sets its own error banner on failure, and a
       // refresh that stumbles must not erase the news that the connection worked
       // — the connection is the fact, the refresh is just the view catching up.
       void loadConnections().finally(() => {
         setStatusMsg({
-          kind: 'success',
-          text: `${data.channel === 'EBAY' ? 'eBay' : data.channel} account connected${data.sellerName ? `: ${data.sellerName}` : ''}.`,
+          kind: drift ? 'info' : 'success',
+          text: `${data.channel === 'EBAY' ? 'eBay' : data.channel} account connected${data.sellerName ? `: ${data.sellerName}` : ''}.${drift}`,
         })
       })
+      return true
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin && e.origin !== apiOrigin) return
+      if (handle(e.data as ConnectedMsg)) {
+        try { (e.source as Window | null)?.postMessage({ type: 'nexus:ack' }, e.origin) } catch { /* popup already gone */ }
+      }
     }
     window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
+    let bc: BroadcastChannel | null = null
+    try {
+      bc = new BroadcastChannel('nexus-oauth')
+      bc.onmessage = (e) => { if (handle(e.data as ConnectedMsg)) bc?.postMessage({ type: 'nexus:ack' }) }
+    } catch { /* no BroadcastChannel — the postMessage path above still works */ }
+    return () => { window.removeEventListener('message', onMessage); bc?.close() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -190,14 +210,17 @@ export function ChannelsClient() {
       setConnectingChannel('EBAY')
       setStatusMsg(null)
 
-      const response = await fetch(`${getBackendUrl()}/api/ebay/auth/initiate`, {
+      // CX.1 — the shared connect flow. The server mints the state + PKCE pair,
+      // stores the intent (connect / reconnect-this-row) against the state, and
+      // sets a double-submit cookie scoped to its own callback path, so the
+      // browser proves on the way back that it is the one that started this.
+      const response = await fetch(`${getBackendUrl()}/api/cx/connect/ebay/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          redirectUri: `${window.location.origin}/settings/channels/ebay-callback`,
-          // Goes into the SIGNED state, so it survives the eBay round-trip without
-          // browser storage and cannot be rewritten by the caller on the way back.
-          adoptConnectionId,
+          intent: adoptConnectionId ? 'reconnect' : 'connect',
+          targetConnectionId: adoptConnectionId,
         }),
       })
 

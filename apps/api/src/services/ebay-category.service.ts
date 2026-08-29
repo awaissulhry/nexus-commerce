@@ -403,7 +403,7 @@ export class EbayCategoryService {
       // seller token reads the same taxonomy.
       const { tryResolveConnection } = await import('./connection-resolver.service.js')
       const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
-      if (conn && conn.ebayAccessToken && conn.ebayRefreshToken) {
+      if (conn && conn.authStatus !== 'disconnected' && conn.authStatus !== 'revoked') {
         const { ebayAuthService } = await import('./ebay-auth.service.js')
         return await ebayAuthService.getValidToken(conn.id)
       }

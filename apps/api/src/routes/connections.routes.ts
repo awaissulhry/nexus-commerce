@@ -20,6 +20,7 @@ import type { ChannelConnection } from "@prisma/client";
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
 import { writeSettingsAudit } from "../utils/settings-audit.js";
+import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 type IsManagedBy = "oauth" | "env" | "pending";
@@ -38,6 +39,21 @@ interface ConnectionRow {
   lastSyncError: string | null;
   createdAt: string;
   updatedAt: string;
+  // ── CX.1 — measured connection core ─────────────────────────────
+  authStatus: string;
+  region: string | null;
+  grantedScopes: string[];
+  scopeDrift: string[];
+  accessTokenExpiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  lastRefreshAt: string | null;
+  lastHeartbeatAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+  identity: Record<string, unknown> | null;
 }
 
 const CHANNEL_ORDER: Record<Channel, number> = {
@@ -73,6 +89,23 @@ function toConnectionRow(r: ChannelConnection): ConnectionRow {
     lastSyncError: r.lastSyncError,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    authStatus: r.authStatus,
+    region: r.region,
+    grantedScopes: r.grantedScopes,
+    scopeDrift: (() => {
+      const spec = tryGetChannelSpec(channelKeyOf(r.channelType));
+      return spec ? scopeDriftOf(spec, r.grantedScopes) : [];
+    })(),
+    accessTokenExpiresAt: r.accessTokenExpiresAt?.toISOString() ?? null,
+    refreshTokenExpiresAt: r.refreshTokenExpiresAt?.toISOString() ?? null,
+    lastRefreshAt: r.lastRefreshAt?.toISOString() ?? null,
+    lastHeartbeatAt: r.lastHeartbeatAt?.toISOString() ?? null,
+    lastInboundAt: r.lastInboundAt?.toISOString() ?? null,
+    lastOutboundAt: r.lastOutboundAt?.toISOString() ?? null,
+    lastErrorAt: r.lastErrorAt?.toISOString() ?? null,
+    lastError: r.lastError,
+    consecutiveFailures: r.consecutiveFailures,
+    identity: (r.identity as Record<string, unknown> | null) ?? null,
   };
 }
 
@@ -93,6 +126,20 @@ function pendingRow(channel: Channel): ConnectionRow {
     lastSyncError: null,
     createdAt: PROCESS_START,
     updatedAt: PROCESS_START,
+    authStatus: "disconnected",
+    region: null,
+    grantedScopes: [],
+    scopeDrift: [],
+    accessTokenExpiresAt: null,
+    refreshTokenExpiresAt: null,
+    lastRefreshAt: null,
+    lastHeartbeatAt: null,
+    lastInboundAt: null,
+    lastOutboundAt: null,
+    lastErrorAt: null,
+    lastError: null,
+    consecutiveFailures: 0,
+    identity: null,
   };
 }
 
@@ -168,8 +215,21 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
         // optional keys here. Anything else (per-channel adapter
         // diagnostics, e.g.) stays untouched.
         const meta = (row?.connectionMetadata ?? {}) as Record<string, unknown>;
-        const scopes = Array.isArray(meta.scopes)
-          ? meta.scopes.filter((s): s is string => typeof s === "string")
+        // CX.1 — scopes are what the grant actually carries (`grantedScopes`,
+        // captured at consent + re-read by the heartbeat), never a list from
+        // metadata that nothing wrote. Drift = catalogue wants − grant has.
+        const scopes = row?.grantedScopes?.length
+          ? row.grantedScopes
+          : Array.isArray(meta.scopes)
+            ? meta.scopes.filter((s): s is string => typeof s === "string")
+            : [];
+        const scopeDrift = connection.scopeDrift;
+        const connectionScopes = row
+          ? await prisma.connectionScope.findMany({
+              where: { connectionId: row.id },
+              orderBy: [{ kind: "asc" }, { externalId: "asc" }],
+              select: { kind: true, externalId: true, label: true, isActive: true },
+            })
           : [];
         const activeMarketplaces = Array.isArray(meta.activeMarketplaces)
           ? meta.activeMarketplaces.filter(
@@ -209,6 +269,8 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           connection,
           scopes,
+          scopeDrift,
+          connectionScopes,
           activeMarketplaces,
           // Per-channel diagnostics namespaced under `meta` so the
           // UI can render an "Advanced" details block without us

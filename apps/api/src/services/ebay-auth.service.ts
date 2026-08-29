@@ -16,6 +16,10 @@ interface EbayTokenResponse {
  * eBay Auth Service
  * Handles OAuth2 authentication and token management for eBay seller accounts
  */
+// CX.1 — delegation targets (see getValidToken / revokeTokens).
+import { getAccessToken, revoke as cxRevoke, tokenServiceEnabled } from './cx/token.service.js';
+import { SYSTEM_ACTOR } from './cx/events.service.js';
+
 export class EbayAuthService {
   private clientId: string;
   private clientSecret: string;
@@ -223,6 +227,12 @@ export class EbayAuthService {
    * This is the main method to use before making eBay API calls
    */
   async getValidToken(connectionId: string): Promise<string> {
+    // CX.1 — the token service is the only decryptor and the only refresher
+    // (leased, rotation-aware, state-machine-backed). The legacy path below is
+    // kept behind NEXUS_CX_TOKEN_SERVICE=0 for one release as the rollback.
+    if (tokenServiceEnabled()) {
+      return getAccessToken(connectionId);
+    }
     try {
       // AS.3 — callers passed the whole connection row here for weeks (hidden
       // by `as any` prisma casts); the Prisma error it produced was cryptic
@@ -378,6 +388,10 @@ export class EbayAuthService {
    * Revoke tokens and deactivate connection
    */
   async revokeTokens(connectionId: string): Promise<void> {
+    if (tokenServiceEnabled()) {
+      await cxRevoke(connectionId, SYSTEM_ACTOR, 'operator');
+      return;
+    }
     try {
       const connection = await prisma.channelConnection.findUnique({
         where: { id: connectionId },

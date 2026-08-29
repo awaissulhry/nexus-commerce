@@ -22,7 +22,7 @@ const cronTargets = [
   { job: 'amazon-mcf-status',      envFlag: null,                                  purpose: 'MCF (multi-channel fulfillment) status sync' },
   { job: 'ebay-orders-sync',       envFlag: 'NEXUS_ENABLE_EBAY_ORDERS_CRON',      purpose: 'Pull new eBay orders (15min, 7d window)' },
   { job: 'ebay-financial-sync',    envFlag: 'NEXUS_ENABLE_EBAY_FINANCIAL_CRON',   purpose: 'Pull eBay financial events (daily 03:30)' },
-  { job: 'ebay-token-refresh',     envFlag: null,                                  purpose: 'Keep eBay OAuth token fresh (6h)' },
+  { job: 'ebay-token-refresh',     envFlag: null,                                  purpose: 'CX.1 alias of cx-heartbeat (every channel: heartbeat + proactive refresh)' },
   { job: 'ads-sync',               envFlag: 'NEXUS_ENABLE_AMAZON_ADS_CRON',       purpose: 'Amazon Ads reports + structure sync (multi-tick)' },
   { job: 'ads-report-ingest',      envFlag: 'NEXUS_ENABLE_AMAZON_ADS_CRON',       purpose: 'Ingest completed Amazon Ads reports (15min)' },
   { job: 'ads-v1-export-ingest',   envFlag: 'NEXUS_ENABLE_AMAZON_ADS_CRON',       purpose: 'Ingest Amazon Ads v1 structure exports (5min)' },

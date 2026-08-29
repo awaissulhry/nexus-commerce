@@ -6043,6 +6043,36 @@ model ChannelConnection {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // ── CX.1 — connection core (docs/2026-08-29-cx1-connection-core.md §1.1) ──
+  // authStatus: connected | degraded | needs_reauth | revoked | disconnected | unknown
+  authStatus            String    @default("unknown")
+  region                String?
+  // THE credential blob: envelope-encrypted (v2 = KMS-wrapped data key, v1 = env key).
+  // Decrypted only by services/cx/token.service.ts. The plaintext columns above are
+  // nulled by the cx1-credentials-backfill job once this is populated.
+  credentialsEnc        String?
+  credentialsKeyId      String?
+  grantedScopes         String[]  @default([])
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  // The four honest timestamps — never conflated into one "last sync".
+  lastRefreshAt         DateTime?
+  lastHeartbeatAt       DateTime?
+  lastInboundAt         DateTime?
+  lastOutboundAt        DateTime?
+  lastErrorAt           DateTime?
+  lastError             String?
+  consecutiveFailures   Int       @default(0)
+  // Distributed refresh lease (pgbouncer-safe; no advisory lock across HTTP).
+  refreshLeaseUntil     DateTime?
+  refreshLeaseOwner     String?
+  // { userId, username, storeName?, storeUrl?, sellerId?, shopDomain? }
+  identity              Json?
+  apiVersion            String?
+
+  scopes ConnectionScope[]
+  events ConnectionEvent[]
+
   variantListings          VariantChannelListing[]
   // MAP.2a — attribution. ON DELETE SET NULL on every one of these: deleting a
   // connection must never delete listings or orders (contrast variantListings
@@ -6065,6 +6095,100 @@ model ChannelConnection {
   @@index([channelType])
   @@index([isActive])
   @@index([managedBy])
+  @@index([authStatus])
+  @@index([accessTokenExpiresAt])
+  @@index([refreshTokenExpiresAt])
+}
+
+// ── CX.1 — one grant, many scopes (marketplaces / shops / profiles / storefronts) ──
+// An SP-API grant covers a whole region (11 EU marketplaces on prod), an Ads grant
+// covers N profiles, a TikTok auth N shops, a Kaufland key 9 storefronts. CASCADE:
+// a scope has no meaning without its grant (contrast listings/orders, SET NULL).
+model ConnectionScope {
+  id           String   @id @default(cuid())
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  // marketplace | shop | profile | storefront
+  kind         String
+  externalId   String
+  label        String?
+  region       String?
+  isActive     Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([connectionId, kind, externalId])
+  @@index([kind, externalId])
+}
+
+// ── CX.1 — OUR app credentials per channel × environment ───────────────────────
+// Never copied into connection rows (the Ads secret was duplicated into 9 rows
+// before CX.1). Seeded once from env at boot; the row wins once it exists.
+model ChannelApp {
+  id              String    @id @default(cuid())
+  // EBAY | AMAZON_SP | AMAZON_ADS | SHOPIFY | ETSY | …
+  channelKey      String
+  // production | sandbox
+  environment     String    @default("production")
+  clientId        String
+  clientSecretEnc String?
+  redirectUris    String[]  @default([])
+  // eBay RuName, Etsy keystring, SP-API application id …
+  extra           Json?
+  // eBay Key Management signing key (private key + JWE), envelope-encrypted.
+  signingKeyEnc   String?
+  signingKeyId    String?
+  secretExpiresAt DateTime?
+  rotatedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([channelKey, environment])
+}
+
+// ── CX.1 — one OAuth attempt, keyed by the `state` we send to the channel ──────
+// Single use (consumedAt), 10-minute TTL, bound to the starting user and to a
+// double-submit cookie nonce; holds the PKCE verifier server-side.
+model OAuthSession {
+  id                 String    @id
+  channelKey         String
+  // connect | reconnect | adopt
+  intent             String
+  targetConnectionId String?
+  startedByUserId    String?
+  codeVerifier       String?
+  redirectUri        String
+  cookieNonce        String
+  region             String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  resultConnectionId String?
+  error              String?
+  createdAt          DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+// ── CX.1 — the ledger: every grant, refresh, revoke, heartbeat, status change ──
+// `detail` never carries token material (the writer redacts). Archive-never-delete
+// (decision 9): rows older than 90 days keep their row, detail moves to the archive.
+model ConnectionEvent {
+  id           String   @id @default(cuid())
+  connectionId String?
+  connection   ChannelConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  channelKey   String
+  // grant | reconsent | adopt | refresh | refresh_failed | revoke | disconnect |
+  // heartbeat_ok | heartbeat_failed | scope_drift | status_change | secret_rotated |
+  // signing_key_created | kms_fallback
+  type         String
+  actorUserId  String?
+  detail       Json?
+  archivedRef  String?
+  createdAt    DateTime @default(now())
+
+  @@index([connectionId, createdAt])
+  @@index([type, createdAt])
 }
 
 model OutboundSyncQueue {

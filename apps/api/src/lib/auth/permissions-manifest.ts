@@ -79,7 +79,6 @@ const ENTRIES: Entry[] = [
   // CX.0 (S4): only the browser-redirect callback is public; /connect is
   // session-gated by the adsConnect rule below.
   P(PUBLIC, (_m, p) => p === '/api/amazon-ads/auth/callback'),
-  P(PUBLIC, (m, p) => p === '/api/ebay/auth/callback'),
 
   // ── Auth surface ────────────────────────────────────────────────
   // Entry points anyone must reach unauthenticated:
@@ -133,6 +132,11 @@ const ENTRIES: Entry[] = [
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),
 
   // ── Channel connect/disconnect (OAuth-adjacent, session-gated) ──
+  // CX.1 — the shared connect flow. Only the browser-redirect callback is public.
+  P(PUBLIC, (m, p) => m.toUpperCase() === 'GET' && p.startsWith('/api/cx/callback/')),
+  RW(F.channelsConnect, F.channelsConnect, pfx('/api/cx/connect/')),
+  RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/cx/connections')),
+  P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
   RW(F.channelsConnect, F.channelsConnect, pfx('/api/ebay/auth')),
   RW(F.adsConnect, F.adsConnect, pfx('/api/amazon-ads/auth')), // (callback already PUBLIC above)
 

@@ -126,8 +126,9 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       ebaySignInName: c.ebaySignInName,
       tokenExpiresAt: c.tokenExpiresAt,
       ebayTokenExpiresAt: c.ebayTokenExpiresAt,
-      refreshToken: c.refreshToken,
-      ebayRefreshToken: c.ebayRefreshToken,
+      authStatus: c.authStatus,
+      refreshTokenExpiresAt: c.refreshTokenExpiresAt,
+      credentialsKeyId: c.credentialsKeyId,
       lastSyncStatus: c.lastSyncStatus,
       lastSyncError: c.lastSyncError,
     }))
@@ -137,7 +138,9 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       now: now.toISOString(),
       connections: connections.map((c) => {
         const expiresAt = c.tokenExpiresAt ?? c.ebayTokenExpiresAt
-        const hasRefreshToken = !!(c.refreshToken ?? c.ebayRefreshToken)
+        // CX.1 — the row no longer carries tokens; an envelope exists iff credentialsKeyId is set,
+        // and the refresh token is live iff its expiry (eBay: ~18 months) is in the future.
+        const hasRefreshToken = !!c.credentialsKeyId && (c.refreshTokenExpiresAt ? c.refreshTokenExpiresAt > now : true)
         const minsUntilExpiry = expiresAt
           ? Math.round((expiresAt.getTime() - now.getTime()) / 60_000)
           : null
@@ -148,6 +151,8 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
           minsUntilExpiry,
           expired: minsUntilExpiry !== null ? minsUntilExpiry <= 0 : null,
           hasRefreshToken,
+          authStatus: c.authStatus,
+          refreshTokenExpiresAt: c.refreshTokenExpiresAt?.toISOString() ?? null,
           lastSyncStatus: c.lastSyncStatus,
           lastSyncError: c.lastSyncError,
         }
@@ -159,7 +164,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
   // Triggers an immediate token refresh for all active eBay connections.
   // Same logic as the 30-min cron — safe to call any time.
   app.post('/admin/refresh-ebay-tokens', async (_req, reply) => {
-    const { runRefreshSweep } = await import('../jobs/ebay-token-refresh.job.js')
+    const { runHeartbeatSweep: runRefreshSweep } = await import('../jobs/cx-heartbeat.job.js')
     try {
       await runRefreshSweep()
     } catch (err: any) {

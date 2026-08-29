@@ -18,8 +18,8 @@
  */
 
 import prisma from '../db.js'
-import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
+import { ebayFetch } from './cx/connectors/ebay/client.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
@@ -59,9 +59,11 @@ async function fetchEbayTransactions(
     url.searchParams.set('limit', '200')
     if (cursor) url.searchParams.set('offset', cursor)
 
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    })
+    // CX.1 — through the eBay connector client: the Finances API requires an
+    // RFC 9421 request signature for EU/UK sellers (research R2 §H); the daily
+    // 403 errorId 215001 was the missing signature. `accessToken` here is the
+    // connection id (see the caller) so the client can mint + sign per call.
+    const res = await ebayFetch(accessToken, url.toString())
     if (!res.ok) {
       const body = await res.text().catch(() => '(no body)')
       throw new Error(`eBay GET /finances/v1/transaction failed: ${res.status} ${body}`)
@@ -155,7 +157,9 @@ export async function syncEbayFinancialEvents(
   const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) throw new Error('No active eBay ChannelConnection')
 
-  const accessToken = await ebayAuthService.getValidToken(connection.id)
+  // CX.1 — the connector client resolves the bearer from the token service and
+  // signs the request; we pass the CONNECTION ID down, never a token.
+  const accessToken = connection.id
 
   // eBay filter format: transactionDate:[2026-01-01T00:00:00Z..2026-02-01T00:00:00Z]
   const filterStr = `transactionDate:[${windowStart.toISOString()}..${windowEnd.toISOString()}]`

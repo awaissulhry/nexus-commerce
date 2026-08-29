@@ -187,4 +187,22 @@ Medium. The token path is behind `NEXUS_CX_TOKEN_SERVICE`; the backfill is idemp
 ## 14. Files
 New: `services/cx/{catalog,token.service,oauth.service,identity.service,events.service,connectors/ebay/*}.ts`, `routes/cx-connect.routes.ts`, `routes/cx-connections.routes.ts` (refresh/revoke admin), `jobs/cx-heartbeat.job.ts`, `jobs/cx1-credentials-backfill.job.ts`, `lib/crypto.ts` (v2), migration `20260830a_cx1_connection_core`, tests. Touched: `connection-resolver.service.ts`, `accounts.routes.ts`, `connections.routes.ts`, `ebay-auth.ts` (shims), `ebay-auth.service.ts` (delegates), `ebay-financial-events.service.ts`, `ebay-token-refresh.job.ts` (deleted), `index.ts`, `cron-registry.ts`, `permissions-manifest.ts` (`/api/cx/connect` → channelsConnect, `/api/cx/callback` → PUBLIC), `apps/web/.../ChannelsClient.tsx`, `apps/web/.../ebay-callback/EbayCallbackContent.tsx` (forwarder), `ChannelDetailClient.tsx` (ScopesCard copy), `apps/api/package.json` (`@aws-sdk/client-kms`).
 
-**Waiting for the Owner's go-ahead on this exact change** (and the KMS key, which can land in parallel).
+~~Waiting for the Owner's go-ahead on this exact change.~~ Approved 2026-08-29 ("Go ahead with the next unit"); see §15 for the build record.
+
+## 15. Build record (2026-08-29, Owner: "Go ahead with the next unit")
+
+Built as specified, with these measured deviations, each for a reason:
+
+| Spec said | Built | Why |
+|---|---|---|
+| §1.3 eBay rows with no `activeMarketplaces` seed the five EU market scopes | seed ONE `marketplace: GLOBAL` scope ("All eBay sites") | Prod probe: both active eBay rows have `activeMarketplaces` unset. Five EU codes would be an assumption rendered as a fact (`reference_fleet_stale_constant_class`); an eBay grant genuinely reaches every site. |
+| §8 accounts rows expose `scopeDrift` | also expose `scopes` (ConnectionScope rows) and the four timestamps on `/api/accounts`; `/api/settings/channels/:type/detail` returns `scopeDrift` + `connectionScopes` | one round-trip per page; the detail page's ScopesCard renders granted vs. missing. |
+| §5 `ebay-auth.ts` initiate → `start()` | plus `create-connection`/`callback` → **410** with `code: OAUTH_FLOW_MOVED`; `connections`/`connection/:id`/`refresh` **removed**; `test` runs a real heartbeat | a browser-posted callback was the spoofable shape; the read routes duplicated `/api/accounts` and leaked expiry. |
+| `admin/ebay-token-status` read `refreshToken` off the row | reads `credentialsKeyId` + `refreshTokenExpiresAt` + `authStatus` | the resolver never returns credentials (`CONNECTION_PUBLIC_SELECT`); `hasRefreshToken` is now "an envelope exists and its refresh token has not expired". |
+| — | `apps/api` compiles **without** `strictNullChecks`, so `if (result.ok)` does not narrow a discriminated union; `=== true` does | tsc fact, recorded so nobody "simplifies" it back. |
+
+**Prod facts measured before the migration was committed** (read-only, `railway run`): 3 active connections — Amazon env row, eBay `xaviaracing` (primary, since 2026-07-03), eBay `motovento` (since 2026-08-20); both eBay rows still hold plaintext tokens; `Marketplace` has 12 AMAZON rows with ids (11 participating); last applied migration `20260828a_tag_icon`, nothing rolled back; no CX.1 column exists yet. The §1.3 gate therefore passes (2 eBay × GLOBAL + 12 Amazon scopes).
+
+**Type checks:** API `tsc` 0 errors, web `tsc` 0 errors. **Existing suites touched:** 13 files / 195 tests green. **New suites:** crypto v2 (41), eBay RFC 9421 signing (18, incl. eBay's own byte-exact vectors) + the CX.1 unit suites listed in §12.
+
+**Not yet done at the time of this record:** deploy (waits on the CX.0 deploy `f2036134…` that Railway has held in DEPLOYING since 02:20Z), `cx1-credentials-backfill` on prod, §11 verification, the Owner's KMS key (until it lands, envelopes use the v1 env key and a CONNECTION_HEALTH alert says so).
