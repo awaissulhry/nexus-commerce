@@ -25,6 +25,7 @@ import {
   ExpandSlot,
   GridPager,
   GridSearchSlot,
+  GridSelectionActions,
   GridSheet,
   GridSheetStatus,
   GridToolbar,
@@ -58,8 +59,9 @@ import {
 
 import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 
+import { BulkSetControl } from './BulkSetControl'
 import { coordKey, type SheetColumn, type SheetRow } from './types'
-import { saveSheetCell, useMasterSheet } from './useMasterSheet'
+import { bulkSetCells, saveSheetCell, useMasterSheet } from './useMasterSheet'
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
@@ -337,6 +339,22 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
     () => sheetPasteProcessor<SheetRow>((data?.columns ?? []).filter((c) => c.defaultVisible).map((c) => ({ colId: c.key, headerName: c.label }))),
     [data],
   )
+  const selectedRows = useMemo(() => (data?.rows ?? []).filter((r) => selected.includes(r.id)), [data, selected])
+  const appliesFor = useCallback((row: SheetRow, col: SheetColumn) => columnApplies(col, row), [])
+
+  const applyBulk = useCallback(
+    async (column: SheetColumn, value: unknown) => {
+      const d = dataRef.current
+      if (!d) return { ok: false, updated: [], refused: [], skipped: [], error: 'The sheet is still loading' }
+      const out = await bulkSetCells({ rows: selectedRows, column, value, locale: d.locale, applies: appliesFor })
+      // A bulk fill carries no per-row version, so the page is refetched: readiness, completeness and
+      // every row's version come back fresh rather than being guessed at locally.
+      if (out.updated.length > 0) { setLastSavedAt(new Date().toISOString()); reload() }
+      return out
+    },
+    [selectedRows, appliesFor, reload],
+  )
+
   const markets = data?.availableMarkets ?? []
   const marketOptions = useMemo(() => markets.map((m) => ({ value: m, label: m })), [markets])
 
@@ -381,9 +399,16 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
             </>
           }
         >
-          <GridSearchSlot>
-            <Input leadingIcon={<Search size={13} />} placeholder="Find a SKU or a name…" aria-label="Find" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%' }} />
-          </GridSearchSlot>
+          {selected.length > 0 ? (
+            <GridSelectionActions>
+              <BulkSetControl rows={selectedRows} columns={data?.columns ?? []} applies={appliesFor} onApply={applyBulk} />
+              <Button size="sm" variant="link" onClick={() => apiRef.current?.deselectAll()}>Clear</Button>
+            </GridSelectionActions>
+          ) : (
+            <GridSearchSlot>
+              <Input leadingIcon={<Search size={13} />} placeholder="Find a SKU or a name…" aria-label="Find" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%' }} />
+            </GridSearchSlot>
+          )}
         </GridToolbar>
       }
       footer={

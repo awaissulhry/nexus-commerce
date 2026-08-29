@@ -155,3 +155,87 @@ export async function saveSheetCell(input: {
     return { ok: false, reason: err instanceof Error ? err.message : String(err) }
   }
 }
+
+
+export interface BulkSetResult {
+  ok: boolean
+  /** Rows the server accepted. */
+  updated: string[]
+  /** Rows the server refused, with its reason. */
+  refused: Array<{ id: string; reason: string }>
+  /** Rows we did not send because the column does not apply to them. */
+  skipped: Array<{ id: string; reason: string }>
+  error?: string
+}
+
+/**
+ * Set ONE column across many rows in a single request.
+ *
+ * This is what makes the sheet worth opening on this catalogue: the master is nearly empty, and
+ * filling five required fields across 251 rows one cell at a time is over a thousand edits. The
+ * endpoint is the same one a single cell uses — `PATCH /api/products/bulk` already accepts up to
+ * 1000 changes and routes `attr_*` into `categoryAttributes` — so bulk fill adds no new write path
+ * and inherits its per-cell structured errors.
+ *
+ * Rows the column does not apply to are SKIPPED here rather than sent and refused: setting a size on
+ * a parent is not a server error, it is a question that should never have been asked.
+ *
+ * NOTE — no `expectedVersion`. The endpoint takes a single version for the whole call, which cannot
+ * be right for N rows at N versions, so a bulk fill is deliberately last-write-wins. The per-cell
+ * path keeps its guard, and the caller reloads afterwards so versions are fresh again.
+ */
+export async function bulkSetCells(input: {
+  rows: SheetRow[]
+  column: SheetColumn
+  value: unknown
+  locale: string
+  applies: (row: SheetRow, column: SheetColumn) => boolean
+}): Promise<BulkSetResult> {
+  const { rows, column, value, locale, applies } = input
+  const backend = getBackendUrl()
+
+  const skipped = rows.filter((r) => !applies(r, column)).map((r) => ({
+    id: r.id,
+    reason: r.isParent && column.scope === 'per_variant' ? 'belongs to each variation' : `not part of ${r.productType ?? 'this product type'}`,
+  }))
+  const targets = rows.filter((r) => applies(r, column))
+  if (targets.length === 0) return { ok: false, updated: [], refused: [], skipped, error: 'No selected row can hold this field' }
+
+  // A locale slot has no bulk route — the per-locale merge is per product, so fan out and gather.
+  if (column.storage === 'localizedContent') {
+    const settled = await Promise.all(
+      targets.map(async (row) => ({ row, out: await saveSheetCell({ row, column, value, locale }) })),
+    )
+    return {
+      ok: settled.some((s) => s.out.ok),
+      updated: settled.filter((s) => s.out.ok).map((s) => s.row.id),
+      refused: settled.filter((s) => !s.out.ok).map((s) => ({ id: s.row.id, reason: s.out.reason ?? 'Refused' })),
+      skipped,
+    }
+  }
+
+  try {
+    const res = await fetch(`${backend}/api/products/bulk`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        changes: targets.map((r) => ({ id: r.id, field: column.writeField, value: value === '' ? null : value })),
+      }),
+    })
+    const body = await res.json().catch(() => null)
+    if (!res.ok && !Array.isArray(body?.errors)) {
+      return { ok: false, updated: [], refused: [], skipped, error: body?.error || `Refused (HTTP ${res.status})` }
+    }
+    const errors: Array<{ id: string; error: string }> = Array.isArray(body?.errors) ? body.errors : []
+    const refusedIds = new Set(errors.map((e) => e.id))
+    return {
+      ok: true,
+      updated: targets.filter((r) => !refusedIds.has(r.id)).map((r) => r.id),
+      refused: errors.map((e) => ({ id: e.id, reason: e.error || 'Refused' })),
+      skipped,
+    }
+  } catch (err) {
+    return { ok: false, updated: [], refused: [], skipped, error: err instanceof Error ? err.message : String(err) }
+  }
+}

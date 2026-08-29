@@ -1,6 +1,6 @@
 # The Master Sheet — design (GDS-4)
 
-**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1 + MS.2 (the reads) and MS.3 (the component) are BUILT** — see §9 and §10. Where the sheet lives is still open and blocks only the mount.
+**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1 + MS.2 (reads), MS.3 (the component) and MS.4 (bulk fill) are BUILT** — see §9, §10, §12. Where the sheet lives is still open and blocks only the mount.
 
 **Ask (2026-08-28):** "a proper grid where I can actually make changes cell by cell. That would be used as the source of data, which would then be mapped, converted, or directly pushed to multiple channels of a specific market."
 
@@ -283,3 +283,47 @@ vicious — the cell would say "required" while the readiness pill said "not app
 * **Only the failing readiness path is proven on real data.** 3 of 58 verdicts on one page came back
   `ready`; no passing row has been checked end to end against a channel.
 * Reads take 3–6.6 s per market from a laptop (mostly Neon latency), unmeasured on Railway.
+
+
+---
+
+## 12. MS.4 as built — bulk fill (2026-08-30)
+
+**Why this before publish.** MS.4 was going to be the publish fan-out, because pushing to channels is
+where the original ask ends. Building on the real catalogue changed the order: the master is nearly
+empty, so *every* readiness verdict is `errors` and there is almost nothing a publish could send.
+Five Amazon-required fields absent across 251 rows is over a thousand cell edits. Filling the master
+is the bottleneck; publishing is the step after it. Publish is now MS.5.
+
+`BulkSetControl.tsx` + `bulkSetCells()` — select rows, pick a column, set it once.
+
+* **No new write path.** It is the same `PATCH /api/products/bulk` a single cell uses, which already
+  accepts up to 1000 changes and routes `attr_*` into `categoryAttributes`. Bulk fill inherits its
+  per-cell structured errors for free.
+* **Three outcomes, never one "done":** `N set` · `N refused` (the server's reason on hover) ·
+  `N not applicable`. A size on a parent is not a server error — it is a question that should never
+  have been asked, so those rows are filtered out client-side and reported separately.
+* The column picker offers only writable columns at least one selected row can hold, and labels each
+  one with **which channel requires it** (`Paese di origine — required by Amazon · IT`), so the
+  operator fills what actually unblocks a listing first.
+* A locale column fans out to the per-product `/global` route, since the bulk endpoint has no way
+  into a locale slot.
+* **Deliberately last-write-wins.** The bulk endpoint takes ONE `expectedVersion` for the whole call,
+  which cannot be correct for N rows at N versions, so bulk fill sends none and the page refetches
+  afterwards to pick up fresh versions. The single-cell path keeps its 409 guard.
+
+### Verified in the browser on the real IT catalogue
+
+| Check | Result |
+|---|---|
+| Bulk write | 3 GLOVES variations selected → `Produttore` = `Xavia Racing SRL` → **"3 set"**, and the server read back the value on exactly those three |
+| Blast radius | `xriser-bla-xl`, a sibling that was *not* selected, stayed `null` |
+| Restore | All three set back to `null`; `updated: 3`, no errors |
+| Not-applicable path, verified WITHOUT writing | Parent + 2 variations selected, column `EAN` (per-variant) → the button reads **"Set 2 rows"**: the parent is excluded before anything is sent |
+
+## 13. MS.5 — next
+
+Publish fan-out (`POST /api/products/sheet/publish` over the existing per-channel routes) and
+follows-master for the six fields that actually carry a flag. **Publishing is outward-facing and hard
+to reverse**, so it will be built preflight-first: a dry run that reports per row what *would* be sent
+and refuses anything whose readiness is not green, with the real send behind an explicit confirm.
