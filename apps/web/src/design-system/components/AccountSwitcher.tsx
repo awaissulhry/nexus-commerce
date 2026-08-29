@@ -139,6 +139,11 @@ function channelName(channel: string): string {
   return CHANNEL_LABEL[channel] ?? channel
 }
 
+/** The one spelling of a channel's name, for anything that renders one. */
+export function channelDisplayName(channel: string): string {
+  return channelName(channel)
+}
+
 /**
  * The label to show for an account. When the backend flags the label as a
  * placeholder there is no real account name to show — the eBay OAuth scope in

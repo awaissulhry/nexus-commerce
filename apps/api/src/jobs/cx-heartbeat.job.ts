@@ -68,11 +68,30 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
     if (spec.discoverScopes) {
       try {
         const scopes = await spec.discoverScopes(handle)
+        /**
+         * MERGE the metadata, never replace it.
+         *
+         * Discovery knows what the CHANNEL says about a scope (market, currency,
+         * account). It does not know what WE decided about it — the Amazon Ads
+         * mode/writesEnabledAt/lastWriteAt a migration or an operator recorded. A
+         * replacing upsert silently erased those on the very first heartbeat
+         * (measured on prod 2026-08-29, CX.3a). Discovery must not delete what
+         * discovery cannot see.
+         */
+        const existing = new Map(
+          (
+            await prisma.connectionScope.findMany({
+              where: { connectionId: row.id },
+              select: { kind: true, externalId: true, metadata: true },
+            })
+          ).map((e) => [`${e.kind}:${e.externalId}`, (e.metadata ?? {}) as Record<string, unknown>]),
+        )
         for (const s of scopes) {
+          const merged = { ...(existing.get(`${s.kind}:${s.externalId}`) ?? {}), ...(s.metadata ?? {}) }
           await prisma.connectionScope.upsert({
             where: { connectionId_kind_externalId: { connectionId: row.id, kind: s.kind, externalId: s.externalId } },
-            create: { connectionId: row.id, kind: s.kind, externalId: s.externalId, label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: (s.metadata ?? undefined) as Prisma.InputJsonValue | undefined },
-            update: { label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: (s.metadata ?? undefined) as Prisma.InputJsonValue | undefined },
+            create: { connectionId: row.id, kind: s.kind, externalId: s.externalId, label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: merged as Prisma.InputJsonValue },
+            update: { label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: merged as Prisma.InputJsonValue },
           })
         }
       } catch (err) {

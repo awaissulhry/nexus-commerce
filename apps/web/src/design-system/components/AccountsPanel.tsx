@@ -46,7 +46,7 @@ import {
 } from '../lib/accounts-panel'
 import '../styles/tokens.css'
 import '../styles/components.css'
-import { ACCOUNT_COLORS, type AccountRow, type AccountsPayload } from './AccountSwitcher'
+import { ACCOUNT_COLORS, channelDisplayName, type AccountRow, type AccountsPayload } from './AccountSwitcher'
 
 export interface AccountsPanelProps {
   /** Absolute base URL of the API, e.g. `getBackendUrl()`. */
@@ -85,14 +85,9 @@ export interface AccountsPanelProps {
   initialData?: AccountsPayload
 }
 
-const CHANNEL_LABEL: Record<string, string> = {
-  AMAZON: 'Amazon',
-  EBAY: 'eBay',
-  SHOPIFY: 'Shopify',
-  WOOCOMMERCE: 'WooCommerce',
-  ETSY: 'Etsy',
-}
-const channelName = (c: string) => CHANNEL_LABEL[c] ?? c
+// One spelling of the channel names, shared with AccountSwitcher. A second copy here
+// is why the Amazon Ads group rendered as the raw "AMAZON_ADS" on prod.
+const channelName = (c: string) => channelDisplayName(c)
 
 const HEALTH_TEXT: Record<string, string> = {
   ok: 'Healthy',

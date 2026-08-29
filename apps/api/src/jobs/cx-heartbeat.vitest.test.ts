@@ -18,6 +18,7 @@ const rows = new Map<string, Row>()
 const updates: Array<{ id: string; data: Record<string, unknown> }> = []
 const events: Array<Record<string, unknown>> = []
 const scopeUpserts: Array<Record<string, unknown>> = []
+let scopeRows: Array<{ kind: string; externalId: string; metadata: Record<string, unknown> | null }> = []
 let apps: Array<Record<string, unknown>> = []
 
 function pick(row: Row, select?: Record<string, boolean>): Row {
@@ -51,6 +52,9 @@ const prismaMock = {
     findFirst: vi.fn(async () => null),
   },
   connectionScope: {
+    // Discovery reads the existing rows so it can MERGE metadata rather than replace
+    // it — the operator's own facts about a scope must survive a heartbeat.
+    findMany: vi.fn(async () => scopeRows),
     upsert: vi.fn(async (args: Record<string, unknown>) => {
       scopeUpserts.push(args)
       return args
@@ -249,6 +253,29 @@ describe('runHeartbeatFor — ok', () => {
     const row = seedRow({ grantedScopes: ['s1'] })
     const report = await runHeartbeatFor(row)
     expect(report.scopeDrift).toEqual(['s2', 's3'])
+  })
+
+  it('MERGES scope metadata — discovery must not delete what discovery cannot see', async () => {
+    // The operator's own facts about a scope (an Amazon Ads profile's mode, whether
+    // writes are enabled, when it was last written to) are not things /v2/profiles
+    // reports. A replacing upsert erased them on the first heartbeat, measured on
+    // prod during CX.3a.
+    scopeRows = [{ kind: 'marketplace', externalId: 'IT', metadata: { mode: 'production', writesEnabledAt: '2026-01-01T00:00:00Z' } }]
+    fakeSpec.discoverScopes = discoverScopes
+    registerChannel(fakeSpec)
+    heartbeat.mockResolvedValue({ ok: true, latencyMs: 5 })
+    discoverScopes.mockResolvedValueOnce([
+      { kind: 'marketplace', externalId: 'IT', label: 'Italy', metadata: { currencyCode: 'EUR' } },
+    ])
+
+    await runHeartbeatFor(seedRow())
+
+    const written = scopeUpserts.at(-1) as { update: { metadata: Record<string, unknown> } }
+    expect(written.update.metadata).toEqual({
+      mode: 'production',
+      writesEnabledAt: '2026-01-01T00:00:00Z',
+      currencyCode: 'EUR',
+    })
   })
 
   it('runs discoverScopes and upserts every ConnectionScope; a discovery failure does not fail the heartbeat', async () => {

@@ -110,3 +110,33 @@ Migration `20260831a_cx3a_amazon_ads_scopes`. New: `jobs/cx3a-ads-credentials.jo
 The only behaviour change on the money path is which store the refresh token is read from, behind `NEXUS_CX_ADS_CREDENTIALS`. Everything else is additive (a connection row, nine scopes, a heartbeat) or removes something with no caller. Rollback: set the flag to `0` — the row blobs are untouched and the engine reads exactly what it reads today. The migration is additive and needs no down-step.
 
 **Not in this unit, and deliberately:** the 75 read sites (CX.3b), the leased refresh for Ads (CX.3b), nulling the nine duplicate blobs (CX.3b, after the core path has a day of green), and Amazon SP-API OAuth (blocked on the Owner's Seller Central app registration).
+
+## 10. Verified on prod (2026-08-29) — and what the verification found
+
+Migration applied at 10:38Z, gate passed. `cx3a-ads-credentials` → `adopted=1 identity=yes appClientId=yes regions=EU,NA,FE`. The connection reads **Xavia Racing Italia**, `authStatus connected`, envelope present. The nine legacy rows: **9 rows, 9 credentials, untouched** — the rollback is real, not theoretical.
+
+**Both credential paths proven live, in sequence, without a flag flip:**
+
+| Time | `[ADS-LIVE] credential source` | Meaning |
+|---|---|---|
+| 10:40:01Z | `{"source":"row","flag":null}` | before adoption the fallback served real traffic — the rollback path, proven |
+| 10:45:01Z | `{"source":"core"}` | after adoption the core serves it |
+
+and a live Amazon call through the core returned `{ok:true, mode:"live", profileCount:9}`.
+
+### The account reaches 14 profiles, not 9
+
+`discoverScopes` swept all three regional hosts and found **five profiles this system has never been able to see**, because the legacy callback hard-codes `advertising-api-eu`:
+
+| Region | Profiles |
+|---|---|
+| EU | 9 (the ones we knew) |
+| NA | **3 — Xavia Racing Usa · US, XAVIA · CA, XAVIA · MX** |
+| FE | **2 — XAVIA · AU, XAVIA · JP** |
+
+Nothing was wrong with the nine; the reach was simply never measured. This is the phase's own thesis landing: *ask the channel what it has, do not assume the shape you stored.*
+
+### Two defects the verification then exposed, both fixed
+
+1. **Discovery erased the operator's own scope metadata.** The heartbeat's scope upsert *replaced* `metadata`, so the mode / `writesEnabledAt` / `lastWriteAt` the migration recorded were wiped on the first heartbeat. Discovery knows what the channel says; it does not know what *we* decided. It now **merges** — and a test pins it, because this would have silently returned on any future channel with `discoverScopes`.
+2. **The Accounts panel rendered the raw `AMAZON_ADS`.** It carried its own second copy of the channel-label map. Deleted; there is one spelling now, exported from `AccountSwitcher`.
