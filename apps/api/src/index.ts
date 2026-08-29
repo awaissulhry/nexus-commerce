@@ -388,9 +388,18 @@ async function seedEnvManagedConnections(): Promise<void> {
     };
 
     if (existingEnv) {
+      // CX.1 set `authStatus` here too, so every deploy reset a CONNECTED row to
+      // 'unknown' and the page said "Not yet checked" about a connection the
+      // heartbeat had verified minutes earlier. A process restart is not new
+      // information about Amazon: the seed may say whether credentials are
+      // CONFIGURED, but only a real call may say whether they WORK. On update it
+      // therefore writes everything except the auth verdict — and still says
+      // 'disconnected' when the credentials have gone, because that IS something
+      // boot can know.
+      const { authStatus, ...updatable } = data;
       await prisma.channelConnection.update({
         where: { id: existingEnv.id },
-        data,
+        data: amazonConfigured ? updatable : { ...updatable, authStatus },
       });
       logger.info("seedEnvManagedConnections: updated env-managed Amazon row", {
         id: existingEnv.id,
