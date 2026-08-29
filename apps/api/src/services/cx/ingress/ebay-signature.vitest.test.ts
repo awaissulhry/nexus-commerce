@@ -113,7 +113,16 @@ describe('verifyEbayNotification', () => {
     mockKeyServer(null, 404)
     const raw = Buffer.from(JSON.stringify(BODY), 'utf8')
     const v = await verifyEbayNotification({ rawBody: raw, header: header(sign(JSON.stringify(BODY))) })
-    expect(v).toMatchObject({ ok: false, reason: 'public_key_unavailable' })
+    expect(v).toMatchObject({ ok: false, reason: 'public_key_not_found' })
+  })
+
+  it('names OUR broken credential differently from an unknown key id', async () => {
+    // These are opposite problems: one rejects a forgery, the other rejects
+    // everything genuine. A shared reason would hide the second behind the first.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403, json: async () => ({}) })))
+    const raw = Buffer.from(JSON.stringify(BODY), 'utf8')
+    const v = await verifyEbayNotification({ rawBody: raw, header: header(sign(JSON.stringify(BODY))) })
+    expect(v.reason).toBe('public_key_forbidden')
   })
 
   it('REJECTS a body that is not JSON', async () => {

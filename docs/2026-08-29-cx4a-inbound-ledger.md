@@ -63,6 +63,12 @@ The rule the writer enforces: **arrival creates the row, not acceptance.** That 
 - **Regression:** 430 files / 5,694 tests pass. `tsc --noEmit` clean.
 - **Challenge endpoint still answers on prod** — `GET /api/webhooks/ebay-notification?challenge_code=…` → `200` with a hash, before and after.
 
+## 4a. A second ambiguity, found by the live probe
+
+The first live rejection came back `public_key_unavailable` — and that reason was itself hiding two opposite problems. A key id eBay does not know is a **forged or stale notification**. A token we cannot obtain, or that eBay refuses, is **our own credential being broken**, which would reject every genuine notification with the identical message. That is the same silent-failure class this unit exists to end, rebuilt one level down.
+
+Split into `app_token_unavailable`, `public_key_forbidden` and `public_key_not_found`, the first two logged at error level. This also makes the prod probe self-answering: a forged key id now reports `public_key_not_found` **only if** our application credential works, so one rejected row settles a question nobody could otherwise answer without eBay sending something.
+
 ## 5. What is NOT verified, and cannot be yet
 
 **No eBay notification has been verified end to end, because nothing is subscribed.** No code creates a Notification API destination or topic subscription (audit: `grep commerce/notification` → 0). Until CX.4b creates one, eBay sends nothing and the new verifier has nothing real to check. The honest statement is: the algorithm is right, proven against real keys; whether eBay accepts our destination is untested.
