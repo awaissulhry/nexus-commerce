@@ -29,6 +29,7 @@ import {
   GridSheet,
   GridSheetStatus,
   GridToolbar,
+  FollowsCell,
   IdentityChip,
   LongTextCell,
   NexusGrid,
@@ -300,7 +301,66 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
       })),
     }
 
-    return [identity, ...attrGroups, readiness]
+    /**
+     * MS.6 — what each channel is ACTUALLY carrying, and where it has stopped following the master.
+     *
+     * Measured on the real IT catalogue: 232 of 525 listings carry `followMasterPrice: false` and 240
+     * `followMasterTitle: false` — nearly half have diverged, and nothing in the console showed it.
+     * (Those are legitimate legacy pins: the value lives in the `price` column rather than
+     * `priceOverride`, and the resolver falls back to it.)
+     *
+     * READ ONLY, deliberately. `PATCH /products/:id/channel-pricing` pins a field when you write a
+     * price, but there is NO route that sets a follow flag back to true — `price: null` is explicitly
+     * ignored. A control that can pin but never un-pin is a trap: the operator breaks inheritance by
+     * accident and cannot undo it from here. So the sheet shows the divergence and the flat-file
+     * surfaces keep the edit until that route exists (docs §14).
+     */
+    const channelGroup: ColGroupDef<SheetRow> = {
+      groupId: 'channel',
+      headerName: `Channel · ${data.market}`,
+      marryChildren: true,
+      children: data.coordinates.flatMap((c) => {
+        const k = coordKey(c)
+        return [
+          {
+            colId: `price:${k}`,
+            headerName: `${c.label} price`,
+            width: 120,
+            sortable: false,
+            ...numericColumn,
+            cellClass: [...numericColumn.cellClass, 'nds-cell-is-locked'],
+            headerTooltip: `What ${c.label} is actually carrying. Read-only here — edit it on the channel surface.`,
+            valueGetter: (p: ValueGetterParams<SheetRow>) => p.data?.listings[k]?.price ?? null,
+            valueFormatter: (p) => (p.value == null ? '' : `€${Number(p.value).toFixed(2)}`),
+          },
+          {
+            colId: `follows:${k}`,
+            headerName: `${c.label} follows`,
+            width: 150,
+            sortable: false,
+            cellClass: 'nds-ag-cell nds-cell-is-locked',
+            valueGetter: (p: ValueGetterParams<SheetRow>) => {
+              const l = p.data?.listings[k]
+              if (!l) return null
+              // One cell for six flags: it follows only when every one of them does.
+              return Object.values(l.follows).every(Boolean)
+            },
+            cellRenderer: FollowsCell,
+            cellRendererParams: { of: 'master' },
+            tooltipValueGetter: (p) => {
+              const l = p.data?.listings[k]
+              if (!l) return `Not listed on ${c.label}`
+              const pinned = Object.entries(l.follows).filter(([, v]) => !v).map(([f]) => f.replace(/^followMaster/, ''))
+              return pinned.length === 0
+                ? `Every field follows the master on ${c.label}`
+                : `Pinned on ${c.label}: ${pinned.join(', ')} — the master no longer drives ${pinned.length === 1 ? 'it' : 'them'}`
+            },
+          },
+        ] as ColDef<SheetRow>[]
+      }),
+    }
+
+    return [identity, ...attrGroups, channelGroup, readiness]
   }, [data, tracker])
 
   const onCellValueChanged = useCallback(

@@ -1,6 +1,6 @@
 # The Master Sheet — design (GDS-4)
 
-**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1–MS.5 are BUILT** — reads (§9), the component (§10), bulk fill (§12), publish preview (§13). Where the sheet lives is still open and blocks only the mount.
+**Status:** designed in the DS and prototyped in the grid lab (`/design/grid-lab?tab=gds#sheet`). §8 decisions taken by the Owner 2026-08-29. **MS.1–MS.6 are BUILT** — reads (§9), the component (§10), bulk fill (§12), publish preview (§13), channel divergence (§14). Where the sheet lives is still open and blocks only the mount.
 
 **Ask (2026-08-28):** "a proper grid where I can actually make changes cell by cell. That would be used as the source of data, which would then be mapped, converted, or directly pushed to multiple channels of a specific market."
 
@@ -368,11 +368,47 @@ would judge — and offer to publish — rows nobody selected).
 **No live publish has been performed.** The send path is wired and type-checked but has never been
 fired against a marketplace, by design — that needs the Owner's word and an ungated env.
 
-## 14. What is left
+## 14. MS.6 as built — channel divergence, read-only (2026-08-30)
 
-* **Follows-master** for the six fields that carry a flag (title, description, price, quantity,
-  images, bulletPoints). Attribute cells have no flag and must derive it from
-  `resolveAttributes().source` — designed in §5, not built.
-* **The mount** — §8.3 is still open. The sheet lives at `/design/grid-lab?tab=sheet` until then.
-* **The web component still has no automated tests** beyond the shared rules; the column builder and
-  the save dispatch are browser-verified only.
+A `Channel · <market>` column group: per coordinate, the price that channel is **actually carrying**
+and whether it still **follows the master**.
+
+**Why it earns a column.** Measured on the real IT catalogue: of 525 IT listings, **232 carry
+`followMasterPrice: false`** and **240 `followMasterTitle: false`** — nearly half have stopped
+following the master, and nothing in the console showed it. Those are legitimate legacy pins, not a
+data bug: `priceOverride` is null on all 525, and the resolver falls back to the direct `price`
+column for rows that predate the Phase 20 SSOT split (`attribute-resolver.ts`, "covers older rows
+that never got migrated"). The value is real; only its storage is old.
+
+One cell summarises six flags — it reads *Follows master* only when **every** flag does, and the
+tooltip names the pinned ones (`Pinned on Amazon · IT: Title, Description, Price — the master no
+longer drives them`). Collapsing six flags into one boolean without naming them would be a worse lie
+than showing nothing.
+
+**Read-only, deliberately.** `PATCH /products/:id/channel-pricing` *pins* a field when you write a
+price (`followMasterPrice = false`), but **no route sets a follow flag back to true** — `price: null`
+is explicitly ignored by that handler. A control that can pin but never un-pin is a trap: the
+operator breaks inheritance by accident and cannot undo it from here. So the sheet shows the
+divergence and the channel surfaces keep the edit until that route exists.
+
+Verified in the browser: parents `1J-EYE5-Y0TW` and `3K-HP05-BH9I` read **Pinned**, the `xriser-*`
+variations read **Follows master**, the MISANO variations read **Pinned** beside a real
+`Amazon · IT price` of €149.95, and eBay shows `—` where no listing exists.
+
+## 15. Tests added for the component (2026-08-30)
+
+The web component's write dispatch was browser-verified only; it now has **17 tests**
+(`useMasterSheet.vitest.test.ts`), five rules mutation-tested. Each covers a way the sheet could lie
+about production data: a per-cell refusal arriving inside a 200 being read as success, a no-op
+(`updated: 0`) reported as saved, a locale field sent to the endpoint that cannot write it, a bulk
+fill ignoring applicability and setting a field on rows that cannot hold it, and the single-cell path
+dropping its `expectedVersion` guard.
+
+## 16. What is left
+
+* **Un-pin.** The one genuinely missing route: setting `followMaster* = true` again. Until it exists,
+  MS.6 stays read-only. This is the next API gap worth closing.
+* **The mount** — §8.3 is still the Owner's decision. The sheet lives at `/design/grid-lab?tab=sheet`.
+* **A live publish has never been fired** (§13). Needs the Owner's word and an ungated env.
+* The column-def builder in `MasterSheet.tsx` is still covered only by browser verification; its two
+  applicability rules are tested in `packages/shared`.
