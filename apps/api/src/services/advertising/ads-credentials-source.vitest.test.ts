@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 /**
  * CX.3a — which store the Amazon Ads credential comes from.
  *
@@ -273,5 +274,16 @@ describe('resolveCredentials — logs carry no credential material', () => {
     expect(all.length).toBeGreaterThan(0) // the sweep must actually have logged something
     for (const secret of SECRETS) expect(all).not.toContain(secret)
     expect(all).not.toContain(ROW_ENVELOPE)
+  })
+})
+
+describe('the two revert flags are distinct (CX.3b step B)', () => {
+  it('the client reads a SEPARATE flag for who mints the token', async () => {
+    // NEXUS_CX_ADS_CREDENTIALS promises to restore the credential SOURCE
+    // byte-for-byte; moving who mints the TOKEN is a different change, so one flag
+    // must not silently carry both meanings.
+    const src = await readFile(new URL('./ads-api-client.ts', import.meta.url), 'utf8')
+    expect(src).toContain("process.env.NEXUS_CX_ADS_LEASED_TOKEN === '0'")
+    expect(src).toContain("process.env.NEXUS_CX_ADS_CREDENTIALS !== '0'")
   })
 })

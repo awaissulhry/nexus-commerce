@@ -495,9 +495,79 @@ export const __adsCredentialsTest = {
   resetSourceLog: () => _credentialSourceLogged.clear(),
 }
 
+/**
+ * CX.3b step B — the access token, from the connection core's LEASED refresh.
+ *
+ * The Ads token is ACCOUNT-level, not per-profile: the profile travels in the
+ * `Amazon-Advertising-API-Scope` header below, and the token request carries no
+ * profile at all. So `getLwaToken`'s `profileId` cache key held up to fourteen
+ * separately-minted but identical tokens, and two replicas hitting an expiry both
+ * POSTed to LWA with nothing to stop them. The token service's DB lease fixes both,
+ * and puts Ads failures into the same `authStatus` state machine every other channel
+ * uses — a dead Ads grant becomes visible on the Channels page instead of only in a log.
+ *
+ * ── The cache in front of it is not an optimisation, it is required ───────────
+ * `getAccessToken` reads the connection row and DECRYPTS the envelope on every call,
+ * before it can even check expiry. `liveCall` is the chokepoint for the report-poll
+ * and bid-drain loops, so that would be a DB round-trip plus a decrypt per Amazon
+ * call. This keeps the same shape `getLwaToken` had — one entry, 60 s before expiry —
+ * keyed by connection rather than by profile.
+ *
+ * `NEXUS_CX_ADS_LEASED_TOKEN=0` reverts to the in-process refresh. It is a SEPARATE
+ * flag from `NEXUS_CX_ADS_CREDENTIALS`, because that one promises to restore the
+ * credential SOURCE byte-for-byte and this changes who mints the token.
+ */
+const _leasedCache = new Map<string, { token: string; expiresAt: number }>()
+
+async function adsAccessToken(profileId: string, creds: AdsCredentials): Promise<string> {
+  if (process.env.NEXUS_CX_ADS_LEASED_TOKEN === '0') return getLwaToken(profileId, creds)
+  try {
+    // One grant covers every profile, so the connection — not the profile — is the key.
+    const connectionId = await adsConnectionIdForToken()
+    if (!connectionId) return getLwaToken(profileId, creds)
+
+    const hit = _leasedCache.get(connectionId)
+    if (hit && Date.now() < hit.expiresAt) return hit.token
+
+    const { getAccessToken } = await import('../cx/token.service.js')
+    const token = await getAccessToken(connectionId)
+    // The token service owns the real expiry; this cache only has to be SHORTER than
+    // it, so a conservative minute keeps the hot path off the database without ever
+    // outliving the token it holds.
+    _leasedCache.set(connectionId, { token, expiresAt: Date.now() + 60_000 })
+    logLeasedSource()
+    return token
+  } catch (err) {
+    // A leased failure must not take the engine down: the in-process path is exactly
+    // today's behaviour, and it still has the credential.
+    logger.warn('[ADS-LIVE] leased token unavailable; minting in-process', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return getLwaToken(profileId, creds)
+  }
+}
+
+let _leasedLogged = false
+function logLeasedSource(): void {
+  if (_leasedLogged) return
+  _leasedLogged = true
+  logger.info('[ADS-LIVE] access token source', { source: 'leased' })
+}
+
+/** The one Ads grant's connection id. Declared (MAP.3), never `findFirst`. */
+async function adsConnectionIdForToken(): Promise<string | null> {
+  const resolver = await import('../connection-resolver.service.js')
+  try {
+    return (await resolver.resolveConnection({ channel: 'AMAZON_ADS', primary: true })).id
+  } catch (err) {
+    if (err instanceof resolver.NoConnectionError || err instanceof resolver.AmbiguousConnectionError) return null
+    throw err
+  }
+}
+
 export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   const creds = await resolveCredentials(opts.profileId)
-  const token = await getLwaToken(opts.profileId, creds)
+  const token = await adsAccessToken(opts.profileId, creds)
   const base = REGION_ENDPOINT[opts.region]
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
