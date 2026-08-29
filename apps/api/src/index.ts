@@ -118,6 +118,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import outboundQueueRoutes from "./routes/outbound-queue.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import pimGlobalRoutes from "./routes/pim-global.routes.js";
+import productsSheetRoutes from "./routes/products-sheet.routes.js";
 import catalogMatrixRoutes from "./routes/catalog-matrix.routes.js";
 import pimMappingRoutes from "./routes/pim-mapping.routes.js";
 import valueMapRoutes from "./routes/value-map.routes.js";
@@ -723,6 +724,8 @@ app.register(dashboardRoutes, { prefix: '/api' });
 app.register(outboundQueueRoutes, { prefix: '' });
 app.register(pimRoutes, { prefix: '/api' });
 app.register(pimGlobalRoutes, { prefix: '/api' });
+// MS.1/MS.2 — the master sheet's reads (docs/2026-08-29-master-sheet-design.md).
+app.register(productsSheetRoutes, { prefix: '/api' });
 app.register(catalogMatrixRoutes, { prefix: '/api' });
 app.register(pimMappingRoutes, { prefix: '/api' });
 app.register(valueMapRoutes, { prefix: '/api' });
