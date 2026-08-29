@@ -24,8 +24,9 @@ import { EBAY_HOSTS } from './cx/connectors/ebay/spec.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 
 // The Sell Finances API is served from apiz.ebay.com (NOT api.ebay.com). Measured on
-// prod 2026-08-29: with the request signed, api.ebay.com answers 404 with an empty body;
-// before signing it answered 403 215001 at the gateway, which hid the wrong host.
+// prod 2026-08-29, three layers deep: unsigned it was 403 errorId 215001 at the gateway,
+// which hid that the host was wrong; signed against api.ebay.com it was 404; signed
+// against apiz.ebay.com it answers — with an empty body when the window is empty.
 const EBAY_FINANCES_BASE = process.env.EBAY_FINANCES_BASE ?? EBAY_HOSTS.production.apiz
 
 interface EbayTransaction {
@@ -72,7 +73,13 @@ async function fetchEbayTransactions(
       const body = await res.text().catch(() => '(no body)')
       throw new Error(`eBay GET /finances/v1/transaction failed: ${res.status} ${body}`)
     }
-    const data: any = await res.json()
+    // A window with no transactions comes back 204 / 200 with an EMPTY body, not
+    // `{"transactions":[]}`. Measured on prod 2026-08-29: `res.json()` on it threw
+    // "Unexpected end of JSON input" and the cron reported a failure for a day that
+    // simply had no payouts — a manufactured error, not a missing sync.
+    const raw = await res.text()
+    if (raw.trim() === '') break
+    const data: any = JSON.parse(raw)
     const txs: EbayTransaction[] = data.transactions ?? []
     all.push(...txs)
     cursor = data.next ? String(data.next) : undefined

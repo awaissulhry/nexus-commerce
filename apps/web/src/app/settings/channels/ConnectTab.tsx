@@ -63,7 +63,13 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
     )
   }
 
-  const sorted = [...catalogue].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
+  // AMAZON_ADS has its own card below (it carries the profiles and the live LWA
+  // sign-in), so the catalogue entry must not ALSO render: on prod it produced two
+  // Amazon Ads cards that disagreed — "Not yet" beside "9 active".
+  const adsSpec = catalogue.find((c) => c.key === 'AMAZON_ADS') ?? null
+  const sorted = catalogue
+    .filter((c) => c.key !== 'AMAZON_ADS')
+    .sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
   const connectedFor = (channelType: string) => accounts.filter((a) => a.channel === channelType)
 
   return (
@@ -107,8 +113,16 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 <div>
                   <dt>Permissions</dt>
                   <dd>
-                    {c.requiredScopes.length} requested
-                    {c.reviewGatedScopes.length > 0 ? ` · ${c.reviewGatedScopes.length} need channel review` : ''}
+                    {c.requiredScopes.length > 0 ? (
+                      <>
+                        {c.requiredScopes.length} requested
+                        {c.reviewGatedScopes.length > 0 ? ` · ${c.reviewGatedScopes.length} need channel review` : ''}
+                      </>
+                    ) : (
+                      // SP-API grants roles at app registration, not OAuth scopes:
+                      // "0 requested" read as a defect rather than as "not scope-based".
+                      'Set by the app’s roles at the channel, not by scopes'
+                    )}
                   </dd>
                 </div>
                 {lifetimeLine(c) && (
@@ -154,7 +168,13 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                     onStart(c.key, { intent: 'connect', region: chosenRegion })
                   }}
                 >
-                  {busy ? 'Opening sign-in…' : have.length > 0 ? `Connect another ${c.displayName} account` : `Connect ${c.displayName}`}
+                  {busy
+                    ? 'Opening sign-in…'
+                    : // "Connect another…" on a HELD button promises a second account the
+                      // channel cannot give yet (Amazon: the env row is connected, OAuth is CX.3).
+                      have.length > 0 && !held
+                      ? `Connect another ${c.displayName} account`
+                      : `Connect ${c.displayName}`}
                 </Button>
                 {have.length > 0 && (
                   <Button asChild variant="secondary" size="sm">
@@ -194,6 +214,33 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
             )
           }
         >
+          {adsSpec && (
+            <dl className="nds-connect-facts">
+              <div>
+                <dt>Signs in with</dt>
+                <dd>{adsSpec.authMode.replace(/_/g, ' ')}</dd>
+              </div>
+              <div>
+                <dt>Permissions</dt>
+                <dd>
+                  {adsSpec.requiredScopes.length} requested
+                  {adsSpec.reviewGatedScopes.length > 0 ? ` · ${adsSpec.reviewGatedScopes.length} need channel review` : ''}
+                </dd>
+              </div>
+              {lifetimeLine(adsSpec) && (
+                <div>
+                  <dt>Renewal</dt>
+                  <dd>{lifetimeLine(adsSpec)}</dd>
+                </div>
+              )}
+              {adsSpec.apiVersion && (
+                <div>
+                  <dt>API version</dt>
+                  <dd>{adsSpec.apiVersion}</dd>
+                </div>
+              )}
+            </dl>
+          )}
           {ads && ads.items.length > 0 && (
             <div className="nds-connect-chips">
               {ads.items.map((i) => (

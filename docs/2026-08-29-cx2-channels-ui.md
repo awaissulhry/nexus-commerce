@@ -81,3 +81,23 @@ Low: read paths only, plus three POSTs the API already exposes. The Ads manual f
 
 ## 10. Tests
 `AccountsPanel` row rendering per `authStatus` × drift (six statuses, drift 0/N, env vs oauth); `ConnectTab` catalogue rendering (available vs held + reason on Enter, region select only when >1); `useConnectPopup` bridge (own-origin and API-origin messages accepted, others ignored, ACK sent, BroadcastChannel path); `DiagnosticsTab` heartbeat result rendering; `KeyValue`.
+
+## 11. Build record + prod defects found and fixed (2026-08-29)
+
+Shipped `9fadf5130` (+ `c86393577`, the two event lists onto `NexusGrid` because the pre-push grid-kit ratchet refuses new DS-`DataGrid` importers). Then verified **on prod, in the browser**, which found seven defects the local checks could not — every one of them a thing the screen said that was not true, or said twice:
+
+| # | Defect, measured on prod | Fix |
+|---|---|---|
+| 1 | The page rendered its title **twice** — the settings shell already draws "Channels" + the nav description, and my `PageHeader` repeated both lines | `PageHeader` removed; the shell owns the header (no other settings page uses one) |
+| 2 | Amazon Ads rendered **twice** on Connect: the catalogue entry ("Not yet") beside the profiles card ("9 active") — two cards disagreeing about one channel | the catalogue's `AMAZON_ADS` entry is filtered out and its facts (auth mode, scopes, renewal, API version) are folded into the one Ads card |
+| 3 | Amazon Seller said "**0 requested**" permissions — SP-API grants roles at app registration, not OAuth scopes | "Set by the app's roles at the channel, not by scopes" when `requiredScopes` is empty |
+| 4 | The env-managed Amazon row said "**0 permissions granted**" | "No OAuth permissions — credentials come from the environment" |
+| 5 | "**Last sync never (SUCCESS)**" — a verdict with no timestamp behind it (the boot-stamped status CX.1 stopped writing) | no time ⇒ no verdict: "Last sync never" |
+| 6 | `xaviaracing` showed "**eBay tokens not configured for this connection**" as a floating line under a **Connected** pill — the last *sync's* error, read as current state | the sync error is appended to the "Last sync … (FAILED): …" fact; `healthReason` is no longer repeated on a CX.1 row |
+| 7 | **Run heartbeat's result vanished ~200 ms after it appeared** — the reset effect depended on the account *object*, and the refetch the check itself triggers hands back a new object for the same account | every diagnostics effect keys on `account.id` / `account.channel`; the reset runs only when the operator picks a different account |
+
+Also: the ledger's Actor column printed a raw cuid; it now prints the actor *kind* (operator / cron / system) with the user id in the title, and `actorKind` is dropped from the Detail summary it duplicated.
+
+**Verified live on prod** (`nexus-commerce-three.vercel.app`, API `ddc4ddba9`): three tabs render with URL sync; Accounts shows the status pill from `authStatus`, region and 12 Amazon marketplace chips / "All eBay sites", "22 permissions not granted" with Reconnect relabelled to match, and the four timestamps; Connect renders five catalogue cards + Ads; Diagnostics loads the ledger on `NexusGrid` — real `heartbeat_ok` rows every 15 minutes — and **Run heartbeat wrote a new ledger row `heartbeat_ok · actorKind: operator · 3087 ms`** attributed to the operator's user id. That is the round trip the honesty rule asks for: the button made a real call, the channel answered, the row landed.
+
+**A note on the poll that said this was not deployed for an hour:** `useSearchParams` inside the `Suspense` boundary makes the page client-rendered, so its text never appears in the server HTML. A `curl | grep` for the new copy therefore reported "not deployed" while the page had been live the whole time. Measure a client-rendered page in a browser, never in `curl`.

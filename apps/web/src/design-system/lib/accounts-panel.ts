@@ -62,11 +62,17 @@ export interface PermissionsLine {
 export function permissionsLine(
   grantedScopes: string[] | undefined,
   scopeDrift: string[] | undefined,
+  managedBy?: string,
 ): PermissionsLine | null {
   const drift = scopeDrift?.length ?? 0
   if (drift > 0) return { tone: 'warning', text: `${drift} permission${drift === 1 ? '' : 's'} not granted` }
   if (!grantedScopes) return null
   const n = grantedScopes.length
+  // An env-managed account holds credentials from the environment, not an OAuth
+  // grant: it has no scopes to count, and "0 permissions granted" would read as a
+  // defect rather than as "this kind of account does not carry scopes".
+  if (n === 0 && managedBy === 'env') return { tone: null, text: 'No OAuth permissions — credentials come from the environment' }
+  if (n === 0) return { tone: null, text: 'No permissions recorded — reconnect to capture them' }
   return { tone: null, text: `${n} permission${n === 1 ? '' : 's'} granted` }
 }
 
@@ -122,8 +128,17 @@ export function lastSyncText(
   lastSyncAt: string | null | undefined,
   lastSyncStatus: string | null | undefined,
   now: number = Date.now(),
+  lastSyncError?: string | null,
 ): string {
-  return `Last sync ${relativeTime(lastSyncAt, now)}${lastSyncStatus ? ` (${lastSyncStatus})` : ''}`
+  // A status with no timestamp is not a reading: "Last sync never (SUCCESS)" was the
+  // env row's boot-stamped status with nothing behind it. No time ⇒ no verdict.
+  if (!lastSyncAt) return 'Last sync never'
+  const head = `Last sync ${relativeTime(lastSyncAt, now)}${lastSyncStatus ? ` (${lastSyncStatus})` : ''}`
+  // The sync error belongs to the sync, not to the account: a failed sync on a
+  // CONNECTED grant used to render as a floating line that read like current state
+  // and contradicted the status pill next to it.
+  const failed = lastSyncStatus === 'FAILED' || lastSyncStatus === 'PARTIAL'
+  return failed && lastSyncError ? `${head}: ${lastSyncError}` : head
 }
 
 export interface ScopeRow {

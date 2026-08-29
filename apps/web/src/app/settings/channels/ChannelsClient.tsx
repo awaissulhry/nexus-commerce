@@ -12,7 +12,6 @@
 import { useCallback, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Tabs, Banner } from '@/design-system/components'
-import { PageHeader } from '@/design-system/patterns'
 import { useAccounts, useAdsConnections, useCatalogue } from './channels-data'
 import { useConnectPopup } from './useConnectPopup'
 import { AccountsTab } from './AccountsTab'
@@ -73,10 +72,9 @@ export function ChannelsClient() {
 
   return (
     <div className="nds-channels">
-      <PageHeader
-        title="Channels"
-        subtitle="Marketplace and store accounts — sign-in, permissions, health."
-      />
+      {/* No PageHeader: the settings shell already renders the title and the
+          nav's description above every settings page — a second copy was the
+          same two lines twice on screen (measured on prod 2026-08-29). */}
       <Tabs ariaLabel="Channels sections" tabs={tabs} active={tab} onChange={setTab} />
 
       {(popup.error || accounts.error) && (

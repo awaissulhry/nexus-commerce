@@ -32,13 +32,27 @@ export interface InboundRow {
   createdAt: string
 }
 
+/** `actorKind` has its own column; repeating it in the detail was the same fact twice. */
+const DETAIL_OMIT = new Set(['actorKind'])
+
 export function summariseDetail(detail: Record<string, unknown> | null): string {
   if (!detail) return ''
   return Object.entries(detail)
-    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .filter(([k, v]) => !DETAIL_OMIT.has(k) && v !== null && v !== undefined && v !== '')
     .slice(0, 5)
     .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
     .join(' · ')
+}
+
+/**
+ * Who did it, in words. `actorUserId` is a cuid — printing it told the operator
+ * nothing; the kind (operator / cron / system / channel) is the useful fact, and
+ * the id stays in the title for anyone auditing a specific person's action.
+ */
+export function actorLabel(row: { actorUserId: string | null; detail: Record<string, unknown> | null }): string {
+  const kind = row.detail && typeof row.detail.actorKind === 'string' ? row.detail.actorKind : null
+  if (kind) return kind
+  return row.actorUserId ? 'operator' : 'system'
 }
 
 function WhenCell(p: ICellRendererParams<{ createdAt: string }>) {
@@ -61,7 +75,13 @@ function ProcessedCell(p: ICellRendererParams<InboundRow>) {
 const LEDGER_COLUMNS: ColDef<LedgerRow>[] = [
   { field: 'createdAt', headerName: 'When', width: 150, cellRenderer: WhenCell, sortable: true },
   { field: 'type', headerName: 'Event', width: 170, cellRenderer: TypeCell },
-  { field: 'actorUserId', headerName: 'Actor', width: 130, valueFormatter: (p) => p.value ?? 'system' },
+  {
+    colId: 'actor',
+    headerName: 'Actor',
+    width: 120,
+    valueGetter: (p) => (p.data ? actorLabel(p.data) : ''),
+    tooltipValueGetter: (p) => (p.data?.actorUserId ? `user ${p.data.actorUserId}` : undefined),
+  },
   { colId: 'detail', headerName: 'Detail', flex: 1, minWidth: 240, valueGetter: (p) => summariseDetail(p.data?.detail ?? null), cellClass: 'nds-ag-cell nds-channels-detail-cell' },
 ]
 

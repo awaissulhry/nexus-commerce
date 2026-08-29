@@ -34,6 +34,12 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   const api = getBackendUrl()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const account = accounts.find((a) => a.id === selectedId) ?? accounts.find((a) => a.isPrimary) ?? accounts[0] ?? null
+  // Key everything below on the account's IDENTITY, never on the object. A refetch
+  // (which every live check triggers) hands back a new object for the same account;
+  // depending on the object re-ran the reset effect and wiped the result the operator
+  // had just asked for, ~200 ms after it appeared. Measured on prod 2026-08-29.
+  const accountId = account?.id ?? null
+  const accountChannel = account?.channel ?? null
 
   const [heartbeat, setHeartbeat] = useState<{ busy: boolean; result: HeartbeatResult | null; error: string | null }>({ busy: false, result: null, error: null })
   const [refresh, setRefresh] = useState<{ busy: boolean; text: string | null; tone: 'success' | 'danger' | 'warning' }>({ busy: false, text: null, tone: 'success' })
@@ -42,44 +48,49 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   const [probe, setProbe] = useState<{ busy: boolean; ok: boolean | null; recommendation: string | null; details: string | null; error: string | null }>({ busy: false, ok: null, recommendation: null, details: null, error: null })
 
   const loadLedger = useCallback(async () => {
-    if (!account) return
+    if (!accountId) return
     setLedger({ rows: null, error: null })
     try {
-      const res = await fetch(`${api}/api/cx/connections/${account.id}/events?take=100`, { credentials: 'include', cache: 'no-store' })
+      const res = await fetch(`${api}/api/cx/connections/${accountId}/events?take=100`, { credentials: 'include', cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { events: LedgerRow[] }
       setLedger({ rows: data.events ?? [], error: null })
     } catch (err) {
       setLedger({ rows: [], error: err instanceof Error ? err.message : 'Failed to load the ledger' })
     }
-  }, [account, api])
+  }, [accountId, api])
 
   const loadInbound = useCallback(async () => {
-    if (!account) return
+    if (!accountChannel) return
     setInbound({ rows: null, stats: null, error: null })
     try {
-      const res = await fetch(`${api}/api/settings/channels/${account.channel.toLowerCase()}/detail`, { credentials: 'include', cache: 'no-store' })
+      const res = await fetch(`${api}/api/settings/channels/${accountChannel.toLowerCase()}/detail`, { credentials: 'include', cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { recentEvents: InboundRow[]; eventStats: { success: number; failed: number; pending: number; total: number } }
       setInbound({ rows: data.recentEvents ?? [], stats: data.eventStats ?? null, error: null })
     } catch (err) {
       setInbound({ rows: [], stats: null, error: err instanceof Error ? err.message : 'Failed to load inbound events' })
     }
-  }, [account, api])
+  }, [accountChannel, api])
 
+  // Results belong to the account they were run against: clear them when the
+  // operator picks a DIFFERENT account, and only then.
   useEffect(() => {
     setHeartbeat({ busy: false, result: null, error: null })
     setRefresh({ busy: false, text: null, tone: 'success' })
     setProbe({ busy: false, ok: null, recommendation: null, details: null, error: null })
+  }, [accountId])
+
+  useEffect(() => {
     void loadLedger()
     void loadInbound()
   }, [loadLedger, loadInbound])
 
   async function runHeartbeat() {
-    if (!account) return
+    if (!accountId) return
     setHeartbeat({ busy: true, result: null, error: null })
     try {
-      const res = await fetch(`${api}/api/cx/connections/${account.id}/heartbeat`, { method: 'POST', credentials: 'include' })
+      const res = await fetch(`${api}/api/cx/connections/${accountId}/heartbeat`, { method: 'POST', credentials: 'include' })
       const data = (await res.json()) as Partial<HeartbeatResult> & { error?: string }
       if (typeof data.ok !== 'boolean') throw new Error(data.error ?? `HTTP ${res.status}`)
       setHeartbeat({ busy: false, result: data as HeartbeatResult, error: null })
@@ -91,10 +102,10 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   }
 
   async function refreshNow() {
-    if (!account) return
+    if (!accountId) return
     setRefresh({ busy: true, text: null, tone: 'success' })
     try {
-      const res = await fetch(`${api}/api/cx/connections/${account.id}/refresh`, { method: 'POST', credentials: 'include' })
+      const res = await fetch(`${api}/api/cx/connections/${accountId}/refresh`, { method: 'POST', credentials: 'include' })
       const data = (await res.json()) as { success?: boolean; accessTokenExpiresAt?: string | null; refreshed?: boolean; error?: string; code?: string }
       if (res.status === 409) setRefresh({ busy: false, text: data.error ?? 'Another worker holds the refresh lease — try again in a moment.', tone: 'warning' })
       else if (!res.ok) setRefresh({ busy: false, text: data.error ?? `Refresh failed (HTTP ${res.status})`, tone: 'danger' })

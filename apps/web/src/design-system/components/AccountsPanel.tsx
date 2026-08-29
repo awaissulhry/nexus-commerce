@@ -327,7 +327,7 @@ export function AccountsPanel({
             const status = a.authStatus !== undefined ? authStatusPill(a.authStatus, a.consecutiveFailures ?? 0) : null
             const scopesOpen = expandedScopes[a.id] === true
             const chips = visibleScopes(a.scopes ?? [], scopesOpen)
-            const permissions = permissionsLine(a.grantedScopes, a.scopeDrift)
+            const permissions = permissionsLine(a.grantedScopes, a.scopeDrift, a.managedBy)
             const showError = errorLineVisible(a.authStatus, a.lastError)
             const actions = rowActions(a, Boolean(onReconnect))
             const result = testResult[a.id]
@@ -335,7 +335,10 @@ export function AccountsPanel({
             // otherwise), then whatever the row still needs to say about itself.
             const sub: ReactNode[] = []
             if (!hasCx) sub.push(HEALTH_TEXT[a.health] ?? a.health)
-            if (a.healthReason) sub.push(a.healthReason)
+            // `healthReason` is the LAST SYNC's verdict. With a CX.1 row the pill states
+            // the auth state and the times line carries the sync outcome and its error,
+            // so repeating it here contradicted the pill ("Connected" + "tokens not configured").
+            if (!hasCx && a.healthReason) sub.push(a.healthReason)
             if (a.labelIsPlaceholder) sub.push('no name from the channel — rename it')
             if (!a.externalAccountId) {
               sub.push(
@@ -420,7 +423,7 @@ export function AccountsPanel({
                       <Stamp label="Inbound" iso={a.lastInboundAt} kind="untracked" />
                       <Stamp label="Outbound" iso={a.lastOutboundAt} kind="untracked" />
                       <span title={timestampTitle('Last sync', a.lastSyncAt)}>
-                        {lastSyncText(a.lastSyncAt, a.lastSyncStatus)}
+                        {lastSyncText(a.lastSyncAt, a.lastSyncStatus, Date.now(), a.lastSyncError)}
                       </span>
                     </div>
                   )}
