@@ -27,7 +27,16 @@ export const MARKETPLACE_ID_TO_CODE: Record<string, string> = {
   A1F83G8C2ARO7P: 'UK',
   A1C3SOZRARQ6R3: 'PL',
   A2NODRKZP88ZB9: 'SE',
-  AMEN7PMS3EDWL:  'IE', // Ireland — Xavia auth has it via Pan-EU but no Marketplace row yet
+  // 🔴 AMEN7PMS3EDWL is BELGIUM (amazon.com.be), not Ireland. It was mapped to 'IE'
+  // here — the only place in the codebase that said so. Corrected 2026-08-29 on
+  // evidence from Amazon itself: the Ads /v2/profiles response for the profile this
+  // id belongs to returns `countryCode: 'BE'`, `timezone: 'Europe/Brussels'`. Four
+  // other files already had it right (outbound-sync.service.ts:257,
+  // amazon-orders.service.ts:150, amazon-solicitations.service.ts:33), so this map was
+  // the outlier — and it is the one 38 call sites normalise through. The visible
+  // symptom: an Amazon Ads profile for Belgium was stored and displayed as Ireland.
+  AMEN7PMS3EDWL:  'BE',
+  A28R8C7NBKEWEA: 'IE', // the real Ireland, matching the four files above
   // NA
   ATVPDKIKX0DER: 'US',
   A2EUQ1WTGCTBG2: 'CA',
