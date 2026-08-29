@@ -161,6 +161,10 @@ async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
           marketplace: market,
           marketplaceStringId: account?.marketplaceStringId,
           accountId: account?.id,
+          // CX.3c — the profile's own name from Amazon, so `accountLabel` has a
+          // source that is the channel's current answer rather than a column last
+          // written at connect time.
+          accountName: account?.name,
           accountType: account?.type,
           currencyCode: p.currencyCode,
           timezone: p.timezone,

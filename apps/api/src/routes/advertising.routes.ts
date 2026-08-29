@@ -12251,12 +12251,43 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // connection is something you saw coming, not something you discover when the
     // ads stop syncing. `isEstimate` is carried through so the UI can mark an
     // inferred date as approximate rather than presenting a guess as a fact.
+    //
+    // CX.3c — three of these columns were showing an operator things that were not
+    // true, and the connection core has measured the same facts all along:
+    //   • `lastVerifiedAt` — NOTHING writes it. Frozen at 2026-05-18 on all nine rows
+    //     while the page labelled it "last verified". The heartbeat calls
+    //     /v2/profiles every 15 minutes; `lastHeartbeatAt` is that call.
+    //   • `tokenExpiresAt` — written once at connect as `issued + 365d`, with the
+    //     row's own `tokenIssuedAtIsEstimate` flag saying so. The grant reported a
+    //     real refresh-token lifetime, which is on the connection.
+    //   • `lastError`/`lastErrorAt` — nothing writes them either, so a failing
+    //     profile looked exactly like a healthy one.
+    // The response SHAPE is untouched (nine web call sites read it); only the
+    // provenance of these values changes, and only when the core can answer.
+    const account = await (async () => {
+      try {
+        const { tryResolveConnection } = await import('../services/connection-resolver.service.js')
+        return await tryResolveConnection({ channel: 'AMAZON_ADS', primary: true })
+      } catch {
+        return null
+      }
+    })()
     const DAY = 24 * 60 * 60 * 1000
     const now = Date.now()
     const withExpiry = items.map((c) => {
-      const daysToTokenExpiry = c.tokenExpiresAt ? Math.floor((c.tokenExpiresAt.getTime() - now) / DAY) : null
+      // The measured expiry when we have one; otherwise the row's estimate, unchanged.
+      const measuredExpiry = account?.refreshTokenExpiresAt ?? null
+      const tokenExpiresAt = measuredExpiry ?? c.tokenExpiresAt
+      const isEstimate = measuredExpiry ? false : c.tokenIssuedAtIsEstimate
+      const daysToTokenExpiry = tokenExpiresAt ? Math.floor((tokenExpiresAt.getTime() - now) / DAY) : null
       return {
         ...c,
+        // A real verification beats a fossil; the row's value is the fallback.
+        lastVerifiedAt: account?.lastHeartbeatAt ?? c.lastVerifiedAt,
+        lastError: account?.lastError ?? c.lastError,
+        lastErrorAt: account?.lastErrorAt ?? c.lastErrorAt,
+        tokenExpiresAt,
+        tokenIssuedAtIsEstimate: isEstimate,
         daysToTokenExpiry,
         tokenExpiryStatus: daysToTokenExpiry == null ? 'unknown'
           : daysToTokenExpiry <= 0 ? 'expired'

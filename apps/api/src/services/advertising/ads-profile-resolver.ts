@@ -23,6 +23,22 @@
  *
  * `NEXUS_CX_ADS_RESOLVER=0` forces the legacy row, and every answer reports which
  * source produced it, so a divergence is visible rather than silent.
+ *
+ * ── The scope metadata shape, in one place (CX.3c) ────────────────────────────
+ * Three writers touch it, and they must compose rather than overwrite (the heartbeat
+ * merges; see `cx-heartbeat.job.ts`):
+ *
+ *   discovery, every heartbeat — what the CHANNEL says:
+ *     marketplace · marketplaceStringId · currencyCode · timezone
+ *     accountId · accountName · accountType
+ *   the operator's routes, mirrored as they write — what WE decided:
+ *     mode · writesEnabledAt · lastWriteAt
+ *   the CX.3a migration — provenance, until the legacy row goes:
+ *     legacyRowId
+ *
+ * Anything not in this list is not part of the contract. Account-level facts —
+ * token expiry, last verification, last error — belong on the CONNECTION, not on a
+ * per-profile copy: that is what CX.3c fixed on /api/advertising/connections.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
