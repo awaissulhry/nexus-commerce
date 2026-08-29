@@ -40,13 +40,19 @@ let coreRow: CoreRow | null = null
 let coreLookupError: Error | null = null
 let legacyRows: LegacyRow[] = []
 
-const channelConnectionFindFirst = vi.fn(async () => {
+/**
+ * The core is reached through the MAP.3 resolver (`tryResolveConnection`), not a bare
+ * `findFirst` — "the primary Amazon Ads account" is a claim that can be audited, and
+ * it is fail-closed when two grants exist. The resolver reads `findMany`, so that is
+ * what this mock has to answer.
+ */
+const channelConnectionFindMany = vi.fn(async () => {
   if (coreLookupError) throw coreLookupError
-  return coreRow
+  return coreRow ? [{ ...coreRow, channelType: 'AMAZON_ADS', isActive: true, isPrimary: true }] : []
 })
 
 const prismaMock = {
-  channelConnection: { findFirst: channelConnectionFindFirst },
+  channelConnection: { findMany: channelConnectionFindMany },
   amazonAdsConnection: {
     findFirst: vi.fn(async ({ where }: { where: { isActive: boolean } }) =>
       legacyRows.find((r) => r.isActive === where.isActive) ?? null),
@@ -123,10 +129,10 @@ describe('resolveCredentials — the connection core', () => {
       refreshToken: CORE_REFRESH,
     })
     // The single AMAZON_ADS connection, and only the two columns needed.
-    expect(channelConnectionFindFirst).toHaveBeenCalledWith({
-      where: { channelType: 'AMAZON_ADS', isActive: true },
-      select: { id: true, credentialsEnc: true },
-    })
+    // Declared resolution: the channel is named and the row is the channel's primary.
+    expect(channelConnectionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ channelType: 'AMAZON_ADS', isActive: true }) }),
+    )
     expect(readRefreshToken).toHaveBeenCalledWith('conn_ads_1')
     expect(getChannelApp).toHaveBeenCalledWith('AMAZON_ADS', 'production')
     // The legacy row is not even read when the core can answer.
@@ -164,7 +170,7 @@ describe('resolveCredentials — NEXUS_CX_ADS_CREDENTIALS=0', () => {
       clientSecret: ROW_CLIENT_SECRET,
       refreshToken: ROW_REFRESH,
     })
-    expect(channelConnectionFindFirst).not.toHaveBeenCalled()
+    expect(channelConnectionFindMany).not.toHaveBeenCalled()
     expect(readRefreshToken).not.toHaveBeenCalled()
     expect(getChannelApp).not.toHaveBeenCalled()
   })
@@ -185,13 +191,17 @@ describe('resolveCredentials — NEXUS_CX_ADS_CREDENTIALS=0', () => {
 // ── (c) + the other half-answers the core can give ───────────────────────────
 
 describe('resolveCredentials — falls back on an incomplete core', () => {
-  it('falls back when the connection row exists but credentialsEnc is null', async () => {
-    coreRow = { id: 'conn_ads_1', credentialsEnc: null }
+  it('falls back when the connection exists but holds no grant yet (pre-adoption)', async () => {
+    // The resolver never returns `credentialsEnc` — CX.1's boundary — so "has this
+    // connection a usable grant?" is answered by asking the token service, which is
+    // the only decryptor. No refresh token ⇒ the core is not ready ⇒ the row serves.
+    coreRow = { id: 'conn_ads_1' }
+    readRefreshToken.mockResolvedValueOnce(null)
 
     const creds = await resolveCredentials(PROFILE_ID)
 
     expect(creds.refreshToken).toBe(ROW_REFRESH)
-    expect(readRefreshToken).not.toHaveBeenCalled()
+    expect(readRefreshToken).toHaveBeenCalledWith('conn_ads_1')
   })
 
   it('falls back when there is no AMAZON_ADS connection at all', async () => {

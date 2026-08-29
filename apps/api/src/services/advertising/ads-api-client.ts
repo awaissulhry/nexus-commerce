@@ -410,16 +410,30 @@ function logCredentialSource(source: AdsCredentialSource, detail: Record<string,
  * core is not ready", and the caller falls back to the legacy row.
  */
 async function credentialsFromCore(): Promise<AdsCredentials | null> {
-  const { default: prisma } = await import('../../db.js')
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'AMAZON_ADS', isActive: true },
-    select: { id: true, credentialsEnc: true },
-  })
-  if (!conn?.credentialsEnc) return null
+  // MAP.3 — DECLARED, not ambient. "The primary Amazon Ads account for this channel"
+  // is a claim someone can audit; `findFirst({ channelType, isActive })` is whichever
+  // row the database happened to return, which is correct only by accident while
+  // exactly one Ads grant exists. `tryResolveConnection` is fail-closed: with two
+  // grants and no primary it returns null and this falls back to the legacy row
+  // rather than spending on a coin flip.
+  const resolver = await import('../connection-resolver.service.js')
+  let conn
+  try {
+    conn = await resolver.resolveConnection({ channel: 'AMAZON_ADS', primary: true })
+  } catch (err) {
+    // "No Ads grant on the core yet" and "the core is broken" are different operator
+    // situations, so they are not collapsed into one silent null: the first is the
+    // ordinary pre-adoption state, the second must be visible. `tryResolveConnection`
+    // would swallow both.
+    if (err instanceof resolver.NoConnectionError || err instanceof resolver.AmbiguousConnectionError) return null
+    throw err
+  }
 
-  // The token service is the only module that decrypts a connection envelope;
-  // `readRefreshToken` is its narrow accessor for exactly this caller (CX.3b
-  // replaces it with the leased refresh).
+  // The token service is the only module that decrypts a connection envelope — the
+  // resolver deliberately does not return `credentialsEnc` at all — so "does this
+  // connection have a usable grant?" is answered by asking for the token, not by
+  // inspecting a column. `readRefreshToken` is its narrow accessor for exactly this
+  // caller (CX.3b replaces it with the leased refresh).
   const { readRefreshToken } = await import('../cx/token.service.js')
   const refreshToken = await readRefreshToken(conn.id)
   if (!refreshToken) return null
