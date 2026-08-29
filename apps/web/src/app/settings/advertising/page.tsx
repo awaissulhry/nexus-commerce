@@ -52,7 +52,10 @@ function StatusBadge({ mode, writesEnabledAt }: { mode: string; writesEnabledAt:
 
 export default function AdvertisingSettingsPage() {
   const [connections, setConnections] = useState<AdsConnection[]>([])
-  const [adsMode, setAdsMode] = useState<string>('sandbox')
+  // `null` until the server has told us. Defaulting to 'sandbox' made the page assert
+  // "Sandbox mode active — API calls return fixture data" before it had asked, and it
+  // would have kept saying so if the request failed. An unknown is not a sandbox.
+  const [adsMode, setAdsMode] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
@@ -186,7 +189,7 @@ export default function AdvertisingSettingsPage() {
         </div>
         <div className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs">
           <span className={`h-1.5 w-1.5 rounded-full ${adsMode === 'live' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-          <span className="text-slate-600">Server mode: <strong>{adsMode}</strong></span>
+          <span className="text-slate-600">Server mode: <strong>{adsMode ?? 'checking…'}</strong></span>
         </div>
       </div>
 
@@ -328,8 +331,10 @@ export default function AdvertisingSettingsPage() {
         <ol className="space-y-2 text-sm text-slate-600 list-decimal list-inside">
           <li>Go to <strong>advertising.amazon.com → Partner Network → Developer Console</strong></li>
           <li>Register an app with scope <code className="font-mono bg-slate-100 px-1 rounded">advertising::campaign_management</code></li>
-          <li>Complete the LWA OAuth consent flow to get your <strong>refresh token</strong></li>
-          <li>Enter the credentials above and click Save</li>
+          <li>
+            Open <strong>Settings → Channels → Connect</strong> and use <strong>Connect with Amazon Ads</strong>.
+            You sign in at Amazon; the profiles and their credential arrive on the connection.
+          </li>
           <li>Click <strong>Test</strong> to verify the connection works</li>
           <li>Set <code className="font-mono bg-slate-100 px-1 rounded">NEXUS_AMAZON_ADS_MODE=live</code> in Railway env vars</li>
           <li>Once metrics are flowing, use <strong>Enable writes</strong> to allow bid automation</li>
