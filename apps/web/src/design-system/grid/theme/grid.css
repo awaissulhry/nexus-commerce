@@ -160,9 +160,25 @@
 
 /* On the ROW, not the first cell: a cell is 1px shorter than its row, which left a gap in the
    rail at every row boundary. The DS drew it on the `td`, whose box includes the row rule, so the
-   rail ran continuously down the family — the row is AG's equivalent box. */
-.nds-ag-flat-tree .ag-row:not(.ag-row-level-0):not(.ag-full-width-row) {
-  box-shadow: inset 3px 0 0 var(--nds-grid-child-rail);
+   rail ran continuously down the family — the row is AG's equivalent box.
+ *
+ * ...and it has to PAINT above the cells, which is why this is a pseudo-element and no longer the
+ * `inset` box-shadow it was. AG draws the row rule as `border-bottom: var(--ag-row-border)` on
+ * `.ag-grid-scrolling-cells` — a `position: relative; z-index: 0` child that spans the row's full
+ * height from `left: 0`. A positioned descendant paints ABOVE its parent's box-shadow, so that
+ * 1px of the LIGHTER `--nds-grid-row-rule` overwrote the rail's bottom pixel at every boundary
+ * and broke the stroke into per-row segments. Measured on prod: consecutive child rows are exactly
+ * contiguous (…867.8 | 867.8…) with no border on the row itself — the row BOX was never the
+ * problem, the paint ORDER was. The row is `position: absolute`, so `::after` anchors to it. */
+.nds-ag-flat-tree .ag-row:not(.ag-row-level-0):not(.ag-full-width-row)::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 3px;
+  background-color: var(--nds-grid-child-rail);
+  z-index: 1;
+  pointer-events: none;
 }
 
 .nds-ag-flat-tree .ag-row:not(.ag-row-level-0).ag-row-hover {
