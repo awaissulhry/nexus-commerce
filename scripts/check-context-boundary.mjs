@@ -8,12 +8,18 @@
  * means anything if something checks it. Without a check, "boundary" is a
  * comment.
  *
- * Advertising first, because it is measurably the cleanest seam: 251 files
- * touch 80 models that NOTHING outside advertising touches. Those 80 are the
- * context's private storage. The other 51 models it uses are genuinely shared
- * (`product` alone is read by 202 files outside advertising) and are NOT
- * claimed here — pretending otherwise would flag correct code, and a false
- * positive makes people change things that were right.
+ * Advertising first, because it is measurably the cleanest seam: the files
+ * matching ADVERTISING below touch a set of models that NOTHING outside the
+ * context touches. Those are its private storage. The models it SHARES with
+ * other contexts (`product` is read by most of the API) are NOT claimed here —
+ * pretending otherwise would flag correct code, and a false positive makes
+ * people change things that were right.
+ *
+ * The live counts are in the baseline and the --census output; they are
+ * deliberately not restated here, because a number in a comment drifts and
+ * then misinforms the next reader. (This header said "80 owned models" for a
+ * while after the real figure became 70 — ten of the original eighty were
+ * never models at all, see clientNames() below.)
  *
  * THE RULE
  * A file outside the advertising context may not touch an advertising-OWNED

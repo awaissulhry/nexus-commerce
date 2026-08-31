@@ -4,11 +4,14 @@
  *
  * WHY
  * You cannot extract a service whose logic lives inside a Fastify handler, and
- * today most of it does: first MEASURED at 3,540 direct DB call sites across
- * 127 files in apps/api/src/routes/ (advertising.routes.ts 504,
- * fulfillment.routes.ts 485). PH.5 moved the bidding-engine bridge into a
- * service, taking it to 3,534 / advertising 498 — the current baseline is
- * whatever route-prisma-baseline.json says, and it only falls.
+ * today most of it does — the API layer holds several thousand direct DB call
+ * sites, with advertising.routes.ts and fulfillment.routes.ts the largest by
+ * far.
+ *
+ * The live figure is whatever route-prisma-baseline.json says, and it only
+ * falls. It is deliberately NOT restated here: this header quoted three
+ * different totals inside a day as the number moved, which is worse than
+ * quoting none. Run `--census` for the current picture.
  *
  * (A `grep prisma\.` puts it at 3,231. The AST counts `tx.` and `db.` too —
  * a transaction client is the same coupling by another name.)
