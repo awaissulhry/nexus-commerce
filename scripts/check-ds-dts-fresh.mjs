@@ -61,9 +61,14 @@ const mode = process.argv[2]
 for (const fresh of walk(out)) {
   const rel = relative(out, fresh)
   const committed = join(DS, rel)
-  // no existsSync gate: these are generated artifacts, so a MISSING one is stale too. The gate
-  // is what made the --check mode vacuous on a clean clone.
-  if (readFileSync(fresh, 'utf8') === readFileSync(committed, 'utf8')) continue
+  // A MISSING declaration is stale too — the gate that skipped them is what made the --check mode
+  // vacuous on a clean clone. But "missing is stale" has to be READ that way, not thrown: this
+  // line used to be a bare readFileSync on `committed`, which raised ENOENT and killed the whole
+  // run on the first never-generated file (measured 2026-08-31: BenchmarkBar.d.ts). So --write
+  // could never CREATE a declaration, only refresh one that already existed — the exact case the
+  // comment above claims to cover.
+  const current = existsSync(committed) ? readFileSync(committed, 'utf8') : null
+  if (current !== null && readFileSync(fresh, 'utf8') === current) continue
   stale.push(rel)
   if (mode === '--write') copyFileSync(fresh, committed)
 }

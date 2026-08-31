@@ -21,8 +21,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GridApi, GridState } from 'ag-grid-community'
 
-import { getBackendUrl } from '@/lib/backend-url'
-
 export const GRID_VIEW_SCHEMA = 1
 
 export interface GridViewPayload<TPage> {
@@ -52,13 +50,24 @@ const isPayload = <T,>(x: unknown): x is GridViewPayload<T> =>
 
 export interface UseGridViewsOptions<TPage> {
   surface: string
+  /**
+   * Where `/api/saved-views` lives. REQUIRED, and supplied by the app on purpose: until
+   * 2026-08-31 this hook imported `@/lib/backend-url` directly, which made it the ONE design-system
+   * file reaching outside the design system. That single import failed the DS declaration build
+   * with TS6059 (`rootDir`), so NO component's `.d.ts` could be regenerated — and it would have
+   * broken the moment the grid DS was mirrored into apps/factory, which has no such module.
+   *
+   * The DS asks; the app answers. No default, so the compiler names every caller rather than
+   * letting one silently inherit an app-shaped guess.
+   */
+  baseUrl: string
   /** The page state to save alongside the grid state, read at save time. */
   getPageState: () => TPage
   /** Apply a view's page state. The grid state is applied to the grid by this hook. */
   applyPageState: (page: TPage) => void
 }
 
-export function useGridViews<TPage>({ surface, getPageState, applyPageState }: UseGridViewsOptions<TPage>) {
+export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageState }: UseGridViewsOptions<TPage>) {
   const [views, setViews] = useState<SavedGridView<TPage>[]>([])
   const [loaded, setLoaded] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -68,7 +77,7 @@ export function useGridViews<TPage>({ surface, getPageState, applyPageState }: U
   const applyRef = useRef(applyPageState)
   applyRef.current = applyPageState
 
-  const url = `${getBackendUrl()}/api/saved-views`
+  const url = `${baseUrl}/api/saved-views`
 
   const refresh = useCallback(async () => {
     try {

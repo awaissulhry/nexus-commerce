@@ -16,7 +16,12 @@
     "rootDir": "../../apps/web/src/design-system",
     "baseUrl": "../..",
     "paths": { "@/*": ["apps/web/src/*"] },
-    "types": []
+    // `modules.ts` reads `process.env.NODE_ENV` to register AG's ValidationModule in development
+    // only. That is a build-time constant the bundler inlines, but the DECLARATION build still has
+    // to type it, and `[]` left it as "Cannot find name 'process'" — which failed the whole DS
+    // declaration emit, for every component. Node types are declaration-only here: this config
+    // emits `.d.ts` and nothing else, so nothing node-shaped can reach a browser bundle.
+    "types": ["node"]
   },
   "include": [
     "../../apps/web/src/design-system/**/*.ts",

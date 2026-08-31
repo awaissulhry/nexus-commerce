@@ -14,6 +14,7 @@ import { AlertTriangle, ArrowLeft, Copy, Download, MoreHorizontal, Plus, Search,
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useListingEvents } from '@/lib/sync/use-listing-events'
 import type { ProductRow, Tag as ProductTag } from '@/app/products/_types'
 
 import { Button, Input, Pill } from '@/design-system/primitives'
@@ -40,7 +41,9 @@ import { GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, Sel
 import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
-import { buildPageColumns, columnLabel, isGroupRow, projectColDefs, CHANNEL_OPTS, SALES_WINDOW_DAYS, STATUS_OPTS } from './columns'
+import { buildPageColumns, columnLabel, isGroupRow, pageColumnExportValue, projectColDefs, CHANNEL_OPTS, SALES_WINDOW_DAYS, STATUS_OPTS } from './columns'
+import { csvFileName, downloadCsv, toCsv, type CsvColumn } from '@/design-system/grid/export/gridCsv'
+import { fetchAllRowsForExport } from './productsExport'
 import { ProductTreeCell, type ProductTreeCellParams } from './ProductTreeCell'
 import { useBulkActions } from './useBulkActions'
 import { GridViewsMenu } from './GridViewsMenu'
@@ -202,6 +205,8 @@ function ProductsNextInner() {
   // ── Saved views: ONE object, server-side, per operator ──────────
   const gridViews = useGridState<PageViewState>({
     surface: 'products-next',
+    // The DS grid does not know where the API lives; the page answers.
+    baseUrl: getBackendUrl(),
     getPageState: () => ({ filters, tile: activeTile, density, lockedColumns, pageSize }),
     applyPageState: (pg) => {
       setFilters(pg.filters)
@@ -279,6 +284,23 @@ function ProductsNextInner() {
     if (gridApi && !gridApi.isDestroyed()) gridApi.refreshServerSide({ purge: false })
     refreshFacets()
   }, [gridApi, refreshFacets])
+  /**
+   * The SERVER's events, not just this tab's.
+   *
+   * `useInvalidationChannel` is a BroadcastChannel: until this hook was mounted (2026-08-31) the
+   * only thing feeding it here was the page's own optimistic emits, so a sale landing by webhook, a
+   * cron sync, a bulk job or another operator's edit never reached the grid — it sat on whatever it
+   * had until someone reloaded. This route is standalone (`AppShell` suppresses global chrome), so
+   * no provider above it mounts the stream; every other workspace mounts this hook itself.
+   *
+   * It is self-contained — one `EventSource` per tab, auto-reconnecting — and dispatches into the
+   * same invalidation channel subscribed to below, so nothing else here changes.
+   *
+   * 🔴 `stock.adjusted` is NOT among the events it maps: every emitter of that type is a client
+   * file, so a server-side stock change still will not move the Available column. That needs the
+   * API to raise an inventory event onto this bus.
+   */
+  useListingEvents()
   useInvalidationChannel(
     ['product.updated', 'product.created', 'product.deleted', 'stock.adjusted', 'listing.updated'],
     () => refetch(),
@@ -665,6 +687,56 @@ function ProductsNextInner() {
     return columnFilters + f.stock.length + f.fulfillment.length + f.families.length + f.workflowStages.length + f.missingChannels.length
   }, [filters, filterModel])
 
+  /**
+   * Export the QUERY, not the viewport.
+   *
+   * The columns are the ones on screen, in the operator's order, read from the grid — so the
+   * Customise dialog decides the file too. The VALUES are `pageColumnExportValue`, which is the
+   * cell's own `valueGetter` unless the column declares an `exportValue` — a renderer-drawn column
+   * (Product, Channels, Tags) has no scalar to write, and said so by exporting blank until it did. The ROWS are re-asked of the server for the whole
+   * filtered scope; AG's own exporter would have written only the blocks it had loaded, plus the
+   * family-footer sentinels this page injects for layout.
+   */
+  const [exporting, setExporting] = useState(false)
+  const runExport = useCallback(async () => {
+    if (!gridApi || gridApi.isDestroyed()) return
+    setExporting(true)
+    try {
+      const byKey = new Map(columns.map((c) => [c.key, c]))
+      const csvColumns = gridApi
+        .getAllDisplayedColumns()
+        .map((col): CsvColumn<ProductRow> | null => {
+          // AG names the tree column `ag-Grid-AutoColumn`; the page knows it as `product`.
+          const key = col.getColId() === AG_AUTO_COL ? 'product' : col.getColId()
+          const c = byKey.get(key)
+          // `actions` is a button, and a selection checkbox is not data.
+          if (!c || key === 'actions') return null
+          return { header: columnLabel(c), value: (row: ProductRow) => pageColumnExportValue(c, row) }
+        })
+        .filter((c): c is CsvColumn<ProductRow> => c !== null)
+
+      const { rows, total, truncated } = await fetchAllRowsForExport<ProductRow>({
+        context: ctxRef.current,
+        sortModel: gridApi.getState().sort?.sortModel ?? [],
+        filterModel,
+      })
+
+      downloadCsv(
+        csvFileName('products', { filtered: activeFilterCount > 0 || !!activeTile || !!searchDraft.trim() }),
+        toCsv(rows, csvColumns),
+      )
+      if (truncated) {
+        toast(`Exported the first ${rows.length.toLocaleString()} of ${total.toLocaleString()} products — narrow the filters to export the rest.`, 'warning')
+      } else {
+        toast(`Exported ${rows.length.toLocaleString()} product${rows.length === 1 ? '' : 's'}.`, 'success')
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Export failed.', 'danger')
+    } finally {
+      setExporting(false)
+    }
+  }, [gridApi, columns, filterModel, activeFilterCount, activeTile, searchDraft, toast])
+
   const filterDimensions = useMemo<FilterDimension[]>(() => {
     const dims: FilterDimension[] = [
       { key: 'channels', label: 'Channel', kind: 'multiselect', value: setValuesOf('channels'), onChange: setSetFilter('channels'), options: CHANNEL_OPTS },
@@ -837,14 +909,8 @@ function ProductsNextInner() {
                 <SlidersHorizontal size={13} /> Customise
               </Button>
               <GridViewsMenu views={gridViews} />
-              <Button
-                size="sm"
-                // AG exports what the grid is SHOWING — current sort, visible columns, in the
-                // operator's order.
-                onClick={() => gridApi?.exportDataAsCsv({ fileName: 'products.csv' })}
-                disabled={!gridApi || !totalCount}
-              >
-                <Download size={13} /> Export
+              <Button size="sm" onClick={() => void runExport()} disabled={!gridApi || !totalCount || exporting}>
+                <Download size={13} /> {exporting ? 'Exporting…' : 'Export'}
               </Button>
               <Pill tone={error ? 'danger' : 'success'} dot size="md">
                 {error ? 'Not syncing' : loading ? 'Syncing…' : 'Live'}

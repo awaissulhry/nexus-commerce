@@ -29,7 +29,14 @@ const ROOT = new URL('..', import.meta.url).pathname
 const WEB = join(ROOT, 'apps/web/src/design-system')
 const FACTORY = join(ROOT, 'apps/factory/src/design-system')
 const BASELINE = join(ROOT, 'scripts/ds-fork-baseline.json')
-const EXT = /\.(tsx|ts|css)$/
+// SOURCE only. `.d.ts` beside a component is `tsc --emitDeclarationOnly` OUTPUT (see
+// check-ds-dts-fresh.mjs) — gitignored in web, generated from the very .tsx this guard already
+// compares. Including them made the ratchet fail the moment declarations were regenerated on one
+// side (measured 2026-08-31: DataGrid.d.ts + MetricStrip.d.ts, after a regen fixed 66 of them),
+// and the "fix" it demanded was to hand-copy build artifacts into factory. Nothing is lost: a
+// declaration cannot drift while its source is identical, and a source that differs is caught
+// directly.
+const EXT = /(?<!\.d)\.(tsx|ts|css)$/
 
 const walk = (dir, base = dir, out = []) => {
   if (!existsSync(dir)) return out

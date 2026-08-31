@@ -74,8 +74,8 @@ export interface UseGridStateOptions<TPage> extends UseGridViewsOptions<TPage> {
   autoRestore?: boolean
 }
 
-export function useGridState<TPage>({ surface, getPageState, applyPageState, autoRestore = true }: UseGridStateOptions<TPage>) {
-  const views = useGridViews<TPage>({ surface, getPageState, applyPageState })
+export function useGridState<TPage>({ surface, baseUrl, getPageState, applyPageState, autoRestore = true }: UseGridStateOptions<TPage>) {
+  const views = useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageState })
   const apiRef = useRef<GridApi | null>(null)
   const pageRef = useRef(getPageState)
   pageRef.current = getPageState

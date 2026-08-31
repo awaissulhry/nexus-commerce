@@ -81,6 +81,16 @@ export interface PageColumn {
   preset?: Partial<ColDef<ProductRow>>
   /** A page-specific DATA cell; group rows still go through `preset`/`groupValue`. */
   render?: (row: ProductRow) => ReactNode
+  /**
+   * The CSV value, when the cell's own value is not a scalar.
+   *
+   * A column drawn by a renderer either carries no `value` at all (Product: the cell IS the
+   * renderer) or carries a shape the renderer understands (Channels: `CoverageChannel[]`, Tags:
+   * a tag array). Neither has an honest CSV form, and `csvField` writes an object as empty rather
+   * than inventing "[object Object]" — measured 2026-08-31: Product, Channels and Tags all
+   * exported blank. This is where such a column says what it means in a file.
+   */
+  exportValue?: (row: ProductRow) => string | number | null
 }
 
 export const isGroupRow = (d: unknown): d is ProductGroupRow =>
@@ -88,6 +98,37 @@ export const isGroupRow = (d: unknown): d is ProductGroupRow =>
 
 /** The server's aggregate field per column — the `valueCols` AG sends under a grouping. */
 const GROUP_FIELD: Record<string, string> = { available: 'totalStock', price: 'basePrice', sales: 'sales.revenueCents', units: 'sales.units' }
+
+/**
+ * A column's value for a DATA row — the one definition the grid's `valueGetter` and the CSV export
+ * both read. Exported because a second implementation is how an export starts disagreeing with the
+ * screen: coverage roll-ups, channel states and variation counts live in `c.value`, and nothing
+ * else can re-derive them without becoming a copy that drifts.
+ */
+export const pageColumnField = (c: PageColumn): string => (c.preset?.field as string | undefined) ?? GROUP_FIELD[c.key] ?? c.key
+
+export const readField = (field: string, row: unknown): unknown =>
+  field.split('.').reduce<unknown>((o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), row)
+
+export const pageColumnValue = (c: PageColumn, row: ProductRow): unknown =>
+  c.value ? c.value(row) : readField(pageColumnField(c), row)
+
+/** What the CSV writes: a column's own `exportValue` when it has one, else what the grid shows. */
+export const pageColumnExportValue = (c: PageColumn, row: ProductRow): unknown =>
+  c.exportValue ? c.exportValue(row) : pageColumnValue(c, row)
+
+/** Channels, as the cell reads it — the same counts `CoverageSummary` draws, in the same order. */
+export function coverageText(channels: readonly CoverageChannel[]): string {
+  const count = (s: CoverageChannel['state']) => channels.filter((c) => c.state === s).length
+  const parts: string[] = []
+  const live = count('live')
+  const issues = count('issues')
+  const draft = count('draft')
+  if (live > 0) parts.push(`${live} live`)
+  if (issues > 0) parts.push(`${issues} ${issues === 1 ? 'issue' : 'issues'}`)
+  if (draft > 0) parts.push(`${draft} draft`)
+  return parts.length ? parts.join(' \u00b7 ') : 'Not listed'
+}
 
 export function groupRowLabel(g: ProductGroupRow, columns: readonly PageColumn[]): string {
   const col = columns.find((c) => c.key === g.groupColId)
@@ -179,6 +220,7 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
     label: 'Product',
     sortable: true,
     render: (row) => <ProductCell row={row} isChild={row.parentId !== null} />,
+    exportValue: (row) => row.name,
   }
   const brandCol: PageColumn = { key: 'brand', group: 'Identity', label: 'Brand', width: 140, sortable: true, defaultHidden: true, groupable: true, preset: textColumn('brand') }
   const productTypeCol: PageColumn = { key: 'productType', group: 'Identity', label: 'Product type', width: 150, sortable: true, defaultHidden: true, groupable: true, preset: textColumn('productType') }
@@ -207,10 +249,11 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
       label: 'Channels',
       width: 130,
       value: (row) => channelsOf(row, activeChannels),
+      exportValue: (row) => coverageText(channelsOf(row, activeChannels)),
       preset: { cellClass: 'nds-ag-cell', cellRenderer: CoverageCell },
     },
     { key: 'status', groupable: true, group: 'Identity', label: 'Status', width: 96, sortable: true, preset: statusColumn('status', { tones: STATUS_TONES }) },
-    { key: 'tags', group: 'Identity', label: 'Tags', width: 150, value: (row) => row.tags ?? [], preset: { cellClass: 'nds-ag-cell', cellRenderer: TagsCell } },
+    { key: 'tags', group: 'Identity', label: 'Tags', width: 150, value: (row) => row.tags ?? [], exportValue: (row) => (row.tags ?? []).map((t) => t.name).join(', '), preset: { cellClass: 'nds-ag-cell', cellRenderer: TagsCell } },
     {
       key: 'available',
       aggregate: ['sum', 'avg', 'min', 'max'],
@@ -219,6 +262,17 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
       width: 120,
       sortable: true,
       groupValue: (g) => g.totalStock ?? null,
+      /**
+       * Mirror the CELL, which is the only thing the operator saw: FBA + FBM when the row carries a
+       * split, else the units total.
+       *
+       * `totalStock` is the same number now — the API row carries the stock-level roll-up (self plus
+       * EVERY variation, not the ten previewed) rather than the stale `Product.totalStock` column,
+       * which read 0 on prod rows holding 105 and 16 FBM units. This still mirrors the cell rather
+       * than reading the field, because the cell is what the file promises to reproduce.
+       */
+      exportValue: (row) =>
+        row.fbaStock != null || row.fbmStock != null ? (row.fbaStock ?? 0) + (row.fbmStock ?? 0) : row.totalStock,
       preset: { cellClass: 'nds-ag-cell' },
       render: (row) => <InventoryCell row={row} onOpen={onOpenInventory} />,
     },
@@ -231,6 +285,9 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
       width: 110,
       sortable: true,
       value: (row) => row.sales?.revenueCents ?? null,
+      // CENTS on the wire, euros on screen (`moneyColumn`). Without this the file says 15900 where
+      // the grid says €159.00 — the unit trap this codebase has been bitten by before.
+      exportValue: (row) => (row.sales?.revenueCents == null ? null : row.sales.revenueCents / 100),
       groupValue: (g) => g.sales?.revenueCents ?? null,
       preset: moneyColumn<ProductRow>('sales.revenueCents', { zero: 'dash', zeroTitle: noSalesTitle }),
     },
@@ -276,8 +333,9 @@ export function projectColDefs(
   return columns
     .filter((c) => c.key !== 'product')
     .map((c) => {
-      const field = (c.preset?.field as string | undefined) ?? GROUP_FIELD[c.key] ?? c.key
-      const byField = (row: ProductRow): unknown => field.split('.').reduce<unknown>((o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), row)
+      // Resolved once per column, not per cell: this runs inside a valueGetter on every render.
+      const field = pageColumnField(c)
+      const byField = (row: ProductRow): unknown => readField(field, row)
       const def: ColDef<ProductRow> = {
         ...c.preset,
         colId: c.key,
