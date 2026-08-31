@@ -10,9 +10,10 @@
  *      inside whatever mutation raised it, which is a bad place to find out.
  *   2. A raw Redis stream command outside the driver. Then the envelope format,
  *      the sharding and the trimming policy exist in two places, and they drift.
- *   3. A TENTH in-process event bus. Nine already exist, none of them shared a
- *      vocabulary, and every one is invisible to a second replica. New buses
- *      go through the broker; the nine are a fixed, shrinking baseline.
+ *   3. A hand-written in-process event bus. Nine of these existed, none sharing
+ *      a vocabulary, every one invisible to a second replica. They now all use
+ *      createCrossReplicaBus; a listener Set anywhere but that factory is a new
+ *      bus by another name, and it would be invisible again.
  *
  * WHAT IT CHECKS (TypeScript AST, not a regex — a regex reads comments and
  * strings, and misses a call split across lines)
@@ -38,17 +39,17 @@ const atRoot = (p) => join(repoRoot, p)
 const DRIVER = 'apps/api/src/lib/events/redis-streams.driver.ts'
 const STREAM_COMMANDS = new Set(['xadd', 'xread', 'xreadgroup', 'xack', 'xautoclaim', 'xgroup', 'xinfo', 'xlen'])
 
-/** The nine in-process buses that predate the broker. This list only shrinks. */
+/**
+ * The ONE sanctioned place a listener Set may live: the shared bus factory.
+ *
+ * This used to be a baseline of NINE service files, each holding its own
+ * hand-written bus that no second replica could see. All nine now go through
+ * createCrossReplicaBus, so the exemption list is down to the implementation
+ * they share — and any listener Set anywhere else is a tenth bus by another
+ * name, whatever it is called.
+ */
 const BUS_BASELINE = new Set([
-  'apps/api/src/services/ads-execution-events.service.ts',
-  'apps/api/src/services/inbound-events.service.ts',
-  'apps/api/src/services/listing-events.service.ts',
-  'apps/api/src/services/marketing-events.service.ts',
-  'apps/api/src/services/order-events.service.ts',
-  'apps/api/src/services/outbound-events.service.ts',
-  'apps/api/src/services/po-events.service.ts',
-  'apps/api/src/services/review-events.service.ts',
-  'apps/api/src/services/sync-logs-events.service.ts',
+  'apps/api/src/lib/events/bus.ts',
 ])
 
 /** Which argument carries the event type, per publisher. */

@@ -31,27 +31,45 @@ export type SyncLogEvent =
     }
   | { type: 'ping'; ts: number }
 
+
+// ── EV.3 — cross-replica via the shared bus factory ─────────────────────────
+//
+// Signatures and synchronous behaviour are UNCHANGED: every call site is
+// untouched, and a local subscriber still receives an event in the same tick.
+// What changed is that a publish now also fans out to other replicas, and this
+// process receives theirs — the ceiling that made a second API instance unsafe.
+//
+// The bus logic is lib/events/bus.ts, shared by every bus rather than copied
+// into each. EPHEMERAL lane: these are refresh hints, not durable facts.
+
+import { createCrossReplicaBus } from '../lib/events/bus.js'
+import type { EventType } from '@nexus/events'
+
 type Listener = (event: SyncLogEvent) => void
 
-const listeners = new Set<Listener>()
+/** The catalogue types this bus carries. A remote event outside this set
+ *  belongs to another bus and must not be delivered here. */
+const CARRIED = ['api-call.recorded'] as const satisfies readonly EventType[]
+
+const bus = createCrossReplicaBus<SyncLogEvent>({ name: 'sync-logs-sse', types: CARRIED })
 
 export function publishSyncLogEvent(event: SyncLogEvent): void {
-  for (const listener of listeners) {
-    try {
-      listener(event)
-    } catch {
-      // A misbehaving listener mustn't break the bus for others.
-    }
-  }
+  bus.publish(event)
 }
 
 export function subscribeSyncLogEvents(listener: Listener): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
+  return bus.subscribe(listener)
 }
 
 export function getSyncLogListenerCount(): number {
-  return listeners.size
+  return bus.listenerCount()
+}
+
+/** Attach this process to events raised on OTHER replicas. Call once at boot. */
+export async function startSyncLogEventIntake(): Promise<void> {
+  await bus.startIntake()
+}
+
+export async function stopSyncLogEventIntake(): Promise<void> {
+  await bus.stopIntake()
 }

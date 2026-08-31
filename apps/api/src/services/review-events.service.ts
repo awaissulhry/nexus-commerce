@@ -45,50 +45,60 @@ export type ReviewEvent =
   | { type: 'review.responded'; reviewId: string; channel: string; ts: number }
   | { type: 'ping'; ts: number }
 
+
+// ── EV.3 — cross-replica via the shared bus factory ─────────────────────────
+//
+// Signatures, synchronous behaviour AND the replay buffer are unchanged: every
+// call site is untouched, a local subscriber still receives an event in the
+// same tick, and a briefly-disconnected tab still replays. What changed is
+// that a publish also fans out to other replicas, and this process receives
+// theirs — so a reconnecting tab replays what happened on ANY instance, not
+// just the one it happens to be attached to.
+//
+// The bus logic is lib/events/bus.ts, shared rather than copied.
+
+import { createCrossReplicaBus } from '../lib/events/bus.js'
+import type { EventType } from '@nexus/events'
+
 type Listener = (event: ReviewEvent) => void
 
-const listeners = new Set<Listener>()
+/** The catalogue types this bus carries. A remote event outside this set
+ *  belongs to another bus and must not be delivered here. */
+const CARRIED = [
+  'review.created',
+  'review.negative',
+  'review.spike.detected',
+  'review.responded',
+] as const satisfies readonly EventType[]
 
-const REPLAY_BUFFER_MAX = 100
-const REPLAY_BUFFER_TTL_MS = 5 * 60_000
-const replayBuffer: ReviewEvent[] = []
-
-function trimReplayBuffer(): void {
-  const cutoff = Date.now() - REPLAY_BUFFER_TTL_MS
-  while (replayBuffer.length > 0 && replayBuffer[0]!.ts < cutoff) {
-    replayBuffer.shift()
-  }
-  while (replayBuffer.length > REPLAY_BUFFER_MAX) {
-    replayBuffer.shift()
-  }
-}
+const bus = createCrossReplicaBus<ReviewEvent>({
+  name: 'review-sse',
+  types: CARRIED,
+  // Replay ring buffer: a briefly-closed tab reconnects without a full refetch.
+  replay: { max: 100, ttlMs: 5 * 60_000 },
+})
 
 export function publishReviewEvent(event: ReviewEvent): void {
-  if (event.type !== 'ping') {
-    replayBuffer.push(event)
-    trimReplayBuffer()
-  }
-  for (const listener of listeners) {
-    try {
-      listener(event)
-    } catch {
-      // A misbehaving listener mustn't break the bus for others.
-    }
-  }
+  bus.publish(event)
 }
 
 export function subscribeReviewEvents(listener: Listener): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-export function replayReviewEventsSince(sinceMs: number): ReviewEvent[] {
-  trimReplayBuffer()
-  return replayBuffer.filter((e) => e.ts > sinceMs)
+  return bus.subscribe(listener)
 }
 
 export function getReviewListenerCount(): number {
-  return listeners.size
+  return bus.listenerCount()
+}
+
+export function replayReviewEventsSince(sinceMs: number): ReviewEvent[] {
+  return bus.replaySince(sinceMs)
+}
+
+/** Attach this process to events raised on OTHER replicas. Call once at boot. */
+export async function startReviewEventIntake(): Promise<void> {
+  await bus.startIntake()
+}
+
+export async function stopReviewEventIntake(): Promise<void> {
+  await bus.stopIntake()
 }

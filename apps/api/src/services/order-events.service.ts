@@ -199,82 +199,79 @@ export type OrderEvent =
     }
   | { type: 'ping'; ts: number }
 
+
+// ── EV.3 — cross-replica via the shared bus factory ─────────────────────────
+//
+// Signatures, synchronous behaviour AND the replay buffer are unchanged: every
+// call site is untouched, a local subscriber still receives an event in the
+// same tick, and a briefly-disconnected tab still replays. What changed is
+// that a publish also fans out to other replicas, and this process receives
+// theirs — so a reconnecting tab replays what happened on ANY instance, not
+// just the one it happens to be attached to.
+//
+// The bus logic is lib/events/bus.ts, shared rather than copied.
+
+import { createCrossReplicaBus } from '../lib/events/bus.js'
+import type { EventType } from '@nexus/events'
+
 type Listener = (event: OrderEvent) => void
 
-const listeners = new Set<Listener>()
+/** The catalogue types this bus carries. A remote event outside this set
+ *  belongs to another bus and must not be delivered here. */
+const CARRIED = [
+  'order.created',
+  'order.updated',
+  'order.cancelled',
+  'return.created',
+  'analytics.salesReport.refreshed',
+  'sales.drift.detected',
+  'sync.dlq.threshold',
+  'sync.latency.breach',
+  'sync.realtime.degraded',
+  'sync.oversell.clamped',
+  'sync.reconcile.drift',
+  'sync.drift.cumulative',
+  'sync.conflict.stale',
+  'competitive.buyBoxLost',
+  'listing.suppressed',
+  'feed.processing.finished',
+  'flat_file_feed.status_changed',
+  'ebay_push.status_changed',
+  'account.health.changed',
+] as const satisfies readonly EventType[]
 
-// RT.8 — replay ring buffer. Browser tabs that disconnect (laptop
-// suspend, mobile network blip, idle tab pruning) silently miss
-// events; on reconnect they'd previously fall back to a full refetch
-// which is laggy + heavy. The ring buffer lets the client pass
-// ?since=<ts> on /api/orders/events and get the missed events
-// replayed before live streaming resumes.
-//
-// 100 events / 5 min was chosen so:
-//   * a 5-min disconnect (laptop closed during lunch) almost always
-//     finds its events still in the buffer
-//   * a 10-min disconnect or a high-volume burst falls back gracefully
-//     — the client just re-fetches (existing behaviour)
-//   * memory cost is negligible (~5KB)
-const REPLAY_BUFFER_MAX = 100
-const REPLAY_BUFFER_TTL_MS = 5 * 60_000
-const replayBuffer: OrderEvent[] = []
-
-function trimReplayBuffer(): void {
-  const cutoff = Date.now() - REPLAY_BUFFER_TTL_MS
-  // Drop events older than the TTL OR beyond the size cap. We trim
-  // by age first (cheaper, common case) then by size (defensive).
-  while (replayBuffer.length > 0 && replayBuffer[0]!.ts < cutoff) {
-    replayBuffer.shift()
-  }
-  while (replayBuffer.length > REPLAY_BUFFER_MAX) {
-    replayBuffer.shift()
-  }
-}
+const bus = createCrossReplicaBus<OrderEvent>({
+  name: 'order-sse',
+  types: CARRIED,
+  // Replay ring buffer: a briefly-closed tab reconnects without a full refetch.
+  replay: { max: 100, ttlMs: 5 * 60_000 },
+})
 
 export function publishOrderEvent(event: OrderEvent): void {
-  // Don't buffer ping events — they're heartbeats, no replay value.
-  if (event.type !== 'ping') {
-    replayBuffer.push(event)
-    trimReplayBuffer()
-  }
-  for (const listener of listeners) {
-    try {
-      listener(event)
-    } catch {
-      // A misbehaving listener mustn't break the bus for others.
-    }
-  }
+  bus.publish(event)
 }
 
 export function subscribeOrderEvents(listener: Listener): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
+  return bus.subscribe(listener)
 }
 
 export function getOrderListenerCount(): number {
-  return listeners.size
+  return bus.listenerCount()
 }
 
-/**
- * RT.8 — return events from the ring buffer with ts > sinceMs. Used
- * by /api/orders/events?since=<ts> on reconnect. Returns an empty
- * array (not throw) when the buffer is empty or sinceMs is in the
- * future — the SSE endpoint handles that as "nothing to replay,
- * resume live streaming".
- */
 export function replayOrderEventsSince(sinceMs: number): OrderEvent[] {
-  trimReplayBuffer()
-  return replayBuffer.filter((e) => e.ts > sinceMs)
+  return bus.replaySince(sinceMs)
 }
 
-/**
- * RT.8 — exposed for diagnostics (push-health could surface the
- * current buffer depth in a future phase).
- */
 export function getReplayBufferDepth(): number {
-  trimReplayBuffer()
-  return replayBuffer.length
+  return bus.bufferDepth()
+}
+
+/** Attach this process to events raised on OTHER replicas. Call once at boot. */
+export async function startOrderEventIntake(): Promise<void> {
+  await bus.startIntake()
+}
+
+export async function stopOrderEventIntake(): Promise<void> {
+  await bus.stopIntake()
 }

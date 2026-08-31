@@ -27,32 +27,57 @@ export interface AdsExecutionEvent {
   ts: number
 }
 
-type Listener = (e: AdsExecutionEvent) => void
 
-const listeners = new Set<Listener>()
+// ── EV.3 — cross-replica via the shared bus factory ─────────────────────────
+//
+// Signatures, synchronous behaviour AND the replay buffer are unchanged: every
+// call site is untouched, a local subscriber still receives an event in the
+// same tick, and a briefly-disconnected tab still replays. What changed is
+// that a publish also fans out to other replicas, and this process receives
+// theirs — so a reconnecting tab replays what happened on ANY instance, not
+// just the one it happens to be attached to.
+//
+// The bus logic is lib/events/bus.ts, shared rather than copied.
 
-const BUFFER_MAX = 50
-const BUFFER_TTL = 5 * 60_000
-const buffer: AdsExecutionEvent[] = []
+import { createCrossReplicaBus } from '../lib/events/bus.js'
+import type { EventType } from '@nexus/events'
 
-function trim(): void {
-  const cut = Date.now() - BUFFER_TTL
-  while (buffer.length > 0 && buffer[0]!.ts < cut) buffer.shift()
-  while (buffer.length > BUFFER_MAX) buffer.shift()
-}
+type Listener = (event: AdsExecutionEvent) => void
+
+/** The catalogue types this bus carries. A remote event outside this set
+ *  belongs to another bus and must not be delivered here. */
+const CARRIED = [
+  'automation.rule.fired',
+] as const satisfies readonly EventType[]
+
+const bus = createCrossReplicaBus<AdsExecutionEvent>({
+  name: 'ads-execution-sse',
+  types: CARRIED,
+  // Replay ring buffer: a briefly-closed tab reconnects without a full refetch.
+  replay: { max: 50, ttlMs: 5 * 60_000 },
+})
 
 export function publishAdsExecution(event: AdsExecutionEvent): void {
-  buffer.push(event); trim()
-  for (const l of listeners) { try { l(event) } catch { /* listener fault isolation */ } }
+  bus.publish(event)
 }
 
 export function subscribeAdsExecutions(listener: Listener): () => void {
-  listeners.add(listener)
-  return () => { listeners.delete(listener) }
+  return bus.subscribe(listener)
+}
+
+export function getAdsExecutionListenerCount(): number {
+  return bus.listenerCount()
 }
 
 export function replayAdsExecutionsSince(sinceMs: number): AdsExecutionEvent[] {
-  trim(); return buffer.filter(e => e.ts > sinceMs)
+  return bus.replaySince(sinceMs)
 }
 
-export function getAdsExecutionListenerCount(): number { return listeners.size }
+/** Attach this process to events raised on OTHER replicas. Call once at boot. */
+export async function startAdsExecutionEventIntake(): Promise<void> {
+  await bus.startIntake()
+}
+
+export async function stopAdsExecutionEventIntake(): Promise<void> {
+  await bus.stopIntake()
+}
