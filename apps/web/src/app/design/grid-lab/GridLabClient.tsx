@@ -31,6 +31,7 @@ import { WorkspaceGrid, AdsFilterBar } from '@/design-system/patterns/workspace-
 import type { FilterState, GridFilter } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
 import { LabNexusGrid } from './LabNexusGrid'
 import { MasterSheet } from '@/app/products/_sheet/MasterSheet'
+import { GridModuleCatalog } from './GridModuleCatalog'
 import { GdsScenarios } from './GdsScenarios'
 import { LAB_COLUMNS, LAB_ROWS, LAB_ROW_ID, type LabRow } from './fixture'
 import { GridFeatureLab } from './GridFeatureLab'
@@ -170,14 +171,14 @@ export function GridLabClient() {
   const [probes, setProbes] = useState<{ legacy: Probe; ag: Probe } | null>(null)
   const [fstate, setFstate] = useState<FilterState>({})
   const [lastClicked, setLastClicked] = useState<string | null>(null)
-  type LabTab = 'parity' | 'features' | 'gds' | 'sheet'
+  type LabTab = 'parity' | 'features' | 'gds' | 'sheet' | 'modules'
   // `?tab=gds` opens the GDS scenarios directly — the conformance runner needs a URL, not a click.
   // `?tab=sheet` is the MASTER SHEET on live data (MS.3); it lives here until the Owner decides
   // where it belongs (docs/2026-08-29-master-sheet-design.md §8.3), and moving it is one mount.
   const [tab, setTab] = useState<LabTab>(() => {
     if (typeof window === 'undefined') return 'parity'
     const t = new URLSearchParams(window.location.search).get('tab')
-    return t === 'features' || t === 'gds' || t === 'sheet' ? t : 'parity'
+    return t === 'features' || t === 'gds' || t === 'sheet' || t === 'modules' ? t : 'parity'
   })
 
   const runProbe = useCallback(() => {
@@ -223,9 +224,32 @@ export function GridLabClient() {
    *
    * `height: auto` + `overflow: visible` hands scrolling back to the app's own #main-content.
    */
+  if (tab === 'modules') {
+    return (
+      <main style={{ padding: 24, display: 'grid', gap: 18, background: 'var(--nds-bg)', minHeight: '100vh', alignContent: 'start' }}>
+        <header style={{ display: 'grid', gap: 6 }}>
+          <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>Grid modules — what we use, and what we hold</h1>
+          <p className="text-md" style={{ margin: 0, maxWidth: 940, color: 'var(--nds-text-2)' }}>
+            AG Grid Enterprise 36.1.0 ships <b>40</b> modules. We register <b>9</b>. The other <b>31</b>{' '}are capability we
+            already hold and have never switched on. Every feature name below is AG Grid&rsquo;s own; the italic line is what it would
+            mean on our surfaces. Where seeing it is what decides it, <b>See it</b> opens a live grid with that module actually on.
+          </p>
+        </header>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10, flexWrap: 'wrap' }}>
+          <Button variant="ghost" size="sm" onClick={() => setTab('parity')}>Engine parity</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('features')}>Enterprise features</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('gds')}>GDS scenarios</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('sheet')}>Master sheet</Button>
+          <Button variant="primary" size="sm" onClick={() => setTab('modules')}>Modules</Button>
+        </div>
+        <GridModuleCatalog />
+      </main>
+    )
+  }
+
   if (tab === 'sheet') {
     return (
-      <main style={{ padding: 24, display: 'grid', gap: 16, background: 'var(--nds-bg)', minHeight: '100vh' }}>
+      <main style={{ padding: 24, display: 'grid', gap: 16, background: 'var(--nds-bg)', minHeight: '100vh', alignContent: 'start' }}>
         <header style={{ display: 'grid', gap: 6 }}>
           <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>The master sheet — live</h1>
           <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
@@ -233,11 +257,12 @@ export function GridLabClient() {
             and paints the server's answer on that cell. <code>docs/2026-08-29-master-sheet-design.md</code>.
           </p>
         </header>
-        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
           <Button variant="ghost" size="sm" onClick={() => setTab('parity')}>Engine parity</Button>
           <Button variant="ghost" size="sm" onClick={() => setTab('features')}>Enterprise features</Button>
           <Button variant="ghost" size="sm" onClick={() => setTab('gds')}>GDS scenarios</Button>
           <Button variant="primary" size="sm" onClick={() => setTab('sheet')}>Master sheet</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('modules')}>Modules</Button>
         </div>
         <MasterSheet market="IT" height={720} />
       </main>
@@ -246,7 +271,7 @@ export function GridLabClient() {
 
   if (tab === 'gds') {
     return (
-      <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh' }}>
+      <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh', alignContent: 'start' }}>
         <header style={{ display: 'grid', gap: 6 }}>
           <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>Grid design system — scenarios</h1>
           <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
@@ -254,11 +279,12 @@ export function GridLabClient() {
             dark can both be measured. <code>design-system/docs/GRID.md</code> is written from these numbers.
           </p>
         </header>
-        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
           <Button variant="ghost" size="sm" onClick={() => setTab('parity')}>Engine parity</Button>
           <Button variant="ghost" size="sm" onClick={() => setTab('features')}>Enterprise features</Button>
           <Button variant="primary" size="sm" onClick={() => setTab('gds')}>GDS scenarios</Button>
           <Button variant="ghost" size="sm" onClick={() => setTab('sheet')}>Master sheet</Button>
+          <Button variant="ghost" size="sm" onClick={() => setTab('modules')}>Modules</Button>
         </div>
         <GdsScenarios />
       </main>
@@ -284,7 +310,7 @@ export function GridLabClient() {
 
         {/* A TAB, not a second route — /design is already where this codebase judges a rendering
             decision, and the two labs answer different questions about the same engine. */}
-        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--nds-border-subtle)', paddingBottom: 10 }}>
           <Button variant={tab === 'parity' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('parity')}>
             Engine parity
           </Button>
