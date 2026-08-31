@@ -66,9 +66,55 @@ mismatch is a silent 401, not an error anyone will notice.
 A response body carries `accountRef` (the Amazon advertising profile id), not
 `profileId`.
 
-## Deploy (Railway, separate service)
-- Root directory: `services/bidding-engine`
-- Build: `npm install && npm run build` · Start: `npm start`
-- Vars: `REDIS_URL` (shared), `PRIMARY_API_URL`, `PRIMARY_API_TOKEN`, Amazon LWA
-  creds, `BIDDING_DRY_RUN`. Scale horizontally — the token bucket + dedupe job
-  ids keep multiple replicas safe.
+## Deploy (Railway, separate service) — READY, NOT DEPLOYED
+
+Everything this needs was verified on production 2026-09-01. It is deliberately
+undeployed: nothing measured requires it (the API averages 0.078 vCPU), so it
+waits for a reason rather than an acronym. When there is one, this is the whole
+procedure.
+
+**Prerequisites — all confirmed live:**
+- `/api/internal/bidding/contexts` returns **200** with `x-internal-token`, **401**
+  without. Measured against production. It returned 401 to *everything* until
+  2026-09-01 — see below.
+- `NEXUS_INTERNAL_API_TOKEN` is set on the `@nexus/api` Railway service.
+- The client's paths carry the `/api` prefix (fixed; the unprefixed path 404s).
+
+**Step 1 — create the service, scheduler OFF.**
+- Root directory: `services/bidding-engine` (outside the npm workspace glob, so
+  it has its own dependency graph and does not touch apps/* installs)
+- Build `npm install && npm run build` · Start `npm start`
+- Vars:
+  - `REDIS_URL` = `${{Redis.REDIS_URL}}` — **by reference, not by value.** The
+    rate limiter is a distributed token bucket and is only correct if every
+    writer shares one Redis.
+  - `PRIMARY_API_URL` = the API's **bare origin**, no `/api` — the client adds
+    `/api/internal/bidding` itself.
+  - `PRIMARY_API_TOKEN` = the value of the primary's `NEXUS_INTERNAL_API_TOKEN`.
+    Same secret, different variable name on each side; a mismatch is a silent 401.
+  - `BIDDING_DRY_RUN=1`
+  - `BIDDING_INTERVAL_MIN=0` — scheduler disabled for now.
+  - **Set NO Amazon credentials.** Two independent reasons nothing reaches
+    Amazon: the dry-run flag, and nothing to authenticate with.
+- Confirm `/health` and `/ready`.
+
+**Step 2 — one deliberate cycle.** `POST /optimize` by hand. Exercises the whole
+chain once: contexts → compute → `/applied` → an `AdvertisingActionLog` row on
+the primary, with `status: 'dry-run'` and the live bid untouched. Watch it once
+before anything runs on a timer.
+
+**Step 3 — enable the timer** (`BIDDING_INTERVAL_MIN=60`) only after step 2 is
+clean. Scale horizontally after that: the token bucket and dedupe job ids make
+multiple replicas safe.
+
+**Going live to Amazon is a separate, later decision** — add the LWA credentials
+and `AMAZON_ADS_REFRESH_TOKEN`, then flip `BIDDING_DRY_RUN=0`. Do not combine it
+with the deploy.
+
+### Why the contract was dead until 2026-09-01
+`/api/internal/bidding` was mapped to `ads.automation.manage` in the permissions
+manifest, so `rbacHook` denied every call **401 before `internalAuthed` ever
+ran** — a service caller has no session, so a session check could never be the
+right gate. It is now `PUBLIC` at the RBAC layer with the shared secret as the
+real gate, matching the webhook receivers. This is the AMS.1 bug, which cost
+35,614 silent rejections in 24h the first time it happened.
