@@ -112,6 +112,16 @@ export function useListingEvents(): UseListingEventsResult {
             id: parsed.productId,
             meta: { source: 'sse', reason: parsed.reason },
           })
+        } else if (parsed.type === 'inventory.stock_changed') {
+          // The API's own event name (the EV.1 catalogue's), mapped to the invalidation type every
+          // stock-aware surface already subscribes to. Without this branch the bridge is inert: this
+          // chain maps SSE types to invalidation types EXPLICITLY, so an event it does not name
+          // reaches no one, whatever the publisher calls it.
+          //
+          // Whole-grid refresh for now. The payload also carries locationId, change,
+          // quantityBefore/After, available, poolTotal, reason and orderId, so a surface that finds
+          // this too blunt can narrow on `id` without the publisher changing.
+          emitInvalidation({ type: 'stock.adjusted', id: parsed.productId, meta: { source: 'sse' } })
         } else if (parsed.type === 'product.created') {
           emitInvalidation({ type: 'product.created', id: parsed.productId, meta: { source: 'sse' } })
         } else if (parsed.type === 'product.deleted') {
