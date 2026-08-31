@@ -21,9 +21,12 @@
  */
 export { NexusGrid, numericColumn, type NexusGridProps, type GridDensity, type GridRowKind } from './NexusGrid'
 export type {
+  AgMenuItemDef,
   ColDef,
   ColGroupDef,
   ColumnState,
+  DefaultMenuItem,
+  GetContextMenuItemsParams,
   GridApi,
   GridReadyEvent,
   GridState,

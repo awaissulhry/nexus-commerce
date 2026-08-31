@@ -44,6 +44,7 @@ import {
   ClipboardModule,
   ColumnApiModule,
   ColumnMenuModule,
+  ContextMenuModule,
   CsvExportModule,
   CustomFilterModule,
   EventApiModule,
@@ -82,6 +83,9 @@ const PRODUCTION_MODULES = [
   MasterDetailModule,
   // interaction
   ColumnMenuModule,
+  // Right-click on a row. NOT `MenuModule`, which bundles the column menu we already register —
+  // this is the context menu alone, so the list above keeps naming exactly what is bundled.
+  ContextMenuModule,
   CustomFilterModule,
   RowSelectionModule,
   PaginationModule,

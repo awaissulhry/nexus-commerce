@@ -38,10 +38,10 @@ import {
   type ProductGridContextFilters,
 } from '@/app/products/next/productsServerContract'
 import { GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, SelectionLabel, SelectionNote, useGridState } from '@/design-system/grid'
-import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type PrefsBridgeOptions } from '@/design-system/grid'
+import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type AgMenuItemDef, type DefaultMenuItem, type GetContextMenuItemsParams, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
-import { buildPageColumns, columnLabel, isGroupRow, pageColumnExportValue, projectColDefs, CHANNEL_OPTS, SALES_WINDOW_DAYS, STATUS_OPTS } from './columns'
+import { buildPageColumns, columnLabel, isGroupRow, pageColumnExportValue, projectColDefs, rowActions, CHANNEL_OPTS, SALES_WINDOW_DAYS, STATUS_OPTS } from './columns'
 import { csvFileName, downloadCsv, toCsv, type CsvColumn } from '@/design-system/grid/export/gridCsv'
 import { fetchAllRowsForExport } from './productsExport'
 import { ProductTreeCell, type ProductTreeCellParams } from './ProductTreeCell'
@@ -373,6 +373,33 @@ function ProductsNextInner() {
 
   // ── Columns ───────────────────────────────────────────────────
   const onDuplicate = useCallback((id: string) => void duplicateBulk([id]), [duplicateBulk])
+  /**
+   * Right-click a row. The SAME actions the `⋯` column offers, read from `rowActions` — a context
+   * menu that drifted from the row menu would be two answers to one question.
+   *
+   * AG's own items (copy, CSV export) stay below a rule: the operator gains this menu without
+   * losing what the grid already gave them. A group row and the family-footer sentinel are not
+   * products, so they get AG's defaults alone — "Edit" on a footer would navigate to an id that is
+   * not one.
+   *
+   * Memoised: an inline callback re-runs AG's column model on every render.
+   */
+  const getContextMenuItems = useCallback(
+    (p: GetContextMenuItemsParams<ProductRow>) => {
+      const defaults = (p.defaultItems ?? []) as (DefaultMenuItem | AgMenuItemDef<ProductRow>)[]
+      const data = p.node?.data
+      if (!data || isGroupRow(data) || isFamilyFooter(data)) return defaults
+      const own: AgMenuItemDef<ProductRow>[] = rowActions(data, { onDuplicate, navigate: (href) => router.push(href) }).map((item) => ({
+        // AG takes `name: string`; `rowActions` keeps its labels plain so both menus can read it.
+        name: typeof item.label === 'string' ? item.label : item.id,
+        disabled: item.disabled,
+        action: item.onSelect,
+      }))
+      return defaults.length ? [...own, 'separator' as DefaultMenuItem, ...defaults] : own
+    },
+    [onDuplicate, router],
+  )
+
   const columns = useMemo(
     // The Channels cell reads `activeChannels`; omitting it froze the column on the empty roster
     // it was built with, so every row read "no channels" while /api/connections answered 200.
@@ -982,6 +1009,7 @@ function ProductsNextInner() {
                 // The grid sizes itself to its rows (the current page of them, under pagination)
                 // and hands scrolling to the page. Rows are rendered per page, not per screen —
                 // the cost of a 500-row page is 500 rows, which is the trade the footer offers.
+                getContextMenuItems={getContextMenuItems}
                 domLayout="autoHeight"
                 density={density}
                 rows="media"

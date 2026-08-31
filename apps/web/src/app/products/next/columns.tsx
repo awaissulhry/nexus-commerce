@@ -15,7 +15,7 @@ import { ExternalLink } from 'lucide-react'
 
 import type { ProductRow } from '@/app/products/_types'
 import { Tag, type Tone } from '@/design-system/primitives'
-import type { CoverageChannel } from '@/design-system/components'
+import type { CoverageChannel, MenuItemDef } from '@/design-system/components'
 import {
   CoverageCell,
   ExpandButton,
@@ -155,6 +155,25 @@ export function variationCount(row: ProductRow): number {
 export const familyHref = (parentId: string) => `/products/next?parent=${encodeURIComponent(parentId)}`
 const editHref = (row: ProductRow) => `/products/${row.id}/edit`
 
+/**
+ * What you can do to one product — the ONE list.
+ *
+ * The `⋯` column and the right-click context menu offer the same actions, so they read the same
+ * list rather than each declaring its own. Two menus that agree today and drift tomorrow is the
+ * shape of defect this file has already been bitten by: `MultiSelect` and `GridSetFilter` shared a
+ * stylesheet and diverged in behaviour, and no guard could see it.
+ *
+ * Labels are plain strings on purpose. AG's context menu takes `name: string`, so a ReactNode label
+ * would render as nothing there while looking correct in the DS menu.
+ */
+export function rowActions(row: ProductRow, deps: Pick<ColumnDeps, 'onDuplicate' | 'navigate'>): MenuItemDef[] {
+  return [
+    { id: 'edit', label: 'Edit', onSelect: () => deps.navigate(editHref(row)) },
+    { id: 'duplicate', label: 'Duplicate', onSelect: () => deps.onDuplicate(row.id) },
+    { id: 'open-new', label: 'Open in new tab', onSelect: () => window.open(editHref(row), '_blank') },
+  ]
+}
+
 export interface ProductCellProps {
   row: ProductRow
   isChild?: boolean
@@ -232,11 +251,7 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
     width: 120,
     preset: actionsColumn<ProductRow>({
       primary: { label: 'Edit', href: editHref },
-      items: (row) => [
-        { id: 'edit', label: 'Edit', onSelect: () => navigate(editHref(row)) },
-        { id: 'duplicate', label: 'Duplicate', onSelect: () => onDuplicate(row.id) },
-        { id: 'open-new', label: 'Open in new tab', onSelect: () => window.open(editHref(row), '_blank') },
-      ],
+      items: (row) => rowActions(row, { onDuplicate, navigate }),
       menuLabel: (row) => `More actions for ${row.name}`,
     }),
   }

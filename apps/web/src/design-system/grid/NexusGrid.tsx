@@ -49,6 +49,11 @@ export type {
   ColDef,
   ColGroupDef,
   ColumnState,
+  DefaultMenuItem,
+  // The row context menu's callback and item shape. Re-exported because a PAGE supplies the items
+  // (they are its actions, not the engine's) and the import boundary forbids a page importing AG
+  // directly — so the engine is where the type has to come from.
+  GetContextMenuItemsParams,
   GridApi,
   GridReadyEvent,
   GridState,
@@ -56,6 +61,7 @@ export type {
   IRowNode,
   IServerSideDatasource,
   IServerSideGetRowsParams,
+  MenuItemDef as AgMenuItemDef,
   SortModelItem,
   ValueGetterParams,
   ValueSetterParams,
