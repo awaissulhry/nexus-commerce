@@ -2209,3 +2209,20 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 @media (max-width: 640px) {
   .nds-kv[data-columns='2'], .nds-kv[data-columns='3'] { grid-template-columns: minmax(0, 1fr); }
 }
+
+/*
+ * SearchTrigger — a field-shaped control that opens a search surface.
+ *
+ * Only the parts `.nds-field` does not already give it: the trailing adornment slot, and a
+ * pointer cursor so it reads as actionable rather than editable. Height and width are the
+ * consumer's business (a top bar and a page toolbar want different ones).
+ */
+.nds-searchtrigger > input { cursor: pointer; }
+
+.nds-searchtrigger-ad {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 8px;
+  flex: none;
+}

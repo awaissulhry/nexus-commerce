@@ -54,3 +54,8 @@ export type { CoverageSummaryProps, CoverageChannel, CoverageState } from './Cov
 
 // A product image in a cell, sized by the grid's density (GDS Phase 2 — lifted from grid-lens).
 export { Thumbnail, type ThumbnailProps } from './Thumbnail'
+
+// TB — filed from the top-bar gap: `.nds-tbtn` had no owner, and the DS had no
+// "looks like a field, behaves like a button" control. See DS-GAPS.md.
+export { ToolbarButton, type ToolbarButtonProps } from './ToolbarButton'
+export { SearchTrigger, type SearchTriggerProps } from './SearchTrigger'

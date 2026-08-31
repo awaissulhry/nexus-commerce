@@ -40,6 +40,7 @@ import Link from 'next/link'
 import { Search, Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
 import NotificationsBell from '@/components/NotificationsBell'
+import { ToolbarButton, SearchTrigger } from '@/design-system/components'
 import { ProfileSwitcher } from './ProfileSwitcher'
 
 function openCommandPalette() {
@@ -85,66 +86,28 @@ export function AppTopBar() {
       <div className="nds-topbar-context" />
 
       <div className="nds-topbar-search">
-        {/*
-         * A readonly input rather than a button: it keeps the DS `.nds-field` primitive intact
-         * (which styles `> input`, not an arbitrary child), reads to a screen reader as the
-         * search control it is, and still hands every keystroke to the palette — which is the
-         * component that actually knows how to search. `readOnly` (not `disabled`) so it remains
-         * focusable and the focus ring works.
-         */}
-        <span className="nds-field nds-topbar-field">
-          <span className="lead" aria-hidden="true">
-            <Search size={15} />
-          </span>
-          <input
-            type="text"
-            readOnly
-            placeholder="Jump to anything…"
-            aria-label="Search — opens the command palette"
-            /*
-             * 🔴 `onMouseDown` + preventDefault, NOT `onClick`/`onFocus`.
-             *
-             * The palette focuses its own input inside a `requestAnimationFrame` when it opens
-             * (CommandPalette.tsx:917). A plain click opens the palette, the rAF moves focus into
-             * it — and then the click's own default focus lands on THIS input afterwards and
-             * takes it straight back. Measured: the palette was open with its input rendered and
-             * unfocused, so every keystroke went nowhere. It looked completely correct.
-             *
-             * Preventing the default means this input never takes focus from a pointer at all,
-             * so whatever the palette does with focus is final.
-             */
-            onMouseDown={(e) => {
-              e.preventDefault()
-              openCommandPalette()
-            }}
-            /* Still reachable by keyboard: Tab to it, Enter or Space opens the palette, and the
-               palette's rAF then owns focus with no pointer event to fight. */
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                openCommandPalette()
-              }
-            }}
-          />
-          <span className="nds-topbar-field-kbd" aria-hidden="true">
-            <kbd className="nds-kbd">{isMac ? '⌘' : 'Ctrl'}</kbd>
-            <kbd className="nds-kbd">K</kbd>
-          </span>
-        </span>
+        {/* DS SearchTrigger — it owns the focus dance that made the palette open UNFOCUSED, and
+            the placeholder-as-label contrast. Both were bugs here first; they belong in the DS so
+            the next consumer cannot reintroduce them. */}
+        <SearchTrigger
+          className="nds-topbar-field"
+          placeholder="Jump to anything…"
+          ariaLabel="Search — opens the command palette"
+          icon={<Search size={15} />}
+          onOpen={openCommandPalette}
+          adornment={
+            <>
+              <kbd className="nds-kbd">{isMac ? '⌘' : 'Ctrl'}</kbd>
+              <kbd className="nds-kbd">K</kbd>
+            </>
+          }
+        />
       </div>
 
       <div className="nds-topbar-utility">
         <ProfileSwitcher />
         <span className="nds-tdivider" aria-hidden="true" />
-        <button
-          type="button"
-          className="nds-tbtn"
-          onClick={cycleTheme}
-          title={themeLabel}
-          aria-label={themeLabel}
-        >
-          <ThemeIcon size={16} />
-        </button>
+        <ToolbarButton icon={<ThemeIcon size={16} />} label={themeLabel} onClick={cycleTheme} />
         {/* The wrapper carries the chrome hook, so NotificationsBell itself stays a plain
             shared component with no knowledge of the surface it is placed on. */}
         <span className="nds-topbar-bell">

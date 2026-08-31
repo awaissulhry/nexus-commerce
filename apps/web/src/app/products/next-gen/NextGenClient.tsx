@@ -31,7 +31,7 @@ import { useLocalCatalog } from '@/local-first/useLocalCatalog'
 import type { LocalProductRow } from '@/local-first/projection'
 
 export function NextGenClient() {
-  const { rows, status, error, stats, refresh, reseed } = useLocalCatalog()
+  const { rows, status, error, stats } = useLocalCatalog()
 
   /*
    * Memoised — `check-grid-option-identity` (GDS §8.5) fails the push if a NexusGrid option prop
@@ -82,14 +82,6 @@ export function NextGenClient() {
           <p className="lf-sub">
             Bound to the in-browser database. Sorting and filtering never touch the network.
           </p>
-        </div>
-        <div className="lf-actions">
-          <button type="button" className="nds-btn" onClick={() => void refresh()} disabled={status !== 'ready'}>
-            Re-query locally
-          </button>
-          <button type="button" className="nds-btn" onClick={() => void reseed()}>
-            Re-seed from API
-          </button>
         </div>
       </header>
 

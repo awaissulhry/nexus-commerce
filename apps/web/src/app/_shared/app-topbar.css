@@ -152,6 +152,7 @@
   color: var(--nds-chrome-fg-2);
 }
 
+.nds-topbar .nds-searchtrigger-ad .nds-kbd,
 .nds-topbar .nds-kbd {
   background: var(--nds-chrome-kbd-bg);
   border-color: var(--nds-chrome-kbd-border);
@@ -218,17 +219,6 @@
   align-items: center;
 }
 
-.nds-topbar-field > input {
-  cursor: pointer;
-}
-
-.nds-topbar-field-kbd {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding-right: 8px;
-  flex: none;
-}
 
 /*
  * ── TB.6 · the profile control ───────────────────────────────────────────────────────────────
