@@ -192,18 +192,23 @@
  * `border-default`, `shadow-sm`) from back when it floated over a light page. On chrome those
  * read as a white disc. Restated here rather than in the component, because the component is
  * shared and this is a statement about the SURFACE it currently sits on.
+ *
+ * `:not(.nds-btn):not(.nds-tbtn)` is required, not decorative: the DS renders a BARE <button>,
+ * so a descendant selector on `button` would shadow a DS control that ever lands inside this
+ * wrapper — and `>` cannot help, because there is no DS wrapper element to stop at. Scoping it
+ * to non-DS buttons means this rule can only ever reach the hand-rolled trigger it is aimed at.
  */
-.nds-topbar .nds-topbar-bell button {
+.nds-topbar .nds-topbar-bell button:not(.nds-btn):not(.nds-tbtn) {
   background: var(--nds-chrome-control-bg);
   border-color: var(--nds-chrome-control-border);
   box-shadow: none;
 }
 
-.nds-topbar .nds-topbar-bell button:hover {
+.nds-topbar .nds-topbar-bell button:not(.nds-btn):not(.nds-tbtn):hover {
   background: var(--nds-chrome-control-hover);
 }
 
-.nds-topbar .nds-topbar-bell button svg {
+.nds-topbar .nds-topbar-bell button:not(.nds-btn):not(.nds-tbtn) svg {
   color: var(--nds-chrome-fg);
 }
 
