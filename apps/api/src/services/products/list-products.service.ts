@@ -9,6 +9,12 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { allowApiKeyScope } from '../../lib/api-key-hook.js'
+// PS.1 — the generic two-tier cache (L1 memory + L2 Redis, time-boxed, circuit-broken). Reused
+// rather than re-implemented: a third copy of that breaker is a third thing to get wrong. Its
+// key prefix is `adscache:`, so an ads flush also drops these — harmless, it only forces a
+// recompute of a 15s value.
+import { cached } from '../advertising/ads-cache.js'
+import { createHash } from 'node:crypto'
 import {
   getAvailableFields,
   getFieldDefinition,
@@ -231,6 +237,48 @@ function applyInOrNull(target: any, field: string, list: string[]): void {
  * The KPI counts of a scope. Cache counts when the cache can serve the scope — single
  * flat-table COUNTs against 5 × multi-join Product COUNTs.
  */
+/**
+ * PS.1 — the KPI counts are cached; the ROWS are not.
+ *
+ * Measured on prod 2026-08-31: `pageSize=1` and `pageSize=200` both cost ~780ms of server time.
+ * The work is fixed, not per-row — `countStatsTuple` counts the whole FILTERED scope on every
+ * request, and its stock half fetches every matching id and rolls StockLevel up across each
+ * product AND its variations. Correct (the `totalStock` column is measurably stale, so the live
+ * roll-up is the only honest number) but paid again on every page, sort and keystroke.
+ *
+ * 15 seconds, chosen deliberately: the expensive pattern is many requests in quick succession
+ * while an operator pages and sorts, and that is entirely absorbed. The exposure is that a KPI
+ * card can trail an edit by up to the TTL while the grid rows beside it are already correct.
+ */
+const STATS_TTL_SEC = 15
+
+/**
+ * A cache key must depend on the SCOPE, or every filter would share one entry and the cards
+ * would report another view's numbers. Keys are sorted before hashing: `JSON.stringify` follows
+ * insertion order, so two identical filters built by different code paths would otherwise hash
+ * differently and quietly halve the hit rate.
+ */
+function statsCacheKey(scope: { where: any; cacheWhere: any; useCache: boolean }): string {
+  const stable = (v: any): any =>
+    v === null || typeof v !== 'object'
+      ? v
+      : Array.isArray(v)
+        ? v.map(stable)
+        : Object.keys(v)
+            .sort()
+            .reduce((o: any, k) => { o[k] = stable(v[k]); return o }, {})
+  const json = JSON.stringify({ w: stable(scope.where), c: stable(scope.cacheWhere), u: scope.useCache })
+  return 'products:stats:' + createHash('sha1').update(json).digest('hex').slice(0, 24)
+}
+
+/** Test seam — key stability is the property worth asserting, and it is pure. */
+export const __statsCacheKeyForTest = statsCacheKey
+
+/** `countStatsTuple` behind the cache. The only entry point callers should use. */
+function cachedStatsTuple(scope: { where: any; cacheWhere: any; useCache: boolean }): Promise<[number, number, number, number, number]> {
+  return cached(statsCacheKey(scope), STATS_TTL_SEC, () => countStatsTuple(scope))
+}
+
 async function countStatsTuple(scope: { where: any; cacheWhere: any; useCache: boolean }): Promise<[number, number, number, number, number]> {
   const { where, cacheWhere, useCache } = scope
   // In / out of stock are the ROLL-UP's answer: a family with 539 units across its variations
@@ -263,7 +311,7 @@ async function countStatsTuple(scope: { where: any; cacheWhere: any; useCache: b
 /** The KPI counts for a query — what a grouped level reports beside its group rows. */
 export async function countProductStats(q: ProductListQuery): Promise<ProductListBody['stats']> {
   const scope = await resolveProductsScope(q)
-  const [total, active, draft, inStock, outOfStock] = await countStatsTuple(scope)
+  const [total, active, draft, inStock, outOfStock] = await cachedStatsTuple(scope)
   return { total, active, draft, inStock, outOfStock }
 }
 
@@ -873,7 +921,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         })
 
   // Stats reflect the FILTERED set — the same counts a grouped level reports for its scope.
-  const statsPromise = countStatsTuple({ where, cacheWhere, useCache })
+  const statsPromise = cachedStatsTuple({ where, cacheWhere, useCache })
 
   const [rawProducts, total, statsRows] = await Promise.all([
     rawProductsPromise,
