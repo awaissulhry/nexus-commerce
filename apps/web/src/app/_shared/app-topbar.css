@@ -71,7 +71,7 @@
 .nds-topbar-brand .logo {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--nds-radius-md);
   background: var(--nds-primary);
   color: var(--nds-white);
   font-weight: 800;
