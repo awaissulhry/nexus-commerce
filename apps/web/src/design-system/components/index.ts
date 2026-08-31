@@ -12,6 +12,7 @@ export { Drawer, type DrawerProps } from './Drawer'
 export { Menu, type MenuProps, type MenuItemDef } from './Menu'
 export { ToastProvider, useToast, type ToastApi } from './Toast'
 export { MultiSelect, type MultiSelectProps, type MultiSelectOption } from './MultiSelect'
+export { OptionList, SEARCH_THRESHOLD, type OptionListProps, type OptionListItem } from './OptionList'
 export { Combobox, type ComboboxProps, type ComboboxOption } from './Combobox'
 export { Listbox, type ListboxProps, type ListboxOption } from './Listbox'
 export { DateField, type DateFieldProps, type DateFormat } from './DateField'
@@ -32,7 +33,7 @@ export { FileDropzone, type FileDropzoneProps } from './FileDropzone'
 export { useClickAway } from './useClickAway'
 export { ColumnGroupModal, type ColumnGroupModalProps, type ColumnGroupProps, type ColumnGroup } from './ColumnGroupModal'
 // MAP.1 — top-right account identity. Replaces the hard-coded marketplace
-// chips in components/layout/TopBar.tsx with real connection state.
+// chips in the app's dead components/layout/TopBar.tsx (deleted in TB.2) with real state.
 export {
   AccountSwitcher,
   type AccountSwitcherProps,

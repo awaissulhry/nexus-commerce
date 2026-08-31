@@ -7,7 +7,8 @@
  * for the three shapes the products grid uses — a set (checkbox list with search), a number range,
  * a text "contains". Each one renders DS markup and speaks AG's model: the value it hands
  * `onModelChange` is exactly the entry the server receives in `filterModel`, declared once in
- * `@nexus/shared/products-grid`.
+ * `@nexus/shared/products-grid`. The set filter's LIST is the DS `OptionList`, shared with
+ * `MultiSelect` — the accordion and the column menu render the same component, not two copies.
  *
  * ONE filter state. The page's accordion and search box write the same model through
  * `api.setFilterModel`, and these components receive it as `props.model` — so the header's funnel
@@ -22,7 +23,7 @@ import { Search } from 'lucide-react'
 
 import type { GridNumberFilterModel, GridSetFilterModel, GridTextFilterModel } from '@nexus/shared/products-grid'
 
-import { searchOptions } from '@/design-system/lib/option-search'
+import { OptionList } from '@/design-system/components/OptionList'
 import { Button, Input } from '@/design-system/primitives'
 
 import type { ColDef } from '../NexusGrid'
@@ -65,33 +66,31 @@ function useDebouncedDraft(applied: string, commit: (draft: string) => void, ms 
   return [draft, edit] as const
 }
 
+/**
+ * The set filter. The LIST is the DS `OptionList` — the same component the accordion's
+ * `MultiSelect` renders inside its popover — so the header-menu filter and the accordion filter
+ * are one control, including Select all. This wrapper owns only what AG needs: the filter shell,
+ * the model mapping, and Clear.
+ *
+ * An empty selection is `null`, not `{ values: [] }` — AG reads null as "this column is not
+ * filtered", which is what clears the funnel and drops the entry from the request.
+ */
 export function GridSetFilter(props: CustomFilterProps<unknown, unknown, GridSetFilterModel>) {
   useGridFilter(SERVER_FILTERS)
   const params = (props.colDef.filterParams ?? {}) as Partial<SetFilterParams>
   const options = params.options ?? []
   const selected = props.model?.values ?? []
-  const [q, setQ] = useState('')
-  const showSearch = !!params.searchable || options.length > 7
-  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
-  const commit = (values: string[]) => props.onModelChange(values.length ? { filterType: 'set', values } : null)
-  const toggle = (v: string) => commit(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v])
+  const { onModelChange } = props
+  const commit = (values: string[]) => onModelChange(values.length ? { filterType: 'set', values } : null)
   return (
     <div className="nds-ag-filter" role="group" aria-label={`Filter ${props.colDef.headerName ?? ''}`.trim()}>
-      {showSearch && (
-        <div className="nds-combo-search">
-          <Search size={13} aria-hidden />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" aria-label="Search options" />
-        </div>
-      )}
-      <div className="nds-ag-filter-list">
-        {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
-        {matches.map((o) => (
-          <label key={o.value} className={['nds-ms-opt', selected.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}>
-            <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} />
-            <span>{o.label}</span>
-          </label>
-        ))}
-      </div>
+      <OptionList
+        options={options}
+        value={selected}
+        onChange={commit}
+        searchable={params.searchable}
+        listClassName="nds-ag-filter-list"
+      />
       <div className="nds-ag-filter-foot">
         <Button size="sm" variant="ghost" disabled={selected.length === 0} onClick={() => commit([])}>
           Clear
