@@ -25,7 +25,7 @@
  * somebody shortens the window without knowing that.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { OutboundSyncStatus } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'

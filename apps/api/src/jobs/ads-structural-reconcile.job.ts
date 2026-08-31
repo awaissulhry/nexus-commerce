@@ -14,7 +14,7 @@
  * and read it as "confirmed off, as predicted". The account had nothing comparing it against Amazon
  * on a schedule, and `ads-sync-integrity` was already reporting that symptom without the cause.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { envEnabled } from '../utils/env-flag.js'

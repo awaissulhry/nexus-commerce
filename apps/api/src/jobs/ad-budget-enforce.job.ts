@@ -6,7 +6,7 @@
  * is safe to schedule alongside the other AD-series crons.
  * Gated by NEXUS_ENABLE_AMAZON_ADS_CRON=1 (registered in index.ts).
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { applyBudgetEnforcement } from '../services/advertising/ads-budget-enforce.service.js'

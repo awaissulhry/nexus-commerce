@@ -12,7 +12,7 @@
  * For setup instructions see docs/IS-SETUP.md.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { isSqsConfigured, pollSqsMessages, deleteSqsMessage } from '../services/amazon-sqs.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'

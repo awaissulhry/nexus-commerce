@@ -19,7 +19,7 @@
  * opt out, useful for local dev where you don't want alert noise).
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { evaluateAllActiveAlerts } from '../services/saved-view-alerts/evaluator.service.js'

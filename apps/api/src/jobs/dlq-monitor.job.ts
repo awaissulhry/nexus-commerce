@@ -25,7 +25,7 @@
  * (next tick fires no event; banner times out via push-health poll).
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null

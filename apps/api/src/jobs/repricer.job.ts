@@ -16,7 +16,7 @@
  * this file just orchestrates the cron registration.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { runRepricerTick } from '../services/repricer-scheduler.service.js'
 import { logger } from '../utils/logger.js'

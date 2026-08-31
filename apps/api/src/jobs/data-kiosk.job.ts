@@ -17,7 +17,7 @@
  * SP-API credentials stay dormant.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { runEconomicsCreateCycle, runDataKioskPollCycle } from '../services/amazon/data-kiosk.service.js'

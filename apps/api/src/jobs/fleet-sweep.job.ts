@@ -12,7 +12,7 @@
  * Registered in CRON_REGISTRY as the *Once function (never the *Cron
  * wrapper — that double-writes CronRun, see cron-registry.ts:234).
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'

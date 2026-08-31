@@ -7,7 +7,7 @@
  * Default-on; opt out via NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER=0.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { scheduleAutoCount } from '../services/cycle-count-scheduler.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

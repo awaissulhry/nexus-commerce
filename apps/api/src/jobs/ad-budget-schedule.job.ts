@@ -31,7 +31,7 @@
  * The delete/disable give-back (`bsRestoreBase`, advertising.routes.ts) is a SEPARATE mechanism and
  * is deliberately untouched by this rule — it runs when the operator removes the schedule.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'

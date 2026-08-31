@@ -13,7 +13,7 @@
  * IT,DE,FR,ES,NL).
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import {
   ingestRestockReportsForAllMarketplaces,

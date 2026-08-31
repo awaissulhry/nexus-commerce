@@ -17,7 +17,7 @@
  * in Nexus quickly.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { pollEbayReturns } from '../services/ebay-returns/ingest.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

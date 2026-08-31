@@ -10,7 +10,7 @@
  * Default-on; opt out via NEXUS_ENABLE_FBA_PAN_EU_CRON=0.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import {
   syncFbaPanEuInventory,

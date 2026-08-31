@@ -26,7 +26,7 @@
  * (e.g. during forensic investigation when long history is needed).
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

@@ -15,7 +15,7 @@
  * Replaces ebay-token-refresh.job.ts (its registry key stays as an alias).
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import type { ConnectionRow } from '../services/connection-resolver.service.js'

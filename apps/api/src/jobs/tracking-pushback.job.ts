@@ -28,7 +28,7 @@
  * whether the underlying pushback hits the real API.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { publishOutboundEvent } from '../services/outbound-events.service.js'

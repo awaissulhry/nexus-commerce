@@ -16,7 +16,7 @@
  * cron. The next nightly run will catch up.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { ingestAllAmazonMarketplaces } from '../services/sales-report-ingest.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

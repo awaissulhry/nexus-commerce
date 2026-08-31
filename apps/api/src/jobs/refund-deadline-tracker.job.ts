@@ -18,7 +18,7 @@
  * tick doesn't compound.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { scanAndNotifyRefundDeadlines } from '../services/return-policies/deadline-tracker.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

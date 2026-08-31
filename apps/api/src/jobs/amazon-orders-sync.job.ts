@@ -15,7 +15,7 @@
  * Gated behind NEXUS_ENABLE_AMAZON_ORDERS_CRON=1.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { amazonOrdersService, getActiveMarketplaceIdsFromDb } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

@@ -13,7 +13,7 @@
  * Default schedule: every 6 hours. Override: NEXUS_EBAY_LABEL_GUARD_SCHEDULE.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 

@@ -28,7 +28,7 @@
  * NEXUS_EBAY_STATUS_RECONCILE_SCHEDULE.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { logger } from '../utils/logger.js'

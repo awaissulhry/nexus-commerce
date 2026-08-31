@@ -16,7 +16,7 @@
  * catalog-refresh 03:00); report pulls are throttle-heavy and external drift is
  * slow-moving, so daily is plenty. Opt out: NEXUS_ENABLE_FBA_DRIFT_DETECTOR=0.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { prisma } from '@nexus/database'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

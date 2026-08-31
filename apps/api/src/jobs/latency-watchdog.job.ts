@@ -24,7 +24,7 @@
  * try/catch so a bus failure never aborts the cron body.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { publishOrderEvent } from '../services/order-events.service.js'

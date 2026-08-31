@@ -20,7 +20,7 @@
  *   NEXUS_PROMOTION_SCHEDULER_CRON, NEXUS_FEE_REFRESH_CRON,
  *   NEXUS_COMPETITIVE_REFRESH_CRON  (set to 'off' to skip).
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { refreshFxRates } from '../services/fx-rate.service.js'
 import { refreshAllSnapshots } from '../services/pricing-snapshot.service.js'

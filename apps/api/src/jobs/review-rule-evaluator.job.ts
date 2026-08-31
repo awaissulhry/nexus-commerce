@@ -16,7 +16,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null

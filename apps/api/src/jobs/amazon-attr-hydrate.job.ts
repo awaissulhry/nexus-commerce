@@ -6,7 +6,7 @@
  * single tick can't hammer SP-API. Schedule overridable via
  * NEXUS_ATTR_HYDRATE_SCHEDULE; per-tick cap via NEXUS_ATTR_HYDRATE_PER_TICK.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { hydrateAmazonAttributes, type HydrateResult } from '../services/amazon/flat-file-hydrate.service.js'

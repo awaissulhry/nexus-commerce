@@ -12,7 +12,7 @@
  * Gated behind NEXUS_ENABLE_AMAZON_APLUS_CRON=1.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { pullAPlusContentMetadata } from '../services/aplus-amazon-pull.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

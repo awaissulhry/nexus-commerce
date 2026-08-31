@@ -42,7 +42,7 @@
  * safe. Set to '0' to opt out.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { syncHealthService } from '../services/sync-health.service.js'
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'

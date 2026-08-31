@@ -8,7 +8,7 @@
  * Default-on; opt out via NEXUS_ENABLE_ABC_CRON=0.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recompute } from '../services/abc-classification.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

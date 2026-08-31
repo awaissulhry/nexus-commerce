@@ -19,7 +19,7 @@
  *
  * Schedule: every 15 min. Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { prisma } from '@nexus/database'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

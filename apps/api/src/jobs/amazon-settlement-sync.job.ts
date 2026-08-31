@@ -12,7 +12,7 @@
  * Gated behind NEXUS_ENABLE_AMAZON_SETTLEMENT_CRON=1.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { syncSettlementReports } from '../services/amazon-settlements.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

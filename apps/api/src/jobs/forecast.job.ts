@@ -10,7 +10,7 @@
  * POST /api/fulfillment/forecast/run.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { generateForecastsForAll } from '../services/forecast.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

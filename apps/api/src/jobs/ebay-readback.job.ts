@@ -6,7 +6,7 @@
  *
  * Mirrors reservation-reconcile.job.ts scaffolding.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import {
   readBackEbayInventory,
   readBackEbayTradingQuantities,

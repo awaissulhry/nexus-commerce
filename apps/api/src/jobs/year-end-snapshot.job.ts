@@ -16,7 +16,7 @@
  * replay StockMovement consumes to reconstruct point-in-time.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { snapshotYearEndValuation } from '../services/year-end-snapshot.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

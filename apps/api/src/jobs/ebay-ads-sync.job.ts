@@ -11,7 +11,7 @@
  * rows → /sync-logs) with an overlap guard.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { syncEbayAdsEntities } from '../services/marketing/ebay-ads-entity-sync.service.js'

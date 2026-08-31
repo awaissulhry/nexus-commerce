@@ -21,7 +21,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import '../services/marketing/marketing-action-handlers.js'
 
 const ACOS_BREACH_DEFAULT = Number(process.env.NEXUS_MKT_ACOS_BREACH ?? 0.5) // 50%

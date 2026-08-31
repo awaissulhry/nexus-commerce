@@ -6,7 +6,7 @@
  * here — they are delegated to the Rule-Setting session (provisioned + read by AC-5).
  * See docs/ai-control-autopilot-spec.md.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

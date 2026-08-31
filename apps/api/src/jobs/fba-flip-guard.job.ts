@@ -13,7 +13,7 @@
  * Schedule: every 10 min (20-min lookback overlaps ticks so nothing slips).
  * Opt out: NEXUS_ENABLE_FBA_FLIP_GUARD=0.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { prisma } from '@nexus/database'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

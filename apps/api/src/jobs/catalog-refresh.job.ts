@@ -21,7 +21,7 @@
  * run will reconcile any drift.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'

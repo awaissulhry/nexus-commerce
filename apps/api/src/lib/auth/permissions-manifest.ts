@@ -192,7 +192,24 @@ const ENTRIES: Entry[] = [
   // no session. Before NEXUS_RBAC_MODE=enforce this must move to API-key
   // (requireApiKeyScope) service auth, else the microservice 403s. Tracked
   // as an S2 follow-up; mapped (not PUBLIC) so it isn't silently open.
-  RW(F.adsAutomationManage, F.adsAutomationManage, pfx('/api/internal/bidding')),
+  // EV.5 — the bidding-engine's internal contract. PUBLIC at the RBAC layer and
+  // authenticated by a shared secret in the handler (`x-internal-token` vs
+  // NEXUS_INTERNAL_API_TOKEN), exactly like the webhook receivers and the AMS
+  // ingest above.
+  //
+  // 🔴 THIS IS THE AMS.1 BUG, REPEATED. The route was mapped to
+  // ads.automation.manage, so rbacHook denied every call 401 `unauthenticated`
+  // BEFORE `internalAuthed` ever ran — a service caller has no session, so the
+  // session check can never be the right gate. AMS.1 records the same mistake
+  // costing 35,614 silent rejections in 24h. Measured here the same way: with
+  // NEXUS_INTERNAL_API_TOKEN correctly set and a matching header, the endpoint
+  // still returned 401.
+  //
+  // The secret IS the gate and it fails closed: `internalAuthed` returns false
+  // when the env var is unset, so an unconfigured deployment refuses
+  // everything rather than opening the route. None of the response's fields are
+  // in the financial restricted registry, so PUBLIC costs no field masking.
+  P(PUBLIC, pfx('/api/internal/bidding')),
 
   // ── Advertising ─────────────────────────────────────────────────
   // RPT.5 — saved report definitions. Scoped ABOVE the catch-all on purpose:

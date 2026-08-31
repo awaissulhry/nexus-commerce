@@ -15,7 +15,7 @@
  * operator's browser never committed (tab closed, network dropped) still
  * runs within about a minute.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { runApprovalMaintenance } from '../services/agent-fleet/approval-inbox.service.js'
 import { logger } from '../utils/logger.js'
 

@@ -297,6 +297,14 @@ node scripts/check-context-boundary.mjs --check || {
   echo "❌ context boundary FAILED — see message above"
   exit 1
 }
+# EV.4 — every scheduled job goes through the cluster-safe cron wrapper.
+# node-cron is per-process: a direct import means that job runs once per
+# replica, which is how 117 crons become 234.
+echo "→ Checking clustered cron (EV.4)..."
+node scripts/check-cron-clustered.mjs || {
+  echo "❌ clustered cron FAILED — see message above"
+  exit 1
+}
 # GDS §8.2 — chrome conformance is MEASURED in a browser against the lab; it needs :3000. When no
 # dev server answers it says so and skips (never a silent pass) — run `npm run grid:conformance`
 # by hand before showing grid work. `--strict` turns a missing server into a failure.

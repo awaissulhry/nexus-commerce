@@ -13,7 +13,7 @@
  * file produced, the delivery logged, and nothing is mailed. That is what makes
  * "is my schedule right?" answerable without mailing anyone.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { runDueSchedules } from '../services/advertising/ads-report-schedules.service.js'

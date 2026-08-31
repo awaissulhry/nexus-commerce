@@ -10,7 +10,7 @@
  * Default-on; opt out via NEXUS_ENABLE_LEAD_TIME_STATS_CRON=0.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recomputeAllLeadTimeStats } from '../services/lead-time-stats.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

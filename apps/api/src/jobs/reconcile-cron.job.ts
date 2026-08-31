@@ -18,7 +18,7 @@
  * Note: the third Amazon metric key is `fbaInventoryUnits` (not `inventory`) —
  * that is the exact field name in ReconciliationReport.metrics.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { logger } from '../utils/logger.js'

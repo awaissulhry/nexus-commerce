@@ -24,7 +24,7 @@
  * Amazon).
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { ebayOrdersService } from '../services/ebay-orders.service.js'
 import { logger } from '../utils/logger.js'

@@ -17,7 +17,7 @@
  * rate-limited and a stale schema is not urgent.
  */
 
-import nodeCron from 'node-cron'
+import nodeCron from '../lib/cron/clustered.js'
 import type { PrismaClient } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'

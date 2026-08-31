@@ -5,7 +5,7 @@
  * Prevents duplicate processing with a lock mechanism.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import OutboundSyncService, { withTimeout } from '../services/outbound-sync.service.js'
 import { logger } from '../utils/logger.js'
 

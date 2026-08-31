@@ -6,7 +6,7 @@
  * The job itself is always available for manual trigger via the cron registry.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { envEnabled } from '../utils/env-flag.js'

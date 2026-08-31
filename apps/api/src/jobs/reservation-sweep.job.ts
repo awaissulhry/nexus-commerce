@@ -16,7 +16,7 @@
  * failure mode this cron exists to prevent. Set to '0' to opt out.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { sweepExpiredReservations } from '../services/stock-level.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

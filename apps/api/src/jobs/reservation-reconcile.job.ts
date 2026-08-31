@@ -3,7 +3,7 @@
  * Releases holds for cancelled orders, consumes for shipped/delivered, and
  * alerts (logs) on ambiguous cases. Gated by NEXUS_RESERVATION_RECONCILE.
  */
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { reconcileOpenOrderReservations } from '../services/reservation-reconcile.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { logger } from '../utils/logger.js'

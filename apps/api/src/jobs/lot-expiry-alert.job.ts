@@ -16,7 +16,7 @@
  * Default-on; opt out via NEXUS_ENABLE_LOT_EXPIRY_ALERT_CRON=0.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

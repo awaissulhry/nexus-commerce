@@ -26,7 +26,7 @@
  * All jobs gated by NEXUS_ENABLE_AMAZON_ADS_CRON=1; default off in dev.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import {

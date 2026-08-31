@@ -19,7 +19,7 @@
  *     these aren't channel webhooks, they're back-office sweeps.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { pollAmazonReturns } from '../services/amazon-returns/ingest.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

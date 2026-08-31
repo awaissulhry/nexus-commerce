@@ -7,7 +7,7 @@
  * Default-ON. Set NEXUS_DISABLE_ALERT_EVALUATOR=1 to opt out.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { runAlertEvaluator } from '../services/alert-evaluator.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'

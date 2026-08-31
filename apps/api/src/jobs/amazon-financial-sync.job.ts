@@ -10,7 +10,7 @@
  * Gated behind NEXUS_ENABLE_AMAZON_FINANCIAL_CRON=1.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { syncYesterdayFinancialEvents } from '../services/amazon-financial-events.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'

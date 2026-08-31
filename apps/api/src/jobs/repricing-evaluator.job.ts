@@ -36,7 +36,7 @@
  * Default-on; opt out via NEXUS_ENABLE_REPRICING_EVALUATOR=0.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'

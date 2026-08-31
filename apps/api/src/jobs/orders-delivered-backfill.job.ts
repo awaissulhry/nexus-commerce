@@ -10,7 +10,7 @@
  * Override schedule via NEXUS_ORDERS_DELIVERED_BACKFILL_SCHEDULE.
  */
 
-import cron from 'node-cron'
+import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { runOrdersDeliveredBackfill } from '../services/reviews/orders-delivered-backfill.service.js'
