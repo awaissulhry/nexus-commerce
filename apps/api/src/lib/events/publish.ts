@@ -26,6 +26,7 @@ import {
   type EventType,
 } from '@nexus/events'
 import { correlationForPublish } from './correlation.js'
+import { notifyPublished } from './relay.js'
 
 /**
  * Structural type so this accepts PrismaClient or a TransactionClient without
@@ -103,6 +104,11 @@ export async function publishEvent<T extends EventType>(
 ): Promise<EventEnvelope<EventPayload<T>>> {
   const envelope = buildEnvelope(type, payload, options)
   await db.eventOutbox.create({ data: toRow(envelope) })
+  // Tell the relay to serve the next few ticks fast. It is still inside the
+  // caller's transaction here, so the row is not visible to the relay yet —
+  // that is exactly why notifyPublished grants SEVERAL fast ticks rather than
+  // triggering one immediate drain.
+  notifyPublished()
   return envelope
 }
 
@@ -119,5 +125,6 @@ export async function publishEvents(
     buildEnvelope(e.type, e.payload as EventPayload<EventType>, e.options),
   ) as EventEnvelope[]
   await db.eventOutbox.createMany({ data: envelopes.map(toRow) })
+  notifyPublished()
   return envelopes
 }

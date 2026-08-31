@@ -29,7 +29,7 @@ vi.mock('../../db.js', () => ({
   },
 }))
 
-import { relayOnce, pruneOutbox } from './relay.js'
+import { relayOnce, pruneOutbox, nextDelayMs, notifyPublished, relayDelayMs, stopRelay } from './relay.js'
 import type { EventBroker } from './broker.js'
 
 const CONFIG = { batchSize: 10, maxAttempts: 5, retentionDays: 7 }
@@ -170,5 +170,43 @@ describe('pruneOutbox', () => {
     $executeRaw.mockResolvedValue(42)
     expect(await pruneOutbox(CONFIG)).toBe(42)
     expect($executeRaw).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('adaptive backoff', () => {
+  // The defect this exists to prevent shipped once: a fixed 1s tick against an
+  // empty table, 86,400 queries and ~172,000 log lines a day, discovering
+  // nothing over and over. Invisible locally because the relay only ever ran
+  // for the seconds a test took — so the backoff is asserted here, not watched
+  // in production logs.
+  beforeEach(() => stopRelay())
+
+  it('doubles the delay on an empty tick', () => {
+    expect(nextDelayMs(1_000, 0, 0)).toBe(2_000)
+    expect(nextDelayMs(2_000, 0, 0)).toBe(4_000)
+  })
+
+  it('caps the idle delay rather than growing without bound', () => {
+    expect(nextDelayMs(8_000, 0, 0)).toBe(10_000)
+    expect(nextDelayMs(10_000, 0, 0)).toBe(10_000)
+    expect(nextDelayMs(999_999, 0, 0)).toBe(10_000)
+  })
+
+  it('snaps back to base the moment a tick publishes anything', () => {
+    // Without this the backoff becomes the steady state and a busy relay
+    // stays slow — the failure mode that turns a fix into a new defect.
+    expect(nextDelayMs(10_000, 1, 0)).toBe(1_000)
+  })
+
+  it('stays at base while fast ticks are owed, even on an empty tick', () => {
+    // The commit race: publishEvent fires inside the caller's transaction, so
+    // the row is not yet visible. An empty tick here must NOT back off.
+    expect(nextDelayMs(10_000, 0, 3)).toBe(1_000)
+  })
+
+  it('notifyPublished resets the live delay to base', () => {
+    notifyPublished()
+    expect(relayDelayMs()).toBe(1_000)
   })
 })

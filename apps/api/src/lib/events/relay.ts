@@ -164,34 +164,109 @@ export async function outboxStats(): Promise<{
 }
 
 // ── the loop ────────────────────────────────────────────────────────────────
+//
+// ADAPTIVE, not a fixed 1s interval. The first production deploy showed why:
+// the relay ticked once a second against an empty table forever — 86,400
+// queries and ~172,000 log lines a day to discover, over and over, that there
+// was nothing to do. Invisible locally, where it only ever ran for the few
+// seconds a test took.
+//
+// An empty tick doubles the delay up to a cap; any tick that publishes resets
+// to the base. That alone would trade latency for quiet, so it is paired with
+// notifyPublished(): a publisher tells the relay a row is coming, and the
+// relay serves the next few ticks at full speed.
+//
+// 🔴 THE COMMIT RACE is why that is a COUNTER and not a boolean. publishEvent
+// runs INSIDE the caller's transaction, so at the moment it fires the row is
+// not visible to the relay's own connection yet. A single fast tick would look
+// at an uncommitted row, find nothing, and back off again — with the event
+// sitting there. Several fast ticks span the commit instead.
+//
+// Net effect: an event published by this process is still drained within ~1s,
+// while an idle relay settles to one query every 10s. What it does NOT cover
+// is a row published by ANOTHER replica, which waits up to the cap — acceptable
+// because the latency-critical path (SSE refresh hints) bypasses the outbox
+// entirely via the ephemeral lane, and the durable consumers are not
+// latency-critical.
+
+const BASE_INTERVAL_MS = 1_000
+const MAX_IDLE_INTERVAL_MS = 10_000
+/** Fast ticks granted after a publish — enough to span the caller's commit. */
+const FAST_TICKS_AFTER_PUBLISH = 5
 
 let timer: NodeJS.Timeout | null = null
+let running = false
 let ticking = false
 let pruneCounter = 0
+let currentDelayMs = BASE_INTERVAL_MS
+let fastTicksRemaining = 0
 
-export function startRelay(broker: EventBroker, intervalMs = 1_000): () => void {
-  if (timer) return stopRelay
+/**
+ * PURE. The next delay, given the last tick's outcome.
+ * Exported so the backoff is testable without waiting on real timers —
+ * otherwise the only way to know it works is to watch production logs again.
+ */
+export function nextDelayMs(current: number, published: number, fastTicks: number): number {
+  if (published > 0 || fastTicks > 0) return BASE_INTERVAL_MS
+  return Math.min(current * 2, MAX_IDLE_INTERVAL_MS)
+}
+
+/**
+ * Tell the relay a row was just written, so it serves the next few ticks at
+ * full speed. Safe to call from inside a transaction — see the commit race
+ * above. Cheap by design: it sets a counter and returns.
+ */
+export function notifyPublished(): void {
+  fastTicksRemaining = FAST_TICKS_AFTER_PUBLISH
+  currentDelayMs = BASE_INTERVAL_MS
+}
+
+/** Current delay, for tests and diagnostics. */
+export function relayDelayMs(): number {
+  return currentDelayMs
+}
+
+export function startRelay(broker: EventBroker, intervalMs = BASE_INTERVAL_MS): () => void {
+  if (running) return stopRelay
+  running = true
+  currentDelayMs = intervalMs
   const config = relayConfig()
   logger.info('event relay: started', {
     broker: broker.name,
-    intervalMs,
+    baseIntervalMs: intervalMs,
+    maxIdleIntervalMs: MAX_IDLE_INTERVAL_MS,
     batchSize: config.batchSize,
     relayId: randomUUID().slice(0, 8),
   })
 
-  timer = setInterval(() => {
+  const schedule = (delay: number) => {
+    if (!running) return
+    timer = setTimeout(tick, delay)
+    // Never hold the process open for the relay alone.
+    timer.unref?.()
+  }
+
+  const tick = () => {
     // A tick that overruns must not stack another on top of it — two
     // overlapping drains are safe (SKIP LOCKED) but pointless, and they
     // multiply connections under exactly the load where that hurts.
-    if (ticking) return
+    if (ticking) {
+      schedule(currentDelayMs)
+      return
+    }
     ticking = true
     void relayOnce(broker, config)
       .then(async (result) => {
         if (result.published > 0) {
           logger.debug('event relay: drained', result)
         }
-        // Prune roughly every 5 minutes at the default 1s tick.
-        if (++pruneCounter % 300 === 0) {
+        currentDelayMs = nextDelayMs(currentDelayMs, result.published, fastTicksRemaining)
+        if (result.published === 0 && fastTicksRemaining > 0) fastTicksRemaining--
+        if (result.published > 0) fastTicksRemaining = 0
+
+        // Prune on a wall-clock cadence rather than a tick count: with an
+        // adaptive interval, "every 300 ticks" is no longer a fixed period.
+        if (++pruneCounter % 60 === 0) {
           const deleted = await pruneOutbox(config)
           if (deleted > 0) logger.debug('event relay: pruned published rows', { deleted })
         }
@@ -203,15 +278,18 @@ export function startRelay(broker: EventBroker, intervalMs = 1_000): () => void 
       })
       .finally(() => {
         ticking = false
+        schedule(currentDelayMs)
       })
-  }, intervalMs)
+  }
 
-  // Never hold the process open for the relay alone.
-  timer.unref?.()
+  schedule(currentDelayMs)
   return stopRelay
 }
 
 export function stopRelay(): void {
-  if (timer) clearInterval(timer)
+  running = false
+  if (timer) clearTimeout(timer)
   timer = null
+  currentDelayMs = BASE_INTERVAL_MS
+  fastTicksRemaining = 0
 }
