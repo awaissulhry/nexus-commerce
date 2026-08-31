@@ -15,7 +15,7 @@ import { computeAvailableToPublish } from '../services/available-to-publish.serv
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
-import { followUpdateData, isFollowableField, pinnedFields, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
+import { applyChannelFollows, isFollowableField, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -739,36 +739,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
     }
 
     try {
-      const results = []
-      for (const u of updates) {
-        const mp = String(u.marketplace).toUpperCase()
-        const ch = String(u.channel ?? 'AMAZON').toUpperCase()
-        const field = u.field as Parameters<typeof followUpdateData>[0]
-
-        const listing = await prisma.channelListing.findFirst({
-          where: { productId: id, channel: ch, marketplace: mp },
-          select: { id: true },
-        })
-        if (!listing) {
-          // Not an error: a market the product was never listed on has nothing to inherit.
-          results.push({ marketplace: mp, channel: ch, field, ok: false, reason: 'no listing on this coordinate' })
-          continue
-        }
-
-        const updated = await prisma.channelListing.update({
-          where: { id: listing.id },
-          data: followUpdateData(field, u.follows as boolean),
-          select: {
-            id: true, followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
-            followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
-          },
-        })
-        results.push({
-          marketplace: mp, channel: ch, field, ok: true,
-          follows: u.follows,
-          stillPinned: pinnedFields(updated as unknown as Record<string, unknown>),
-        })
-      }
+      const results = await applyChannelFollows(id, updates as Parameters<typeof applyChannelFollows>[1])
 
       return reply.send({
         results,

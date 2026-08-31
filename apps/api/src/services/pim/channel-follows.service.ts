@@ -64,3 +64,70 @@ export function pinnedFields(listing: Record<string, unknown>): FollowableField[
 
 export const followFlagColumn = (field: FollowableField): string => FIELD_COLUMNS[field].flag
 export const overrideColumn = (field: FollowableField): string | null => FIELD_COLUMNS[field].override
+
+
+export interface FollowUpdateRequest {
+  marketplace: string
+  channel?: string
+  field: FollowableField
+  follows: boolean
+}
+
+export interface FollowUpdateResult {
+  marketplace: string
+  channel: string
+  field: FollowableField
+  ok: boolean
+  reason?: string
+  follows?: boolean
+  stillPinned?: FollowableField[]
+}
+
+/**
+ * Apply flag changes to a product's channel listings.
+ *
+ * The DB work lives here rather than in the route: a route file states the contract and validates
+ * the request; the logic that touches Prisma belongs in a service the route calls. That is the
+ * standard the route/prisma ratchet enforces, and this service already owns the pure half.
+ *
+ * A coordinate with no listing is a RESULT, not an error — a market the product was never listed on
+ * has nothing to inherit, and failing the whole call for it would punish a reasonable request.
+ */
+export async function applyChannelFollows(
+  productId: string,
+  updates: FollowUpdateRequest[],
+): Promise<FollowUpdateResult[]> {
+  const { default: prisma } = await import('../../db.js')
+  const results: FollowUpdateResult[] = []
+
+  for (const u of updates) {
+    const marketplace = String(u.marketplace).toUpperCase()
+    const channel = String(u.channel ?? 'AMAZON').toUpperCase()
+
+    const listing = await prisma.channelListing.findFirst({
+      where: { productId, channel, marketplace },
+      select: { id: true },
+    })
+    if (!listing) {
+      results.push({ marketplace, channel, field: u.field, ok: false, reason: 'no listing on this coordinate' })
+      continue
+    }
+
+    const updated = await prisma.channelListing.update({
+      where: { id: listing.id },
+      data: followUpdateData(u.field, u.follows),
+      select: {
+        id: true, followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
+        followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
+      },
+    })
+
+    results.push({
+      marketplace, channel, field: u.field, ok: true,
+      follows: u.follows,
+      stillPinned: pinnedFields(updated as unknown as Record<string, unknown>),
+    })
+  }
+
+  return results
+}
