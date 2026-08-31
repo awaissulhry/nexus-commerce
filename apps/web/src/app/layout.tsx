@@ -59,16 +59,14 @@ import { AppNavRail } from "@/app/_shared/AppNavRail";
 import AppShell from "@/components/layout/AppShell";
 import CommandPalette from "@/components/CommandPalette";
 import CommandMatrixPanel from "@/components/CommandMatrixPanel";
-import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
-// MAP.1 — top-right connected-accounts chip (floats beside NotificationsBell).
-import GlobalAccountChip from "@/components/GlobalAccountChip";
 import { GlobalDlqBanner } from "@/components/dashboard/GlobalDlqBanner";
 import { GlobalAccountHealthBanner } from "@/components/dashboard/GlobalAccountHealthBanner";
 import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlertWatcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+import { ProfileScopeProvider } from "@/app/_shared/ProfileScope";
 import { PageGuard } from "@/lib/auth/PageGuard";
 import CopilotMount from "@/components/CopilotMount";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
@@ -111,6 +109,7 @@ export default async function RootLayout({
           {t('a11y.skipToContent')}
         </a>
         <AuthProvider>
+        <ProfileScopeProvider>
         <ToastProvider>
           <ConfirmProvider>
             {/* AppShell renders the full Nexus chrome for normal routes and a
@@ -129,10 +128,14 @@ export default async function RootLayout({
               }
               overlays={
                 <>
+                  {/* TB.2 — NotificationsBell and the MAP.1 account chip have MOVED into
+                      AppTopBar. They were `fixed` elements here because this slot was the
+                      desktop top-right chrome; with a real bar that is no longer true, and
+                      leaving them would render a second bell beside the one in the bar.
+                      CommandPalette stays: it is a keyboard surface with no resting UI, and
+                      the bar's search field triggers it by event. */}
                   <CommandPalette />
                   <CommandMatrixPanel />
-                  <NotificationsBell />
-                  <GlobalAccountChip />
                   {/* RT.13 — Buy Box loss alert listener (no visual UI). */}
                   <CompetitiveAlertWatcher />
                 </>
@@ -146,6 +149,7 @@ export default async function RootLayout({
             <CopilotMount />
           </ConfirmProvider>
         </ToastProvider>
+        </ProfileScopeProvider>
         </AuthProvider>
       </body>
     </html>

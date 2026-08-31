@@ -180,7 +180,11 @@ export default function NotificationsBell() {
   }
 
   return (
-    <div ref={wrapRef} className="fixed top-14 md:top-3 right-3 z-40">
+    /* TB.2 — the bell no longer floats. It used to be `fixed top-14 md:top-3 right-3 z-40`
+       because the layout's `overlays` slot WAS the desktop top-right chrome; now it is placed
+       by `AppTopBar`. `relative` is still required — the panel below is `absolute top-10
+       right-0` and positions against this wrapper. */
+    <div ref={wrapRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

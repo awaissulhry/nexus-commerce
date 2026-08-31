@@ -1,0 +1,339 @@
+/*
+ * TB — the app-wide top bar.
+ *
+ * Every colour comes from `--nds-topbar-*` / `--nds-chrome-*` (design-system/tokens/topbar.ts,
+ * chrome.ts). Nothing here is a literal, so the bar cannot drift from the rail below it.
+ *
+ * ── The layout model, and why the rail needed NO change ───────────────────────────────────────
+ *
+ * `.h10-rail` is `position: absolute; top: 0; height: 100%` inside its shell, and it is shared by
+ * BOTH the app rail (`AppRail`) and the ads cockpit's own rail (`AdsSidebar`, which renders its
+ * own `<aside class="h10-rail">` with a channel switcher inside `.h10-brand`). Pushing the rail
+ * down with `.h10-rail { top: var(--nds-topbar-h) }` would therefore have reached into the ads
+ * cockpit's layout too.
+ *
+ * So the bar does not move the rail — it SHORTENS THE SHELL. `.nds-chrome-host` publishes
+ * `--nds-chrome-top`, and the two shells (`.app-rail-host` and `.h10-shell`) subtract it from
+ * their height. The rail keeps `top: 0; height: 100%` and lands below the bar by construction, at
+ * whatever height the bar happens to be. Routes with no bar never set `--nds-chrome-top`, so the
+ * `0px` fallback reproduces the original geometry exactly.
+ *
+ * ── Chrome is dark; the workspace is not ─────────────────────────────────────────────────────
+ *
+ * Operator decision 2026-08-31. The bar and rail are a dark frame; every page surface inside
+ * stays light in both themes, so the 2026-08-05 "no dark mode here" decision for the ads cockpit
+ * and /products/next still holds for their CONTENT. Because `--nds-chrome-*` are
+ * theme-independent literals, this file needs no `.dark` block and no per-shell light pin — the
+ * two mechanisms the first, rail-aliased version of the bar required. See tokens/topbar.ts.
+ */
+
+.nds-chrome-host {
+  /* The one declaration that moves both shells. Read by .app-rail-host and .h10-shell. */
+  --nds-chrome-top: var(--nds-topbar-h);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.nds-topbar {
+  flex: 0 0 auto;
+  height: var(--nds-topbar-h);
+  display: flex;
+  align-items: stretch;
+  background: var(--nds-topbar-bg);
+  border-bottom: 1px solid var(--nds-topbar-border);
+  color: var(--nds-topbar-fg);
+  /* Above the rail's z-index 50: the rail hover-expands to 344px and must slide UNDER the bar,
+     never over it. This is the whole reason the bar is full-width rather than inset. */
+  position: relative;
+  z-index: 60;
+}
+
+/*
+ * The brand cell is exactly the COLLAPSED RAIL WIDTH, so the logo centres over the rail's icon
+ * column below it. See tokens/topbar.ts (`brandW`).
+ *
+ * NO right border. It carried one at first, on the theory that continuing the line into the
+ * rail's own border would make the L-shape read as one piece. Operator, 2026-08-31: it reads as
+ * an arbitrary partition instead — the bar is one surface, and a rule inside it implies a
+ * division that is not there.
+ */
+.nds-topbar-brand {
+  width: var(--nds-topbar-brand-w);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.nds-topbar-brand .logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--nds-primary);
+  color: var(--nds-white);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Left region: page context (TB.5 fills this; empty until a page opts in). */
+.nds-topbar-context {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-topbar-gap);
+  padding: 0 12px;
+}
+
+/* Centre region: the search field. */
+.nds-topbar-search {
+  flex: 0 1 520px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+
+/* Right region: identity + utility. */
+.nds-topbar-utility {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-topbar-gap);
+  padding: 0 12px;
+}
+
+.nds-topbar-utility > * {
+  flex: none;
+}
+
+/*
+ * ── DS controls on a dark chrome surface ─────────────────────────────────────────────────────
+ *
+ * The DS's field and button surfaces are LIGHT. Dropped onto dark chrome unchanged, `.nds-field`
+ * stayed white, `AccountSwitcher` rendered a white pill and `NotificationsBell` a white circle —
+ * three bright blobs rather than controls. That was measured on the dark prototype before this
+ * was adopted, and it is the real cost of dark chrome.
+ *
+ * These rules re-surface those primitives for chrome; they do NOT fork them. Geometry, radius,
+ * focus ring and behaviour still come from the DS — only the surface tokens are restated, and
+ * only inside `.nds-topbar`. It is a genuine DS gap (there is no "on chrome" variant of a field
+ * or an icon button), recorded in design-system/docs/DS-GAPS.md.
+ */
+.nds-topbar .nds-field {
+  background: var(--nds-topbar-field-bg);
+  border-color: var(--nds-topbar-field-border);
+}
+
+.nds-topbar .nds-field > input {
+  color: var(--nds-topbar-field-fg);
+}
+
+/*
+ * The placeholder is held to BODY-TEXT contrast, not the DS's `--nds-text-disabled`.
+ *
+ * In a normal field a placeholder is a hint and low contrast is correct. Here "Jump to anything…"
+ * IS the control's visible label — there is no other text on it — so the DS default measured
+ * 2.04:1 on the light bar, making the bar's most prominent affordance its least readable one.
+ * `--nds-chrome-control-placeholder` is 5.51:1 on the field ground.
+ */
+.nds-topbar .nds-field > input::placeholder {
+  color: var(--nds-topbar-field-placeholder);
+}
+
+.nds-topbar .nds-field .lead {
+  color: var(--nds-chrome-fg-2);
+}
+
+.nds-topbar .nds-kbd {
+  background: var(--nds-chrome-kbd-bg);
+  border-color: var(--nds-chrome-kbd-border);
+  color: var(--nds-chrome-kbd-fg);
+}
+
+.nds-topbar .nds-tbtn {
+  color: var(--nds-chrome-fg);
+}
+
+.nds-topbar .nds-tbtn:hover:not(:disabled),
+.nds-topbar .nds-tbtn[aria-pressed='true'],
+.nds-topbar .nds-tbtn[aria-expanded='true'] {
+  background: var(--nds-chrome-item-hover);
+  color: var(--nds-chrome-fg-strong);
+}
+
+.nds-topbar .nds-tdivider {
+  background: var(--nds-chrome-control-border);
+}
+
+/* DS AccountSwitcher — its trigger is the white pill referred to above. */
+.nds-topbar .nds-acct-trigger {
+  background: var(--nds-chrome-control-bg);
+  border-color: var(--nds-chrome-control-border);
+  color: var(--nds-chrome-fg-strong);
+}
+
+.nds-topbar .nds-acct-trigger:hover {
+  background: var(--nds-chrome-control-hover);
+}
+
+/*
+ * The notifications bell.
+ *
+ * `NotificationsBell` renders its trigger with app-level utility classes (`bg-white`,
+ * `border-default`, `shadow-sm`) from back when it floated over a light page. On chrome those
+ * read as a white disc. Restated here rather than in the component, because the component is
+ * shared and this is a statement about the SURFACE it currently sits on.
+ */
+.nds-topbar .nds-topbar-bell button {
+  background: var(--nds-chrome-control-bg);
+  border-color: var(--nds-chrome-control-border);
+  box-shadow: none;
+}
+
+.nds-topbar .nds-topbar-bell button:hover {
+  background: var(--nds-chrome-control-hover);
+}
+
+.nds-topbar .nds-topbar-bell button svg {
+  color: var(--nds-chrome-fg);
+}
+
+/*
+ * The search field — LAYOUT ONLY from here.
+ *
+ * `--nds-topbar-slot-h` is the bar's one shared control floor: GDS-3.1 established that a toolbar
+ * whose controls disagree by half a pixel visibly ticks when they swap.
+ */
+.nds-topbar-field {
+  width: 100%;
+  height: var(--nds-topbar-slot-h);
+  align-items: center;
+}
+
+.nds-topbar-field > input {
+  cursor: pointer;
+}
+
+.nds-topbar-field-kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 8px;
+  flex: none;
+}
+
+/*
+ * ── TB.6 · the profile control ───────────────────────────────────────────────────────────────
+ *
+ * Replaces the connected-accounts chip in the bar. "Profile" is `Role` in the schema — a named
+ * permission bundle — so this control answers "who am I and what am I scoped to", not "which
+ * marketplace am I looking at".
+ *
+ * 🔴 The DS `Menu` PORTALS its panel to document.body, so the panel is NOT a descendant of
+ * `.nds-topbar` and cannot be styled through it. That is also what stops `.nds-chrome-host`'s
+ * `overflow: hidden` from clipping it. The row classes below are therefore styled at top level,
+ * by their own names, because they travel with the content into the portal.
+ */
+.nds-topbar-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--nds-topbar-slot-h);
+  padding: 0 10px;
+  background: var(--nds-chrome-control-bg);
+  border-color: var(--nds-chrome-control-border);
+  color: var(--nds-chrome-fg-strong);
+}
+
+.nds-topbar-profile:hover {
+  background: var(--nds-chrome-control-hover);
+}
+
+/* The informational form, when nothing a selection could change exists. */
+.nds-topbar-profile-static {
+  border: 1px solid var(--nds-chrome-control-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.nds-topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary);
+  color: var(--nds-white);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.nds-topbar-profile-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nds-topbar-profile-scoped {
+  color: var(--nds-chrome-fg-2);
+  flex: none;
+}
+
+/* ── portalled menu content (see the note above) ── */
+.nds-topbar-profile-identity,
+.nds-topbar-profile-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+
+.nds-topbar-profile-identity .nm,
+.nds-topbar-profile-row .nm {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+.nds-topbar-profile-identity .sub,
+.nds-topbar-profile-row .sub {
+  font-size: 11.5px;
+  color: var(--nds-text-2);
+}
+
+.nds-topbar-profile-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-3);
+}
+
+/*
+ * The honesty line. It is `--nds-text-2` (not `--nds-text-3` or a disabled tone) because it is
+ * the sentence that stops the control being read as an access change, and a caveat nobody can
+ * read is not a caveat.
+ */
+.nds-topbar-profile-note {
+  display: block;
+  max-width: 260px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--nds-text-2);
+  white-space: normal;
+  text-align: left;
+}

@@ -15,6 +15,8 @@ import { palette, pill, badge } from './colors'
 import { space } from './spacing'
 import { fontSize, fontWeight } from './typography'
 import { gridVars, gridVarsDark } from './grid'
+import { chromeVars } from './chrome'
+import { topbarVars } from './topbar'
 
 export interface CssVar {
   /** when set, a section-comment is emitted before this row */
@@ -416,6 +418,12 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // .dark block below needs no grid entry.
   ...gridVars,
 
+  // TB — the app-wide top bar's own tokens (tokens/topbar.ts). Colours alias the RAIL rather
+  // than the general surfaces, so the bar and the rail below it resolve the same ground, rule
+  // and text and the corner where they meet shows no seam.
+  ...chromeVars,
+  ...topbarVars,
+
   { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--nds-text)' },
   { name: '--text-secondary', value: 'var(--nds-text-2)' },
   { name: '--text-tertiary', value: 'var(--nds-text-3)' },
@@ -570,4 +578,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
 
   // ── grid aliases, re-declared so they resolve against the dark tier (tokens/grid.ts) ──
   ...gridVarsDark,
+
+  // No top-bar or chrome entries here: chrome is theme-independent literals (tokens/chrome.ts)
+  // and the bar aliases only those, so there is nothing to re-resolve in the dark scope.
 ]

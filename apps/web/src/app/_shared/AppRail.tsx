@@ -76,7 +76,14 @@ function RailIndicator({ indicator }: { indicator?: 'action' | 'warning' | 'disc
 
 export interface AppRailProps {
   navItems: RailNavItem[]
-  brand: {
+  /**
+   * Brand mark + wordmark for the rail's own `.h10-brand` block.
+   *
+   * OPTIONAL since TB.1: when the app-wide top bar renders, IT owns the brand, and a rail that
+   * repeated it would show the mark twice. `AppNavRail` therefore omits this; a rail used
+   * outside the bar's reach still passes it.
+   */
+  brand?: {
     /** Single character shown as the compact mark when collapsed. */
     mark: string
     /** Full product name shown when expanded. */
@@ -138,14 +145,20 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
 
   return (
     <aside className={`h10-rail${pinned ? ' pinned' : ''}`} data-print-hide>
-      {/* Brand mark: compact "N" (or custom mark) collapsed; full wordmark on hover */}
-      <div className="h10-brand">
-        <span className="logo" aria-hidden="true">{brand.mark}</span>
-        <span className="word">
-          <span className="mk">{brand.name}</span>
-          {brand.accent && <> <b>{brand.accent}</b></>}
-        </span>
-      </div>
+      {/* Brand mark: compact "N" (or custom mark) collapsed; full wordmark on hover.
+          Omitted when the top bar is providing the brand — see the `brand` prop.
+          NOTE this is AppRail's own block only. The ads cockpit renders its own
+          <aside class="h10-rail"> in AdsSidebar.tsx whose `.h10-brand` CONTAINS the
+          channel switcher (`.h10-brand-switch`), so it is deliberately untouched. */}
+      {brand && (
+        <div className="h10-brand">
+          <span className="logo" aria-hidden="true">{brand.mark}</span>
+          <span className="word">
+            <span className="mk">{brand.name}</span>
+            {brand.accent && <> <b>{brand.accent}</b></>}
+          </span>
+        </div>
+      )}
 
       {header != null && <div className="h10-railhdr-wrap">{header}</div>}
 

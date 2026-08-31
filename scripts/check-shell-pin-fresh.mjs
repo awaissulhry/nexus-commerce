@@ -110,14 +110,68 @@ for (const m of shellCode.matchAll(/([^{}]*?)\{([^{}]*)\}/g)) {
 const notPortalScoped = [...flips].filter((t) => !portalPinned.has(t)).sort()
 const scopeLost = notPortalScoped.length > 0
 
+/**
+ * CHROME-GOVERNED PINS (TB, operator decision 2026-08-31).
+ *
+ * The bar and the rail became ONE deliberately dark surface — a dark frame around a light
+ * workspace. That is NOT dark mode: the console's CONTENT is still pinned light, and the
+ * 2026-08-05 "no dark mode here" decision still governs it. Only the chrome changed.
+ *
+ * So for these tokens the DS LIGHT value is no longer the right reference — `.h10-shell` pins
+ * them to `tokens/chrome.ts` on purpose, and checking them against light would fail forever on a
+ * correct pin, which is how a guard gets switched off.
+ *
+ * They are NOT exempted. FRESH still runs; it just resolves them against the chrome token they
+ * are supposed to equal. A pin that drifts from chrome still fails, and a chrome token renamed
+ * out from under the pin still fails — the guard keeps its teeth, pointed at the right target.
+ */
+const CHROME_PIN = new Map([
+  ['--nds-rail-bg', '--nds-chrome-bg'],
+  ['--nds-rail-border', '--nds-chrome-border'],
+  ['--nds-rail-text', '--nds-chrome-fg'],
+  ['--nds-rail-text-2', '--nds-chrome-fg-2'],
+  ['--nds-rail-text-strong', '--nds-chrome-fg-strong'],
+  ['--nds-rail-icon', '--nds-chrome-icon'],
+  ['--nds-rail-chev', '--nds-chrome-chev'],
+  ['--nds-rail-item-hover', '--nds-chrome-item-hover'],
+  ['--nds-rail-item-hover-2', '--nds-chrome-item-hover-2'],
+  ['--nds-rail-chip-bg', '--nds-chrome-chip-bg'],
+  ['--nds-rail-chip-active-bg', '--nds-chrome-chip-active-bg'],
+  ['--nds-rail-chip-active-fg', '--nds-chrome-chip-active-fg'],
+  ['--nds-rail-ft', '--nds-chrome-ft'],
+  ['--nds-shadow-rail', '--nds-chrome-shadow-rail'],
+])
+
 const missing = [...flips].filter((t) => !pins.has(t)).sort()
 const stale = []
+const chromeMissing = []
 for (const [tok, expr] of pins) {
+  const chromeRef = CHROME_PIN.get(tok)
+  if (chromeRef) {
+    // The chrome token must exist — a rename that left this map behind is exactly the silent
+    // drift this guard exists to catch, so it fails loudly rather than skipping.
+    const chromeVal = lightDefs.get(chromeRef)
+    if (chromeVal == null) {
+      chromeMissing.push({ tok, chromeRef })
+      continue
+    }
+    const a = resolve(expr)
+    const b = resolve(chromeVal)
+    if (a.toLowerCase() !== b.toLowerCase()) {
+      stale.push({ tok, expr, got: a, want: b, ref: chromeRef })
+    }
+    continue
+  }
   const declared = lightDefs.get(tok)
   if (declared == null) continue
   const a = resolve(expr)
   const b = resolve(declared)
   if (a.toLowerCase() !== b.toLowerCase()) stale.push({ tok, expr, got: a, want: b })
+}
+if (chromeMissing.length) {
+  console.error(`❌ shell-pin CHROME: ${chromeMissing.length} pin(s) reference a chrome token that no longer exists:`)
+  for (const c of chromeMissing) console.error(`   ${c.tok} → ${c.chromeRef} (not defined in tokens.css)`)
+  process.exit(1)
 }
 
 if (missing.length || stale.length || scopeLost) {
@@ -135,8 +189,8 @@ if (missing.length || stale.length || scopeLost) {
     for (const t of missing) console.error(`   ${t}`)
   }
   if (stale.length) {
-    console.error(`❌ shell-pin STALE: ${stale.length} pin(s) no longer match the DS light value:`)
-    for (const s of stale) console.error(`   ${s.tok}: pinned ${s.expr} = ${s.got}, DS light = ${s.want}`)
+    console.error(`❌ shell-pin STALE: ${stale.length} pin(s) no longer match their reference value:`)
+    for (const s of stale) console.error(`   ${s.tok}: pinned ${s.expr} = ${s.got}, ${s.ref ? `chrome ${s.ref}` : 'DS light'} = ${s.want}`)
     console.error(`\n   A stale pin that looks authoritative is worse than no pin: it silently drags a\n` +
                   `   token back to a value the DS has moved away from, inside this console only.`)
   }

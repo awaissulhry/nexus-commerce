@@ -17,10 +17,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { filterNavByPermission } from '@/lib/auth/nav-permissions'
-import { Search, Sun, Moon, Monitor, ChevronDown, Pin, PinOff } from 'lucide-react'
+import { useProfileScope } from './ProfileScope'
+import { ChevronDown, Pin, PinOff } from 'lucide-react'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { getBackendUrl } from '@/lib/backend-url'
-import { useTheme } from '@/lib/theme/use-theme'
 import { useRecentlyViewed } from '@/lib/use-recently-viewed'
 import MarketsModal from '@/components/layout/MarketsModal'
 import { AppRail, type RailSubItem } from './AppRail'
@@ -31,10 +31,6 @@ import {
   type SidebarCounts,
   type Connections,
 } from './app-nav'
-
-function dispatchCmdK() {
-  window.dispatchEvent(new CustomEvent('nexus:open-command-palette'))
-}
 
 export function AppNavRail() {
   const [counts, setCounts] = useState<SidebarCounts>({})
@@ -127,15 +123,10 @@ export function AppNavRail() {
     debouncedRefetch,
   )
 
-  // ── Chrome: theme toggle, recently-viewed (persisted collapse) ──
-  const { mode, cycleTheme } = useTheme()
-  const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
-  const themeLabel =
-    mode === 'light'
-      ? 'Switch to dark mode'
-      : mode === 'dark'
-        ? 'Switch to system theme'
-        : 'Switch to light mode'
+  // ── Chrome: recently-viewed (persisted collapse) ──
+  // TB.4 — `useTheme()` moved to AppTopBar. It is the hook that APPLIES the `.dark` class, so
+  // the component that owns it must render everywhere the theme matters; the bar reaches more
+  // routes than this rail does, which makes it the better owner, not just a tidier one.
 
   const recent = useRecentlyViewed()
   // useRecentlyViewed reads localStorage, so it returns [] on the server but
@@ -218,24 +209,9 @@ export function AppNavRail() {
   const header = (
     <>
       <div className="h10-railctl">
-        <button
-          type="button"
-          className="h10-railbtn"
-          onClick={cycleTheme}
-          title={themeLabel}
-          aria-label={themeLabel}
-        >
-          <ThemeIcon size={16} />
-        </button>
-        <button
-          type="button"
-          className="h10-railbtn"
-          onClick={dispatchCmdK}
-          title="Search (⌘K)"
-          aria-label="Search"
-        >
-          <Search size={16} />
-        </button>
+        {/* TB.3/TB.4 — the search trigger and the theme cycler now live in the top bar, which
+            reaches every route the rail does and several it does not. The rail keeps the pin,
+            which is about the rail itself and belongs nowhere else. */}
         <button
           type="button"
           className="h10-railbtn h10-railpin"
@@ -302,7 +278,12 @@ export function AppNavRail() {
   // Filter the rail by permission when we have a resolved session. Anonymous
   // (shadow, pre-enforce) shows the full nav so the open app is unchanged;
   // a signed-in user sees only permitted links.
-  const { status, has } = useAuth()
+  const { status } = useAuth()
+  // TB.6 — the predicate comes from ProfileScope, not straight from AuthProvider. With no profile
+  // selected it IS AuthProvider's union, so this is a no-op by default; with one selected the rail
+  // shows that profile's surface. Narrowing a view can only hide things the user may still do —
+  // the server keeps enforcing the union either way (see ProfileScope.tsx).
+  const { has } = useProfileScope()
   const builtNav = buildAppNav(counts, conn)
   const navItems = useMemo(
     () => (status === 'authed' ? filterNavByPermission(builtNav, has) : builtNav),
@@ -313,7 +294,8 @@ export function AppNavRail() {
     <>
       <AppRail
         navItems={navItems}
-        brand={{ mark: 'N', name: 'Nexus' }}
+        /* TB.1 — no `brand`: the app-wide top bar owns the mark now, and passing it
+           here would render the "N" twice, once in the bar and once right below it. */
         header={header}
         footer={footer}
         pinned={pinned}

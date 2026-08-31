@@ -281,6 +281,47 @@
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
   --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
 
+  /* ── Tier 3: app chrome (tokens/chrome.ts — top bar + rail, ONE dark surface, theme-independent by design; literals so there is no .dark block and no alias scope to resolve) ── */
+  --nds-chrome-bg: #18263b;
+  --nds-chrome-border: #26323f;
+  --nds-chrome-fg: #aab6c2;
+  --nds-chrome-fg-2: #97a3b1;
+  --nds-chrome-fg-strong: #e7ebf1;
+  --nds-chrome-icon: #8a94a6;
+  --nds-chrome-chev: #6f7b8b;
+  --nds-chrome-ft: #6f7b8b;
+  --nds-chrome-item-hover: #223247;
+  --nds-chrome-item-hover-2: #1d2a3c;
+  --nds-chrome-chip-bg: #243345;
+  --nds-chrome-chip-active-bg: #1d3a5f;
+  --nds-chrome-chip-active-fg: #cfe1fb;
+  --nds-chrome-control-bg: #1f2c3d;
+  --nds-chrome-control-border: #2f3a4a;
+  --nds-chrome-control-fg: #e7ebf1;
+  --nds-chrome-control-placeholder: #97a3b1;
+  --nds-chrome-control-hover: #26364a;
+  --nds-chrome-shadow-rail: 8px 0 30px rgba(0, 0, 0, 0.35);
+  --nds-chrome-kbd-bg: #2f3a4a;
+  --nds-chrome-kbd-border: #46505f;
+  --nds-chrome-kbd-fg: #aab6c2;
+
+  /* ── Tier 3: top bar (tokens/topbar.ts — geometry here; every colour aliases tokens/chrome.ts) ── */
+  --nds-topbar-h: 56px;
+  --nds-topbar-brand-w: 66px;
+  --nds-topbar-slot-h: 36px;
+  --nds-topbar-gap: 8px;
+  --nds-topbar-bg: var(--nds-chrome-bg);
+  --nds-topbar-border: var(--nds-chrome-border);
+  --nds-topbar-item-hover: var(--nds-chrome-item-hover);
+  --nds-topbar-fg: var(--nds-chrome-fg);
+  --nds-topbar-fg-strong: var(--nds-chrome-fg-strong);
+  --nds-topbar-icon: var(--nds-chrome-icon);
+  --nds-topbar-field-bg: var(--nds-chrome-control-bg);
+  --nds-topbar-field-border: var(--nds-chrome-control-border);
+  --nds-topbar-field-fg: var(--nds-chrome-control-fg);
+  --nds-topbar-field-placeholder: var(--nds-chrome-control-placeholder);
+  --nds-topbar-field-radius: var(--nds-radius-md);
+
   /* ── Platform-semantic aliases ── */
   --text-primary: var(--nds-text);
   --text-secondary: var(--nds-text-2);

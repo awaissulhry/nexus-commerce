@@ -23,7 +23,12 @@
    sidebar + scrolling content = the H10 behavior). min-height here would overflow
    the clipped parent and kill all scrolling. */
 .h10-shell {
-  display: flex; height: 100dvh; overflow: hidden; background: var(--nds-grey-50); color: var(--nds-grey-900);
+  /* TB.1 — the viewport MINUS the top bar. `--nds-chrome-top` is published by
+     `.nds-chrome-host` (app-topbar.css); its 0px fallback means routes with no bar
+     (/shared, auth) keep the original 100dvh exactly. Shortening the SHELL is what
+     puts the rail below the bar — `.h10-rail` is untouched, which matters because
+     the ads cockpit renders its own <aside class="h10-rail"> with a channel switcher. */
+  display: flex; height: calc(100dvh - var(--nds-chrome-top, 0px)); overflow: hidden; background: var(--nds-grey-50); color: var(--nds-grey-900);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   /* Pin the rail palette light so this deliberately-light shell (ads cockpit +
      /products/next) never inherits dark-mode rail colours. Only the app-wide
@@ -51,6 +56,12 @@
    .app-rail-host. Light by default; .dark overrides the palette. Standalone
    shells use the .h10-shell pin instead (always light), so this never affects
    them. TODO(P7): de-duplicate these values against tokens.css via a shared file. */
+/* TB — `.nds-chrome-host` joins this selector so the TOP BAR sits in the same variable scope as
+   the rail. The `--nds-rail-*` COLOURS below are superseded by the chrome block at the END of
+   this file (they were the light palette, from before the bar and rail became one dark surface);
+   the non-colour declarations here — `--nds-primary`, `--nds-danger`, `--nds-shadow-rail` — are
+   still live, which is why the block stays rather than being deleted outright. */
+.nds-chrome-host,
 .app-rail-host {
   --nds-rail-bg: var(--nds-grey-75); --nds-rail-border: var(--nds-grey-150);
   --nds-rail-text: #4a5462; --nds-rail-text-2: var(--nds-grey-600); --nds-rail-text-strong: var(--nds-grey-900);
@@ -61,6 +72,7 @@
   --nds-primary: var(--nds-blue-600); --nds-danger: var(--nds-red-500); --nds-warning: var(--nds-amber-600);
   --nds-shadow-rail: 8px 0 30px rgba(20, 28, 38, 0.13);
 }
+.dark .nds-chrome-host,
 .dark .app-rail-host {
   --nds-rail-bg: #18263b; --nds-rail-border: var(--nds-grey-800);
   --nds-rail-text: var(--nds-rail-text); --nds-rail-text-2: var(--nds-rail-text-2); --nds-rail-text-strong: var(--nds-rail-text-strong);
@@ -529,4 +541,48 @@ body:has(.h10-shell),
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
   --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * TB — the rail joins the top bar as ONE dark chrome surface.
+ *
+ * Operator decision 2026-08-31: the bar and the rail are a dark frame around a light workspace.
+ * That is NOT dark mode — the workspace, the grid and every page surface stay light in both
+ * themes, and the 2026-08-05 "no dark mode here" decision for the ads cockpit and /products/next
+ * still holds for their CONTENT. Only the chrome changed.
+ *
+ * Placed LAST on purpose. Four separate rules above pin `--nds-rail-*`, at three different
+ * specificities (`.h10-shell`, `.app-rail-host`, `body:has(.h10-shell)`, and `.dark`-prefixed
+ * variants at 0,2,0) — that scatter is exactly why "the rail colour" was never one colour and
+ * the bar could only match it on some routes. Rather than edit four blocks whose other
+ * declarations (`--nds-primary`, `--nds-shadow-rail`, …) must survive, this states the chrome
+ * palette once, at the end, where source order settles it. Every `--nds-rail-*` line above is
+ * now superseded and can be swept once this has proven out.
+ *
+ * The `.dark` selectors are listed explicitly: `.dark .app-rail-host` is (0,2,0) and would
+ * otherwise outrank a bare `.app-rail-host` here no matter how late it appears.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-chrome-host,
+.app-rail-host,
+.h10-shell,
+body:has(.h10-shell),
+.dark .nds-chrome-host,
+.dark .app-rail-host,
+.dark .h10-shell,
+.dark body:has(.h10-shell) {
+  --nds-rail-bg: var(--nds-chrome-bg);
+  --nds-rail-border: var(--nds-chrome-border);
+  --nds-rail-text: var(--nds-chrome-fg);
+  --nds-rail-text-2: var(--nds-chrome-fg-2);
+  --nds-rail-text-strong: var(--nds-chrome-fg-strong);
+  --nds-rail-icon: var(--nds-chrome-icon);
+  --nds-rail-chev: var(--nds-chrome-chev);
+  --nds-rail-item-hover: var(--nds-chrome-item-hover);
+  --nds-rail-item-hover-2: var(--nds-chrome-item-hover-2);
+  --nds-rail-chip-bg: var(--nds-chrome-chip-bg);
+  --nds-rail-chip-active-bg: var(--nds-chrome-chip-active-bg);
+  --nds-rail-chip-active-fg: var(--nds-chrome-chip-active-fg);
+  --nds-rail-ft: var(--nds-chrome-ft);
+  /* The hover-expand shadow has to read against a dark ground, not a light one. */
+  --nds-shadow-rail: var(--nds-chrome-shadow-rail);
 }
