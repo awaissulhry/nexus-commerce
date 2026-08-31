@@ -343,6 +343,16 @@ const ENTRIES: Entry[] = [
 
   // ── Products / catalog / PIM ────────────────────────────────────
   P(F.productsView, (m, p) => has('/bulk-fetch')(m, p) || has('/search')(m, p)),
+
+  // PH.3 — the product graph. ONE route, so this is the only route-level
+  // permission the whole graph can carry: read access to product data. It is
+  // deliberately the READ permission — the schema has no mutations, and if one
+  // is ever added this entry must be split before it ships, not after.
+  //
+  // Field-level protection is separate and lives in two places: graph/auth.ts
+  // (every field has a stated decision, enforced by a pre-push guard) and the
+  // financialFilterHook preSerialization filter, verified to cover mercurius.
+  P(F.productsView, (_m, p) => p === '/graphql'),
   P(F.productsImport, pfx('/api/import-wizard')),
   P(F.productsImport, pfx('/api/scheduled-imports')),
   P(F.productsExport, pfx('/api/export-wizard')),

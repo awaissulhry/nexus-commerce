@@ -6,6 +6,8 @@ import { handleMovementStockoutTransition } from './stockout-detector.service.js
 import { consumeLayersInTx, receiveLayerInTx } from './cost-layers.service.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
+// EV.2 — the stock fact, published inside the movement's own transaction.
+import { publishEvent } from '../lib/events/publish.js'
 import { resolveIntendedQuantity } from './sync-control-core.js'
 import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
@@ -524,6 +526,28 @@ export async function applyStockMovement(input: StockMovementInput) {
       referenceType,
       referenceId,
       actor,
+    })
+
+    // EV.2 — the fact, recorded in the SAME transaction as the movement it
+    // describes. Not after the commit: a crash in that window would leave the
+    // stock changed with nothing anywhere recording that it had. Rolls back
+    // with the movement, so a failed cascade publishes nothing.
+    //
+    // This does NOT replace the OutboundSyncQueue push path — that stays
+    // exactly as it is. It adds the fact that anything else can subscribe to,
+    // which is what did not exist: every consumer until now had to be wired
+    // into cascadeQuantityToListings by hand.
+    await publishEvent(tx, 'inventory.stock_changed', {
+      productId,
+      locationId: resolvedLocationId,
+      movementId: movement.id,
+      change,
+      quantityBefore,
+      quantityAfter: newQuantity,
+      available: newAvailable,
+      poolTotal: newTotalStock,
+      reason: String(reason),
+      orderId: orderId ?? null,
     })
 
     return {

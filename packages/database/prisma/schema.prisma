@@ -16987,3 +16987,55 @@ model KeywordBidProposal {
   @@index([status, proposedAt])
   @@index([term, marketplace])
 }
+
+/// EV.1 — the transactional outbox.
+///
+/// The single reason this table exists: an event must be recorded in the SAME
+/// transaction as the state change it describes. Publishing to a broker after
+/// the commit leaves a window — commit succeeds, process dies, event never
+/// published, and the fact is lost with no trace that anything is missing. No
+/// broker can close that window; only writing the intent transactionally can.
+///
+/// The relay drains this table: claim unpublished rows with FOR UPDATE SKIP
+/// LOCKED, push to the broker, stamp publishedAt. That makes delivery
+/// at-least-once (a crash after publish but before the stamp replays the row),
+/// which is why `eventId` is UNIQUE and every consumer must be idempotent.
+///
+/// Rows are pruned after EVENT_OUTBOX_RETENTION_DAYS by the relay itself — an
+/// append-only table on a hot write path is otherwise unbounded.
+model EventOutbox {
+  id String @id @default(uuid())
+
+  /// The envelope's event id. UNIQUE: the relay's idempotency guarantee, and
+  /// what lets a consumer recognise a redelivery.
+  eventId String @unique
+
+  /// Contract identity, mirroring packages/events/catalog.ts.
+  type    String
+  version Int    @default(1)
+  /// Owning bounded context, denormalised so the relay can route or shard by
+  /// context without loading the catalogue.
+  context String
+
+  /// Envelope fields.
+  accountId     String?
+  subject       String
+  correlationId String
+  causationId   String?
+  source        String
+
+  payload    Json
+  /// Domain time — when the fact happened, NOT when it was published.
+  occurredAt DateTime
+
+  /// Null = still pending. The relay's claim predicate.
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+  lastError   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([publishedAt, occurredAt])
+  @@index([type, occurredAt])
+  @@index([subject])
+}

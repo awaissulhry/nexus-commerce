@@ -262,6 +262,41 @@ node scripts/check-grid-kit-ratchet.mjs --check || {
   echo "❌ grid-kit ratchet FAILED — see message above"
   exit 1
 }
+# EV.1 — the event contract. Every published event type is declared in
+# packages/events/catalog.ts, Redis stream commands stay inside the driver, and
+# no TENTH in-process event bus appears (the nine that predate the broker are a
+# fixed, shrinking baseline). AST-based; reads the catalogue from source, so it
+# can never pass against a stale build of the contract it enforces.
+echo "→ Checking event contract (EV.1)..."
+node scripts/check-event-contract.mjs || {
+  echo "❌ event contract FAILED — see message above"
+  exit 1
+}
+# PH.3 — the product graph contract. Every field in the SDL has a stated auth
+# decision, no stale registry entries, and the schema stays read-only (the
+# /graphql route carries ONE route permission, the READ one).
+echo "→ Checking graph contract (PH.3)..."
+node scripts/check-graph-contract.mjs || {
+  echo "❌ graph contract FAILED — see message above"
+  exit 1
+}
+# PH.4a — business logic leaves the HTTP layer. A route file may keep the DB
+# calls it has, may not gain one; a NEW route file is held at ZERO. The
+# baseline lives in scripts/route-prisma-baseline.json and only falls — every
+# rebuilt page and every de-layered handler ratchets it down.
+echo "→ Checking route de-layering ratchet (PH.4a)..."
+node scripts/check-route-prisma-ratchet.mjs --check || {
+  echo "❌ route-prisma ratchet FAILED — see message above"
+  exit 1
+}
+# PH.4b — bounded-context boundaries. Advertising privately owns 80 models;
+# nothing outside the context may touch them, or extraction becomes a
+# cross-service database read.
+echo "→ Checking context boundary (PH.4b)..."
+node scripts/check-context-boundary.mjs --check || {
+  echo "❌ context boundary FAILED — see message above"
+  exit 1
+}
 # GDS §8.2 — chrome conformance is MEASURED in a browser against the lab; it needs :3000. When no
 # dev server answers it says so and skips (never a silent pass) — run `npm run grid:conformance`
 # by hand before showing grid work. `--strict` turns a missing server into a failure.

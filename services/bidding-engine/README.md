@@ -38,15 +38,33 @@ npm test                 # bidding math
 Starts `BIDDING_DRY_RUN=1` (computes + logs, never writes). Flip to `0` only
 after the primary write-gate cutover. `npm run build && npm start` for prod.
 
-## Primary-app endpoints to implement (contract)
+## Primary-app endpoints (contract) — BUILT and verified
+
 ```
-GET  /internal/bidding/contexts?marketplace=&limit=
+GET  /api/internal/bidding/contexts?marketplace=&limit=
        -> { contexts: BidContext[] }       # joins AdTarget bids + Product days-of-supply + strategy ACoS
-POST /internal/bidding/applied
+POST /api/internal/bidding/applied
        { bridgeId, externalId, bidMinor, prevBidMinor, status }   # updates the local row + AdvertisingActionLog
 ```
-Both require `x-internal-token: <PRIMARY_API_TOKEN>`. These are the only coupling
-points; everything else is self-contained here.
+
+Both exist in `apps/api/src/routes/advertising.routes.ts` and were exercised end
+to end locally (PH.4c): contexts fetched, bid computed, result reported, and an
+`AdvertisingActionLog` row written — two processes, no shared database.
+
+🔴 **The `/api` prefix is load-bearing.** `advertisingRoutes` is registered with
+`{ prefix: '/api' }`, so the endpoints live under `/api`, and the permissions
+manifest maps `/api/internal/bidding` to `ads.automation.manage`. This README and
+`primary-client.ts` both omitted it; the unprefixed path returns **404**, which
+would have surfaced on the first deploy. `PRIMARY_API_URL` stays the bare origin
+(no `/api`) — the client adds the prefix.
+
+🔴 **The shared secret has two names.** The engine sends `PRIMARY_API_TOKEN` as
+the `x-internal-token` header; the primary compares it against
+`NEXUS_INTERNAL_API_TOKEN`. Same value, different variable on each side — a
+mismatch is a silent 401, not an error anyone will notice.
+
+A response body carries `accountRef` (the Amazon advertising profile id), not
+`profileId`.
 
 ## Deploy (Railway, separate service)
 - Root directory: `services/bidding-engine`

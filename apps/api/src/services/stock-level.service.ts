@@ -25,6 +25,8 @@
 
 import prisma from '../db.js'
 import { applyStockMovement } from './stock-movement.service.js'
+// EV.2 — reservation facts, published inside each reservation's own transaction.
+import { publishEvent } from '../lib/events/publish.js'
 
 const PENDING_ORDER_TTL_MS = 24 * 60 * 60 * 1000 // 24h
 // S.2 — open marketplace orders sit in reserved state from ingestion
@@ -99,9 +101,11 @@ export async function reserveStock(args: ReserveStockArgs) {
     // RV.1 — only HARD reservations decrement StockLevel.reserved.
     // SOFT is visible in the StockReservation table but doesn't
     // affect available calculations.
+    let availableAfter = sl.available
     if (kind === 'HARD') {
       const newReserved = sl.reserved + quantity
       const newAvailable = sl.quantity - newReserved
+      availableAfter = newAvailable
       await tx.stockLevel.update({
         where: { id: sl.id },
         data: { reserved: newReserved, available: newAvailable },
@@ -137,6 +141,17 @@ export async function reserveStock(args: ReserveStockArgs) {
         notes: `Reserved ${quantity} for ${reason}${orderId ? ` (order ${orderId})` : ''}`,
         actor: actor ?? null,
       },
+    })
+
+    // EV.2 — same transaction as the reservation itself.
+    await publishEvent(tx, 'inventory.reserved', {
+      productId,
+      reservationId: reservation.id,
+      locationId,
+      quantity,
+      kind: kind === 'SOFT' ? 'SOFT' : 'HARD',
+      availableAfter,
+      orderId: orderId ?? null,
     })
 
     return reservation
@@ -192,6 +207,15 @@ export async function releaseReservation(
         notes: opts.reason ?? null,
         actor: opts.actor ?? null,
       },
+    })
+
+    await publishEvent(tx, 'inventory.reservation_released', {
+      productId: sl.productId,
+      reservationId,
+      quantity: r.quantity,
+      kind: isHard ? 'HARD' : 'SOFT',
+      availableAfter: newAvailable,
+      reason: opts.reason ?? null,
     })
 
     return updated
@@ -253,10 +277,24 @@ export async function consumeReservation(
       where: { id: r.stockLevelId },
       data: { reserved: newReserved, available: newAvailable },
     })
-    return await tx.stockReservation.update({
+    const consumed = await tx.stockReservation.update({
       where: { id: reservationId },
       data: { consumedAt: new Date() },
     })
+
+    // The stock leaving was already published as inventory.stock_changed by
+    // consumeWithFefo → applyStockMovement above. This records that the
+    // RESERVATION settled, which is a different fact: it is what closes the
+    // promise made to a buyer.
+    await publishEvent(tx, 'inventory.reservation_consumed', {
+      productId: r.stockLevel.productId,
+      reservationId,
+      quantity: r.quantity,
+      kind: (r.kind ?? 'HARD') === 'SOFT' ? 'SOFT' : 'HARD',
+      orderId: r.orderId ?? null,
+    })
+
+    return consumed
   })
 }
 

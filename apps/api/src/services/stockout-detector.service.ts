@@ -24,6 +24,10 @@
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
+// EV.2 — a stockout was detected but never published. Now it is a fact
+// anything can subscribe to, not just a row in a table someone must poll.
+import prismaForEvents from '../db.js'
+import { publishEvent } from '../lib/events/publish.js'
 
 export type DetectorTrigger = 'cron' | 'movement' | 'manual'
 
@@ -242,11 +246,24 @@ export async function handleMovementStockoutTransition(args: {
         locationId: args.locationId,
         detectedBy: 'movement',
       })
+      await publishEvent(prismaForEvents, 'inventory.stockout', {
+        productId: args.productId,
+        sku: args.sku,
+        locationId: args.locationId,
+        previousAvailable: args.prevAvailable,
+        availableNow: Math.max(0, args.nextAvailable),
+      })
     } else {
       await closeStockoutEvent({
         productId: args.productId,
         locationId: args.locationId,
         closedBy: 'movement',
+      })
+      await publishEvent(prismaForEvents, 'inventory.stockout_cleared', {
+        productId: args.productId,
+        sku: args.sku,
+        locationId: args.locationId,
+        availableNow: Math.max(1, args.nextAvailable),
       })
     }
   } catch (err) {

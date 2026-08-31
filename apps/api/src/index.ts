@@ -308,6 +308,10 @@ import { initializeQueue, closeQueue } from "./lib/queue.js";
 import { logger } from "./utils/logger.js";
 import { envEnabled } from "./utils/env-flag.js";
 import { markCronStep } from "./jobs/cron-startup-state.js";
+// EV.1 — outbox relay + cross-replica event fan-out.
+import { startEventInfrastructure } from "./workers/event-relay.worker.js";
+// PH.3 — the read-only product graph at /graphql.
+import { registerProductGraph } from "./graph/index.js";
 import prisma from "./db.js";
 
 let queueWorkersStarted = false;
@@ -638,6 +642,10 @@ app.register(ebayAuthRoutes);
 app.register(ebayRoutes);
 app.register(ebayOrdersRoutes);
 app.register(catalogRoutes, { prefix: '/api/catalog' });
+// PH.3 — mercurius at /graphql. Registered with the routes so it sits inside
+// the same global hooks: the rbac preHandler gates it, and the financial
+// preSerialization filter strips restricted fields from its replies.
+registerProductGraph(app);
 app.register(catalogOrganizeRoutes, { prefix: '/api/catalog' });
 // S.0 / C-2 — listing-health.routes declares full /api/catalog/... paths
 // internally, so register without a prefix. See DEVELOPMENT.md "Health
@@ -874,6 +882,17 @@ async function start() {
       // the background when Redis is reachable.
       void tryStartQueueWorkers().catch((err) => {
         logger.error('queue workers: background init failed — HTTP + crons unaffected', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+      // EV.1 — the event outbox relay and this replica's broker attachment.
+      // Same fire-and-forget discipline as the queue workers above: an
+      // unreachable Redis must not block boot. Events keep landing durably in
+      // EventOutbox regardless; the relay drains whatever accumulated once the
+      // broker is reachable.
+      void startEventInfrastructure().catch((err) => {
+        logger.error('event infrastructure: init failed — HTTP + crons unaffected', {
           error: err instanceof Error ? err.message : String(err),
         });
       });

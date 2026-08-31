@@ -932,14 +932,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // from running effective CPCs far above the seller's norm.
   fastify.patch('/advertising/campaigns/:id/cpc-ceiling', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { enabled?: boolean; multiple?: number }
-    const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
-    if (!c) { reply.status(404); return { error: 'campaign not found' } }
-    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
-    const multiple = b.multiple != null ? Math.max(1, Math.min(10, Number(b.multiple))) : 1.5
-    db.cpcCeiling = { enabled: !!b.enabled, multiple }
-    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
-    return { ok: true, cpcCeiling: db.cpcCeiling }
+    const { setCpcCeiling } = await import('../services/advertising/campaign-settings.service.js')
+    const r = await setCpcCeiling(id, request.body as { enabled?: boolean; multiple?: number })
+    if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
+    return r.value
   })
 
   // ── Self-competition (RC2.R8) — other campaigns in the SAME market that
@@ -948,28 +944,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // cannibalisation. Read-only.
   fastify.get('/advertising/campaigns/:id/self-competition', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const camp = await prisma.campaign.findUnique({ where: { id }, select: { marketplace: true } })
-    if (!camp) { reply.status(404); return { error: 'campaign not found' } }
-    const myAds = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: id }, asin: { not: null } }, select: { asin: true } })
-    const asins = [...new Set(myAds.map((a) => a.asin).filter((x): x is string => !!x))]
+    const { getSelfCompetition } = await import('../services/advertising/campaign-settings.service.js')
+    const r = await getSelfCompetition(id)
+    if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
     reply.header('Cache-Control', 'private, max-age=120')
-    if (asins.length === 0) return { marketplace: camp.marketplace, asins: [], conflicts: [] }
-    const others = await prisma.adProductAd.findMany({
-      where: { asin: { in: asins }, adGroup: { campaign: { marketplace: camp.marketplace, id: { not: id }, status: 'ENABLED' } } },
-      select: { asin: true, adGroup: { select: { campaign: { select: { id: true, name: true, status: true } } } } },
-    })
-    const byCamp = new Map<string, { campaignId: string; name: string; status: string; asins: Set<string> }>()
-    for (const o of others) {
-      const c = o.adGroup?.campaign
-      if (!c || !o.asin) continue
-      let g = byCamp.get(c.id)
-      if (!g) { g = { campaignId: c.id, name: c.name, status: c.status, asins: new Set() }; byCamp.set(c.id, g) }
-      g.asins.add(o.asin)
-    }
-    const conflicts = [...byCamp.values()]
-      .map((g) => ({ campaignId: g.campaignId, name: g.name, status: g.status, asins: [...g.asins] }))
-      .sort((a, b) => b.asins.length - a.asins.length)
-    return { marketplace: camp.marketplace, asins, conflicts }
+    return r.value
   })
 
   // ── GET /advertising/campaigns/:id/keyword-conflicts (RC3.2) ───────────
@@ -1294,25 +1273,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Same read-modify-write pattern as /cpc-ceiling and /guardrails.
   fastify.patch('/advertising/campaigns/:id/automation', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { bidAutomation?: boolean; targetAcos?: number | null; bidAlgorithm?: string | null }
-    const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
-    if (!c) { reply.status(404); return { error: 'campaign not found' } }
-    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
-    if (b.bidAutomation !== undefined) db.bidAutomation = !!b.bidAutomation
-    // C1 — the Adtomic bid-algorithm picker's store. Whitelisted rather than free text: this
-    // feeds a three-option control, and an unknown value would render as a blank cell.
-    if (b.bidAlgorithm !== undefined) {
-      const allowed = ['TARGET_ACOS', 'MAX_IMPRESSIONS', 'MAX_ORDERS']
-      if (b.bidAlgorithm == null) delete db.bidAlgorithm
-      else if (allowed.includes(b.bidAlgorithm)) db.bidAlgorithm = b.bidAlgorithm
-      else { reply.status(400); return { error: `bidAlgorithm must be one of ${allowed.join(', ')}` } }
-    }
-    if (b.targetAcos !== undefined) {
-      if (b.targetAcos == null) delete db.targetAcos
-      else db.targetAcos = Math.max(0, Math.min(5, Number(b.targetAcos))) // fraction; clamp 0–500%
-    }
-    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
-    return { ok: true, bidAutomation: db.bidAutomation ?? false, targetAcos: db.targetAcos ?? null, bidAlgorithm: db.bidAlgorithm ?? null }
+    const { setBidAutomation } = await import('../services/advertising/campaign-settings.service.js')
+    const r = await setBidAutomation(id, request.body as { bidAutomation?: boolean; targetAcos?: number | null; bidAlgorithm?: string | null })
+    if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
+    return r.value
   })
 
   // ── Apex A.2a: per-campaign live-write allowlist toggle ─────────────────
@@ -1323,17 +1287,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/advertising/campaigns/:id/live-writes', async (request, reply) => {
     const { id } = request.params as { id: string }
     const b = request.body as { enabled?: boolean }
-    const c = await prisma.campaign.findUnique({ where: { id }, select: { id: true, name: true } })
-    if (!c) { reply.status(404); return { error: 'campaign not found' } }
-    const enabled = !!b.enabled
-    await prisma.campaign.update({ where: { id }, data: { liveBidWritesEnabled: enabled } })
-    logger.warn('[ADS-LIVE-ALLOWLIST]', {
-      campaignId: id,
-      name: c.name,
-      enabled,
-      actor: actorFromHeaders(request.headers as Record<string, unknown>),
-    })
-    return { ok: true, campaignId: id, liveBidWritesEnabled: enabled }
+    const { setLiveWrites } = await import('../services/advertising/campaign-settings.service.js')
+    const r = await setLiveWrites(id, !!b.enabled, actorFromHeaders(request.headers as Record<string, unknown>))
+    if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
+    return r.value
   })
 
   // MM.2 — bulk live-write allowlist for a whole marketplace (or an explicit set), so an
@@ -1342,12 +1299,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // still independently governs whether anything actually reaches Amazon.
   fastify.post('/advertising/campaigns/live-writes/bulk', async (request, reply) => {
     const b = request.body as { marketplace?: string; enabled?: boolean; campaignIds?: string[] }
-    const enabled = !!b.enabled
-    if (!b.marketplace && !(b.campaignIds && b.campaignIds.length)) { reply.status(400); return { error: 'marketplace or campaignIds required' } }
-    const where = b.campaignIds?.length ? { id: { in: b.campaignIds } } : { marketplace: b.marketplace }
-    const r = await prisma.campaign.updateMany({ where, data: { liveBidWritesEnabled: enabled } })
-    logger.warn('[ADS-LIVE-ALLOWLIST-BULK]', { marketplace: b.marketplace, campaignIds: b.campaignIds?.length, enabled, count: r.count, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
-    return { ok: true, count: r.count, enabled }
+    const { setLiveWritesBulk } = await import('../services/advertising/campaign-settings.service.js')
+    const r = await setLiveWritesBulk(
+      { marketplace: b.marketplace, campaignIds: b.campaignIds, enabled: !!b.enabled },
+      actorFromHeaders(request.headers as Record<string, unknown>),
+    )
+    if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
+    return r.value
   })
 
   /**
@@ -8841,71 +8799,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/internal/bidding/contexts', async (request, reply) => {
     if (!internalAuthed(request as never)) { reply.status(401); return { error: 'unauthorized' } }
     const q = request.query as Record<string, string | undefined>
-    const limit = Math.min(q.limit ? Number(q.limit) : 500, 2000)
-    // Apex A.2a — in live mode the bidding engine only ever sees targets whose
-    // campaign is on the live-write allowlist (default-deny), so the engine path
-    // is contained exactly like the audited worker path. Sandbox returns all.
-    const enforceAllowlist = adsMode() === 'live'
-    const campaignWhere = {
-      ...(q.marketplace ? { marketplace: q.marketplace } : {}),
-      ...(enforceAllowlist ? { liveBidWritesEnabled: true } : {}),
-    }
-    const targets = await prisma.adTarget.findMany({
-      where: {
-        kind: 'KEYWORD', status: 'ENABLED', isNegative: false,
-        externalTargetId: { not: null }, clicks: { gt: 0 },
-        ...(Object.keys(campaignWhere).length ? { adGroup: { campaign: campaignWhere } } : {}),
-      },
-      take: limit,
-      select: {
-        id: true, externalTargetId: true, bidCents: true, clicks: true, spendCents: true,
-        salesCents: true, ordersCount: true,
-        adGroup: { select: { campaign: { select: { marketplace: true, dynamicBidding: true } } } },
-      },
-    })
-    // Resolve profileId (accountRef) per marketplace once.
-    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true, profileId: true } })
-    const profileByMkt = new Map(conns.map((c) => [c.marketplace, c.profileId]))
-    const contexts = targets.flatMap((t) => {
-      const mkt = t.adGroup?.campaign?.marketplace ?? null
-      const accountRef = mkt ? profileByMkt.get(mkt) : undefined
-      if (!accountRef || !t.externalTargetId) return []
-      const cr = t.clicks > 0 ? (t.ordersCount ?? 0) / t.clicks : 0
-      const db = (t.adGroup?.campaign?.dynamicBidding ?? {}) as { targetAcos?: number; maxBidChangePct?: number }
-      const acosTargetBps = Math.round((db.targetAcos ?? 0.3) * 10000)
-      // Apex A.2a — bound the engine's per-cycle move by the campaign's
-      // max-change-% guardrail (when set), so the engine respects the same cap
-      // as the audited path. Default keeps the original [5, max(bid×3,300)] band.
-      const pct = Number(db.maxBidChangePct)
-      const bounded = Number.isFinite(pct) && pct > 0
-      const bidMinMinor = bounded ? Math.max(5, Math.round(t.bidCents * (1 - pct / 100))) : 5
-      const bidMaxMinor = bounded ? Math.round(t.bidCents * (1 + pct / 100)) : Math.max(t.bidCents * 3, 300)
-      return [{
-        bridgeId: t.id, externalId: t.externalTargetId, accountRef,
-        currentBidMinor: t.bidCents,
-        aovMinor: (t.ordersCount ?? 0) > 0 ? Math.round(t.salesCents / (t.ordersCount ?? 1)) : 5000,
-        cr7d: cr, cr30d: cr, acosTargetBps, acos1hBps: null, daysOfSupply: null,
-        bidMinMinor, bidMaxMinor,
-      }]
-    })
+    const { getBidContexts } = await import('../services/advertising/bidding-bridge.service.js')
     reply.header('Cache-Control', 'no-store')
-    return { contexts }
+    return { contexts: await getBidContexts({ marketplace: q.marketplace, limit: q.limit ? Number(q.limit) : null }) }
   })
   fastify.post('/internal/bidding/applied', async (request, reply) => {
     if (!internalAuthed(request as never)) { reply.status(401); return { error: 'unauthorized' } }
     const b = request.body as { bridgeId?: string; externalId?: string; bidMinor?: number; prevBidMinor?: number; status?: string }
     if (!b?.bridgeId || b?.bidMinor == null) { reply.status(400); return { error: 'bridgeId + bidMinor required' } }
-    if (b.status === 'applied') {
-      await prisma.adTarget.update({ where: { id: b.bridgeId }, data: { bidCents: b.bidMinor } }).catch(() => {})
-    }
-    await prisma.advertisingActionLog.create({
-      data: {
-        actionType: 'bid_set_by_engine', entityType: 'AD_TARGET', entityId: b.bridgeId,
-        payloadBefore: { bidCents: b.prevBidMinor ?? null },
-        payloadAfter: { bidCents: b.bidMinor, source: 'bidding-engine' } as object,
-        amazonResponseStatus: b.status === 'applied' ? 'SUCCESS' : b.status === 'failed' ? 'FAILED' : 'PENDING',
-      },
-    }).catch(() => {})
+    const { recordAppliedBid } = await import('../services/advertising/bidding-bridge.service.js')
+    await recordAppliedBid(b as { bridgeId: string; bidMinor: number; externalId?: string; prevBidMinor?: number; status?: string })
     return { ok: true }
   })
 
