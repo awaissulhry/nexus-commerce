@@ -82,6 +82,12 @@ export async function createSession(
   return { rawToken, sessionId: row.id }
 }
 
+import {
+  getCachedSession,
+  setCachedSession,
+  dropCachedSessions,
+} from './session-cache.js'
+
 export interface ValidatedSession {
   sessionId: string
   user: SessionUser
@@ -98,6 +104,14 @@ export async function validateSession(
 ): Promise<ValidatedSession | null> {
   if (!rawToken) return null
   const hash = hashToken(rawToken)
+
+  // SC.1 — the global rbacHook calls this on EVERY request, so an uncached lookup put a Neon
+  // round trip in front of every authenticated response (~600ms, measured). A hit skips the
+  // query entirely; a miss, a timeout or a Redis outage falls through to the database below and
+  // answers correctly, only slower. Only VALID sessions are cached — never a negative result.
+  const cached = await getCachedSession(hash)
+  if (cached) return cached
+
   const row = await (prisma as any).userSession.findUnique({
     where: { sessionTokenHash: hash },
     select: {
@@ -147,7 +161,7 @@ export async function validateSession(
       .catch(() => undefined)
   }
 
-  return {
+  const validated: ValidatedSession = {
     sessionId: row.id,
     mfaSatisfied: !!row.mfaSatisfied,
     user: {
@@ -161,23 +175,41 @@ export async function validateSession(
       roleKeys: (row.user.roleAssignments ?? []).map((a: any) => a.role.key),
     },
   }
+
+  // Not awaited: the write is time-boxed internally and swallows its own errors, so awaiting it
+  // would only add latency to the very request the cache exists to speed up.
+  void setCachedSession(hash, validated)
+  return validated
 }
 
-/** Revoke a single session by its id. */
+/**
+ * Revoke a single session by its id.
+ *
+ * SC.1 — the token hash is read BEFORE the update, because `updateMany` returns a count, not
+ * rows, and the cache is keyed by hash. One extra read on a rare operation is the price of
+ * revocation staying immediate for the constant one.
+ */
 export async function revokeSession(sessionId: string): Promise<boolean> {
+  const row = await (prisma as any).userSession.findUnique({
+    where: { id: sessionId },
+    select: { sessionTokenHash: true },
+  })
   const r = await (prisma as any).userSession.updateMany({
     where: { id: sessionId, revokedAt: null },
     data: { revokedAt: new Date() },
   })
+  if (row?.sessionTokenHash) void dropCachedSessions([row.sessionTokenHash])
   return r.count > 0
 }
 
 /** Revoke the session identified by a raw token (logout). */
 export async function revokeSessionByToken(rawToken: string): Promise<boolean> {
+  const hash = hashToken(rawToken)
   const r = await (prisma as any).userSession.updateMany({
-    where: { sessionTokenHash: hashToken(rawToken), revokedAt: null },
+    where: { sessionTokenHash: hash, revokedAt: null },
     data: { revokedAt: new Date() },
   })
+  void dropCachedSessions([hash])
   return r.count > 0
 }
 
@@ -186,13 +218,34 @@ export async function revokeAllSessions(
   userId: string,
   exceptSessionId?: string,
 ): Promise<number> {
-  const r = await (prisma as any).userSession.updateMany({
-    where: {
-      userId,
-      revokedAt: null,
-      ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
-    },
-    data: { revokedAt: new Date() },
+  const where = {
+    userId,
+    revokedAt: null,
+    ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
+  }
+  // Hashes first — this is what keeps `deactivateUser`'s "instant lockout: kill every live
+  // session" literally true rather than true-within-a-TTL.
+  const rows = await (prisma as any).userSession.findMany({
+    where,
+    select: { sessionTokenHash: true },
   })
+  const r = await (prisma as any).userSession.updateMany({ where, data: { revokedAt: new Date() } })
+  void dropCachedSessions(rows.map((x: any) => x.sessionTokenHash).filter(Boolean))
   return r.count as number
+}
+
+/**
+ * Drop every cached session for a user WITHOUT revoking anything.
+ *
+ * For permission changes: `rbac.ts` keys its permission cache on `permissionsVersion`, so a role
+ * edit propagates immediately there — but the version is also carried inside the cached session,
+ * so that copy has to go too or the new permissions would not be seen until the TTL lapsed.
+ * Called from `bumpUserPermissionVersion`.
+ */
+export async function dropCachedSessionsForUser(userId: string): Promise<void> {
+  const rows = await (prisma as any).userSession.findMany({
+    where: { userId, revokedAt: null },
+    select: { sessionTokenHash: true },
+  })
+  await dropCachedSessions(rows.map((x: any) => x.sessionTokenHash).filter(Boolean))
 }

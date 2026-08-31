@@ -12,7 +12,7 @@
  */
 
 import prisma from '../db.js'
-import { revokeAllSessions } from '../lib/auth/session.js'
+import { revokeAllSessions, dropCachedSessionsForUser } from '../lib/auth/session.js'
 import { clearPermissionCache } from '../lib/auth/rbac.js'
 import {
   assertCanAssignRole,
@@ -67,6 +67,10 @@ async function isUserOwner(userId: string): Promise<boolean> {
 
 /** Bump a single user's permissionsVersion (invalidates their perm cache). */
 export async function bumpUserPermissionVersion(userId: string): Promise<void> {
+  // SC.1 — the cached session carries permissionsVersion and roleKeys, so it has to be dropped
+  // alongside the bump or a role change would not take effect until the cache TTL lapsed. This
+  // preserves the immediate propagation rbac.ts §3.5 is built around.
+  void dropCachedSessionsForUser(userId)
   await (prisma as any).userProfile.update({
     where: { id: userId },
     data: { permissionsVersion: { increment: 1 } },
