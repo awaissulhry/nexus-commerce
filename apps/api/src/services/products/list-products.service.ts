@@ -189,6 +189,31 @@ export const stockRollupCte = (ids: readonly string[]): Prisma.Sql => Prisma.sql
     GROUP BY own.id
   )`
 
+/**
+ * `stockRollupCte` in JavaScript — the per-ROW Available, folded from StockLevel rows already
+ * fetched for the page rather than a second round-trip.
+ *
+ * A row counts its OWN stock always, and a parent counts every variation's on top. Both halves
+ * matter: keying only by owner (which the FBA/FBM buckets do) reports 0 for a variation whose
+ * stock was folded into its parent, and counting only children reports 0 for a standalone product.
+ *
+ * Every variation, not the ten the page previews inline: the preview cap is a rendering decision,
+ * and a family's Available is the whole family.
+ */
+export function foldStockRollup(
+  stockRows: ReadonlyArray<{ productId: string; quantity: number }>,
+  childToParent: ReadonlyMap<string, string>,
+): Map<string, number> {
+  const out = new Map<string, number>()
+  const add = (id: string, qty: number) => out.set(id, (out.get(id) ?? 0) + qty)
+  for (const s of stockRows) {
+    add(s.productId, s.quantity)
+    const parentId = childToParent.get(s.productId)
+    if (parentId) add(parentId, s.quantity)
+  }
+  return out
+}
+
 /** Available per product id (self + variations), for a set of ids. */
 export async function stockRollup(ids: readonly string[]): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map()
@@ -963,6 +988,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
   const pageProductIds = sortedRawProducts.map((p) => p.id)
   const offersByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
   const stockByProduct = new Map<string, { fba: number; non: number }>()
+  /** Available per row: the product's own StockLevels plus every variation's. */
+  let rollupByProduct = new Map<string, number>()
   const salesByProduct = new Map<string, { units: number; revenueCents: number }>()
   let salesUnattributed: Array<{ channel: string; orders: number; units: number; revenueCents: number }> = []
   if (pageProductIds.length > 0) {
@@ -1014,6 +1041,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       else cur.non += s.quantity
       stockByProduct.set(ownerId, cur)
     }
+    rollupByProduct = foldStockRollup(stockRows, childToParent)
 
     // Sales roll up exactly like stock, and for the same reason: measured on this
     // database, ALL 859 ProductProfitDaily rows attach to a child and NONE to a parent, so
@@ -1186,7 +1214,12 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         name: p.name,
         brand: p.brand,
         basePrice: p.basePrice != null ? Number(p.basePrice) : null,
-        totalStock: p.totalStock,
+        // AVAILABLE is the ROLL-UP, never the stale column (see `stockRollupCte` above). Filters,
+        // sorting, the KPI counts and the group totals were moved onto it on 2026-08-28; the ROW's own
+        // field was left behind, so `totalStock` still answered 0 for a family holding hundreds.
+        // These buckets are the same StockLevel sum the CTE computes — self plus EVERY variation, not
+        // the ten the page previews — so the number agrees with the cell, the sort and the export.
+        totalStock: rollupByProduct.get(p.id) ?? 0,
         lowStockThreshold: p.lowStockThreshold,
         status: p.status,
         syncChannels: p.syncChannels,
@@ -1248,7 +1281,12 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       name: p.name,
       brand: p.brand,
       basePrice: Number(p.basePrice),
-      totalStock: p.totalStock,
+      // AVAILABLE is the ROLL-UP, never the stale column (see `stockRollupCte` above). Filters,
+      // sorting, the KPI counts and the group totals were moved onto it on 2026-08-28; the ROW's own
+      // field was left behind, so `totalStock` still answered 0 for a family holding hundreds.
+      // These buckets are the same StockLevel sum the CTE computes — self plus EVERY variation, not
+      // the ten the page previews — so the number agrees with the cell, the sort and the export.
+      totalStock: rollupByProduct.get(p.id) ?? 0,
       lowStockThreshold: p.lowStockThreshold,
       status: p.status,
       syncChannels: p.syncChannels,
