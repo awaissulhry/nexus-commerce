@@ -1,7 +1,7 @@
 {
   "note": "Direct DB calls per route file. This may only FALL. A file absent here is held at ZERO — new logic belongs in a service that the route calls. See the script header.",
   "updatedAt": "2026-08-31",
-  "total": 3493,
+  "total": 3491,
   "files": {
     "apps/api/src/routes/accounts.routes.ts": 19,
     "apps/api/src/routes/admin.ts": 19,
@@ -95,7 +95,7 @@
     "apps/api/src/routes/pricing-rules.routes.ts": 17,
     "apps/api/src/routes/pricing.routes.ts": 56,
     "apps/api/src/routes/product-certificates.routes.ts": 7,
-    "apps/api/src/routes/product-channel-data.routes.ts": 28,
+    "apps/api/src/routes/product-channel-data.routes.ts": 26,
     "apps/api/src/routes/product-images-crud.routes.ts": 47,
     "apps/api/src/routes/product-relations.routes.ts": 13,
     "apps/api/src/routes/product-seo.routes.ts": 6,
