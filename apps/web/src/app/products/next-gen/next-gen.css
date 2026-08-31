@@ -1,0 +1,114 @@
+/*
+ * LF.1 — layout for the local-first spike page.
+ *
+ * Tokens only, no literals — `check-css-hex-ratchet` counts raw hex per file and this route is
+ * new, so it starts at zero and stays there.
+ *
+ * The page is a flex column inside AppShell's `noRail` <main> (which is `flex-1 min-h-0
+ * overflow-hidden`), so the grid takes the remaining height via NexusGrid's `fill` rather than a
+ * fixed pixel height.
+ */
+
+.lf-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  padding: 20px 24px;
+  gap: 16px;
+  background: var(--nds-surface-canvas, var(--nds-grey-50));
+}
+
+.lf-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+}
+
+.lf-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--nds-text-strong);
+}
+
+.lf-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--nds-text-2);
+}
+
+.lf-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/*
+ * The stat strip. This is the page's actual output — the numbers that decide whether local-first
+ * earns its complexity — so it reads as data, not as a footnote.
+ */
+.lf-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  flex: none;
+}
+
+.lf-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 132px;
+  padding: 10px 14px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.lf-stats dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-3);
+}
+
+.lf-stats dd {
+  margin: 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text);
+}
+
+/* The local-query figure is the comparison against /products/next's round trip. */
+.lf-hero {
+  border-color: var(--nds-primary);
+}
+
+.lf-hero dd {
+  color: var(--nds-primary);
+}
+
+.lf-error {
+  flex: none;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--nds-danger);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-danger);
+  font-size: 13px;
+}
+
+.lf-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
