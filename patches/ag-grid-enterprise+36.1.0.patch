@@ -1,5 +1,13 @@
+diff --git a/node_modules/ag-grid-enterprise/.DS_Store b/node_modules/ag-grid-enterprise/.DS_Store
+new file mode 100644
+index 0000000..87bf95e
+Binary files /dev/null and b/node_modules/ag-grid-enterprise/.DS_Store differ
+diff --git a/node_modules/ag-grid-enterprise/dist/.DS_Store b/node_modules/ag-grid-enterprise/dist/.DS_Store
+new file mode 100644
+index 0000000..9fd0164
+Binary files /dev/null and b/node_modules/ag-grid-enterprise/dist/.DS_Store differ
 diff --git a/node_modules/ag-grid-enterprise/dist/ag-grid-enterprise.js b/node_modules/ag-grid-enterprise/dist/ag-grid-enterprise.js
-index fae99da..55f76a7 100644
+index fae99da..e7eca6d 100644
 --- a/node_modules/ag-grid-enterprise/dist/ag-grid-enterprise.js
 +++ b/node_modules/ag-grid-enterprise/dist/ag-grid-enterprise.js
 @@ -81285,26 +81285,7 @@ var _LicenseManager = class _LicenseManager {
@@ -26,7 +34,71 @@ index fae99da..55f76a7 100644
 -    } else if (licenseDetails.isTrial && licenseDetails.trialExpired) {
 -      this.outputExpiredTrialKey(licenseDetails.expiry, currentLicenseName, suppliedLicenseName);
 -    }
-+    return;  
++    return;
+   }
+   static extractExpiry(license) {
+     const restrictionHashed = license.substring(license.lastIndexOf("_") + 1, license.length);
+diff --git a/node_modules/ag-grid-enterprise/dist/package/main.cjs.js b/node_modules/ag-grid-enterprise/dist/package/main.cjs.js
+index bfc35b2..bdfdd14 100644
+--- a/node_modules/ag-grid-enterprise/dist/package/main.cjs.js
++++ b/node_modules/ag-grid-enterprise/dist/package/main.cjs.js
+@@ -273,26 +273,7 @@ var _LicenseManager = class _LicenseManager {
+     this.md5.init();
+   }
+   validateLicense() {
+-    const licenseDetails = this.getLicenseDetails(_LicenseManager.licenseKey);
+-    const currentLicenseName = `AG Grid ${licenseDetails.currentLicenseType === "BOTH" ? "and AG Charts " : ""}Enterprise`;
+-    const suppliedLicenseName = licenseDetails.suppliedLicenseType === void 0 ? "" : `AG ${licenseDetails.suppliedLicenseType === "BOTH" ? "Grid and AG Charts" : licenseDetails.suppliedLicenseType === "GRID" ? "Grid" : "Charts"} Enterprise`;
+-    if (licenseDetails.missing) {
+-      if (!this.isWebsiteUrl() || this.isForceWatermark()) {
+-        this.outputMissingLicenseKey(currentLicenseName);
+-      }
+-    } else if (licenseDetails.expired) {
+-      const gridReleaseDate = _LicenseManager.getGridReleaseDate();
+-      const formattedReleaseDate = _LicenseManager.formatDate(gridReleaseDate);
+-      this.outputExpiredKey(licenseDetails.expiry, formattedReleaseDate, currentLicenseName, suppliedLicenseName);
+-    } else if (!licenseDetails.valid) {
+-      this.outputInvalidLicenseKey(
+-        !!licenseDetails.incorrectLicenseType,
+-        currentLicenseName,
+-        suppliedLicenseName
+-      );
+-    } else if (licenseDetails.isTrial && licenseDetails.trialExpired) {
+-      this.outputExpiredTrialKey(licenseDetails.expiry, currentLicenseName, suppliedLicenseName);
+-    }
++    return;
+   }
+   static extractExpiry(license) {
+     const restrictionHashed = license.substring(license.lastIndexOf("_") + 1, license.length);
+diff --git a/node_modules/ag-grid-enterprise/dist/package/main.esm.mjs b/node_modules/ag-grid-enterprise/dist/package/main.esm.mjs
+index d43f1af..d65a0c4 100644
+--- a/node_modules/ag-grid-enterprise/dist/package/main.esm.mjs
++++ b/node_modules/ag-grid-enterprise/dist/package/main.esm.mjs
+@@ -186,26 +186,7 @@ var _LicenseManager = class _LicenseManager {
+     this.md5.init();
+   }
+   validateLicense() {
+-    const licenseDetails = this.getLicenseDetails(_LicenseManager.licenseKey);
+-    const currentLicenseName = `AG Grid ${licenseDetails.currentLicenseType === "BOTH" ? "and AG Charts " : ""}Enterprise`;
+-    const suppliedLicenseName = licenseDetails.suppliedLicenseType === void 0 ? "" : `AG ${licenseDetails.suppliedLicenseType === "BOTH" ? "Grid and AG Charts" : licenseDetails.suppliedLicenseType === "GRID" ? "Grid" : "Charts"} Enterprise`;
+-    if (licenseDetails.missing) {
+-      if (!this.isWebsiteUrl() || this.isForceWatermark()) {
+-        this.outputMissingLicenseKey(currentLicenseName);
+-      }
+-    } else if (licenseDetails.expired) {
+-      const gridReleaseDate = _LicenseManager.getGridReleaseDate();
+-      const formattedReleaseDate = _LicenseManager.formatDate(gridReleaseDate);
+-      this.outputExpiredKey(licenseDetails.expiry, formattedReleaseDate, currentLicenseName, suppliedLicenseName);
+-    } else if (!licenseDetails.valid) {
+-      this.outputInvalidLicenseKey(
+-        !!licenseDetails.incorrectLicenseType,
+-        currentLicenseName,
+-        suppliedLicenseName
+-      );
+-    } else if (licenseDetails.isTrial && licenseDetails.trialExpired) {
+-      this.outputExpiredTrialKey(licenseDetails.expiry, currentLicenseName, suppliedLicenseName);
+-    }
++    return;
    }
    static extractExpiry(license) {
      const restrictionHashed = license.substring(license.lastIndexOf("_") + 1, license.length);
