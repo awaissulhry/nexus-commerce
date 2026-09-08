@@ -397,9 +397,6 @@ function ConnectionCard({
     now,
   )
   const refreshExpiry = timestampText(connection.refreshTokenExpiresAt, 'expiry', now)
-  const identityEntries = Object.entries(connection.identity ?? {}).filter(
-    ([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
-  )
 
   const items: KeyValueItem[] = [
     {
@@ -410,7 +407,8 @@ function ConnectionCard({
         </Pill>
       ),
     },
-    { label: 'Managed by', value: MANAGED_BY[connection.isManagedBy] },
+    { label: 'Managed by', value: connection.connectMode === 'self_authorization' && connection.isManagedBy === 'oauth' ? 'Private app authorization' : MANAGED_BY[connection.isManagedBy] },
+    { label: 'Account', value: identityLine(connection) },
     {
       label: 'Region',
       value: connection.region ? <Tag>{connection.region}</Tag> : <span style={muted}>—</span>,
@@ -441,7 +439,7 @@ function ConnectionCard({
       label: 'Last sync',
       value: (
         <span style={row('var(--nds-space-6)')}>
-          {connection.lastSyncStatus && (
+          {connection.lastSyncAt && connection.lastSyncStatus && (
             <Pill tone={SYNC_TONE[connection.lastSyncStatus] ?? 'neutral'}>
               {connection.lastSyncStatus}
             </Pill>
@@ -449,7 +447,7 @@ function ConnectionCard({
           <When cell={timestampText(connection.lastSyncAt, 'event', now)} />
         </span>
       ),
-      hint: connection.lastSyncError ?? undefined,
+      hint: connection.lastSyncAt ? connection.lastSyncError ?? undefined : undefined,
     },
     {
       label: 'Connected since',
@@ -468,21 +466,6 @@ function ConnectionCard({
       ) : undefined,
     },
   ]
-  if (identityEntries.length > 0) {
-    items.push({
-      label: 'Identity',
-      value: (
-        <span style={stack('var(--nds-space-2)')}>
-          {identityEntries.map(([k, v]) => (
-            <span key={k}>
-              <span style={muted}>{k}</span> {String(v)}
-            </span>
-          ))}
-        </span>
-      ),
-    })
-  }
-
   return (
     <Card
       header="Connection"

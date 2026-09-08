@@ -15,10 +15,12 @@
 
 - GPT-6-Astra independently reviewed the connection implementation and the integrated naming changes. Confirmed findings were fixed and tested.
 - 298 focused API tests passed across connection lifecycle, provider adapters, import, identity placement, tokens, callback security, shipping ownership and account names.
-- 119 Web tests passed; 68 mirrored Factory account-model tests passed with the Web test configuration.
+- 125 Web tests passed; 68 mirrored Factory account-model tests passed with the Web test configuration.
 - API production build and API/Web TypeScript checks passed.
 - Web token freshness and token guard passed.
 - Browser checks: 390px light/dark account cards, legacy-ID fallback, name-only scope chips, switcher Escape, rename Escape cancellation and Enter save. Production account rename to XAVIA RACING confirmed.
+- Clean API and Vercel production builds succeeded for the managed-lifecycle release. Live heartbeats passed for Amazon Seller (253ms), Amazon Ads (127ms), xaviaracing (562ms), and motovento (474ms). Private verification succeeded; expiry changed from the synthetic anniversary to not recorded. Startup logs confirmed environment synthesis was skipped.
+- A final live detail-page check exposed a legacy raw identity dump; the follow-up replaces it with the same account name, hides account keys in ledger summaries, and adds regression coverage. Private sign-in wording and an unmeasured Last sync status were corrected at the same time.
 
 ## Explicit limits and unrelated checks
 

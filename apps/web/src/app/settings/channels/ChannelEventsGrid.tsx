@@ -13,6 +13,8 @@ import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-syste
 import { Pill, Tag } from '@/design-system/primitives'
 import { EmptyState } from '@/design-system/components'
 import { relativeTime } from './channels-data'
+import { summariseDetail } from './channel-event-details'
+export { summariseDetail } from './channel-event-details'
 
 export interface LedgerRow {
   id: string
@@ -30,18 +32,6 @@ export interface InboundRow {
   processedAt: string | null
   error: string | null
   createdAt: string
-}
-
-/** `actorKind` has its own column; repeating it in the detail was the same fact twice. */
-const DETAIL_OMIT = new Set(['actorKind'])
-
-export function summariseDetail(detail: Record<string, unknown> | null): string {
-  if (!detail) return ''
-  return Object.entries(detail)
-    .filter(([k, v]) => !DETAIL_OMIT.has(k) && v !== null && v !== undefined && v !== '')
-    .slice(0, 5)
-    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(' · ')
 }
 
 /**

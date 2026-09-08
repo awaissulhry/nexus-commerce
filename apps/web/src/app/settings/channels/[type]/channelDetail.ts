@@ -7,6 +7,7 @@
  */
 
 import { getBackendUrl } from '@/lib/backend-url'
+import { accountDisplayName } from '@/design-system/lib'
 
 // ─── Contract ────────────────────────────────────────────────────────────
 
@@ -191,9 +192,9 @@ export function showLastError(connection: ChannelConnection): boolean {
 
 /** The line under the title: who this grant is, or why there is nobody. */
 export function identityLine(connection: ChannelConnection): string {
+  const label = connection.sellerName ?? connection.storeName
+  if (label) return accountDisplayName({ channel: connection.channel, label, id: connection.id })
   return (
-    connection.sellerName ??
-    connection.storeName ??
     (connection.isManagedBy === 'env'
       ? 'Set by environment'
       : connection.isManagedBy === 'pending'

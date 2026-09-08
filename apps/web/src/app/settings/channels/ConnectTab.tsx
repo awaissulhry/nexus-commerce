@@ -114,7 +114,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
               <dl className="nds-connect-facts">
                 <div>
                   <dt>Signs in with</dt>
-                  <dd>{c.authMode.replace(/_/g, ' ')}</dd>
+                  <dd>{isSelfAuthorizedAmazon ? 'Private app authorization' : c.authMode.replace(/_/g, ' ')}</dd>
                 </div>
                 <div>
                   <dt>Permissions</dt>
