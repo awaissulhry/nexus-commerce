@@ -8,10 +8,13 @@ const row = {
   externalAccountId: 'SELLERONE',
 }
 const upsert = vi.fn(async () => ({}))
+const deleteMany = vi.fn(async () => ({ count: 0 }))
 vi.mock('../../../../db.js', () => ({
   default: {
     channelConnection: { findUnique: vi.fn(async () => row) },
-    connectionScope: { upsert },
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn({
+      connectionScope: { deleteMany, upsert },
+    })),
   },
 }))
 vi.mock('../../apps.service.js', () => ({
@@ -56,8 +59,11 @@ describe('private Amazon authorization import', () => {
       'adopt',
     )
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { connectionId_kind_externalId: { connectionId: row.id, kind: 'marketplace', externalId: 'IT' } },
+      where: { connectionId_kind_externalId: { connectionId: row.id, kind: 'marketplace', externalId: 'MARKETONE' } },
     }))
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { connectionId: row.id, kind: 'marketplace', externalId: { notIn: ['MARKETONE'] } },
+    })
   })
 
   it('refuses a token configured for a different seller before calling Amazon', async () => {

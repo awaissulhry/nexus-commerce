@@ -111,40 +111,53 @@ export async function importAmazonEnvironmentAuthorization(input: {
     )
   }
 
-  for (const entry of marketplaces) {
-    const externalId = entry.marketplace?.countryCode ?? entry.marketplace?.id
-    if (!externalId) continue
-    await prisma.connectionScope.upsert({
+  const verifiedMarketplaces = marketplaces.filter((entry) => entry.marketplace?.id)
+  const marketplaceIds = verifiedMarketplaces.map((entry) => entry.marketplace.id as string)
+  await prisma.$transaction(async (tx) => {
+    // Environment migration rows used country codes. Replace that snapshot as
+    // one unit because Amazon marketplace IDs are the unique identifiers (one
+    // country can contain more than one marketplace participation).
+    await tx.connectionScope.deleteMany({
       where: {
-        connectionId_kind_externalId: {
+        connectionId: row.id,
+        kind: 'marketplace',
+        externalId: { notIn: marketplaceIds },
+      },
+    })
+    for (const entry of verifiedMarketplaces) {
+      const externalId = entry.marketplace.id as string
+      await tx.connectionScope.upsert({
+        where: {
+          connectionId_kind_externalId: {
+            connectionId: row.id,
+            kind: 'marketplace',
+            externalId,
+          },
+        },
+        create: {
           connectionId: row.id,
           kind: 'marketplace',
           externalId,
+          label: entry.marketplace?.name ?? null,
+          region,
+          isActive: !!entry.participation?.isParticipating,
+          metadata: {
+            countryCode: entry.marketplace?.countryCode ?? null,
+            currency: entry.marketplace?.defaultCurrencyCode ?? null,
+          } as Prisma.InputJsonValue,
         },
-      },
-      create: {
-        connectionId: row.id,
-        kind: 'marketplace',
-        externalId,
-        label: entry.marketplace?.name ?? null,
-        region,
-        isActive: !!entry.participation?.isParticipating,
-        metadata: {
-          marketplaceId: entry.marketplace?.id ?? null,
-          currency: entry.marketplace?.defaultCurrencyCode ?? null,
-        } as Prisma.InputJsonValue,
-      },
-      update: {
-        label: entry.marketplace?.name ?? null,
-        region,
-        isActive: !!entry.participation?.isParticipating,
-        metadata: {
-          marketplaceId: entry.marketplace?.id ?? null,
-          currency: entry.marketplace?.defaultCurrencyCode ?? null,
-        } as Prisma.InputJsonValue,
-      },
-    })
-  }
+        update: {
+          label: entry.marketplace?.name ?? null,
+          region,
+          isActive: !!entry.participation?.isParticipating,
+          metadata: {
+            countryCode: entry.marketplace?.countryCode ?? null,
+            currency: entry.marketplace?.defaultCurrencyCode ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      })
+    }
+  })
 
   const placement = row.managedBy === 'oauth' ? 'reconsent' : 'adopt'
   await storeGrant(

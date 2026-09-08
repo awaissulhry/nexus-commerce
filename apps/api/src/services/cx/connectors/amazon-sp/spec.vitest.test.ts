@@ -58,11 +58,11 @@ describe('Amazon account verification', () => {
   it('discovers marketplaces from this token only', async () => {
     expect(await amazonSpSpec.discoverScopes!(handle)).toEqual([{
       kind: 'marketplace',
-      externalId: 'IT',
+      externalId: 'MARKETONE',
       label: 'Test market',
       region: 'EU',
       isActive: true,
-      metadata: { marketplaceId: 'MARKETONE', currency: 'EUR' },
+      metadata: { countryCode: 'IT', currency: 'EUR' },
     }])
   })
 

@@ -58,11 +58,11 @@ async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
   const rows = await amazonParticipations(handle)
   return rows.map((row) => ({
     kind: 'marketplace' as const,
-    externalId: row.marketplace.countryCode ?? row.marketplace.id,
+    externalId: row.marketplace.id,
     label: row.marketplace.name,
     region: handle.region ?? undefined,
     isActive: !!row.participation?.isParticipating,
-    metadata: { marketplaceId: row.marketplace.id, currency: row.marketplace.defaultCurrencyCode },
+    metadata: { countryCode: row.marketplace.countryCode, currency: row.marketplace.defaultCurrencyCode },
   }))
 }
 
