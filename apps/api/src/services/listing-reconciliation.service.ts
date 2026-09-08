@@ -268,8 +268,8 @@ export async function runAmazonReconciliation(
   logger.info('[recon] Starting Amazon reconciliation', { marketplace, runId })
 
   const amazonService = new AmazonService()
-  if (!amazonService.isConfigured()) {
-    throw new Error('Amazon SP-API credentials not configured — check AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN')
+  if (!await amazonService.isConfigured()) {
+    throw new Error('Connect or verify your Amazon Seller account in Settings → Channels.')
   }
 
   // Resolve the SP-API marketplace ID from the 2-letter code

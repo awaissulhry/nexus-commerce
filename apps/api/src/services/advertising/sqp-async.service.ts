@@ -154,7 +154,7 @@ export async function requestSqpReports(args: {
   const period = args.period ?? 'WEEK'
   const startDateOnly = new Date(args.start); startDateOnly.setUTCHours(0, 0, 0, 0)
   const endDateOnly = new Date(args.end); endDateOnly.setUTCHours(0, 0, 0, 0)
-  const sp = getSpApiClient()
+  const sp = await getSpApiClient()
 
   // Don't re-request something already outstanding for the same (asin, window) — the report would
   // queue behind the one we are already waiting for and make the drain strictly worse.
@@ -254,7 +254,7 @@ export interface SqpCollectResult {
  */
 export async function collectSqpReports(args: { limit?: number; paceMs?: number } = {}): Promise<SqpCollectResult> {
   const limit = args.limit ?? 60
-  const sp = getSpApiClient()
+  const sp = await getSpApiClient()
   const now = Date.now()
 
   const outstanding = await prisma.sqpReportRequest.findMany({

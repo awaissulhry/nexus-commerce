@@ -23,7 +23,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runOrdersPoll(): Promise<void> {
-  if (!amazonOrdersService.isConfigured()) {
+  if (!await amazonOrdersService.isConfigured()) {
     logger.warn('amazon-orders cron: Amazon SP-API not configured — skipping')
     return
   }

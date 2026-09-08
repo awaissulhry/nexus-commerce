@@ -43,8 +43,8 @@ interface SyncSummary {
 }
 
 export class AmazonInventoryService {
-  isConfigured(): boolean {
-    return amazonService.isConfigured()
+  async isConfigured(): Promise<boolean> {
+    return await amazonService.isConfigured()
   }
 
   /** Full FBA sweep — call this from the 15-min cron. */

@@ -62,7 +62,7 @@ export async function restoreFbaListings(options?: {
 }): Promise<FbaRestoreSummary> {
   const { skus, marketplaces, dryRun = true, limit } = options ?? {}
 
-  const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+  const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
   if (!sellerId) throw new Error('AMAZON_SELLER_ID not configured')
 
   const listings = await prisma.channelListing.findMany({

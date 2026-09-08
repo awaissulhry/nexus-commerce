@@ -103,6 +103,11 @@ describe('permissions line + Reconnect label — drift 0 / N, per status, env vs
   it('offers no Reconnect when the host gave no handler', () => {
     expect(rowActions({ isPrimary: true, managedBy: 'oauth', scopeDrift: ['a'] }, false).reconnect).toBeNull()
   })
+  it('names private verification honestly and holds unavailable connectors', () => {
+    const account = { isPrimary: true, managedBy: 'oauth' }
+    expect(rowActions(account, true, 'Verify access').reconnect).toBe('Verify access')
+    expect(rowActions(account, true, null).reconnect).toBeNull()
+  })
 
   it('reconnectLabel names the shortfall', () => {
     expect(reconnectLabel(undefined)).toBe('Reconnect')
@@ -157,7 +162,9 @@ describe('scope chips', () => {
 
   it('labels a chip with the channel label, else the raw id — never an invented name', () => {
     expect(scopeChipLabel({ kind: 'marketplace', externalId: 'A1PA6795UKMFR9', label: 'Amazon.de' })).toBe('Amazon.de')
-    expect(scopeChipLabel({ kind: 'marketplace', externalId: 'APJ6JRA9NG5V4', label: null })).toBe('APJ6JRA9NG5V4')
+    expect(scopeChipLabel({ kind: 'marketplace', externalId: 'APJ6JRA9NG5V4', label: null })).toBe('Marketplace name unavailable')
+    expect(scopeChipLabel({ kind: 'profile', externalId: '123456789', label: '123456789' })).toBe('Profile name unavailable')
+    expect(scopeChipLabel({ kind: 'marketplace', externalId: 'APJ6JRA9NG5V4', label: ' APJ6JRA9NG5V4 ' })).toBe('Marketplace name unavailable')
     expect(scopeChipLabel({ kind: 'marketplace', externalId: 'US', label: 'Amazon US', isActive: false })).toBe('Amazon US · inactive')
   })
 

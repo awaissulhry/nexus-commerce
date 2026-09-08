@@ -23,6 +23,7 @@ import { Stethoscope, Play, ChevronDown, ChevronRight, CheckCircle2, XCircle, Co
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, SegmentedControl } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
+import { accountDisplayName } from '@/design-system/lib'
 
 interface ProfileRow { profileId: string; marketplace: string; region: string; accountLabel: string | null; mode: string; isActive: boolean }
 interface ProbeResult {
@@ -161,7 +162,7 @@ export function ProbePanel() {
                   onChange={setSelected}
                   options={profiles.map((p) => ({
                     value: p.profileId,
-                    label: <span title={`${p.accountLabel ?? p.profileId} · ${p.region} · ${p.mode}${p.isActive ? '' : ' · inactive'}`}>{p.marketplace}</span>,
+                    label: <span title={`${accountDisplayName({ channel: 'AMAZON_ADS', label: p.accountLabel ?? '' })} · ${p.region} · ${p.mode}${p.isActive ? '' : ' · inactive'}`}>{p.marketplace}</span>,
                   }))}
                 />
                 <Button variant="primary" size="sm" disabled={running || !selected} onClick={() => void run()}>
@@ -179,7 +180,7 @@ export function ProbePanel() {
               {report && (
                 <>
                   <div className="hl-pb-meta">
-                    <span>Profile <b>{report.profileId}</b></span>
+                    <span>Account <b>{accountDisplayName({ channel: 'AMAZON_ADS', label: profiles.find((p) => p.profileId === report.profileId)?.accountLabel ?? '' })}</b></span>
                     <span>Market <b>{report.marketplace ?? '—'}</b></span>
                     <span>Region <b>{report.region}</b></span>
                     <span className="mono">{report.baseUrl}</span>

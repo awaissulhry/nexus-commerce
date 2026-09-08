@@ -18,50 +18,17 @@
  * the full body in `rawBody` for future per-line reconciliation features.
  */
 
-import { SellingPartner } from 'amazon-sp-api'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const SETTLEMENT_REPORT_TYPE = 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2'
 
-let cachedClient: SellingPartner | null = null
 
-function getClient(): SellingPartner {
-  if (cachedClient) return cachedClient
-
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      'amazon-settlements: missing required LWA env vars ' +
-        '(AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN)',
-    )
-  }
-
-  const region = (process.env.AMAZON_REGION ?? 'eu') as 'eu' | 'na' | 'fe'
-
-  cachedClient = new SellingPartner({
-    region,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-    },
-    options: {
-      auto_request_tokens: true,
-      auto_request_throttled: true,
-    },
-  } as any)
-
-  instrumentSellingPartner(cachedClient as never, {
-    channel: 'AMAZON',
-    triggeredBy: 'cron',
-  })
-
-  return cachedClient
+async function getClient(): Promise<any> {
+  const client = await (await import('../lib/amazon-sp-client.js')).getAmazonSpClient()
+  instrumentSellingPartner(client as never, { channel: 'AMAZON' })
+  return client
 }
 
 export interface ReportListItem {
@@ -86,7 +53,7 @@ export async function listSettlementReports(opts: {
   to: Date
   maxReports?: number
 }): Promise<ReportListItem[]> {
-  const sp = getClient()
+  const sp = await getClient()
   const max = opts.maxReports ?? 500
   const results: ReportListItem[] = []
   let nextToken: string | undefined
@@ -124,7 +91,7 @@ export async function listSettlementReports(opts: {
  * both gzip + plain responses transparently.
  */
 export async function downloadReportBody(reportDocumentId: string): Promise<string> {
-  const sp = getClient()
+  const sp = await getClient()
   const docRes: any = await (sp as any).callAPI({
     operation: 'getReportDocument',
     endpoint: 'reports',

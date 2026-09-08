@@ -117,7 +117,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const sku = String(request.query.sku ?? '').trim()
       const mkt = String(request.query.marketplace ?? 'IT').toUpperCase()
       if (!sku) return reply.code(400).send({ error: 'sku query param required' })
-      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
       if (!sellerId) return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
       const marketplaceId = AMZ_MP_ID[mkt] ?? AMZ_MP_ID.IT
       const r = await amazonSpApiClient.getListingsItem({

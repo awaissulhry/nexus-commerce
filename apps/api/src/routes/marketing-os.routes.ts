@@ -151,7 +151,10 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
       reply.status(404)
       return { error: 'Campaign not found' }
     }
-    return c
+    const profile = c.amazonAds?.profileId ? await prisma.amazonAdsConnection.findUnique({
+      where: { profileId: c.amazonAds.profileId }, select: { accountLabel: true },
+    }) : null
+    return { ...c, amazonAds: c.amazonAds ? { ...c.amazonAds, accountLabel: profile?.accountLabel ?? null } : null }
   })
 
   // ── Unified analytics (P14) ───────────────────────────────────────────

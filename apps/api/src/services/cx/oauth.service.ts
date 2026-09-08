@@ -305,6 +305,7 @@ export async function complete(input: {
       channelLabel: spec.displayName,
       identity,
       targetConnectionId: session.targetConnectionId,
+      region: session.region,
     })
   } catch (err) {
     if (err instanceof IdentityRefusal) {

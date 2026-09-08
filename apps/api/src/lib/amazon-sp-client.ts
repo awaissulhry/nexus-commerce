@@ -10,26 +10,29 @@ import type { ConnectionRow } from '../services/connection-resolver.service.js'
 
 type AmazonAccount = Pick<ConnectionRow, 'id' | 'channelType' | 'externalAccountId' | 'region' | 'managedBy' | 'isActive' | 'authStatus' | 'isPrimary'>
 
-export async function amazonAccount(accountId?: string): Promise<AmazonAccount | null> {
+export async function amazonAccount(accountId?: string): Promise<AmazonAccount> {
   const { chooseConnection, listActiveConnections, resolveConnection } = await import('../services/connection-resolver.service.js')
   let account: ConnectionRow
   if (accountId) {
     account = await resolveConnection({ accountId })
   } else {
     const candidates = await listActiveConnections('AMAZON')
-    if (candidates.length === 0) return null
-    const selected = chooseConnection(candidates, { channel: 'AMAZON', wantPrimary: true })
+    if (candidates.length === 0) throw new Error('Connect an Amazon seller account in Channels before using Amazon.')
+    const selected = chooseConnection(candidates, { channel: 'AMAZON' })
     account = candidates.find((candidate) => candidate.id === selected.id)!
   }
   if (account.channelType !== 'AMAZON' || !account.isActive || !account.externalAccountId || ['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) {
     throw new Error('Reconnect the selected Amazon seller account.')
+  }
+  if (account.managedBy === 'env' && account.externalAccountId !== (process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID)) {
+    throw new Error('The configured Amazon authorization belongs to a different seller account.')
   }
   return account
 }
 
 export async function getAmazonSellerId(accountId?: string): Promise<string> {
   const account = await amazonAccount(accountId)
-  return account?.externalAccountId ?? process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+  return account.externalAccountId!
 }
 
 export async function amazonCredsConfigured(): Promise<boolean> {
@@ -49,6 +52,8 @@ export async function getAmazonAccessToken(accountId?: string): Promise<string> 
   if (account?.managedBy === 'oauth') {
     return (await import('../services/cx/token.service.js')).getAccessToken(account.id)
   }
+
+  if (account.managedBy !== 'env') throw new Error('Reconnect the selected Amazon seller account.')
 
   const refreshToken = process.env.AMAZON_REFRESH_TOKEN
   if (!refreshToken) throw new Error('Reconnect the Amazon account to configure its credentials.')
@@ -86,18 +91,38 @@ export async function getAmazonRegion(accountId?: string): Promise<'eu' | 'na' |
   throw new Error('Choose a supported Amazon region.')
 }
 
-export async function getAmazonSpClient(accountId?: string): Promise<any> {
+export async function getAmazonSpClient(
+  accountId?: string,
+  options: { auto_request_throttled?: boolean } = {},
+): Promise<any> {
   const account = await amazonAccount(accountId)
-  const token = await getAmazonAccessToken(account?.id)
   const app = await (await import('../services/cx/apps.service.js')).getChannelApp('AMAZON_SP')
   const { SellingPartner } = await import('amazon-sp-api')
-  return new (SellingPartner as any)({
-    region: await getAmazonRegion(account?.id),
-    access_token: token,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: app.clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret,
-    },
-    options: { auto_request_tokens: false, auto_request_throttled: true },
-  })
+  const createClient = async () => new (SellingPartner as any)({
+      region: await getAmazonRegion(account.id),
+      access_token: await getAmazonAccessToken(account.id),
+      credentials: {
+        SELLING_PARTNER_APP_CLIENT_ID: app.clientId,
+        SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret,
+      },
+      options: { auto_request_tokens: false, auto_request_throttled: true, ...options },
+    })
+  const client = await createClient()
+  // Long-running reports and cached consumers must respect disconnects and
+  // refreshes on every request, not just when their SDK instance was created.
+  client.callAPI = async (...args: unknown[]) => {
+    const current = await createClient()
+    return current.callAPI(...args)
+  }
+  // Document uploads/downloads use presigned URLs and bypass callAPI. They still
+  // belong to this account and must stop when its authorization is disconnected.
+  for (const method of ['download', 'upload'] as const) {
+    if (typeof client[method] !== 'function') continue
+    const original = client[method].bind(client)
+    client[method] = async (...args: unknown[]) => {
+      await amazonAccount(account.id)
+      return original(...args)
+    }
+  }
+  return client
 }

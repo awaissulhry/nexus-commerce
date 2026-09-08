@@ -42,7 +42,7 @@ function isFbmChannel(ch: string | null | undefined): boolean {
 
 export async function runFbaDriftDetector(): Promise<void> {
   try {
-    if (!amazonService.isConfigured()) {
+    if (!await amazonService.isConfigured()) {
       logger.warn('fba-drift-detector: Amazon SP-API not configured — skipping')
       return
     }

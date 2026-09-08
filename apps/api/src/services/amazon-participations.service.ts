@@ -51,27 +51,7 @@ export interface ParticipationRefreshResult {
 }
 
 async function getLwaAccessToken(): Promise<string> {
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('LWA credentials missing (need AMAZON_LWA_CLIENT_ID + AMAZON_LWA_CLIENT_SECRET + AMAZON_REFRESH_TOKEN)')
-  }
-  const res = await fetch('https://api.amazon.com/auth/o2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }).toString(),
-  })
-  if (!res.ok) {
-    throw new Error(`LWA token exchange failed: ${res.status} ${await res.text()}`)
-  }
-  const data = (await res.json()) as { access_token: string }
-  return data.access_token
+  return (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
 }
 
 function deriveStatus(p: SpapiParticipation): ParticipationStatus {
@@ -84,7 +64,7 @@ function deriveStatus(p: SpapiParticipation): ParticipationStatus {
 export async function refreshAmazonParticipations(): Promise<ParticipationRefreshResult> {
   const t0 = Date.now()
   const warnings: string[] = []
-  const region = process.env.AMAZON_REGION ?? 'eu'
+  const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
   const host = `sellingpartnerapi-${region}.amazon.com`
 
   const accessToken = await getLwaAccessToken()

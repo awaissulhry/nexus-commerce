@@ -21,6 +21,7 @@ export type AuthStatus =
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
 export interface ChannelConnection {
+  connectMode?: 'website_oauth' | 'self_authorization'
   id: string
   channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
   isActive: boolean

@@ -36,10 +36,10 @@ describe('STATUS_LABEL', () => {
 })
 
 describe('channelName', () => {
-  it('names the channels the catalogue and accounts use, and echoes unknown keys', () => {
+  it('names known channels without exposing unknown technical keys', () => {
     expect(channelName('EBAY')).toBe('eBay')
     expect(channelName('AMAZON')).toBe('Amazon')
     expect(channelName('AMAZON_ADS')).toBe('Amazon Ads')
-    expect(channelName('KAUFLAND')).toBe('KAUFLAND')
+    expect(channelName('KAUFLAND')).toBe('Channel')
   })
 })

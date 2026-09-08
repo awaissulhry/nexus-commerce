@@ -13,6 +13,7 @@ import { Card, Banner, Listbox } from '@/design-system/components'
 import { Button, Tag, Pill, Skeleton } from '@/design-system/primitives'
 import { type AccountRow, type AdsConnection, type CatalogueChannel } from './channels-data'
 import { getBackendUrl } from '@/lib/backend-url'
+import { accountDisplayName } from '@/design-system/lib'
 
 const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY']
 
@@ -23,6 +24,7 @@ const HELD_REASON: Record<string, string> = {
 }
 
 function lifetimeLine(c: CatalogueChannel): string | null {
+  if (c.connectMode === 'self_authorization') return 'Amazon does not report an expiry for this private authorization.'
   if (c.rotatesRefreshToken) return 'Sign-in renews itself on every refresh.'
   if (c.refreshTokenLifetimeSec) {
     const months = Math.round(c.refreshTokenLifetimeSec / (30 * 86_400))
@@ -149,7 +151,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 <div className="nds-connect-chips">
                   {adsItems.map((i) => (
                     <Tag key={i.id} tone={i.tokenExpiryStatus === 'expired' ? 'danger' : i.mode === 'live' || i.mode === 'production' ? 'success' : 'neutral'}>
-                      {i.accountLabel ?? 'Profile'} · {i.marketplace} · {i.mode}
+                      {accountDisplayName({ channel: 'AMAZON_ADS', label: i.accountLabel ?? '' })} · {i.marketplace} · {i.mode}
                     </Tag>
                   ))}
                 </div>

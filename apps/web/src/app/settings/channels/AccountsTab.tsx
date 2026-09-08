@@ -10,6 +10,7 @@ import { AccountsPanel } from '@/design-system/components'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { CatalogueChannel } from './channels-data'
+import { reconnectLabel } from '@/design-system/lib/accounts-panel'
 
 export interface AccountsTabProps {
   catalogue: CatalogueChannel[] | null
@@ -33,6 +34,12 @@ export function AccountsTab({ catalogue, reloadSignal, onStart }: AccountsTabPro
     <AccountsPanel
       apiBase={getBackendUrl()}
       onConnect={onConnect}
+      reconnectLabelForAccount={(a) => {
+        const entry = catalogue?.find((c) => c.channelType === a.channel && c.available)
+        if (!entry) return null
+        if (entry.connectMode === 'self_authorization') return a.managedBy === 'env' ? 'Import authorization' : 'Verify access'
+        return a.managedBy === 'env' ? 'Replace environment credentials' : reconnectLabel(a.scopeDrift, a.grantedScopes)
+      }}
       onReconnect={(a) => {
         const entry = (catalogue ?? []).find((c) => c.channelType === a.channel && c.available)
         if (entry) onStart(entry.key, { intent: 'reconnect', targetConnectionId: a.id, region: a.region })

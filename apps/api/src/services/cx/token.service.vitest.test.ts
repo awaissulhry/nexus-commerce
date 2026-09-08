@@ -32,6 +32,16 @@ function pick(row: Row, select?: Record<string, boolean>): Row {
 }
 
 const prismaMock = {
+  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<void>) => {
+    const snapshot = structuredClone(rows)
+    try {
+      await fn(prismaMock)
+    } catch (error) {
+      rows.clear()
+      for (const [id, row] of snapshot) rows.set(id, row)
+      throw error
+    }
+  }),
   channelConnection: {
     findUnique: vi.fn(async ({ where, select }: { where: { id: string }; select?: Record<string, boolean> }) => {
       const r = rows.get(where.id)
@@ -154,7 +164,7 @@ const HOUR = 3_600_000
 const past = () => new Date(Date.now() - HOUR)
 const future = (h = 2) => new Date(Date.now() + h * HOUR)
 
-type Creds = { accessToken: string; refreshToken?: string | null; accessTokenExpiresAt?: string | null; refreshTokenExpiresAt?: string | null }
+type Creds = { accessToken: string; refreshToken?: string | null; accessTokenExpiresAt?: string | null; refreshTokenExpiresAt?: string | null; extra?: Record<string, unknown> }
 
 let seq = 0
 async function seedRow(opts: { creds?: Creds | null; plaintext?: Record<string, unknown>; row?: Record<string, unknown> } = {}): Promise<string> {
@@ -673,6 +683,43 @@ describe('readCredentials (via getAccessToken)', () => {
 })
 
 describe('writeCredentials (via refresh / storeGrant)', () => {
+  it('repairs a manufactured private import expiry after verifying the stored token', async () => {
+    await import('./connectors/amazon-sp/spec.js')
+    const id = await seedRow({
+      row: { channelType: 'AMAZON', region: 'EU' },
+      creds: { accessToken: 'old', refreshToken: 'stored-private-refresh', accessTokenExpiresAt: new Date(0).toISOString(), refreshTokenExpiresAt: new Date(0).toISOString(), extra: { authorizationMode: 'self', operatorNote: 'keep' } },
+    })
+    await getAccessToken(id, { forceRefresh: true })
+    expect(lastExchange().get('refresh_token')).toBe('stored-private-refresh')
+    expect((await credsOf(id)).refreshTokenExpiresAt).toBeNull()
+    expect((await credsOf(id)).extra).toEqual({ authorizationMode: 'self', operatorNote: 'keep' })
+    expect(rows.get(id)!.refreshTokenExpiresAt).toBeNull()
+  })
+  it('rolls back grant state when related marketplace persistence fails', async () => {
+    const id = await seedRow({ row: { managedBy: 'env', authStatus: 'unknown' } })
+    const before = structuredClone(rows.get(id))
+    await expect(storeGrant(id, { accessToken: 'new', refreshToken: 'refresh', expiresInSec: 3600, grantedScopes: [], identity: null }, { kind: 'operator' }, 'adopt', async () => {
+      throw new Error('marketplace write failed')
+    })).rejects.toThrow('marketplace write failed')
+    expect(rows.get(id)).toEqual(before)
+    expect(eventsOf('adopt', id)).toHaveLength(0)
+  })
+
+  it('records unknown expiry for private Amazon import instead of inventing a year', async () => {
+    await import('./connectors/amazon-sp/spec.js')
+    const id = await seedRow({ row: { channelType: 'AMAZON', region: 'EU', refreshTokenExpiresAt: new Date('2030-01-01') } })
+    await storeGrant(id, { accessToken: 'private', refreshToken: 'refresh', expiresInSec: 3600, grantedScopes: [], identity: { userId: 'SELLERA' }, region: 'EU', tokenResponseMetadata: { authorizationMode: 'self' } }, { kind: 'operator' }, 'adopt')
+    expect((await credsOf(id)).refreshTokenExpiresAt).toBeNull()
+    expect(rows.get(id)!.refreshTokenExpiresAt).toBeNull()
+  })
+
+  it('refuses Amazon region changes before writing credentials', async () => {
+    await import('./connectors/amazon-sp/spec.js')
+    const id = await seedRow({ row: { channelType: 'AMAZON', region: 'EU' } })
+    const before = structuredClone(rows.get(id))
+    await expect(storeGrant(id, { accessToken: 'private', expiresInSec: 3600, grantedScopes: [], identity: null, region: 'NA' }, { kind: 'operator' }, 'reconsent')).rejects.toThrow('existing account region')
+    expect(rows.get(id)).toEqual(before)
+  })
   it('a refresh writes an envelope and nulls the four plaintext token columns in the same UPDATE', async () => {
     const id = await seedRow({ creds: null, plaintext: { accessToken: 'plain-access', refreshToken: 'plain-refresh', ebayAccessToken: 'e-a', ebayRefreshToken: 'e-r', tokenExpiresAt: past() } })
     await getAccessToken(id)

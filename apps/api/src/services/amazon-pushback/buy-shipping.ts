@@ -152,7 +152,7 @@ export async function getEligibleShippingServices(
     ]
   }
 
-  const sp = await getSpClient()
+  const sp = await getSpClient(details.amazonOrderId)
   const res: any = await sp.callAPI({
     operation: 'getEligibleShipmentServices',
     endpoint: 'merchantFulfillment',
@@ -187,7 +187,7 @@ export async function createShipment(
     }
   }
 
-  const sp = await getSpClient()
+  const sp = await getSpClient(details.amazonOrderId)
   const res: any = await sp.callAPI({
     operation: 'createShipment',
     endpoint: 'merchantFulfillment',
@@ -237,17 +237,12 @@ export async function cancelBuyShippingShipment(amazonShipmentId: string):
 }
 
 // ── Internals ──────────────────────────────────────────────────────────
-async function getSpClient(): Promise<any> {
-  const { SellingPartner } = await import('amazon-sp-api')
-  return new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as any,
-    refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-      SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  } as any)
+async function getSpClient(amazonOrderId?: string): Promise<any> {
+  const account = amazonOrderId
+    ? await (await import('../connection-resolver.service.js')).resolveConnection({ channel: 'AMAZON', channelOrderId: amazonOrderId })
+    : null
+  const client = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(account?.id)
+  return client
 }
 
 function toAmazonShape(d: ShipmentRequestDetails): any {

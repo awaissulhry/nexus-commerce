@@ -817,7 +817,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       if (channel.toUpperCase() !== 'AMAZON') {
         return reply.code(400).send({ error: 'detect-type is only supported for AMAZON' })
       }
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({ error: 'Amazon SP-API not configured' })
       }
 
@@ -1001,7 +1001,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           issues?: { message: string; severity: string }[]
         }
 
-        if (channel.toUpperCase() === 'AMAZON' && amazonService.isConfigured()) {
+        if (channel.toUpperCase() === 'AMAZON' && await amazonService.isConfigured()) {
           const mpId = (MARKETPLACES.find(
             (m) => m.channel === 'AMAZON' && m.code === marketplace,
           ) as (typeof MARKETPLACES)[number] & { marketplaceId?: string } | undefined)?.marketplaceId
@@ -1042,7 +1042,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             }]
           }
 
-          const sellerId = process.env.AMAZON_SELLER_ID ?? ''
+          const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
           const spResult = await amazonSpApiClient.putListingsItem({
             sellerId,
             sku,
@@ -1173,7 +1173,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
         const byCoord = new Map(listings.map((l) => [`${l.channel}:${l.marketplace}`, l]))
-        const amazonConfigured = amazonService.isConfigured()
+        const amazonConfigured = await amazonService.isConfigured()
         // Amazon dry-run is env-gated (AMAZON_PUBLISH_MODE). Anything other
         // than an explicit 'live' is a dry-run — same default the SP-API
         // client applies — so the review can label it without guessing.

@@ -42,28 +42,13 @@ const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
 const flatFileService = new AmazonFlatFileService(prisma, schemaService)
 
-function getSellerId(): string {
-  return process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+async function getSellerId(): Promise<string> {
+  return await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
 }
 
-function getSpClient() {
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const lwaClientId = process.env.AMAZON_LWA_CLIENT_ID
-  const lwaClientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  if (!refreshToken || !lwaClientId || !lwaClientSecret) {
-    throw new Error('Amazon SP-API credentials not configured')
-  }
-  return import('amazon-sp-api').then(({ SellingPartner }) =>
-    new (SellingPartner as any)({
-      region: (process.env.AMAZON_REGION ?? 'eu') as any,
-      refresh_token: refreshToken,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: lwaClientId,
-        SELLING_PARTNER_APP_CLIENT_SECRET: lwaClientSecret,
-      },
-      options: { auto_request_tokens: true, auto_request_throttled: true },
-    }),
-  )
+async function getSpClient(){
+  const client = await (await import('../lib/amazon-sp-client.js')).getAmazonSpClient()
+  return client
 }
 
 interface SubmissionResult {
@@ -251,7 +236,7 @@ export default async function amazonCockpitPublishRoutes(
       })
     }
 
-    const sellerId = getSellerId()
+    const sellerId = await getSellerId()
     if (!sellerId && !dryRun) {
       return reply.code(503).send({
         error: 'AMAZON_SELLER_ID not configured (set or use dryRun:true)',

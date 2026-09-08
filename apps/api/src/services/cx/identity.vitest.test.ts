@@ -11,6 +11,7 @@ interface Row {
   channelType: string
   isActive: boolean
   externalAccountId: string | null
+  region?: string
 }
 
 const rows: Row[] = []
@@ -55,6 +56,21 @@ beforeEach(() => {
 })
 
 describe('placeGrant — identity known', () => {
+  it('refuses replacing a known Amazon seller on reconnect', async () => {
+    rows.push({ id: 'a', channelType: 'AMAZON', isActive: true, externalAccountId: 'SELLERA', region: 'EU' })
+    await expect(placeGrant({ channelType: 'AMAZON', channelLabel: 'Amazon', identity: identity('SELLERB'), targetConnectionId: 'a', region: 'EU' })).rejects.toThrow('same Amazon seller')
+  })
+
+  it('refuses moving the same Amazon seller into another region', async () => {
+    rows.push({ id: 'a', channelType: 'AMAZON', isActive: true, externalAccountId: 'SELLERA', region: 'EU' })
+    await expect(placeGrant({ channelType: 'AMAZON', channelLabel: 'Amazon', identity: identity('SELLERA'), region: 'NA' })).rejects.toThrow('another account or region')
+  })
+
+  it('does not redirect an explicit Amazon target to another account', async () => {
+    rows.push({ id: 'a', channelType: 'AMAZON', isActive: true, externalAccountId: 'SELLERA', region: 'EU' })
+    rows.push({ id: 'b', channelType: 'AMAZON', isActive: true, externalAccountId: null, region: 'EU' })
+    await expect(placeGrant({ channelType: 'AMAZON', channelLabel: 'Amazon', identity: identity('SELLERA'), targetConnectionId: 'b', region: 'EU' })).rejects.toThrow('another account or region')
+  })
   it('an active row already carrying this identity → reconsent onto that row', async () => {
     rows.push({ id: 'c1', channelType: 'EBAY', isActive: true, externalAccountId: 'U1' })
     rows.push({ id: 'c2', channelType: 'EBAY', isActive: true, externalAccountId: 'U2' })

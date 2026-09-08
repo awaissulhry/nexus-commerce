@@ -158,25 +158,9 @@ export async function submitShippingConfirmation(
 
   // Real path. Imports are deferred so dryRun mode never loads the
   // (heavy) SellingPartner client + its AWS auth chain.
-  const { SellingPartner } = await import('amazon-sp-api')
-  const merchantToken = process.env.AMAZON_MERCHANT_TOKEN ?? process.env.AMAZON_SELLER_ID
-  if (!merchantToken) {
-    throw new AmazonPushbackError(
-      'AMAZON_MERCHANT_TOKEN / AMAZON_SELLER_ID env not set',
-      500,
-      'MERCHANT_TOKEN_MISSING',
-    )
-  }
-
-  const sp: any = new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as any,
-    refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-      SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  })
+  const account = await (await import('../connection-resolver.service.js')).resolveConnection({ channel: 'AMAZON', channelOrderId: input.amazonOrderId })
+    const merchantToken = await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId(account.id)
+    const sp: any = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(account.id)
 
   // Step 1: create feed document slot.
   const docRes: any = await sp.callAPI({

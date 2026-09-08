@@ -26,7 +26,7 @@ let running = false
 async function runSqsPoll(): Promise<void> {
   if (running) return   // skip if previous tick is still in flight
   if (!isSqsConfigured()) return
-  if (!amazonOrdersService.isConfigured()) return
+  if (!await amazonOrdersService.isConfigured()) return
 
   running = true
   try {
@@ -233,7 +233,7 @@ async function runSqsPoll(): Promise<void> {
         if (msg.anyOfferChangedNotification) {
           const note = msg.anyOfferChangedNotification
           const ourSellerId =
-            process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+            await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
           const winnerIsUs =
             note.buyBoxWinner !== null &&
             ourSellerId !== '' &&

@@ -7,17 +7,14 @@
  * (sales/traffic) come back as objects; flat-file reports stay as strings
  * for the caller to parse with csv-parse or similar.
  *
- * Reuses the existing amazon-sp-api credential setup. Same env vars as
- * AmazonService.getClient(): AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET,
- * AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
- * AWS_ROLE_ARN.
+ * Uses the managed Amazon account, including its seller grant and region.
  *
  * NOT END-TO-END TESTED — needs real SP-API credentials. Without them the
  * createReport call returns 401 and the function throws with the exact
  * SP-API error message so the caller can surface it cleanly.
  */
 
-import { SellingPartner } from 'amazon-sp-api'
+import type { SellingPartner } from 'amazon-sp-api'
 import { logger } from '../utils/logger.js'
 import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 import {
@@ -55,7 +52,6 @@ export interface FetchReportResult<T = unknown> {
   durationMs: number
 }
 
-let cachedClient: SellingPartner | null = null
 
 /**
  * SQP.2 — exported so a caller can drive the three report operations SEPARATELY.
@@ -64,64 +60,17 @@ let cachedClient: SellingPartner | null = null
  * work when Amazon generates this account's reports serially (a 40-report batch drains in 14.6h
  * against a 300s poll ceiling — see docs/2026-08-12-sqp-feed.md §3). An asynchronous collector needs
  * `createReport` now and `getReport`/`getReportDocument` on a later tick, so it needs the client
- * rather than the wrapper. Same cached, instrumented instance — every call still lands in
+ * rather than the wrapper. A connection-pinned, instrumented instance — every call still lands in
  * OutboundApiCallLog.
  */
-export function getSpApiClient(): SellingPartner {
+export async function getSpApiClient(): Promise<SellingPartner> {
   return getClient()
 }
 
-function getClient(): SellingPartner {
-  if (cachedClient) return cachedClient
-
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
-  const roleArn = process.env.AWS_ROLE_ARN
-
-  if (
-    !clientId ||
-    !clientSecret ||
-    !refreshToken ||
-    !accessKeyId ||
-    !secretAccessKey ||
-    !roleArn
-  ) {
-    throw new Error(
-      'sp-api-reports: missing one or more required env vars ' +
-        '(AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, ' +
-        'AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN). ' +
-        'See AMAZON_API_AUTHORIZATION.md.',
-    )
-  }
-
-  // Region selection: env override or default to 'eu' (Xavia primary).
-  // For multi-region sellers (NA + EU + FE), use a different cached client
-  // per region — out of v0 scope, single-region cache is fine for now.
-  const region = (process.env.AMAZON_REGION ?? 'eu') as 'eu' | 'na' | 'fe'
-
-  cachedClient = new SellingPartner({
-    region,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-    },
-    options: {
-      auto_request_tokens: true,
-      auto_request_throttled: true,
-    },
-  } as any)
-
-  // L.3.2 — every callAPI now writes an OutboundApiCallLog row.
-  instrumentSellingPartner(cachedClient as never, {
-    channel: 'AMAZON',
-    triggeredBy: 'cron',
-  })
-
-  return cachedClient
+async function getClient(): Promise<any> {
+  const client = await (await import('../lib/amazon-sp-client.js')).getAmazonSpClient()
+  instrumentSellingPartner(client as never, { channel: 'AMAZON', triggeredBy: 'cron' })
+  return client
 }
 
 /**
@@ -227,7 +176,7 @@ async function doFetchSpApiReport<T = unknown>(
   args: FetchReportArgs,
 ): Promise<FetchReportResult<T>> {
   const startedAt = Date.now()
-  const sp = getClient()
+  const sp = await getClient()
 
   // ── Step 1: createReport ────────────────────────────────────────
   logger.info('sp-api-reports: createReport', {
@@ -333,7 +282,7 @@ async function doFetchSpApiReport<T = unknown>(
     reportId,
     reportDocumentId,
     payload,
-    region: (process.env.AMAZON_REGION ?? 'eu') as string,
+    region: await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(),
     durationMs,
   }
 }

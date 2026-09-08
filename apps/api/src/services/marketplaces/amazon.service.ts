@@ -1,4 +1,3 @@
-import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
 import { instrumentSellingPartner } from "../outbound-api-call-log.service.js";
 
@@ -268,83 +267,24 @@ function sleep(ms: number): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export class AmazonService {
-  private sp: SellingPartner | null = null;
-
   constructor() {
     // Constructor does nothing — validation is deferred to getClient()
   }
 
   /**
-   * Lazy-initialize the SellingPartner client.
-   * Validates env vars only when actually needed (first API call).
-   * Throws if credentials are missing.
+   * Obtain a client pinned to the managed connection; each request rechecks access.
    */
-  private async getClient(): Promise<SellingPartner> {
-    if (this.sp) {
-      return this.sp;
-    }
-
-    const clientId = process.env.AMAZON_LWA_CLIENT_ID;
-    const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET;
-    const refreshToken = process.env.AMAZON_REFRESH_TOKEN;
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const roleArn = process.env.AWS_ROLE_ARN;
-
-    if (
-      !clientId ||
-      !clientSecret ||
-      !refreshToken ||
-      !accessKeyId ||
-      !secretAccessKey ||
-      !roleArn
-    ) {
-      throw new Error(
-        "Missing one or more required Amazon SP-API environment variables: " +
-          "AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, " +
-          "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN"
-      );
-    }
-
-    // The library accepts AWS credentials in the config at runtime,
-    // but the bundled typings only declare the LWA client fields.
-    // We cast to `any` to pass the full credential set.
-    this.sp = new SellingPartner({
-      region: "eu",
-      refresh_token: refreshToken,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: clientId,
-        SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-      },
-      options: {
-        auto_request_tokens: true,
-        auto_request_throttled: true,
-      },
-    } as any);
-
-    // L.3.2 — every sp.callAPI(...) call now writes an
-    // OutboundApiCallLog row via the patched callAPI. Idempotent.
-    instrumentSellingPartner(this.sp as never, {
-      channel: 'AMAZON',
-      marketplace: process.env.AMAZON_MARKETPLACE_ID ?? undefined,
-    });
-
-    return this.sp;
+  private async getClient(): Promise<any> {
+    const client = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient();
+    instrumentSellingPartner(client as never, { channel: 'AMAZON' });
+    return client;
   }
 
   /**
-   * Check if Amazon credentials are configured.
-   * Returns true if all required env vars are present.
+   * Check whether an unambiguous, usable Amazon account is configured.
    */
-  isConfigured(): boolean {
-    return !!(
-      process.env.AMAZON_LWA_CLIENT_ID &&
-      process.env.AMAZON_LWA_CLIENT_SECRET &&
-      process.env.AMAZON_REFRESH_TOKEN &&
-      process.env.AWS_ACCESS_KEY_ID &&
-      process.env.AWS_SECRET_ACCESS_KEY &&
-      process.env.AWS_ROLE_ARN
-    );
+  async isConfigured(): Promise<boolean> {
+    return (await import('../../lib/amazon-sp-client.js')).amazonCredsConfigured();
   }
 
   /* ────────────────────────────────────────────────────────────── */
@@ -538,7 +478,7 @@ export class AmazonService {
    */
   async fetchProductDetails(sku: string, marketplaceId?: string): Promise<ProductDetails> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
+      await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId();
     const mpId = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4";
 
     let title: string = "";
@@ -1257,7 +1197,7 @@ export class AmazonService {
     asin: string | null
   }> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
     if (!sellerId) {
       throw new Error(
         'AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set; cannot call getListingsItem.',
@@ -1334,7 +1274,7 @@ export class AmazonService {
     marketplaceId: string,
   ): Promise<ReturnType<typeof this._emptyDetectResult>> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
     if (!sellerId) {
       throw new Error('AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set.')
     }
@@ -1462,7 +1402,7 @@ export class AmazonService {
     skus: string[],
     marketplaceId: string,
   ): Promise<CatalogItem[]> {
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    const sellerId = await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
     if (!sellerId) throw new Error('AMAZON_SELLER_ID not set')
 
     const sp = await this.getClient()
@@ -1563,7 +1503,7 @@ export class AmazonService {
     if (!trimmedBrand || !cc) {
       return { inferred: 'unknown', reason: 'brand and country required' }
     }
-    if (!this.isConfigured()) {
+    if (!await this.isConfigured()) {
       return { inferred: 'unknown', reason: 'SP-API not configured' }
     }
     const cacheKey = `${trimmedBrand}|${cc}`
@@ -1613,7 +1553,7 @@ export class AmazonService {
       res = await sp.callAPI({
         operation: 'getListingsItem',
         endpoint: 'listingsItems',
-        path: { sellerId: process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? '', sku: evidenceSku },
+        path: { sellerId: await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId(), sku: evidenceSku },
         query: {
           marketplaceIds: [marketplaceId],
           includedData: ['summaries', 'attributes', 'identifiers'],
@@ -1790,7 +1730,7 @@ export class AmazonService {
     productType: string | null
     relationships: Array<{ type: string; parentAsin?: string; childAsins?: string[] }>
   } | null> {
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    const sellerId = await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
     if (!sellerId) throw new Error('AMAZON_SELLER_ID not configured')
 
     const sp = await this.getClient()

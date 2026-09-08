@@ -23,10 +23,10 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/amazon/products - Fetch products from Amazon SP-API and sync to database
   fastify.get('/products', async (request, reply) => {
     try {
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({
           success: false,
-          error: 'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+          error: 'Connect or verify your Amazon Seller account in Settings → Channels.',
         })
       }
 
@@ -378,10 +378,10 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // Default prefix is empty (all Amazon products). Pass ?sku_prefix=xevo to narrow.
   fastify.get('/products/verify-amazon-parents', async (request, reply) => {
     try {
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
       }
-      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
       const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
       if (!sellerId) {
         return reply.code(503).send({ success: false, error: 'AMAZON_SELLER_ID not set' })
@@ -468,7 +468,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/products/test-catalog-api', async (request, reply) => {
     try {
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
       }
 
@@ -544,7 +544,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const asin = (request.query as any).asin || 'B0DYXSQP18'
 
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({
           success: false,
           error: 'Amazon SP-API client not initialized',
@@ -620,14 +620,14 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // ────────────────────────────────────────────────────────────────────────
   fastify.post('/products/sync-hierarchy', async (request, reply) => {
     try {
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
       }
-      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
       if (!sellerId) {
         return reply
           .code(503)
-          .send({ success: false, error: 'AMAZON_SELLER_ID env var required for Listings API' })
+          .send({ success: false, error: 'Amazon seller identity unavailable — reconnect the account in Channels.' })
       }
       const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
 
@@ -886,11 +886,11 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       if (!sku) {
         return reply.code(400).send({ success: false, error: 'sku query param required' })
       }
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({ success: false, error: 'Amazon SP-API not configured' })
       }
 
-      const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
       const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
       if (!sellerId) {
         return reply.code(503).send({ success: false, error: 'AMAZON_SELLER_ID not set' })
@@ -1210,12 +1210,12 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       if (!productId || !asin) {
         return reply.code(400).send({ error: 'productId and asin required' })
       }
-      if (!amazonService.isConfigured()) {
+      if (!await amazonService.isConfigured()) {
         return reply.code(503).send({ error: 'Amazon SP-API not configured' })
       }
 
       const marketplaceId = marketplace || process.env.AMAZON_MARKETPLACE_ID || 'APJ6JRA9NG5V4'
-      const region = (process.env.AMAZON_REGION || 'IT').toUpperCase()
+      const region = (await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()).toUpperCase()
       const sp = await (amazonService as any).getClient()
 
       const item: any = await sp.callAPI({
@@ -1299,11 +1299,11 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         if (!Array.isArray(skus) || skus.length === 0) {
           return reply.code(400).send({ error: 'skus array required' })
         }
-        if (!amazonService.isConfigured()) {
+        if (!await amazonService.isConfigured()) {
           return reply.code(503).send({ error: 'Amazon SP-API not configured' })
         }
         const sellerId =
-          process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+          await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
         const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
         if (!sellerId) {
           return reply.code(503).send({ error: 'AMAZON_SELLER_ID not set' })
@@ -1410,7 +1410,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/amazon/pim/bulk-link-amazon — link every product with an ASIN
   fastify.post('/pim/bulk-link-amazon', async (_request, reply) => {
     try {
-      const region = (process.env.AMAZON_REGION || 'IT').toUpperCase()
+      const region = (await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()).toUpperCase()
       const channelMarket = `AMAZON_${region}`
 
       const unlinked = await prisma.product.findMany({
@@ -1496,11 +1496,11 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       marketplaceCodes?: string[]
     }
   }>('/orders/sync', async (request, reply) => {
-    if (!amazonOrdersService.isConfigured()) {
+    if (!await amazonOrdersService.isConfigured()) {
       return reply.code(503).send({
         success: false,
         error:
-          'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+          'Connect or verify your Amazon Seller account in Settings → Channels.',
       })
     }
 
@@ -1636,7 +1636,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body?: { limit?: number; includePending?: boolean } }>(
     '/orders/backfill-zero-totals',
     async (request, reply) => {
-      if (!amazonOrdersService.isConfigured()) {
+      if (!await amazonOrdersService.isConfigured()) {
         return reply.code(503).send({
           success: false,
           error: 'Amazon SP-API credentials are not configured.',
@@ -1668,11 +1668,11 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body?: { sellerSkus?: string[]; marketplaceId?: string }
   }>('/inventory/sync', async (request, reply) => {
-    if (!amazonInventoryService.isConfigured()) {
+    if (!await amazonInventoryService.isConfigured()) {
       return reply.code(503).send({
         success: false,
         error:
-          'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+          'Connect or verify your Amazon Seller account in Settings → Channels.',
       })
     }
 
@@ -2033,25 +2033,10 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // has any A+ Content published for this seller. If 0, Phase 9 is
   // a no-op (nothing to reconcile). If non-zero, we build the pull.
   fastify.get('/aplus/probe', async () => {
-    const clientId = process.env.AMAZON_LWA_CLIENT_ID
-    const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-    const refreshToken = process.env.AMAZON_REFRESH_TOKEN
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-    const region = (process.env.AMAZON_REGION ?? 'eu') as string
+    const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
     const host = `sellingpartnerapi-${region}.amazon.com`
-    if (!clientId || !clientSecret || !refreshToken) return { error: 'creds missing' }
-    const tok = await fetch('https://api.amazon.com/auth/o2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret,
-      }).toString(),
-    })
-    if (!tok.ok) return { error: `LWA failed: ${await tok.text()}` }
-    const { access_token } = await tok.json() as { access_token: string }
+    const access_token = await (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
     const probes: Array<{ name: string; path: string }> = [
       { name: 'aplus-listDocs', path: `/aplus/2020-11-01/contentDocuments?marketplaceId=${marketplaceId}&pageSize=20` },
       { name: 'aplus-listAsins', path: `/aplus/2020-11-01/contentAsinRelations?marketplaceId=${marketplaceId}&asinSet=B0BMSC91YK` },
@@ -2124,32 +2109,10 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // ones grant access. Used to determine whether Amazon's Finance role grant
   // is partial (some endpoints work, others don't) or fully blocked.
   fastify.get('/finance/probe', async () => {
-    const clientId = process.env.AMAZON_LWA_CLIENT_ID
-    const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-    const refreshToken = process.env.AMAZON_REFRESH_TOKEN
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-    const region = (process.env.AMAZON_REGION ?? 'eu') as string
+    const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
     const host = `sellingpartnerapi-${region}.amazon.com`
-
-    if (!clientId || !clientSecret || !refreshToken) {
-      return { error: 'creds missing' }
-    }
-
-    // Refresh LWA
-    const tokRes = await fetch('https://api.amazon.com/auth/o2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret,
-      }).toString(),
-    })
-    if (!tokRes.ok) {
-      return { error: `LWA failed: ${await tokRes.text()}` }
-    }
-    const { access_token: accessToken } = await tokRes.json() as { access_token: string }
+    const accessToken = await (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
 
     const since = new Date(Date.now() - 30 * 86400_000).toISOString()
     const sinceShort = new Date(Date.now() - 7 * 86400_000).toISOString()
@@ -2194,7 +2157,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         results.push({ name: ep.name, status: 0, ok: false, error: e instanceof Error ? e.message : String(e) })
       }
     }
-    return { tokenFingerprint: refreshToken.slice(-8), results }
+    return { results }
   })
 
   /**
@@ -2316,7 +2279,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         checks,
         listingProbe,
         config: {
-          region: process.env.AMAZON_REGION ?? 'eu-west-1',
+          region: await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(),
           marketplaceId: probeMarketplace,
         },
       }

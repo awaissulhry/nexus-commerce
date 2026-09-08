@@ -124,7 +124,7 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // 2 — Find any ASIN for this (channel, marketplace) to look up classifications
-    if (!amazon.isConfigured()) {
+    if (!await amazon.isConfigured()) {
       return reply.send({ categoryPath: null, browseNodes: null })
     }
 
@@ -245,7 +245,7 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
           })
 
           const asin = listing?.externalListingId ?? fallbackAsin
-          if (!asin || !amazon.isConfigured()) return
+          if (!asin || !await amazon.isConfigured()) return
 
           const result = await amazon.detectProductTypeFromAsin(asin, mpId)
           if (!result.categoryPath && (!result.browseNodes || result.browseNodes.length === 0)) return

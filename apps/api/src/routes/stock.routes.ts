@@ -581,7 +581,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         amazonFbaCron: {
-          configured: amazonInventoryService.isConfigured(),
+          configured: await amazonInventoryService.isConfigured(),
           enabled: process.env.NEXUS_ENABLE_AMAZON_INVENTORY_CRON === '1',
           lastReconciliationAt: lastFbaReconciliation?.createdAt ?? null,
           lastReconciliationDelta: lastFbaReconciliation?.change ?? null,
@@ -3763,7 +3763,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // updated immediately without waiting for the 15-min cron.
   fastify.post('/stock/sync', async (_request, reply) => {
     try {
-      if (!amazonInventoryService.isConfigured()) {
+      if (!await amazonInventoryService.isConfigured()) {
         return reply.code(503).send({ error: 'Amazon SP-API not configured' })
       }
       const summary = await amazonInventoryService.syncFBAInventory()

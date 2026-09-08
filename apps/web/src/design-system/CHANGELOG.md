@@ -4,6 +4,12 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## Account names — 2026-09-08
+
+Account rows now stack below a 640px container width, keeping identity, scope chips, colour controls and actions readable at 390px. Hosts can name private verification accurately through `reconnectLabelForAccount`, or hold unavailable connectors without a dead button. Mirrored account styles also close Factory's missing account-style block.
+
+`accountDisplayName` and `channelDisplayName` provide a shared name-only identity contract. `AccountSwitcher` and `AccountsPanel` never fall back to seller, connection, or advertising profile IDs, including legacy responses and accessible labels. Missing names are explicit and can be renamed. Scope chips no longer expose opaque marketplace/profile keys. Mirrored in Factory; pure regression tests cover opaque IDs and real names.
+
 ## Amazon Seller migration — 2026-09-08
 
 `AccountsPanel` offers a primary replacement action for ENV-managed accounts when the host supplies reconnect. Amazon application-role grants are described without inventing OAuth scope counts, and the panel states that environment credentials remain active until reconnect succeeds. This supports both public website authorization and private-app self-authorization import. Mirrored in Factory.

@@ -88,7 +88,7 @@ export class VariationSyncProcessor {
       });
 
       // Get seller ID from environment
-      const sellerId = process.env.AMAZON_SELLER_ID;
+      const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId();
       if (!sellerId) {
         throw new Error('AMAZON_SELLER_ID not configured in environment');
       }

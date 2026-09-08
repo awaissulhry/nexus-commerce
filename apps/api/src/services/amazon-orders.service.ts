@@ -242,8 +242,8 @@ interface SyncSummary {
 }
 
 export class AmazonOrdersService {
-  isConfigured(): boolean {
-    return amazonService.isConfigured()
+  async isConfigured(): Promise<boolean> {
+    return await amazonService.isConfigured()
   }
 
   /**

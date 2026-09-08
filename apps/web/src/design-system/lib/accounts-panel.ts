@@ -166,9 +166,12 @@ export interface ScopeRow {
 /** How many scope chips a row shows before folding the rest behind "+N more". */
 export const SCOPE_CHIP_CAP = 12
 
-/** A chip's text: the channel's label when it gave one, else the raw id — never invented. */
+/** Missing provider names are explicit; marketplace/profile IDs are never display labels. */
 export function scopeChipLabel(s: ScopeRow): string {
-  const label = s.label ?? s.externalId
+  const name = s.label?.trim()
+  const label = name && name !== s.externalId.trim()
+    ? name
+    : s.kind === 'marketplace' ? 'Marketplace name unavailable' : 'Profile name unavailable'
   return s.isActive === false ? `${label} · inactive` : label
 }
 
@@ -209,12 +212,13 @@ export interface RowActions {
 export function rowActions(
   a: { isPrimary: boolean; managedBy: string; scopeDrift?: string[]; grantedScopes?: string[] },
   hasReconnect: boolean,
+  actionLabel?: string | null,
 ): RowActions {
   const env = a.managedBy === 'env'
   return {
     makePrimary: !a.isPrimary,
     test: true,
-    reconnect: hasReconnect ? (env ? 'Replace environment credentials' : reconnectLabel(a.scopeDrift, a.grantedScopes)) : null,
+    reconnect: hasReconnect ? (actionLabel !== undefined ? actionLabel : env ? 'Replace environment credentials' : reconnectLabel(a.scopeDrift, a.grantedScopes)) : null,
     disconnect: !env,
     envNote: env,
   }

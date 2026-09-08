@@ -58,7 +58,7 @@ export async function collectInUseSchemaTargets(
 }
 
 export async function runSchemaRefresh(): Promise<string> {
-  if (!amazonService.isConfigured()) {
+  if (!await amazonService.isConfigured()) {
     logger.warn('schema-refresh cron: Amazon SP-API not configured — skipping')
     return 'skipped=not-configured'
   }

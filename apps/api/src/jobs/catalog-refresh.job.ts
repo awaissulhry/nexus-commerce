@@ -32,7 +32,7 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 const amazonService = new AmazonService()
 
 async function runCatalogRefresh(): Promise<void> {
-  if (!amazonService.isConfigured()) {
+  if (!await amazonService.isConfigured()) {
     logger.warn('catalog-refresh cron: Amazon SP-API not configured — skipping')
     return
   }

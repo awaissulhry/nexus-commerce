@@ -280,7 +280,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // Amazon: configured if any of the SP-API credential env vars
       // are set. Use the same "isConfigured" check the AmazonService
       // does internally so this stays in sync.
-      const amazonConnected = amazonService.isConfigured()
+      const amazonConnected = await amazonService.isConfigured()
 
       // eBay: any active account counts. MAP.3 — a readiness check is genuinely
       // account-agnostic; it goes through the resolver so "active" means one thing.
@@ -2559,7 +2559,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // missing creds surface as a blocking checklist item rather
       // than a post-submit FAILED entry.
       const readiness: Record<string, boolean> = {
-        AMAZON: amazonService.isConfigured(),
+        AMAZON: await amazonService.isConfigured(),
         // MAP.3 — readiness, account-agnostic.
         EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
@@ -2656,7 +2656,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // missing creds surface as a blocking checklist item rather
       // than a post-submit FAILED entry.
       const readiness: Record<string, boolean> = {
-        AMAZON: amazonService.isConfigured(),
+        AMAZON: await amazonService.isConfigured(),
         // MAP.3 — readiness, account-agnostic.
         EBAY: (await listActiveConnections('EBAY')).length > 0,
       }

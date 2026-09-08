@@ -138,7 +138,7 @@ async function delistAmazon(
   // externalListingId for Amazon is typically the SKU (since the
   // Listings Items endpoint is keyed by SKU, not ASIN).
   const sku = job.externalListingId!
-  const sellerId = process.env.AMAZON_SELLER_ID ?? ''
+  const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
   if (!sellerId) {
     return {
       success: false,

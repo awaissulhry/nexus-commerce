@@ -860,7 +860,7 @@ export class OutboundSyncService {
     const marketplaceId =
       payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT";
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
+      await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId();
 
     // A4.0 — resolve the Amazon product type (required by the Listings PATCH) and
     // build the CORRECT patch body (schema attribute names + value shapes),

@@ -325,7 +325,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
 
         const buyBoxOfferRaw = offers.find((o: any) => o.IsBuyBoxWinner === true)
         const ourSellerId =
-          process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+          await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
         const ourOfferRaw = ourSellerId
           ? offers.find((o: any) => o.SellerId === ourSellerId)
           : null

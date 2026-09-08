@@ -253,7 +253,7 @@ export async function syncFinancialEvents(
 ): Promise<FinancialSyncSummary> {
   const t0 = Date.now()
 
-  if (!amazonService.isConfigured()) {
+  if (!await amazonService.isConfigured()) {
     throw new Error('Amazon SP-API not configured')
   }
 
@@ -421,28 +421,6 @@ interface NewTransaction {
   marketplaceDetails?: { marketplaceId?: string; marketplaceName?: string }
 }
 
-async function getLwaAccessToken(): Promise<string> {
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('LWA credentials missing')
-  }
-  const res = await fetch('https://api.amazon.com/auth/o2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }).toString(),
-  })
-  if (!res.ok) throw new Error(`LWA failed: ${await res.text()}`)
-  const data = (await res.json()) as { access_token: string }
-  return data.access_token
-}
-
 function sumBreakdowns(
   breakdowns: NewBreakdown[] | undefined,
   matcher: (type: string) => boolean,
@@ -567,7 +545,9 @@ export async function syncFinancialTransactions(
 ): Promise<FinancialSyncSummary> {
   const t0 = Date.now()
   const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-  const region = (process.env.AMAZON_REGION ?? 'eu') as string
+  const authorization = await import('../lib/amazon-sp-client.js')
+  const account = await authorization.amazonAccount()
+  const region = await authorization.getAmazonRegion(account.id)
   const host = `sellingpartnerapi-${region}.amazon.com`
 
   // Clamp upper bound to "now - 3min" — same SP-API data-propagation guard
@@ -575,8 +555,6 @@ export async function syncFinancialTransactions(
   const SP_API_CLOCK_SKEW_MS = 180_000
   const minAgo = new Date(Date.now() - SP_API_CLOCK_SKEW_MS)
   const upperBound = windowEnd.getTime() > minAgo.getTime() ? minAgo : windowEnd
-
-  const accessToken = await getLwaAccessToken()
 
   const collected: NewTransaction[] = []
   let nextToken: string | undefined
@@ -591,7 +569,7 @@ export async function syncFinancialTransactions(
         }
     const qs = new URLSearchParams(params).toString()
     const res = await fetch(`https://${host}/finances/2024-06-19/transactions?${qs}`, {
-      headers: { 'x-amz-access-token': accessToken, 'Content-Type': 'application/json' },
+      headers: { 'x-amz-access-token': await authorization.getAmazonAccessToken(account.id), 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
       const body = await res.text()

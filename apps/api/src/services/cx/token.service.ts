@@ -22,6 +22,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { encryptCredentials, decryptCredentials, isCredentialsBlob, onCredentialsKmsFallback } from '../../lib/crypto.js'
@@ -135,15 +136,15 @@ async function readCredentials(row: ConnRow): Promise<Credentials | null> {
 }
 
 /** Write credentials as an envelope and null every plaintext column in the same UPDATE. */
-async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}) {
+async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}, persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>) {
   const { blob, keyId } = await encryptCredentials(creds as unknown as Record<string, unknown>)
-  await prisma.channelConnection.update({
+  const write = async (db: Pick<Prisma.TransactionClient, 'channelConnection'>) => db.channelConnection.update({
     where: { id: connectionId },
     data: {
       credentialsEnc: blob,
       credentialsKeyId: keyId,
       accessTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
-      refreshTokenExpiresAt: creds.refreshTokenExpiresAt ? new Date(creds.refreshTokenExpiresAt) : undefined,
+      refreshTokenExpiresAt: creds.refreshTokenExpiresAt ? new Date(creds.refreshTokenExpiresAt) : null,
       // Legacy display/expiry columns keep a DATE (not a secret) so pre-CX.2 readers still render.
       tokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
       ebayTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
@@ -154,6 +155,14 @@ async function writeCredentials(connectionId: string, creds: Credentials, extraD
       ...extraData,
     },
   })
+  if (persistRelated) {
+    await prisma.$transaction(async (tx) => {
+      await write(tx)
+      await persistRelated(tx)
+    })
+  } else {
+    await write(prisma)
+  }
 }
 
 /**
@@ -322,7 +331,11 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
       await failRefresh(row, 'auth_expired', 'No refresh token stored — the grant must be renewed by the operator.')
       throw new RefreshFailed(connectionId, 'auth_expired', 'No refresh token stored')
     }
-    if (creds.refreshTokenExpiresAt && Date.parse(creds.refreshTokenExpiresAt) < Date.now()) {
+    // Earlier private imports assigned the public-app annual consent lifetime
+    // to an existing token. That local estimate is not an Amazon expiry.
+    const privateAmazon = key === 'AMAZON_SP' && creds.extra?.authorizationMode === 'self'
+    const refreshTokenExpiresAt = privateAmazon ? null : creds.refreshTokenExpiresAt
+    if (refreshTokenExpiresAt && Date.parse(refreshTokenExpiresAt) < Date.now()) {
       await failRefresh(row, 'auth_expired', 'The refresh token has expired — the operator must reconnect.')
       throw new RefreshFailed(connectionId, 'auth_expired', 'Refresh token expired')
     }
@@ -365,7 +378,7 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
       refreshToken: rotated ? String(json.refresh_token) : creds.refreshToken,
       accessTokenExpiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
       refreshTokenExpiresAt:
-        rotated && spec.auth.refreshTokenLifetimeSec
+        privateAmazon ? null : rotated && spec.auth.refreshTokenLifetimeSec
           ? new Date(Date.now() + spec.auth.refreshTokenLifetimeSec * 1000).toISOString()
           : creds.refreshTokenExpiresAt ?? null,
       extra: creds.extra,
@@ -445,12 +458,18 @@ export async function storeGrant(
   grant: GrantResult,
   actor: Actor,
   event: 'grant' | 'reconsent' | 'adopt',
+  persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>,
 ): Promise<void> {
   const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
   if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
   const { key, spec } = specFor(row)
+  if (key === 'AMAZON_SP' && row.region && grant.region && row.region !== grant.region) {
+    throw new Error('Reconnect Amazon in the existing account region.')
+  }
   const now = Date.now()
-  const refreshLife = grant.refreshExpiresInSec ?? spec.auth.refreshTokenLifetimeSec ?? null
+  const refreshLife = key === 'AMAZON_SP' && grant.tokenResponseMetadata?.authorizationMode === 'self'
+    ? null
+    : grant.refreshExpiresInSec ?? spec.auth.refreshTokenLifetimeSec ?? null
   const creds: Credentials = {
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken ?? null,
@@ -478,7 +497,7 @@ export async function storeGrant(
     lastRefreshAt: new Date(),
     refreshLeaseUntil: null,
     refreshLeaseOwner: null,
-  })
+  }, persistRelated)
   lastFailureAt.delete(connectionId)
   await recordConnectionEvent({
     connectionId,

@@ -103,7 +103,7 @@ async function pushAmazonPrice(
   snapshot: any,
   startedAt: number,
 ): Promise<PushPriceResult> {
-  const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+  const sellerId = await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId()
   if (!sellerId) {
     return {
       ok: false,

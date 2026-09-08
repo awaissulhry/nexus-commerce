@@ -63,7 +63,7 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
     const accessKey = process.env.AWS_ACCESS_KEY_ID ?? null
     const secretKey = process.env.AWS_SECRET_ACCESS_KEY ?? null
     const awsRegion = process.env.AWS_REGION ?? null
-    const amzRegion = process.env.AMAZON_REGION ?? null
+    const amzRegion = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion() ?? null
     const lwaId     = process.env.AMAZON_LWA_CLIENT_ID ?? process.env.AMAZON_CLIENT_ID ?? null
     const spSlug    = mapAwsRegionToSpApiSlug(amzRegion ?? awsRegion ?? 'na')
     const spApiHost = `sellingpartnerapi-${spSlug}.amazon.com`

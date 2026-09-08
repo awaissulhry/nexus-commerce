@@ -303,7 +303,7 @@ export class ChannelPublishService {
     }
 
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
     if (!sellerId) {
       return { ...entry, updatedAt: new Date().toISOString() }
     }

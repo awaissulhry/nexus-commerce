@@ -227,8 +227,8 @@ export class AmazonSpApiClient {
   ): Promise<T> {
     const token = await this.getAccessToken()
     const host = opts.sandbox
-      ? `sandbox.sellingpartnerapi-${this.region}.amazon.com`
-      : `sellingpartnerapi-${this.region}.amazon.com`
+      ? `sandbox.sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com`
+      : `sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com`
     const qs = opts.query
       ? '?' +
         new URLSearchParams(
@@ -543,7 +543,7 @@ export class AmazonSpApiClient {
       // Submit to SP-API (with retry/backoff on 429/5xx + network errors)
       const marketplaceId = options.marketplaceId ?? this.defaultMarketplaceId()
       const response = await this.fetchWithRetry(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${sku}?marketplaceIds=${encodeURIComponent(marketplaceId)}&issueLocale=en_US`,
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${sku}?marketplaceIds=${encodeURIComponent(marketplaceId)}&issueLocale=en_US`,
         {
           method: 'PATCH',
           headers: {
@@ -695,7 +695,7 @@ export class AmazonSpApiClient {
       ]
 
       const url = new URL(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
           sku,
         )}`,
       )
@@ -794,7 +794,7 @@ export class AmazonSpApiClient {
       const accessToken = await this.getAccessToken()
       const patches = [{ op, path: '/attributes/purchasable_offer', value }]
       const url = new URL(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
       )
       url.searchParams.set('marketplaceIds', marketplaceId)
       logger.info('SP-API: patchPurchasableOffer', { sku, marketplaceId, op })
@@ -921,8 +921,8 @@ export class AmazonSpApiClient {
       // 401 and the audit log captures the outcome.
       const host =
         mode === 'sandbox'
-          ? `sandbox.sellingpartnerapi-${this.region}.amazon.com`
-          : `sellingpartnerapi-${this.region}.amazon.com`
+          ? `sandbox.sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com`
+          : `sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com`
       const url = new URL(
         `https://${host}/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
           sku,
@@ -1057,7 +1057,7 @@ export class AmazonSpApiClient {
       // VALIDATION_PREVIEW must hit the PRODUCTION host — the sandbox returns
       // canned responses, not a real validation of our payload.
       const url = new URL(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
       )
       url.searchParams.set('marketplaceIds', marketplaceId)
       url.searchParams.set('mode', 'VALIDATION_PREVIEW')
@@ -1224,7 +1224,7 @@ export class AmazonSpApiClient {
       const accessToken = await this.getAccessToken()
 
       const url = new URL(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
           sku,
         )}`,
       )
@@ -1335,7 +1335,7 @@ export class AmazonSpApiClient {
     try {
       const accessToken = await this.getAccessToken()
       const url = new URL(
-        `https://sellingpartnerapi-${this.region}.amazon.com/listings/2021-08-01/items/${opts.sellerId}`,
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${opts.sellerId}`,
       )
       url.searchParams.set('marketplaceIds', opts.marketplaceId)
       url.searchParams.set('includedData', 'summaries')
@@ -1378,7 +1378,7 @@ export class AmazonSpApiClient {
   }> {
     try {
       const accessToken = await this.getAccessToken()
-      const url = new URL(`https://sellingpartnerapi-${this.region}.amazon.com/catalog/2022-04-01/items/${asin}`)
+      const url = new URL(`https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/catalog/2022-04-01/items/${asin}`)
       url.searchParams.set('marketplaceIds', marketplaceId)
       url.searchParams.set('includedData', 'images,summaries')
       const response = await this.fetchWithRetry(

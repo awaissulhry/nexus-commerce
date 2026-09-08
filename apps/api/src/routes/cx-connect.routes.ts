@@ -17,6 +17,9 @@ import { logger } from '../utils/logger.js'
 import { tryGetChannelSpec, type ChannelKey } from '../services/cx/catalog.js'
 import { complete, OAuthFlowError, start, type Intent } from '../services/cx/oauth.service.js'
 import { recordConnectionEvent } from '../services/cx/events.service.js'
+import prisma from '../db.js'
+import { connectionLabel } from '../services/connection-label.js'
+import { CONNECTION_PUBLIC_SELECT } from '../services/connection-resolver.service.js'
 import {
   AmazonSelfAuthorizationError,
   importAmazonEnvironmentAuthorization,
@@ -33,6 +36,11 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
 }
 
+/** JSON inside an HTML script must not contain a literal closing script tag. */
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
 /** Design-system-toned page (tokens inlined: the popup has no app shell). */
 function callbackPage(input: {
   ok: boolean
@@ -40,7 +48,7 @@ function callbackPage(input: {
   body: string
   payload?: Record<string, unknown>
 }): string {
-  const message = input.payload ? JSON.stringify({ type: 'nexus:channel-connected', ...input.payload }) : 'null'
+  const message = input.payload ? scriptJson({ type: 'nexus:channel-connected', ...input.payload }) : 'null'
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(input.title)} · Nexus</title>
 <style>
@@ -56,7 +64,7 @@ ${input.ok ? '' : `<p class="small"><a href="${esc(WEB_ORIGIN)}/settings/channel
 </main>
 <script>
 (function(){
-  var msg=${message}; var origin=${JSON.stringify(WEB_ORIGIN)}; var acked=false;
+  var msg=${message}; var origin=${scriptJson(WEB_ORIGIN)}; var acked=false;
   function done(){ try{window.close()}catch(e){} setTimeout(function(){ if(!window.closed){ var h=document.getElementById('hint'); if(h) h.innerHTML='You can close this window. <a href="'+origin+'/settings/channels">Back to Channels</a>'; } },600); }
   if(!msg){ return; }
   function isAck(data){ return data&&data.type==='nexus:ack'&&data.state===msg.state; }
@@ -70,6 +78,8 @@ ${input.ok ? '' : `<p class="small"><a href="${esc(WEB_ORIGIN)}/settings/channel
 })();
 </script></body></html>`
 }
+
+export const __cxConnectTest = { callbackPage }
 
 export default async function cxConnectRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { channel: string }; Body: { intent?: Intent; targetConnectionId?: string; region?: string } }>(
@@ -101,7 +111,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
               channel: 'AMAZON',
               channelKey: 'AMAZON_SP',
               connectionId: result.connectionId,
-              sellerName: result.sellerId,
+              sellerName: connectionLabel(await prisma.channelConnection.findUniqueOrThrow({ where: { id: result.connectionId }, select: CONNECTION_PUBLIC_SELECT })).label,
               placement: result.placement,
               scopeDrift: [],
             },
@@ -153,7 +163,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
         })
         // The cookie has done its job.
         reply.clearCookie(`nexus_oauth_${request.query.state ?? ''}`, { path: '/api/cx/callback' })
-        const who = result.identity?.username ?? result.identity?.userId ?? null
+        const who = connectionLabel(await prisma.channelConnection.findUniqueOrThrow({ where: { id: result.connectionId }, select: CONNECTION_PUBLIC_SELECT })).label
         const drift = result.scopeDrift.length
         return reply.type('text/html').send(
           callbackPage({

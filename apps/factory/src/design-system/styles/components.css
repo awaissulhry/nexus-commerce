@@ -1818,3 +1818,227 @@
 .nds-thumb-preview-count { padding: 2px 4px; font-size: var(--nds-font-size-micro); color: var(--nds-text-muted); }
 @keyframes nds-thumb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .nds-thumb-skel { animation: none; } .nds-thumb-img { transition: none; } }
+
+/* ── AccountSwitcher (MAP.1) ───────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched.
+   Colour comes only from tokens, so `.dark` (tokens.css) re-themes it with no
+   rules here. The health dot is never the ONLY carrier of state — every row
+   also prints its status in words, so the control does not depend on hue. */
+.nds-acct { position: relative; display: inline-flex; }
+
+.nds-acct-skeleton { display: block; width: 148px; height: 28px; border-radius: var(--nds-radius-round); background: var(--nds-surface-hover); }
+
+.nds-acct-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-round);
+  background: var(--nds-surface); color: var(--nds-text);
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; text-decoration: none;
+}
+.nds-acct-trigger:hover { background: var(--nds-surface-hover); }
+.nds-acct-trigger:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-acct-trigger.is-muted { color: var(--nds-text-2); font-weight: 500; }
+.nds-acct-summary { padding-left: 2px; }
+
+.nds-acct-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken); color: var(--nds-text);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.nds-acct-caret { color: var(--nds-text-3); flex: none; }
+/* Count badge on a channel pill — only rendered when that channel holds >1 account. */
+.nds-acct-pill-n {
+  min-width: 15px; padding: 0 4px; margin-left: 1px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
+  font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+}
+
+/* Dots share one class so the legend in the panel and the chip cannot drift. */
+.nds-acct-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--nds-text-3); }
+.nds-acct-dot[data-health='ok'] { background: var(--nds-success); }
+.nds-acct-dot[data-health='warn'] { background: var(--nds-warning); }
+.nds-acct-dot[data-health='error'] { background: var(--nds-danger); }
+.nds-acct-dot[data-health='unknown'] { background: var(--nds-text-3); }
+.nds-acct-dot[data-health='off'] { background: transparent; border: 1.5px solid var(--nds-border-strong); }
+
+.nds-acct-panel {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  /* Above the DS menu (40) and any sticky page header, below Modal (50) so an
+     open modal still covers the chrome. */
+  z-index: var(--nds-z-popover);
+  width: 320px; max-height: min(70vh, 520px); overflow-y: auto;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl);
+  box-shadow: var(--nds-shadow-menu);
+  padding: 6px;
+}
+.nds-acct-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px 8px; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-2);
+}
+.nds-acct-count {
+  min-width: 18px; text-align: center; padding: 1px 6px;
+  border-radius: var(--nds-radius-round); background: var(--nds-surface-sunken);
+  color: var(--nds-text-2); font-size: 11px; letter-spacing: 0;
+}
+
+.nds-acct-group + .nds-acct-group { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding-top: 6px; }
+.nds-acct-group-head { padding: 4px 8px; font-size: 11px; font-weight: 700; color: var(--nds-text-2); }
+
+.nds-acct-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 8px; border-radius: var(--nds-radius-md);
+  text-decoration: none; color: inherit;
+}
+.nds-acct-row .nds-acct-dot { margin-top: 5px; }
+.nds-acct-row.is-link { cursor: pointer; }
+.nds-acct-row.is-link:hover { background: var(--nds-surface-hover); }
+/* MAP.4 — a selectable row is a real button; strip the UA chrome and keep the
+   row layout identical to the informational <div> so nothing shifts when a
+   second account appears. */
+button.nds-acct-row { width: 100%; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
+button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-acct-row[data-selected] { background: var(--nds-surface-sunken); }
+/* The tick is never the only marker of the current account — the row is also
+   tinted and carries aria-current, so the state does not depend on one glyph. */
+/* The tick means SELECTED, not healthy — and the row already carries a health dot
+   two elements to its left, so a green tick conflated two different meanings on
+   one row. It takes the text colour instead: semantically right, and it clears AA
+   where green did not (measured 2.91:1 with --nds-success, 4.43:1 with
+   --nds-success-strong, both under the 4.5 bar for 13px text). Selection is also
+   carried by the row tint and aria-current, so this is never the only signal. */
+.nds-acct-check { margin-left: auto; align-self: center; color: var(--nds-text); font-weight: 800; font-size: 13px; }
+.nds-acct-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nds-acct-row-label { font-size: 13px; font-weight: 600; color: var(--nds-text); }
+.nds-acct-row-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--nds-text-2); }
+.nds-acct-row-sub code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-text-2); }
+.nds-acct-row-warn { font-size: 11.5px; color: var(--nds-warning-strong); }
+.nds-acct-row-warn[data-tone='error'] { color: var(--nds-danger-strong); }
+/* Dark-mode tone text: no rule needed. `.dark` (tokens.css) now carries
+   --nds-{success,warning,danger}-strong and --nds-text-link, so the rules above
+   re-theme themselves. The per-component hex overrides that stood here until
+   2026-08-24 were a DS-wide gap patched locally — fixed at the token tier. */
+.nds-acct-tag {
+  padding: 1px 6px; border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+}
+.nds-acct-markets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.nds-acct-market {
+  padding: 1px 5px; border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
+  font-size: 10.5px; font-weight: 700;
+}
+
+.nds-acct-foot { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
+.nds-acct-foot a { font-size: 12px; font-weight: 600; color: var(--nds-text-link); text-decoration: none; }
+.nds-acct-foot a:hover { text-decoration: underline; }
+
+/* ── AccountsPanel (MAP.4) ─────────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched. Tokens
+   only, so `.dark` re-themes it with no rules here. Reuses .nds-acct-dot and
+   .nds-acct-tag from the AccountSwitcher so a health dot means the same thing
+   in the chip and on this page — one concept, one definition. */
+.nds-acctp {
+  container-type: inline-size;
+  min-width: 0;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  padding: 14px 16px;
+}
+.nds-acctp-head h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--nds-text); }
+.nds-acctp-head p { margin: 4px 0 0; font-size: 12px; color: var(--nds-text-2); max-width: 62ch; }
+
+.nds-acctp-notice { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; }
+.nds-acctp-notice[data-tone='ok'] { color: var(--nds-success-strong); }
+.nds-acctp-notice[data-tone='error'] { color: var(--nds-danger-strong); }
+
+.nds-acctp-group { margin-top: 14px; }
+.nds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-acctp-ch { font-size: 12px; font-weight: 700; color: var(--nds-text); }
+.nds-acctp-count {
+  min-width: 18px; text-align: center; padding: 0 6px;
+  border-radius: var(--nds-radius-round); background: var(--nds-surface-sunken);
+  color: var(--nds-text-2); font-size: 11px; font-weight: 700;
+}
+.nds-acctp-empty { margin: 8px 0; font-size: 12.5px; color: var(--nds-text-2); }
+
+.nds-acctp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-acctp-row:last-of-type { border-bottom: none; }
+.nds-acctp-row[data-busy] { opacity: 0.6; }
+.nds-acctp-row .nds-acct-dot { margin-top: 6px; }
+.nds-acctp-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.nds-acctp-name { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--nds-text); }
+.nds-acctp-sub { font-size: 12px; color: var(--nds-text-2); }
+.nds-acctp-warn { color: var(--nds-warning-strong); }
+.nds-acctp-badge {
+  padding: 1px 7px; border-radius: var(--nds-radius-round);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
+  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+}
+.nds-acctp-input {
+  font: inherit; font-size: 13.5px; font-weight: 600;
+  padding: 3px 7px; width: min(280px, 100%);
+  border: 1px solid var(--nds-primary); border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface); color: var(--nds-text);
+}
+
+/* CX.2 — the row's actions are DS `Button size="sm"` (Disconnect = `danger-outline`), so
+   the hand-rolled `.nds-acctp-actions button` idiom that used to live here is gone: one
+   surface, one button object. Five actions now sit here, so they wrap, right-aligned. */
+.nds-acctp-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; flex-shrink: 0; max-width: 46%; }
+/* Why an action is absent, in words a screen reader and an eye can both reach —
+   never a `title` on a disabled control, which fires no pointer events. */
+.nds-acctp-note { font-size: 11.5px; color: var(--nds-text-2); max-width: 20ch; text-align: right; }
+
+.nds-acctp-add {
+  margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 6px 11px; border-radius: var(--nds-radius-md);
+  border: 1px dashed var(--nds-border-strong); background: none;
+  color: var(--nds-text-link); cursor: pointer;
+}
+.nds-acctp-add:hover { background: var(--nds-surface-hover); }
+
+/* MAP.4 — the account identity colour. A bar, never the only carrier of identity:
+   every row also prints its account name, so the colour is a shortcut, not the
+   information itself. */
+.nds-acct-swatch { width: 3px; align-self: stretch; border-radius: 2px; flex: none; margin-top: 2px; }
+.nds-acctp-swatches { display: inline-flex; gap: 4px; align-items: center; }
+.nds-acctp-swatch {
+  width: 16px; height: 16px; border-radius: 50%; padding: 0;
+  border: 2px solid transparent; cursor: pointer;
+}
+.nds-acctp-swatch[aria-pressed='true'] { border-color: var(--nds-text); }
+.nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: 10px; color: var(--nds-text-2); line-height: 1; }
+
+/* CX.2 — the honest row. The status pill sits on the name line; scope chips, the
+   permissions + timestamps line and the error line stack under it in `.nds-acctp-main`'s
+   gap, so the row keeps equal padding top and bottom and no orphan margins. */
+.nds-acctp-status { flex: none; }
+.nds-acctp-scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.nds-acctp-times {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+  font-size: 11.5px; color: var(--nds-text-2); font-variant-numeric: tabular-nums;
+}
+/* The stored `lastError`, verbatim — already redacted server-side. Long tokens wrap
+   inside the column rather than pushing the actions off the row. */
+.nds-acctp-err { margin: 0; font-size: 12px; color: var(--nds-danger-strong); overflow-wrap: anywhere; }
+/* The inline result of Test: "OK · 412 ms" / "Failed · auth_expired · …". */
+.nds-acctp-test { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.nds-acctp-test[data-tone='ok'] { color: var(--nds-success-strong); }
+.nds-acctp-test[data-tone='error'] { color: var(--nds-danger-strong); }
+
+/* Account controls stack within narrow settings panels, regardless of viewport width. */
+@container (max-width: 640px) {
+  .nds-acctp-row { flex-direction: column; gap: var(--nds-space-10); }
+  .nds-acctp-main { width: 100%; overflow-wrap: anywhere; }
+  .nds-acctp-actions { max-width: 100%; justify-content: flex-start; }
+  .nds-acctp-swatches { flex-wrap: wrap; }
+  .nds-acctp-note { max-width: none; text-align: left; }
+}

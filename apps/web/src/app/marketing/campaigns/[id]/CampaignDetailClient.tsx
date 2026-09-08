@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { ArrowLeft, Play, Pause, Check, Rocket } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { accountDisplayName } from '@/design-system/lib'
 
 export interface CampaignDetail {
   id: string; name: string; channel: string; surface: string; objective: string; status: string
@@ -20,7 +21,7 @@ export interface CampaignDetail {
   deliveryStatus: string | null; deliveryReasons: string[]; startDate: string; endDate: string | null
   links: Array<{ id: string; marketplace: string; externalId: string | null; status: string; currency: string; deliveryStatus: string | null }>
   targets: Array<{ id: string; kind: string; expressionType: string | null; expressionValue: string; bidCents: number | null; spendCents: number; salesCents: number; status: string }>
-  amazonAds: { adProduct: string; profileId: string | null; portfolioId: string | null } | null
+  amazonAds: { adProduct: string; profileId: string | null; accountLabel?: string | null; portfolioId: string | null } | null
   ebayPromoted: { fundingStrategy: string; bidPercentage: string | null } | null
   discount: { discountType: string; discountPercent: string | null; appliesTo: string } | null
   externalAds: { platform: string; objectiveNative: string | null } | null
@@ -59,7 +60,7 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
   const launch = async () => { setBusy(true); try { await fetch(`${getBackendUrl()}/api/marketing/os/campaigns/${c.id}/launch`, { method: 'POST' }) } finally { setBusy(false); void reload() } }
 
   const detailBlock = (() => {
-    if (c.amazonAds) return [['Ad product', c.amazonAds.adProduct], ['Profile', c.amazonAds.profileId ?? '—'], ['Portfolio', c.amazonAds.portfolioId ?? '—']]
+    if (c.amazonAds) return [['Ad product', c.amazonAds.adProduct], ['Account', accountDisplayName({ channel: 'AMAZON_ADS', label: c.amazonAds.accountLabel ?? '' })], ['Portfolio', c.amazonAds.portfolioId ?? '—']]
     if (c.ebayPromoted) return [['Funding', c.ebayPromoted.fundingStrategy], ['Bid %', c.ebayPromoted.bidPercentage ?? '—']]
     if (c.discount) return [['Discount type', c.discount.discountType], ['Percent', c.discount.discountPercent ?? '—'], ['Applies to', c.discount.appliesTo]]
     if (c.externalAds) return [['Platform', c.externalAds.platform], ['Objective', c.externalAds.objectiveNative ?? '—']]

@@ -65,27 +65,9 @@ export function marketplaceCode(id: string): string {
 
 // ── SP-API client ────────────────────────────────────────────────────
 
-let cachedClient: unknown = null
-async function getClient(): Promise<{ callAPI: (o: Record<string, unknown>) => Promise<any> }> {
-  if (cachedClient) return cachedClient as never
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('[data-kiosk] missing AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET / AMAZON_REFRESH_TOKEN')
-  }
-  const mod = await import('amazon-sp-api')
-  const SellingPartner = (mod as unknown as { default: new (o: unknown) => unknown }).default
-  cachedClient = new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as 'eu',
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: false },
-  })
-  return cachedClient as never
+async function getClient(): Promise<any> {
+  const client = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(undefined, { auto_request_throttled: false })
+  return client
 }
 
 /** True when the failure is Data Kiosk's create-query quota, which surfaces

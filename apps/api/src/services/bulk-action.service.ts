@@ -2379,7 +2379,7 @@ export class BulkActionService {
         './channel-batch/amazon-batch-feed.service.js'
       );
       const sellerId =
-        process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID;
+        await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId();
       if (!sellerId) {
         throw new Error(
           'CHANNEL_BATCH AMAZON: AMAZON_SELLER_ID env required',

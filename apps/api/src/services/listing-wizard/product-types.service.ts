@@ -191,7 +191,7 @@ export class ProductTypesService {
     marketplace: string | null
     search: string
   }): Promise<ProductTypeListItem[] | null> {
-    if (!this.amazon.isConfigured()) return null
+    if (!await this.amazon.isConfigured()) return null
 
     const sp = await (this.amazon as unknown as {
       getClient: () => Promise<{ callAPI: (req: unknown) => Promise<unknown> }>
@@ -347,7 +347,7 @@ Rank the top 5 best matches. If nothing fits well, return fewer entries with low
       // Other channels don't have a CategorySchema pipeline yet.
       return { ok: false, reason: 'channel-not-supported' }
     }
-    if (!this.amazon.isConfigured()) {
+    if (!await this.amazon.isConfigured()) {
       return { ok: false, reason: 'sp-api-not-configured' }
     }
     try {

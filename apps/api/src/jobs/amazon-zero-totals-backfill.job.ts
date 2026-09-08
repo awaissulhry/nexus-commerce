@@ -45,7 +45,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runZeroTotalsBackfill(): Promise<void> {
-  if (!amazonOrdersService.isConfigured()) {
+  if (!await amazonOrdersService.isConfigured()) {
     logger.warn('amazon-zero-totals-backfill: Amazon SP-API not configured — skipping')
     return
   }

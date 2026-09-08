@@ -376,7 +376,7 @@ export async function submitAmazonImageFeed(
   const marketplaceId = MARKETPLACE_IDS[mkt] ?? marketplaceCodeToId(mkt)
   if (!marketplaceId) throw new Error(`Unknown Amazon marketplace: ${mkt}`)
 
-  const sellerId = process.env.AMAZON_SELLER_ID ?? ''
+  const sellerId = await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
   if (!sellerId) throw new Error('AMAZON_SELLER_ID env var required')
 
   // Create job row first so UI has a jobId to poll immediately
@@ -539,16 +539,7 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
 
 async function fetchProcessingReport(resultFeedDocumentId: string): Promise<unknown> {
   try {
-    const { SellingPartner } = await import('amazon-sp-api')
-    const sp: any = new SellingPartner({
-      region: (process.env.AMAZON_REGION ?? 'eu') as any,
-      refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-        SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-      },
-      options: { auto_request_tokens: true, auto_request_throttled: true },
-    })
+    const sp: any = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient()
     const docRes: any = await withTimeout(
       sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: resultFeedDocumentId } }),
       25_000,

@@ -241,7 +241,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
     const mkt = (request.query.marketplace ?? 'ES').toUpperCase()
     const marketplaceId = marketplaceCodeToId(mkt)
     if (!marketplaceId) return reply.code(400).send({ error: `bad marketplace ${mkt}` })
-    const sellerId = request.query.sellerId || process.env.AMAZON_SELLER_ID || process.env.AMAZON_MERCHANT_ID || ''
+    const sellerId = request.query.sellerId || await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId() || await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId() || ''
     try {
       const res = await amazonSpApiClient.getListingsItem({
         sellerId,
@@ -259,7 +259,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         sku: request.params.sku,
         marketplace: mkt,
         clientRegion: amazonSpApiClient.region,
-        envRegion: process.env.AMAZON_REGION ?? '(unset)',
+        envRegion: await (await import('../../lib/amazon-sp-client.js')).getAmazonRegion(),
         sellerIdUsed: sellerId,
         sellerIdLen: sellerId.length,
         success: res.success,

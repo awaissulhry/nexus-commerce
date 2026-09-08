@@ -32,6 +32,7 @@ import {
   type KeyValueItem,
 } from '@/design-system/components'
 import { Button, CheckboxCard, Pill, Tag } from '@/design-system/primitives'
+import { scopeChipLabel } from '@/design-system/lib/accounts-panel'
 import { PageHeader } from '@/design-system/patterns'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -210,7 +211,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
       }
       if ('connected' in r) {
         popup?.close()
-        setNote({ tone: 'success', text: `${label} authorization verified and stored securely.` })
+        setNote({ tone: 'success', text: `${label} access verified.` })
         await refetch()
         router.refresh()
         return
@@ -313,7 +314,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
               aria-disabled={reconnectH.held || busy === 'reconnect'}
               aria-busy={busy === 'reconnect'}
             >
-              {busy === 'reconnect' ? 'Opening…' : reconnectLabel(drift.length, detail.scopes.length)}
+              {busy === 'reconnect' ? 'Checking…' : connection.connectMode === 'self_authorization' ? connection.isManagedBy === 'env' ? 'Import authorization' : 'Verify access' : reconnectLabel(drift.length, detail.scopes.length)}
             </Button>
             <Button
               size="sm"
@@ -584,8 +585,7 @@ function MarketplacesCard({
             <div style={row('var(--nds-space-6)')}>
               {participation.map((s) => (
                 <Tag key={`${s.kind}:${s.externalId}`} tone={s.isActive ? 'success' : 'neutral'}>
-                  {s.label ?? s.externalId}
-                  {s.isActive ? '' : ' · inactive'}
+                  {scopeChipLabel(s)}
                 </Tag>
               ))}
             </div>

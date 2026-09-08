@@ -115,7 +115,7 @@ export class CategorySchemaService {
     if (hit && Date.now() - hit.at < TWENTY_FOUR_HOURS_MS) return hit.labels
 
     let labels: Record<string, Record<string, string>> = {}
-    if (this.amazon.isConfigured()) {
+    if (await this.amazon.isConfigured()) {
       try {
         const sp = await (this.amazon as any).getClient()
         const envelope = (await sp.callAPI({
@@ -178,9 +178,9 @@ export class CategorySchemaService {
   }
 
   private async fetchAndCacheAmazon(query: SchemaQuery) {
-    if (!this.amazon.isConfigured()) {
+    if (!await this.amazon.isConfigured()) {
       throw new Error(
-        'Amazon SP-API not configured — set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+        'Connect or verify your Amazon Seller account in Settings → Channels.',
       )
     }
 

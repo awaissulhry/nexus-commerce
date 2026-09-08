@@ -41,7 +41,7 @@ interface RetryResult {
 }
 
 export async function runAmazonOrderItemsRetry(): Promise<void> {
-  if (!amazonOrdersService.isConfigured()) {
+  if (!await amazonOrdersService.isConfigured()) {
     logger.warn('amazon-order-items-retry: SP-API not configured — skipping')
     return
   }

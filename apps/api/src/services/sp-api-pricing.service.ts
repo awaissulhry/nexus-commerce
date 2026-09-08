@@ -27,43 +27,16 @@
  * back to manual values when absent.
  */
 
-import { SellingPartner } from 'amazon-sp-api'
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const RATE_LIMIT_MS = 200 // SP-API: 5 req/sec for productFees & productPricing
 
-let cachedClient: SellingPartner | null = null
-function getClient(): SellingPartner {
-  if (cachedClient) return cachedClient
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
-  const roleArn = process.env.AWS_ROLE_ARN
-  if (!clientId || !clientSecret || !refreshToken || !accessKeyId || !secretAccessKey || !roleArn) {
-    throw new Error(
-      'sp-api-pricing: missing one or more required SP-API env vars',
-    )
-  }
-  const region = (process.env.AMAZON_REGION ?? 'eu') as 'eu' | 'na' | 'fe'
-  cachedClient = new SellingPartner({
-    region,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  } as any)
-  // L.3.2 — every callAPI now writes an OutboundApiCallLog row.
-  instrumentSellingPartner(cachedClient as never, {
-    channel: 'AMAZON',
-    triggeredBy: 'cron',
-  })
-  return cachedClient
+async function getClient(): Promise<any> {
+  const client = await (await import('../lib/amazon-sp-client.js')).getAmazonSpClient()
+  instrumentSellingPartner(client as never, { channel: 'AMAZON' })
+  return client
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -125,7 +98,7 @@ export async function refreshFeeEstimates(
     }
   }
 
-  const sp = getClient()
+  const sp = await getClient()
   let feesWritten = 0
   let errors = 0
   for (const listing of listings) {
@@ -250,7 +223,7 @@ export async function refreshCompetitivePricing(
   })
 
   // Batch by 20 ASINs/request — SP-API limit.
-  const sp = getClient()
+  const sp = await getClient()
   let pricesWritten = 0
   let errors = 0
   for (let i = 0; i < listings.length; i += 20) {
@@ -286,8 +259,7 @@ export async function refreshCompetitivePricing(
         }
         const offers = r?.body?.payload?.Offers ?? []
         const ourSellerId =
-          process.env.AMAZON_SELLER_ID ??
-          process.env.AMAZON_MERCHANT_ID ??
+          await (await import('../lib/amazon-sp-client.js')).getAmazonSellerId() ??
           null
         let lowest: number | null = null
         let buyBox: number | null = null

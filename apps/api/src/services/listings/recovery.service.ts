@@ -298,9 +298,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       // env, not a per-row column. Falls back across the two legacy
       // names.
       const sellerId =
-        process.env.AMAZON_SELLER_ID ??
-        process.env.AMAZON_MERCHANT_ID ??
-        ''
+        await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
       if (!sellerId) {
         throw new Error(
           'AMAZON_SELLER_ID / AMAZON_MERCHANT_ID is not set — cannot call SP-API.',

@@ -6,8 +6,9 @@
  * param, JSON-Patch body shape, and ERROR/WARNING parsing. Live behaviour is
  * smoke-tested separately on prod via scripts/_ala-vp-smoke.mjs.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { AmazonSpApiClient } from './amazon-sp-api.client.js'
+vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonRegion: async () => 'na' }))
 
 function stub(client: AmazonSpApiClient, mockResponse: Record<string, unknown>) {
   const captured: { url?: string; init?: any } = {}
@@ -31,6 +32,7 @@ describe('validateListing — VALIDATION_PREVIEW', () => {
       patches: [{ op: 'replace', path: '/attributes/item_name', value: [{ value: 'X' }] }],
     })
     expect(res.available).toBe(true)
+    expect(cap.url).toContain('sellingpartnerapi-na.amazon.com')
     expect(res.ok).toBe(true)
     expect(cap.init.method).toBe('PATCH')
     expect(cap.url).toContain('mode=VALIDATION_PREVIEW')

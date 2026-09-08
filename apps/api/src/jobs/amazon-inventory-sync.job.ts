@@ -25,7 +25,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runInventorySweep(): Promise<void> {
-  if (!amazonInventoryService.isConfigured()) {
+  if (!await amazonInventoryService.isConfigured()) {
     logger.warn('amazon-inventory cron: Amazon SP-API not configured — skipping')
     return
   }

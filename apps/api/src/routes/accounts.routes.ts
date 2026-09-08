@@ -43,6 +43,7 @@ import {
 } from "../services/connection-resolver.service.js";
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 import { revoke } from "../services/cx/token.service.js";
+import { connectionLabel } from "../services/connection-label.js";
 
 type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
@@ -114,41 +115,6 @@ export interface AccountRow {
   identity: Record<string, unknown> | null;
 }
 
-const EBAY_PLACEHOLDER_LABELS = new Set(["eBay seller (verified)", "eBay seller"]);
-/** Amazon merchant ids look like A1VRHKTGYO1JNU — 12-16 uppercase alphanumerics starting with A. */
-const AMAZON_MERCHANT_ID = /^A[A-Z0-9]{9,19}$/;
-
-function deriveLabel(r: ChannelConnection): Pick<AccountRow, "label" | "labelSource" | "labelIsPlaceholder"> {
-  const channel = r.channelType as Channel;
-  // MAP.2a — the operator's own name for the account wins over anything the
-  // channel gave us, because neither channel gives us a usable one.
-  const own = r.accountLabel?.trim();
-  if (own) return { label: own, labelSource: "accountLabel", labelIsPlaceholder: false };
-
-  const storeName = r.ebayStoreName?.trim();
-  if (storeName) return { label: storeName, labelSource: "storeName", labelIsPlaceholder: false };
-
-  const displayName = r.displayName?.trim();
-  const signIn = r.ebaySignInName?.trim();
-  const candidate = displayName || signIn;
-  if (candidate) {
-    const isPlaceholder =
-      EBAY_PLACEHOLDER_LABELS.has(candidate) ||
-      (channel === "AMAZON" && AMAZON_MERCHANT_ID.test(candidate));
-    return {
-      label: candidate,
-      labelSource: displayName
-        ? channel === "AMAZON" && AMAZON_MERCHANT_ID.test(candidate)
-          ? "sellerId"
-          : "displayName"
-        : "signInName",
-      labelIsPlaceholder: isPlaceholder,
-    };
-  }
-  // Nothing at all — name it by its channel rather than rendering an empty chip.
-  return { label: channel, labelSource: "channel", labelIsPlaceholder: true };
-}
-
 /**
  * Health, from what we can actually measure. Deliberately NOT a function of
  * tokenExpiresAt — see the file header, decision 1.
@@ -202,7 +168,7 @@ function toAccountRow(
     id: r.id,
     channel: r.channelType as Channel,
     managedBy: r.managedBy ?? "oauth",
-    ...deriveLabel(r),
+    ...connectionLabel(r),
     markets: readMarkets(r),
     ...deriveHealth(r),
     isPrimary,

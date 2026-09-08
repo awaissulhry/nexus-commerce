@@ -61,25 +61,7 @@ export interface MultiMarketplaceReconciliationReport {
 }
 
 async function getLwaAccessToken(): Promise<string> {
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('LWA credentials missing')
-  }
-  const res = await fetch('https://api.amazon.com/auth/o2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }).toString(),
-  })
-  if (!res.ok) throw new Error(`LWA failed: ${await res.text()}`)
-  const data = (await res.json()) as { access_token: string }
-  return data.access_token
+  return (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
 }
 
 /**
@@ -93,7 +75,7 @@ async function fetchChannelOrderTotals(
   to: Date,
 ): Promise<{ orderCount: number; revenue: number; pages: number }> {
   const accessToken = await getLwaAccessToken()
-  const region = (process.env.AMAZON_REGION ?? 'eu') as string
+  const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
   const host = `sellingpartnerapi-${region}.amazon.com`
 
   // SP-API: 2-min skew window

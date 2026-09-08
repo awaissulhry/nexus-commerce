@@ -34,7 +34,7 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       reviewGatedScopes: s.auth.reviewGatedScopes ?? [],
       regions: s.regions?.map((r) => ({ key: r.key, label: r.label })) ?? [],
       defaultRegion: s.defaultRegion ?? null,
-      refreshTokenLifetimeSec: s.auth.refreshTokenLifetimeSec ?? null,
+      refreshTokenLifetimeSec: s.key === 'AMAZON_SP' && process.env.AMAZON_SP_AUTH_MODE === 'self' ? null : s.auth.refreshTokenLifetimeSec ?? null,
       rotatesRefreshToken: s.auth.rotatesRefreshToken,
       webhooks: s.webhooks,
       sandbox: s.sandbox,

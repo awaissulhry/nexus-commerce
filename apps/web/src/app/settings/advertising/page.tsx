@@ -10,6 +10,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import Link from 'next/link'
 import { Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
+import { accountDisplayName } from '@/design-system/lib'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 
@@ -99,7 +100,9 @@ export default function AdvertisingSettingsPage() {
   }
 
   const handleDelete = async (profileId: string) => {
-    if (!confirm(`Remove connection for profile ${profileId}?`)) return
+    const connection = connections.find((c) => c.profileId === profileId)
+    const name = accountDisplayName({ channel: 'AMAZON_ADS', label: connection?.accountLabel ?? '' })
+    if (!confirm(`Remove connection for ${name}?`)) return
     await fetch(`${getBackendUrl()}/api/advertising/connections/${profileId}`, { method: 'DELETE' })
     fetchConnections()
   }
@@ -213,12 +216,11 @@ export default function AdvertisingSettingsPage() {
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-slate-900 text-sm truncate">
-                      {conn.accountLabel ?? conn.profileId}
+                      {accountDisplayName({ channel: 'AMAZON_ADS', label: conn.accountLabel ?? '' })}
                     </span>
                     <StatusBadge mode={conn.mode} writesEnabledAt={conn.writesEnabledAt} />
                   </div>
                   <div className="text-xs text-slate-500 space-x-3">
-                    <span>Profile: <code className="font-mono">{conn.profileId}</code></span>
                     <span>Region: {conn.region}</span>
                     <span>Marketplace: {conn.marketplace}</span>
                   </div>

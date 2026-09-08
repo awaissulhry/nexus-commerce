@@ -20,49 +20,15 @@ import { logger } from '../utils/logger.js'
 
 // ── Region + auth (mirrors fba-inbound.service.ts) ───────────────────
 
-const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
 const REGION_ENDPOINTS: Record<string, string> = {
   na: 'https://sellingpartnerapi-na.amazon.com',
   eu: 'https://sellingpartnerapi-eu.amazon.com',
   fe: 'https://sellingpartnerapi-fe.amazon.com',
 }
-const SP_REGION = (process.env.AMAZON_SP_REGION ?? 'eu') as keyof typeof REGION_ENDPOINTS
 
-let cachedToken: { value: string; expiresAt: number } | null = null
 
 async function getLwaAccessToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60_000) {
-    return cachedToken.value
-  }
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      'SP-API not configured (AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET / AMAZON_REFRESH_TOKEN)',
-    )
-  }
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-  })
-  const res = await fetch(LWA_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`LWA token exchange failed: ${res.status} ${text.slice(0, 200)}`)
-  }
-  const json = (await res.json()) as { access_token: string; expires_in: number }
-  cachedToken = {
-    value: json.access_token,
-    expiresAt: Date.now() + json.expires_in * 1000,
-  }
-  return json.access_token
+  return (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
 }
 
 const V2_BASE = '/inbound/fba/2024-03-20'
@@ -73,7 +39,7 @@ async function spFetch(
   body?: unknown,
 ): Promise<{ status: number; json: any; text: string }> {
   const token = await getLwaAccessToken()
-  const url = `${REGION_ENDPOINTS[SP_REGION]}${path}`
+  const url = `${REGION_ENDPOINTS[await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()]}${path}`
   const res = await fetch(url, {
     method,
     headers: {

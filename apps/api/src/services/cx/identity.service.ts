@@ -38,12 +38,30 @@ export async function placeGrant(input: {
   channelLabel: string
   identity: ConnectionIdentity | null
   targetConnectionId?: string | null
+  region?: string | null
 }): Promise<GrantPlacement> {
   const { channelType, channelLabel, identity, targetConnectionId } = input
 
+  // Amazon grants are attached to one seller and region; reconnect cannot move
+  // another seller's credentials onto the row that owns existing history.
+  if (channelType === 'AMAZON' && targetConnectionId) {
+    const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })
+    if (!target || target.channelType !== channelType ||
+        (target.externalAccountId && target.externalAccountId !== identity?.userId) ||
+        (target.region && input.region && target.region !== input.region)) {
+      throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'Reconnect the same Amazon seller account in its existing region.')
+    }
+  }
+
   if (identity?.userId) {
     const already = await findAccountByExternalId(channelType, identity.userId)
-    if (already) return { kind: 'reconsent', connectionId: already.id }
+    if (already) {
+      if (channelType === 'AMAZON' && ((targetConnectionId && already.id !== targetConnectionId) ||
+          (already.region && input.region && already.region !== input.region))) {
+        throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'This Amazon authorization belongs to another account or region.')
+      }
+      return { kind: 'reconsent', connectionId: already.id }
+    }
 
     if (targetConnectionId) {
       const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })

@@ -354,18 +354,15 @@ async function seedEnvManagedConnections(): Promise<void> {
     // WHERE isActive=true could fight a real OAuth Amazon row landing
     // later, so we do not let this seed step write isActive=true if
     // there's already an OAuth-managed Amazon row active.
-    // MAP.3 — asking "has a real OAuth Amazon grant landed yet?" is a boot-time
-    // seed guard, not a resolution for work, but it goes through the resolver so
-    // there is exactly one definition of an active account in the codebase.
-    const { listActiveConnections } = await import(
-      "./services/connection-resolver.service.js"
-    );
-    const existingOauth = (await listActiveConnections("AMAZON")).find(
-      (c) => c.managedBy === "oauth",
-    );
+    // A disconnected grant is still authoritative history. Recreating an env
+    // account on restart would silently undo the operator's disconnect.
+    const existingOauth = await prisma.channelConnection.findFirst({
+      where: { channelType: "AMAZON", managedBy: "oauth" },
+      select: { id: true },
+    });
     if (existingOauth) {
       logger.info(
-        "seedEnvManagedConnections: oauth-managed Amazon row already active — skipping env synthesis",
+        "seedEnvManagedConnections: persisted Amazon authorization exists — skipping env synthesis",
         { existingId: existingOauth.id },
       );
       return;

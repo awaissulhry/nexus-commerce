@@ -242,24 +242,7 @@ export async function submitAmazonListingsBatch(
 
   // Lazy-load the SP-API client so dry-run paths never pay the
   // import cost (the client pulls in AWS auth chain + a 1MB+ tree).
-  const { SellingPartner } = await import('amazon-sp-api')
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const lwaClientId = process.env.AMAZON_LWA_CLIENT_ID
-  const lwaClientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  if (!refreshToken || !lwaClientId || !lwaClientSecret) {
-    throw new Error(
-      'AmazonBatch: AMAZON_REFRESH_TOKEN / AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET required',
-    )
-  }
-  const sp: any = new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as any,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: lwaClientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: lwaClientSecret,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  })
+  const sp: any = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient()
 
   // Step 1: create feed document slot.
   const docRes: any = await sp.callAPI({
@@ -339,16 +322,7 @@ export async function pollAmazonFeedStatus(feedId: string): Promise<{
       resultFeedDocumentId: null,
     }
   }
-  const { SellingPartner } = await import('amazon-sp-api')
-  const sp: any = new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as any,
-    refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-      SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  })
+  const sp: any = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient()
   const res: any = await withTimeout(
     sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } }),
     25_000,

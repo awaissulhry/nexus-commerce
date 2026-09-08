@@ -55,7 +55,7 @@ export function ChannelsClient() {
         ?? (m.channel === 'EBAY' ? 'eBay' : m.channel)
       setNotice({
         tone: drift ? 'info' : 'success',
-        title: `${displayName} account ${m.placement === 'reconsent' ? 'reconnected' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
+        title: `${displayName} account ${m.placement === 'verified' ? 'verified' : m.placement === 'reconsent' ? 'reconnected' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
         text: drift ? `${drift} permission${drift === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${drift === 1 ? 'it' : 'them'}.` : undefined,
       })
     },

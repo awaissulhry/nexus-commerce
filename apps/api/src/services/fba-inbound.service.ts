@@ -30,56 +30,19 @@
 import { logger } from '../utils/logger.js'
 import prisma from '../db.js'
 
-const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
 const REGION_ENDPOINTS: Record<string, string> = {
   na: 'https://sellingpartnerapi-na.amazon.com',
   eu: 'https://sellingpartnerapi-eu.amazon.com',
   fe: 'https://sellingpartnerapi-fe.amazon.com',
 }
-const SP_REGION = (process.env.AMAZON_SP_REGION ?? 'eu') as keyof typeof REGION_ENDPOINTS
 
-let cachedToken: { value: string; expiresAt: number } | null = null
 
 async function getLwaAccessToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60_000) {
-    return cachedToken.value
-  }
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('SP-API not configured (AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET / AMAZON_REFRESH_TOKEN)')
-  }
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-  })
-  const res = await fetch(LWA_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`LWA token exchange failed: ${res.status} ${text.slice(0, 200)}`)
-  }
-  const json = (await res.json()) as { access_token: string; expires_in: number }
-  cachedToken = {
-    value: json.access_token,
-    expiresAt: Date.now() + json.expires_in * 1000,
-  }
-  return json.access_token
+  return (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
 }
 
-export function isFbaInboundConfigured(): boolean {
-  return !!(
-    process.env.AMAZON_LWA_CLIENT_ID &&
-    process.env.AMAZON_LWA_CLIENT_SECRET &&
-    process.env.AMAZON_REFRESH_TOKEN &&
-    process.env.AMAZON_MARKETPLACE_ID
-  )
+export async function isFbaInboundConfigured(): Promise<boolean> {
+  return (await import('../lib/amazon-sp-client.js')).amazonCredsConfigured()
 }
 
 // ─── Types mirror the v0 createInboundShipmentPlan request/response ─
@@ -165,7 +128,7 @@ export async function createInboundShipmentPlan(args: {
   shipFrom?: ShipFromAddress
   labelPrepPreference?: 'SELLER_LABEL' | 'AMAZON_LABEL_ONLY' | 'AMAZON_LABEL_PREFERRED'
 }): Promise<CreatePlanResult> {
-  if (!isFbaInboundConfigured()) {
+  if (!await isFbaInboundConfigured()) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   if (!args.items || args.items.length === 0) {
@@ -190,7 +153,7 @@ export async function createInboundShipmentPlan(args: {
     })),
   }
 
-  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/plans?MarketplaceId=${encodeURIComponent(marketplaceId)}`
+  const url = `${REGION_ENDPOINTS[await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()]}/fba/inbound/v0/plans?MarketplaceId=${encodeURIComponent(marketplaceId)}`
 
   const res = await fetch(url, {
     method: 'POST',
@@ -262,7 +225,7 @@ export interface GetLabelsResult {
  * error handling uniform across the FBA inbound surface.
  */
 export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<GetLabelsResult> {
-  if (!isFbaInboundConfigured()) {
+  if (!await isFbaInboundConfigured()) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   if (!args.shipmentId) throw new Error('shipmentId required')
@@ -280,7 +243,7 @@ export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<Get
     qs.set('PackageLabelsToPrint', args.packageLabelsToPrint.join(','))
   }
 
-  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/labels?${qs.toString()}`
+  const url = `${REGION_ENDPOINTS[await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/labels?${qs.toString()}`
 
   const res = await fetch(url, {
     method: 'GET',
@@ -360,7 +323,7 @@ export async function getInboundShipmentsBatch(args: {
   lastUpdatedBefore?: string
   nextToken?: string
 }): Promise<GetShipmentsResult> {
-  if (!isFbaInboundConfigured()) {
+  if (!await isFbaInboundConfigured()) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
@@ -397,7 +360,7 @@ export async function getInboundShipmentsBatch(args: {
     }
   }
 
-  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments?${qs.toString()}`
+  const url = `${REGION_ENDPOINTS[await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()]}/fba/inbound/v0/shipments?${qs.toString()}`
 
   const res = await fetch(url, {
     method: 'GET',
@@ -466,7 +429,7 @@ const FNSKU_CACHE_TTL_MS = 30 * 60_000
  * absent as null — user enters FNSKU manually).
  */
 export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<string, string>> {
-  if (!isFbaInboundConfigured()) {
+  if (!await isFbaInboundConfigured()) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   if (sellerSkus.length === 0) return {}
@@ -474,7 +437,7 @@ export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<s
   // Refresh cache if stale
   if (!fnskuInventoryCache || Date.now() - fnskuInventoryCache.fetchedAt > FNSKU_CACHE_TTL_MS) {
     const token = await getLwaAccessToken()
-    const base = REGION_ENDPOINTS[SP_REGION] ?? REGION_ENDPOINTS.eu
+    const base = REGION_ENDPOINTS[await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()] ?? REGION_ENDPOINTS.eu
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
     const allMap: Record<string, string> = {}
 
@@ -555,7 +518,7 @@ export async function backfillFbaInboundShipments(args: {
   const daysBack = args.daysBack ?? 730
   const errors: string[] = []
 
-  if (!isFbaInboundConfigured()) {
+  if (!await isFbaInboundConfigured()) {
     throw new Error('SP-API FBA inbound not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
 

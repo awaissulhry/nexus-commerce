@@ -875,7 +875,7 @@ export class SubmissionService {
         } else {
           const message =
             c.platform === 'AMAZON'
-              ? 'Amazon SP-API not configured. Set AMAZON_SELLER_ID + AMAZON_REFRESH_TOKEN env vars on the API server.'
+              ? 'Connect or verify your Amazon Seller account in Settings → Channels.'
               : c.platform === 'EBAY'
                 ? 'No active eBay ChannelConnection — link an eBay account in Settings.'
                 : `${c.platform} channel credentials not configured.`

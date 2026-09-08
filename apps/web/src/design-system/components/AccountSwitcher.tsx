@@ -32,6 +32,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { accountIdentity } from '../tokens/colors'
+import { accountDisplayName, channelDisplayName } from '../lib/account-identity'
+export { channelDisplayName } from '../lib/account-identity'
 import '../styles/tokens.css'
 import '../styles/components.css'
 
@@ -120,16 +122,6 @@ export interface AccountSwitcherProps {
   initialData?: AccountsPayload
 }
 
-const CHANNEL_LABEL: Record<string, string> = {
-  AMAZON: 'Amazon',
-  // CX.3a — Amazon Ads is its own channel: one grant, N advertising profiles.
-  AMAZON_ADS: 'Amazon Ads',
-  EBAY: 'eBay',
-  SHOPIFY: 'Shopify',
-  WOOCOMMERCE: 'WooCommerce',
-  ETSY: 'Etsy',
-}
-
 const HEALTH_TEXT: Record<AccountHealth, string> = {
   ok: 'Healthy',
   warn: 'Degraded',
@@ -137,25 +129,7 @@ const HEALTH_TEXT: Record<AccountHealth, string> = {
   unknown: 'Not yet reported',
 }
 
-function channelName(channel: string): string {
-  return CHANNEL_LABEL[channel] ?? channel
-}
-
-/** The one spelling of a channel's name, for anything that renders one. */
-export function channelDisplayName(channel: string): string {
-  return channelName(channel)
-}
-
-/**
- * The label to show for an account. When the backend flags the label as a
- * placeholder there is no real account name to show — the eBay OAuth scope in
- * use carries no identity claim, and Amazon's is a raw merchant id. Naming the
- * channel and showing the raw value underneath is honest; inventing a friendly
- * name is not. MAP.2's `accountLabel` column is the fix.
- */
-function primaryLabel(a: AccountRow): string {
-  return a.labelIsPlaceholder ? channelName(a.channel) : a.label
-}
+const channelName = channelDisplayName
 
 export function AccountSwitcher({
   endpoint,
@@ -376,13 +350,10 @@ export function AccountSwitcher({
                     />
                   )}
                   <span className="nds-acct-row-main">
-                    <span className="nds-acct-row-label">{primaryLabel(a)}</span>
+                    <span className="nds-acct-row-label">{accountDisplayName(a)}</span>
                     <span className="nds-acct-row-sub">
                       {a.labelIsPlaceholder ? (
-                        // Naming what we actually hold, rather than dressing it up.
-                        <>
-                          {a.labelSource === 'sellerId' ? 'Seller ID' : 'No display name'} · <code>{a.label}</code>
-                        </>
+                        <>Account name unavailable — rename in Channels</>
                       ) : (
                         <>{HEALTH_TEXT[a.health]}</>
                       )}

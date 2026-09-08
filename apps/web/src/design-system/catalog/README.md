@@ -17,4 +17,6 @@ surface and the **verification harness** target.
 This is the screen used to judge the whole system at once, and the surface where
 "screenshot-diff before showing" is enforced for every later visual phase.
 
+Account names (2026-09-08): `accountDisplayName` / `channelDisplayName` are exported from `design-system/lib`. Verify the switcher and AccountsPanel with real names, legacy `sellerId` placeholders, numeric profile IDs, and missing marketplace names. No technical keys should appear as text, tooltips, dialog copy, or accessible labels. Names can be supplied with Rename; IDs remain internal routing keys.
+
 Amazon Seller migration (2026-09-08): verify an ENV-managed Amazon row, its primary **Replace environment credentials** action, the application-role permission copy, and the preserved ENV fallback note. Exercise both website authorization and private-app self-authorization import. Repeat after conversion to confirm the row reads as connected and no longer offers ENV replacement. Check narrow and desktop layouts in light and dark themes.

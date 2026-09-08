@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { AccountRow } from '@/design-system/components/AccountSwitcher'
+import { accountDisplayName, channelDisplayName } from '@/design-system/lib'
 
 export type { AccountRow }
 
@@ -83,7 +84,7 @@ function useJson<T>(path: string, reloadSignal: unknown, pick: (raw: unknown) =>
 export function useAccounts(reloadSignal: unknown) {
   return useJson('/api/accounts', reloadSignal, (raw) => {
     const r = raw as { accounts?: AccountRow[]; notConnected?: string[]; canSwitch?: boolean }
-    return { accounts: r.accounts ?? [], notConnected: r.notConnected ?? [] }
+    return { accounts: (r.accounts ?? []).map((a) => ({ ...a, label: accountDisplayName(a) })), notConnected: r.notConnected ?? [] }
   })
 }
 
@@ -100,20 +101,7 @@ export function useAdsConnections(reloadSignal: unknown) {
 
 /** The one place channel display names live on this page (the catalogue carries them for its own keys). */
 export function channelName(channelType: string): string {
-  switch (channelType) {
-    case 'AMAZON':
-      return 'Amazon'
-    case 'EBAY':
-      return 'eBay'
-    case 'SHOPIFY':
-      return 'Shopify'
-    case 'ETSY':
-      return 'Etsy'
-    case 'AMAZON_ADS':
-      return 'Amazon Ads'
-    default:
-      return channelType
-  }
+  return channelDisplayName(channelType)
 }
 
 export function relativeTime(iso: string | null | undefined, now = Date.now()): string {

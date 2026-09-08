@@ -69,7 +69,7 @@ export async function lookupFnskus(skus: string[], marketplace = 'IT'): Promise<
   let spApiError: string | undefined
 
   if (uncached.length > 0) {
-    if (!isFbaInboundConfigured()) {
+    if (!await isFbaInboundConfigured()) {
       spApiError = 'Amazon SP-API not configured — enter FNSKUs manually'
     } else {
       try {

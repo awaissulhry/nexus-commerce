@@ -97,7 +97,7 @@ export class AmazonPublishAdapter {
    */
   async publish(payload: AmazonPayload): Promise<AmazonPublishResult> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId()
     if (!sellerId) {
       return {
         ok: false,

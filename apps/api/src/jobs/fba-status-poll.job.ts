@@ -44,7 +44,7 @@ export async function runFbaStatusPoll(): Promise<{
   skipped: number
   errors: number
 }> {
-  if (!isFbaInboundConfigured()) {
+  if (!await isFbaInboundConfigured()) {
     return { scanned: 0, updated: 0, unchanged: 0, skipped: 0, errors: 0 }
   }
 
@@ -143,8 +143,8 @@ export function startFbaStatusPollCron(): void {
     logger.error('fba-status-poll cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    if (!isFbaInboundConfigured()) {
+  scheduledTask = cron.schedule(schedule, async () => {
+    if (!await isFbaInboundConfigured()) {
       // Skip silently — manual run via runFbaStatusPoll() also no-ops.
       // Don't record a CronRun row for a configuration-skipped tick.
       return
