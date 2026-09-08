@@ -19,11 +19,15 @@ export interface AccountsTabProps {
 
 export function AccountsTab({ catalogue, reloadSignal, onStart }: AccountsTabProps) {
   const askConfirm = useConfirm()
-  // Every AVAILABLE catalogue entry gets a "Connect another …" affordance in the
-  // panel, keyed by channelType — the panel groups accounts by channelType.
+  // Every website-authorized catalogue entry gets a "Connect another …"
+  // affordance. A private Amazon app can only re-import its one company
+  // authorization, so presenting an add-account action would lead to a flow
+  // Amazon does not support.
   const onConnect: Record<string, () => void> = {}
   for (const c of catalogue ?? []) {
-    if (c.available) onConnect[c.channelType] = () => onStart(c.key, { intent: 'connect' })
+    if (c.available && c.connectMode === 'website_oauth') {
+      onConnect[c.channelType] = () => onStart(c.key, { intent: 'connect' })
+    }
   }
   return (
     <AccountsPanel
