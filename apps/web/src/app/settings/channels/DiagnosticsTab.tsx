@@ -8,12 +8,13 @@
  * labelled for what it is (the primary account's token against the IT site).
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card, Banner, Listbox, MetricStrip, EmptyState } from '@/design-system/components'
 import { Button, Pill, Tag, Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { channelName, relativeTime, STATUS_LABEL, type AccountRow } from './channels-data'
 import { LedgerGrid, InboundGrid, type LedgerRow, type InboundRow } from './ChannelEventsGrid'
+import { readableAccountText } from './channel-event-details'
 
 interface HeartbeatResult {
   ok: boolean
@@ -40,6 +41,10 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   // had just asked for, ~200 ms after it appeared. Measured on prod 2026-08-29.
   const accountId = account?.id ?? null
   const accountChannel = account?.channel ?? null
+  const accountNames = useMemo(() => Object.fromEntries(accounts.flatMap((a) => [
+    [a.id, a.label], ...(a.externalAccountId ? [[a.externalAccountId, a.label]] : []),
+  ])), [accounts])
+  const displayMessage = (message: string) => readableAccountText(message, accountNames)
 
   const [heartbeat, setHeartbeat] = useState<{ busy: boolean; result: HeartbeatResult | null; error: string | null }>({ busy: false, result: null, error: null })
   const [refresh, setRefresh] = useState<{ busy: boolean; text: string | null; tone: 'success' | 'danger' | 'warning' }>({ busy: false, text: null, tone: 'success' })
@@ -211,18 +216,18 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
             </Pill>{' '}
             {heartbeat.result.latencyMs} ms · status now {STATUS_LABEL[heartbeat.result.authStatus]?.label ?? heartbeat.result.authStatus}
             {heartbeat.result.errorClass ? ` · ${heartbeat.result.errorClass}` : ''}
-            {heartbeat.result.message ? ` · ${heartbeat.result.message}` : ''}
+            {heartbeat.result.message ? ` · ${displayMessage(heartbeat.result.message)}` : ''}
             {heartbeat.result.scopeDrift?.length ? ` · ${heartbeat.result.scopeDrift.length} permission(s) not granted` : ''}
           </p>
         )}
         {heartbeat.error && (
           <Banner tone="danger" title="Heartbeat could not run">
-            {heartbeat.error}
+            {displayMessage(heartbeat.error)}
           </Banner>
         )}
         {refresh.text && (
           <Banner tone={refresh.tone} title={refresh.tone === 'success' ? 'Token refreshed' : 'Refresh'}>
-            {refresh.text}
+            {displayMessage(refresh.text)}
           </Banner>
         )}
       </Card>
@@ -230,13 +235,13 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
       <Card header="Connection ledger" description="Every grant, refresh, heartbeat, status change and revoke — archived, never deleted.">
         {ledger.error && (
           <Banner tone="danger" title="Ledger unavailable">
-            {ledger.error}
+            {displayMessage(ledger.error)}
           </Banner>
         )}
         {ledger.rows === null ? (
           <Skeleton height={160} />
         ) : (
-          <LedgerGrid rows={ledger.rows} emptyTitle="No ledger rows yet" emptyDescription="The first heartbeat or refresh writes the first row." />
+          <LedgerGrid rows={ledger.rows} accountNames={accountNames} emptyTitle="No ledger rows yet" emptyDescription="The first heartbeat or refresh writes the first row." />
         )}
       </Card>
 
@@ -253,7 +258,7 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
         )}
         {inbound.error && (
           <Banner tone="danger" title="Inbound events unavailable">
-            {inbound.error}
+            {displayMessage(inbound.error)}
           </Banner>
         )}
         {inbound.rows === null ? (
@@ -275,12 +280,12 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
           </div>
           {probe.error && (
             <Banner tone="danger" title="Probe failed">
-              {probe.error}
+              {displayMessage(probe.error)}
             </Banner>
           )}
           {probe.recommendation !== null && (
-            <Banner tone={probe.ok ? 'success' : 'warning'} title={probe.recommendation}>
-              <pre className="nds-diag-pre">{probe.details}</pre>
+            <Banner tone={probe.ok ? 'success' : 'warning'} title={displayMessage(probe.recommendation)}>
+              <pre className="nds-diag-pre">{probe.details ? displayMessage(probe.details) : null}</pre>
             </Banner>
           )}
         </Card>

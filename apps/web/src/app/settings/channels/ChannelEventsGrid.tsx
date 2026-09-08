@@ -13,7 +13,7 @@ import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-syste
 import { Pill, Tag } from '@/design-system/primitives'
 import { EmptyState } from '@/design-system/components'
 import { relativeTime } from './channels-data'
-import { summariseDetail } from './channel-event-details'
+import { readableAccountText, summariseDetail, type AccountNames } from './channel-event-details'
 export { summariseDetail } from './channel-event-details'
 
 export interface LedgerRow {
@@ -80,13 +80,15 @@ const INBOUND_COLUMNS: ColDef<InboundRow>[] = [
   { field: 'eventType', headerName: 'Type', width: 220 },
   { field: 'externalId', headerName: 'External id', width: 200, valueFormatter: (p) => p.value ?? '—' },
   { colId: 'processed', headerName: 'Processed', width: 120, cellRenderer: ProcessedCell },
-  { field: 'error', headerName: 'Error', flex: 1, minWidth: 200, valueFormatter: (p) => p.value ?? '' },
+  { field: 'error', headerName: 'Error', flex: 1, minWidth: 200, valueFormatter: (p) => readableAccountText(p.value ?? '') },
 ]
 
 const getRowId = (p: { data: { id: string } }) => p.data.id
 
-export function LedgerGrid({ rows, emptyTitle, emptyDescription }: { rows: LedgerRow[]; emptyTitle: string; emptyDescription: string }) {
-  const columnDefs = useMemo(() => LEDGER_COLUMNS, [])
+export function LedgerGrid({ rows, emptyTitle, emptyDescription, accountNames }: { rows: LedgerRow[]; emptyTitle: string; emptyDescription: string; accountNames?: AccountNames }) {
+  const columnDefs = useMemo<ColDef<LedgerRow>[]>(() => LEDGER_COLUMNS.map((column) => column.colId === 'detail'
+    ? { ...column, valueGetter: (p) => summariseDetail(p.data?.detail ?? null, accountNames) }
+    : column), [accountNames])
   if (rows.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} />
   return <NexusGrid<LedgerRow> density="compact" domLayout="autoHeight" rowData={rows} columnDefs={columnDefs} getRowId={getRowId} />
 }
