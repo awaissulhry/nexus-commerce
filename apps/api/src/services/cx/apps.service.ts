@@ -48,7 +48,15 @@ function envSeed(key: ChannelKey): { clientId: string; clientSecret: string; red
       const id = e.AMAZON_LWA_CLIENT_ID ?? e.AMAZON_CLIENT_ID
       const secret = e.AMAZON_LWA_CLIENT_SECRET ?? e.AMAZON_CLIENT_SECRET
       if (!id || !secret) return null
-      return { clientId: id, clientSecret: secret, redirectUris: [], extra: { applicationId: e.AMAZON_SP_APPLICATION_ID ?? null } }
+      return {
+        clientId: id,
+        clientSecret: secret,
+        redirectUris: [],
+        extra: {
+          applicationId: e.AMAZON_SP_APPLICATION_ID ?? null,
+          authorizationVersion: e.AMAZON_SP_AUTH_VERSION === 'beta' ? 'beta' : null,
+        },
+      }
     }
     case 'AMAZON_ADS':
       if (!e.AMAZON_ADS_CLIENT_ID || !e.AMAZON_ADS_CLIENT_SECRET) return null
@@ -112,13 +120,21 @@ export async function getChannelApp(key: ChannelKey, environment: Environment = 
         cipher: String(sk.cipher ?? 'ED25519'),
       }
     }
+    const storedExtra = (row.extra as Record<string, unknown>) ?? {}
+    // Public application metadata can safely fill an older ChannelApp row that
+    // predates these fields; explicit stored values still win.
+    const fallbackExtra = key === 'AMAZON_SP' ? (envSeed(key)?.extra ?? {}) : {}
+    const extra = { ...fallbackExtra }
+    for (const [name, entry] of Object.entries(storedExtra)) {
+      if (entry !== null && entry !== '') extra[name] = entry
+    }
     value = {
       channelKey: key,
       environment,
       clientId: row.clientId,
       clientSecret: secret,
       redirectUris: row.redirectUris,
-      extra: (row.extra as Record<string, unknown>) ?? {},
+      extra,
       signingKey,
     }
   } else {

@@ -142,7 +142,9 @@ const getChannelApp = vi.fn(async (key: string) => ({
   clientId: 'test-client-id',
   clientSecret: 'test-client-secret',
   redirectUris: key === 'EBAY' ? ['Nexus-Test-RuName'] : [],
-  extra: {},
+  extra: key === 'AMAZON_SP'
+    ? { applicationId: 'amzn1.sp.solution.fixture', authorizationVersion: 'beta' }
+    : {},
   signingKey: null,
 }))
 vi.mock('./apps.service.js', () => ({ getChannelApp }))
@@ -151,10 +153,13 @@ vi.mock('./apps.service.js', () => ({ getChannelApp }))
 
 const { registerChannel, getChannelSpec, scopeDriftOf } = await import('./catalog.js')
 const { ebaySpec, EBAY_REQUIRED_SCOPES } = await import('./connectors/ebay/spec.js')
+await import('./connectors/amazon-sp/spec.js')
 const { decryptCredentials, encryptCredentials } = await import('../../lib/crypto.js')
 const { start, complete, sweepSessions, callbackUrlFor, OAuthFlowError, SESSION_TTL_MS, COOKIE_PREFIX } = await import('./oauth.service.js')
 
 const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token'
+const AMAZON_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
+const AMAZON_PARTICIPATIONS_URL = 'https://sellingpartnerapi-eu.amazon.com/sellers/v1/marketplaceParticipations'
 const EBAY_IDENTITY_URL = 'https://apiz.ebay.com/commerce/identity/v1/user/'
 const FAKE_TOKEN_URL = 'https://token.fake.test/oauth/token'
 const FAKE_AUTHORIZE_URL = 'https://auth.fake.test/oauth/authorize'
@@ -228,11 +233,14 @@ function json(body: Record<string, unknown>, status = 200): Response {
 }
 const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
   const u = String(url)
-  if (u === EBAY_TOKEN_URL || u === FAKE_TOKEN_URL) return tokenResponse()
+  if (u === EBAY_TOKEN_URL || u === AMAZON_TOKEN_URL || u === FAKE_TOKEN_URL) return tokenResponse()
   if (u === EBAY_IDENTITY_URL) return identityResponse()
+  if (u === AMAZON_PARTICIPATIONS_URL) {
+    return json({ payload: [{ marketplace: { id: 'APJ6JRA9NG5V4', name: 'Amazon.it', countryCode: 'IT', defaultCurrencyCode: 'EUR' }, participation: { isParticipating: true } }] })
+  }
   throw new Error(`unexpected fetch ${u}`)
 })
-const exchangeCalls = () => fetchMock.mock.calls.filter((c) => String(c[0]) === EBAY_TOKEN_URL || String(c[0]) === FAKE_TOKEN_URL)
+const exchangeCalls = () => fetchMock.mock.calls.filter((c) => [EBAY_TOKEN_URL, AMAZON_TOKEN_URL, FAKE_TOKEN_URL].includes(String(c[0])))
 const exchangeBody = () => new URLSearchParams(String(exchangeCalls()[0][1]?.body ?? ''))
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -384,6 +392,40 @@ describe('start', () => {
     expect(sessions.get(s.state)!.redirectUri).toBe('https://api.example.test/api/cx/callback/etsy')
   })
 
+  it('builds Amazon’s Seller Central consent URL without LWA-only parameters', async () => {
+    const s = await start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'NA', actor: ACTOR })
+    const url = new URL(s.authorizeUrl)
+    expect(`${url.origin}${url.pathname}`).toBe('https://sellercentral.amazon.com/apps/authorize/consent')
+    expect(url.searchParams.get('application_id')).toBe('amzn1.sp.solution.fixture')
+    expect(url.searchParams.get('state')).toBe(s.state)
+    expect(url.searchParams.get('version')).toBe('beta')
+    expect(url.searchParams.has('client_id')).toBe(false)
+    expect(url.searchParams.has('redirect_uri')).toBe(false)
+    expect(url.searchParams.has('scope')).toBe(false)
+    expect(sessions.get(s.state)?.redirectUri).toBe('https://api.example.test/api/cx/callback/amazon_sp')
+  })
+
+  it('refuses unsupported Amazon regions before creating a session', async () => {
+    const err = await flowError(start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'UNKNOWN', actor: ACTOR }))
+    expect(err.code).toBe('invalid_intent')
+    expect(sessions.size).toBe(0)
+  })
+
+  it('refuses missing Amazon application metadata before creating a session', async () => {
+    getChannelApp.mockResolvedValueOnce({
+      channelKey: 'AMAZON_SP',
+      environment: 'production',
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+      redirectUris: [],
+      extra: {},
+      signingKey: null,
+    })
+    const err = await flowError(start({ channelKey: 'AMAZON_SP', intent: 'connect', actor: ACTOR }))
+    expect(err.code).toBe('channel_unavailable')
+    expect(sessions.size).toBe(0)
+  })
+
   it('sandbox environment points at auth.sandbox.ebay.com', async () => {
     const s = await startEbay({ environment: 'sandbox' })
     expect(s.authorizeUrl.startsWith('https://auth.sandbox.ebay.com/oauth2/authorize?')).toBe(true)
@@ -408,7 +450,7 @@ describe('start', () => {
   })
 
   it('an unregistered channel key throws from the catalogue', async () => {
-    await expect(start({ channelKey: 'AMAZON_SP', intent: 'connect', actor: ACTOR })).rejects.toThrow(/No ChannelSpec registered/)
+    await expect(start({ channelKey: 'WALMART' as never, intent: 'connect', actor: ACTOR })).rejects.toThrow(/No ChannelSpec registered/)
   })
 })
 
@@ -568,9 +610,50 @@ describe('complete — exchange', () => {
     const s = await startEbay()
     expect((await flowError(completeEbay(s))).code).toBe('exchange_failed')
   })
+
+  it('does not store an Amazon grant that cannot refresh', async () => {
+    tokenResponse = () => json({ access_token: 'one-hour-only', expires_in: 3600 })
+    const s = await start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'EU', actor: ACTOR })
+    const err = await flowError(complete({
+      channelKey: 'AMAZON_SP',
+      query: { state: s.state, spapi_oauth_code: 'amazon-code', selling_partner_id: 'SELLERONE' },
+      cookies: cookiesFor(s),
+    }))
+    expect(err.code).toBe('exchange_failed')
+    expect(err.message).toContain('returned no refresh token')
+    expect(connections.size).toBe(0)
+  })
 })
 
 describe('complete — placement and storage', () => {
+  it('replaces an ENV-managed Amazon row only after verified Seller Central authorization', async () => {
+    const accountId = seedConnection({
+      id: 'amazon-env',
+      channelType: 'AMAZON',
+      managedBy: 'env',
+      region: 'EU',
+      externalAccountId: 'SELLERONE',
+    })
+    const s = await start({ channelKey: 'AMAZON_SP', intent: 'reconnect', targetConnectionId: accountId, region: 'EU', actor: ACTOR })
+    const result = await complete({
+      channelKey: 'AMAZON_SP',
+      query: { state: s.state, spapi_oauth_code: 'amazon-code', selling_partner_id: 'SELLERONE' },
+      cookies: cookiesFor(s),
+    })
+
+    expect(result).toMatchObject({ connectionId: accountId, placement: 'reconsent', identity: { userId: 'SELLERONE' } })
+    expect(connections.get(accountId)).toMatchObject({
+      managedBy: 'oauth',
+      isActive: true,
+      authStatus: 'connected',
+      externalAccountId: 'SELLERONE',
+      accessToken: null,
+      refreshToken: null,
+    })
+    expect(connections.get(accountId)?.credentialsEnc).toEqual(expect.any(String))
+    expect(scopeUpserts).toHaveLength(1)
+  })
+
   it('new account: creates the row, stores the grant, records grant + status_change, returns the result shape', async () => {
     const s = await startEbay()
     const r = await completeEbay(s)

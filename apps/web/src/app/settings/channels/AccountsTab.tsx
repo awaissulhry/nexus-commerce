@@ -14,7 +14,7 @@ import type { CatalogueChannel } from './channels-data'
 export interface AccountsTabProps {
   catalogue: CatalogueChannel[] | null
   reloadSignal: unknown
-  onStart: (channelKey: string, opts: { intent: 'connect' | 'reconnect'; targetConnectionId?: string }) => void
+  onStart: (channelKey: string, opts: { intent: 'connect' | 'reconnect'; targetConnectionId?: string; region?: string | null }) => void
 }
 
 export function AccountsTab({ catalogue, reloadSignal, onStart }: AccountsTabProps) {
@@ -31,7 +31,7 @@ export function AccountsTab({ catalogue, reloadSignal, onStart }: AccountsTabPro
       onConnect={onConnect}
       onReconnect={(a) => {
         const entry = (catalogue ?? []).find((c) => c.channelType === a.channel && c.available)
-        if (entry) onStart(entry.key, { intent: 'reconnect', targetConnectionId: a.id })
+        if (entry) onStart(entry.key, { intent: 'reconnect', targetConnectionId: a.id, region: a.region })
       }}
       reloadSignal={reloadSignal}
       confirm={askConfirm}

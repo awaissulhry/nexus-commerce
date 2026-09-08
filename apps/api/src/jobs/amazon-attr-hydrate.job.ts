@@ -16,7 +16,7 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 const PER_TICK = Number(process.env.NEXUS_ATTR_HYDRATE_PER_TICK ?? '40')
 
 export async function runAttrHydrate(): Promise<HydrateResult> {
-  if (!amazonCredsConfigured()) return { scanned: 0, hydrated: 0, skipped: 0, errors: 0 }
+  if (!(await amazonCredsConfigured())) return { scanned: 0, hydrated: 0, skipped: 0, errors: 0 }
   return hydrateAmazonAttributes({ onlySparse: true, limit: PER_TICK })
 }
 

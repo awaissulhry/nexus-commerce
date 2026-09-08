@@ -51,16 +51,21 @@ export function ChannelsClient() {
     (m) => {
       bump()
       const drift = m.scopeDrift?.length ?? 0
+      const displayName = catalogue.data?.find((entry) => entry.channelType === m.channel)?.displayName
+        ?? (m.channel === 'EBAY' ? 'eBay' : m.channel)
       setNotice({
         tone: drift ? 'info' : 'success',
-        title: `${m.channel === 'EBAY' ? 'eBay' : m.channel} account ${m.placement === 'reconsent' ? 'reconnected' : m.placement === 'adopt' ? 'adopted' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
+        title: `${displayName} account ${m.placement === 'reconsent' ? 'reconnected' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
         text: drift ? `${drift} permission${drift === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${drift === 1 ? 'it' : 'them'}.` : undefined,
       })
     },
     // A legacy popup (Amazon Ads) closes without a message; refetch so whatever it
     // wrote shows, and say only what we know.
-    () => {
+    (channelKey) => {
       bump()
+      if (channelKey !== 'AMAZON_ADS') {
+        setNotice({ tone: 'info', title: 'Sign-in was not completed.', text: 'No account access was changed. You can start again when you are ready.' })
+      }
     },
   )
 

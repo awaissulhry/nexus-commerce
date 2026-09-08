@@ -96,10 +96,19 @@ export async function start(input: {
 
   const environment = input.environment ?? 'production'
   const app = await getChannelApp(input.channelKey, environment)
+  const amazonApplicationId = input.channelKey === 'AMAZON_SP' && typeof app.extra.applicationId === 'string'
+    ? app.extra.applicationId.trim()
+    : ''
+  if (input.channelKey === 'AMAZON_SP' && !amazonApplicationId) {
+    throw new OAuthFlowError('channel_unavailable', 'Configure the Amazon application ID before connecting sellers.', 503)
+  }
   const state = b64url(randomBytes(32))
   const cookieNonce = b64url(randomBytes(24))
   const codeVerifier = spec.auth.pkce ? b64url(randomBytes(48)) : null
   const region = input.region ?? spec.defaultRegion ?? null
+  if (region && spec.regions?.length && !spec.regions.some((candidate) => candidate.key === region)) {
+    throw new OAuthFlowError('invalid_intent', `Choose a supported ${spec.displayName} region.`)
+  }
   // eBay's redirect_uri is the RuName (redirectUris[0]); everyone else gets the API callback.
   const redirectUri = app.redirectUris[0] ?? callbackUrlFor(input.channelKey)
 
@@ -126,6 +135,13 @@ export async function start(input: {
     ...(spec.auth.authorizationParams ?? {}),
     ...(spec.auth.promptParam ?? {}),
   })
+  if (input.channelKey === 'AMAZON_SP') {
+    params.delete('client_id')
+    params.delete('redirect_uri')
+    params.delete('scope')
+    params.set('application_id', amazonApplicationId)
+    if (app.extra.authorizationVersion === 'beta') params.set('version', 'beta')
+  }
   if (codeVerifier) {
     params.set('code_challenge', b64url(createHash('sha256').update(codeVerifier).digest()))
     params.set('code_challenge_method', 'S256')
@@ -232,10 +248,22 @@ export async function complete(input: {
     logger.warn('[cx-oauth] code exchange rejected', { channelKey: input.channelKey, status })
     throw await fail('exchange_failed', `${spec.displayName} rejected the authorization code (${status}).`, 502, { status, body: text.slice(0, 300) })
   }
-  const token = JSON.parse(text) as Record<string, unknown>
+  let token: Record<string, unknown>
+  try {
+    token = JSON.parse(text) as Record<string, unknown>
+  } catch {
+    throw await fail('exchange_failed', 'The provider returned an invalid token response.', 502)
+  }
   const accessToken = String(token.access_token ?? '')
   if (!accessToken) throw await fail('exchange_failed', `${spec.displayName} returned no access token.`, 502)
+  const refreshToken = typeof token.refresh_token === 'string' && token.refresh_token.length > 0 ? token.refresh_token : null
+  if (spec.auth.refreshTokenRequired && !refreshToken) {
+    throw await fail('exchange_failed', `${spec.displayName} returned no refresh token. No connection was changed.`, 502)
+  }
   const expiresInSec = Number(token.expires_in ?? spec.auth.accessTokenLifetimeSec ?? 3600)
+  if (!Number.isFinite(expiresInSec) || expiresInSec <= 0) {
+    throw await fail('exchange_failed', 'The provider returned an invalid token lifetime.', 502)
+  }
   const refreshExpiresInSec = typeof token.refresh_token_expires_in === 'number' ? token.refresh_token_expires_in : null
   const grantedScopes = typeof token.scope === 'string' && token.scope.length > 0
     ? token.scope.split(/[\s,]+/).filter(Boolean)
@@ -252,14 +280,20 @@ export async function complete(input: {
     channelType: spec.channelType,
     region: session.region,
     grantedScopes,
-    identity: null,
+    identity: input.channelKey === 'AMAZON_SP' && typeof metadata.selling_partner_id === 'string'
+      ? { userId: metadata.selling_partner_id }
+      : null,
+    environment,
     token: async () => accessToken,
   }
   let identity: ConnectionIdentity | null = null
   try {
     identity = await spec.identity(probe)
   } catch (err) {
-    logger.warn('[cx-oauth] identity lookup failed; continuing without it', { channelKey: input.channelKey, error: err instanceof Error ? err.message : String(err) })
+    logger.warn('[cx-oauth] identity lookup failed', { channelKey: input.channelKey, error: err instanceof Error ? err.message : String(err) })
+  }
+  if (!identity?.userId && spec.auth.identityRequired) {
+    throw await fail('identity_refused', 'The provider could not verify this account identity. No connection was changed.', 409)
   }
   if (identity && metadata.selling_partner_id && !identity.userId) identity.userId = String(metadata.selling_partner_id)
 
@@ -295,7 +329,7 @@ export async function complete(input: {
 
   const grant: GrantResult = {
     accessToken,
-    refreshToken: typeof token.refresh_token === 'string' ? token.refresh_token : null,
+    refreshToken,
     expiresInSec,
     refreshExpiresInSec,
     grantedScopes,

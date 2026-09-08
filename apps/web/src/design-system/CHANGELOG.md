@@ -4,6 +4,10 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## Amazon Seller migration — 2026-09-08
+
+`AccountsPanel` offers a primary replacement action for ENV-managed accounts when the host supplies reconnect. Amazon application-role grants are described without inventing OAuth scope counts, and the panel states that environment credentials remain active until Seller Central sign-in succeeds. Mirrored in Factory.
+
 ## [GDS-4] — 2026-08-29 — The master sheet: a bounded sheet host, sheet cells, sheet validation
 
 The Owner asked for "a proper grid where I can actually make changes cell by cell… the source of data… mapped,

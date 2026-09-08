@@ -46,3 +46,7 @@ bulk dialog. It inherited that dialog's `padding: 0` body (textarea border
 touched the edges) and silently resized the other dialog. The DS `Modal` is
 namespaced (`.nds-*`), so reusing it is collision-proof. If a needed control
 is missing (as `Textarea` was), **add the primitive here** rather than hand-roll.
+
+### AccountsPanel — Amazon Seller migration (2026-09-08)
+
+When the host supplies `onReconnect`, an ENV-managed row offers **Replace environment credentials**. `permissionModel="application_roles"` describes Amazon’s approved app roles without displaying a false OAuth-scope count. The ENV grant remains visibly active until sign-in succeeds.

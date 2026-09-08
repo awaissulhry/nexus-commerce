@@ -33,8 +33,13 @@ vi.mock('../db.js', () => ({ default: prismaMock }))
 vi.mock('../services/connection-resolver.service.js', () => ({
   listActiveConnections: async () => [],
 }))
-const revokeTokens = vi.fn(async (_id: string) => undefined)
-vi.mock('../services/ebay-auth.service.js', () => ({ ebayAuthService: { revokeTokens } }))
+const revoke = vi.fn(async (_id: string) => ({ revokedAtChannel: true }))
+vi.mock('../services/cx/token.service.js', () => ({ revoke }))
+vi.mock('../services/cx/catalog.js', () => ({
+  channelKeyOf: (channel: string) => channel === 'EBAY' ? 'EBAY' : channel === 'AMAZON' ? 'AMAZON_SP' : null,
+  tryGetChannelSpec: (key: string | null) => key ? { auth: { permissionModel: key === 'AMAZON_SP' ? 'application_roles' : 'oauth_scopes' } } : null,
+  scopeDriftOf: () => [],
+}))
 
 let app: FastifyInstance
 beforeAll(async () => {
@@ -47,38 +52,27 @@ afterAll(async () => {
 })
 
 describe('POST /api/accounts/:id/disconnect', () => {
-  it('revokes at eBay and nulls every token column for an OAuth eBay account', async () => {
+  it('uses the generic encrypted-grant revocation path for an OAuth account', async () => {
     updates.length = 0
     const res = await app.inject({ method: 'POST', url: '/api/accounts/ebay1/disconnect' })
     expect(res.statusCode).toBe(200)
-    expect(revokeTokens).toHaveBeenCalledWith('ebay1')
-    const last = updates.at(-1)!
-    expect(last.data).toMatchObject({
-      isActive: false,
-      isPrimary: false,
-      accessToken: null,
-      refreshToken: null,
-      tokenExpiresAt: null,
-      ebayAccessToken: null,
-      ebayRefreshToken: null,
-      ebayTokenExpiresAt: null,
-    })
+    expect(revoke).toHaveBeenCalledWith('ebay1', { kind: 'operator', userId: null }, 'operator')
+    expect(res.json()).toMatchObject({ success: true, revokedAtChannel: true })
   })
 
-  it('still nulls tokens locally when the remote revoke fails', async () => {
-    updates.length = 0
-    revokeTokens.mockRejectedValueOnce(new Error('eBay down'))
+  it('reports a generic revoke failure without claiming disconnect succeeded', async () => {
+    revoke.mockRejectedValueOnce(new Error('credential store unavailable'))
     const res = await app.inject({ method: 'POST', url: '/api/accounts/ebay1/disconnect' })
-    expect(res.statusCode).toBe(200)
-    expect(updates.at(-1)!.data).toMatchObject({ isActive: false, accessToken: null, refreshToken: null })
+    expect(res.statusCode).toBe(500)
   })
 
-  it('leaves an env-managed row untouched apart from deactivation', async () => {
+  it('refuses to pretend an env-managed account was disconnected', async () => {
     updates.length = 0
-    revokeTokens.mockClear()
+    revoke.mockClear()
     const res = await app.inject({ method: 'POST', url: '/api/accounts/amz1/disconnect' })
-    expect(res.statusCode).toBe(200)
-    expect(revokeTokens).not.toHaveBeenCalled()
-    expect(updates.at(-1)!.data).not.toHaveProperty('accessToken')
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toMatchObject({ success: false, code: 'ENV_MANAGED' })
+    expect(revoke).not.toHaveBeenCalled()
+    expect(updates).toHaveLength(0)
   })
 })

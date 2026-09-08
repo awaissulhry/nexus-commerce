@@ -128,8 +128,8 @@ describe('timestamps — relative text, absolute ISO in the title, honest nulls'
 describe('permissions — §2 copy and the Reconnect relabel', () => {
   it('drift', () => {
     expect(permissionsCopy(22, 3)).toBe('22 granted · 3 not granted — reconnect to grant them.')
-    expect(reconnectLabel(3)).toBe('Reconnect to grant 3 permissions')
-    expect(reconnectLabel(1)).toBe('Reconnect to grant 1 permission')
+    expect(reconnectLabel(3, 22)).toBe('Reconnect to grant 3 permissions')
+    expect(reconnectLabel(1, 22)).toBe('Reconnect to grant 1 permission')
   })
   it('no drift', () => {
     expect(permissionsCopy(22, 0)).toBe('22 permissions granted — every permission this channel asks for.')
@@ -138,6 +138,13 @@ describe('permissions — §2 copy and the Reconnect relabel', () => {
   })
   it('nothing recorded', () => {
     expect(permissionsCopy(0, 0)).toMatch(/^No permissions recorded/)
+    expect(permissionsCopy(0, 22)).toMatch(/^No permissions recorded/)
+    expect(reconnectLabel(22, 0)).toBe('Reconnect')
+  })
+  it('Amazon describes approved application roles instead of zero OAuth scopes', () => {
+    expect(permissionsCopy(0, 0, 'application_roles')).toBe(
+      'Seller Central grants the roles Amazon approved on the Nexus SP-API application.',
+    )
   })
 })
 
@@ -166,11 +173,12 @@ describe('identity line', () => {
 })
 
 describe('holds — a refusal carries its reason (U13)', () => {
-  it('Reconnect is held for every channel but eBay, with the CX.3 reason', () => {
+  it('Reconnect is live for Amazon, including its env-to-OAuth migration', () => {
     expect(reconnectHold('amazon', connection({ channel: 'AMAZON', isManagedBy: 'env' }))).toEqual({
-      held: true,
-      reason: 'Reconnect for Amazon arrives with CX.3',
+      held: false,
     })
+  })
+  it('Reconnect stays held for channels whose flow has not shipped', () => {
     expect(reconnectHold('shopify', connection({ channel: 'SHOPIFY', isManagedBy: 'pending' }))).toEqual({
       held: true,
       reason: 'Reconnect for Shopify arrives with CX.3',
@@ -224,19 +232,41 @@ describe('runHeartbeat — Test', () => {
   })
 })
 
-describe('startReconnect — eBay consent for THIS connection', () => {
+describe('startReconnect — consent for THIS connection', () => {
   it('POSTs intent reconnect + targetConnectionId with credentials and returns the authUrl', async () => {
     const fetchImpl = fakeFetch({ success: true, authUrl: 'https://auth.ebay.com/oauth2/authorize?x=1' })
-    expect(await startReconnect('conn_1', fetchImpl)).toEqual({ authUrl: 'https://auth.ebay.com/oauth2/authorize?x=1' })
+    expect(await startReconnect('ebay', 'conn_1', 'GLOBAL', fetchImpl)).toEqual({
+      authUrl: 'https://auth.ebay.com/oauth2/authorize?x=1',
+    })
     const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
     expect(url).toMatch(/\/api\/cx\/connect\/ebay\/start$/)
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
-    expect(JSON.parse(String(init.body))).toEqual({ intent: 'reconnect', targetConnectionId: 'conn_1' })
+    expect(JSON.parse(String(init.body))).toEqual({
+      intent: 'reconnect',
+      targetConnectionId: 'conn_1',
+      region: 'GLOBAL',
+    })
+  })
+  it('maps Amazon details to the Seller Central connector', async () => {
+    const fetchImpl = fakeFetch({
+      success: true,
+      authUrl: 'https://sellercentral.amazon.com/apps/authorize/consent',
+    })
+    await startReconnect('amazon', 'amazon-1', 'NA', fetchImpl)
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect(url).toMatch(/\/api\/cx\/connect\/amazon_sp\/start$/)
+    expect(JSON.parse(String(init.body))).toEqual({
+      intent: 'reconnect',
+      targetConnectionId: 'amazon-1',
+      region: 'NA',
+    })
   })
   it('surfaces the API error', async () => {
     const fetchImpl = fakeFetch({ success: false, error: 'eBay app credentials missing' }, 500)
-    expect(await startReconnect('conn_1', fetchImpl)).toEqual({ error: 'eBay app credentials missing' })
+    expect(await startReconnect('ebay', 'conn_1', null, fetchImpl)).toEqual({
+      error: 'eBay app credentials missing',
+    })
   })
 })
 

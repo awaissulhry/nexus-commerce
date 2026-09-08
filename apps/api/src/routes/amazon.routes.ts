@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
@@ -2223,31 +2224,22 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         detail?: string
       }> = []
 
-      const requiredEnv = [
-        'AMAZON_LWA_CLIENT_ID',
-        'AMAZON_LWA_CLIENT_SECRET',
-        'AMAZON_REFRESH_TOKEN',
-        'AWS_ACCESS_KEY_ID',
-        'AWS_SECRET_ACCESS_KEY',
-      ] as const
-      const missingEnv = requiredEnv.filter((k) => !process.env[k])
+      const configured = await amazonCredsConfigured()
       checks.push({
-        name: 'env',
-        ok: missingEnv.length === 0,
-        detail:
-          missingEnv.length === 0
-            ? 'All required SP-API env vars set'
-            : `Missing: ${missingEnv.join(', ')}`,
+        name: 'sellerGrant',
+        ok: configured,
+        detail: configured
+          ? 'A connected Seller Central grant is available'
+          : 'No connected Seller Central grant or migration fallback is available',
       })
 
-      const sellerId =
-        process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID
+      const sellerId = await getAmazonSellerId()
       checks.push({
         name: 'sellerId',
         ok: !!sellerId,
         detail: sellerId
-          ? 'AMAZON_SELLER_ID set'
-          : 'Set AMAZON_SELLER_ID to the SP-API merchant token',
+          ? `Seller identity available (${sellerId})`
+          : 'Connect an Amazon Seller account to record its identity',
       })
 
       // LWA token exchange — proves refresh token + client creds.
@@ -2255,7 +2247,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       // bubbling up as a 500.
       let lwaOk = false
       let lwaDetail = ''
-      if (missingEnv.length === 0) {
+      if (configured) {
         try {
           await amazonSpApiClient.getAccessToken()
           lwaOk = true
@@ -2264,7 +2256,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
           lwaDetail = err instanceof Error ? err.message : String(err)
         }
       } else {
-        lwaDetail = 'Skipped — required env vars missing'
+        lwaDetail = 'Skipped — no connected seller grant'
       }
       checks.push({ name: 'lwa', ok: lwaOk, detail: lwaDetail })
 

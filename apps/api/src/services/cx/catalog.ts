@@ -88,6 +88,7 @@ export interface ConnectionHandle {
   id: string
   channelKey: ChannelKey
   channelType: string
+  environment?: 'production' | 'sandbox'
   region: string | null
   grantedScopes: string[]
   identity: ConnectionIdentity | null
@@ -97,6 +98,10 @@ export interface ConnectionHandle {
 
 export interface AuthSpec {
   mode: AuthMode
+  /** OAuth scopes are chosen at consent; Amazon SP-API instead grants the roles approved on the application. */
+  permissionModel?: 'oauth_scopes' | 'application_roles'
+  /** Refuse to store a grant if the connector cannot prove which external account authorised it. */
+  identityRequired?: boolean
   /** Builds the consent URL; `region` is a catalogue region key. */
   authorizeUrl?: (ctx: { region: string | null; environment: 'production' | 'sandbox' }) => string
   tokenUrl: (ctx: { region: string | null; environment: 'production' | 'sandbox' }) => string
@@ -122,6 +127,8 @@ export interface AuthSpec {
   accessTokenLifetimeSec?: number
   /** null = never expires (Shopify offline token); undefined = unknown. */
   refreshTokenLifetimeSec?: number | null
+  /** Refuse a code exchange that would leave the connection usable for only one access-token lifetime. */
+  refreshTokenRequired?: boolean
   rotatesRefreshToken: boolean
   revokeUrl?: (ctx: { environment: 'production' | 'sandbox' }) => string
   introspectUrl?: (ctx: { environment: 'production' | 'sandbox' }) => string

@@ -224,6 +224,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
             ? meta.scopes.filter((s): s is string => typeof s === "string")
             : [];
         const scopeDrift = connection.scopeDrift;
+        const permissionModel = tryGetChannelSpec(channelKeyOf(channel))?.auth.permissionModel ?? "oauth_scopes";
         const connectionScopes = row
           ? await prisma.connectionScope.findMany({
               where: { connectionId: row.id },
@@ -270,6 +271,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
           connection,
           scopes,
           scopeDrift,
+          permissionModel,
           connectionScopes,
           activeMarketplaces,
           // Per-channel diagnostics namespaced under `meta` so the

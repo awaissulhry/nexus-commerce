@@ -116,8 +116,6 @@ export function mapAwsRegionToSpApiSlug(region: string): string {
 }
 
 export class AmazonSpApiClient {
-  private accessToken: string | null = null
-  private tokenExpiresAt: number = 0
   // Grantless token cache — keyed by scope string
   private grantlessTokens: Map<string, { token: string; expiresAt: number }> = new Map()
   private lastRequestTime: number = 0
@@ -125,13 +123,11 @@ export class AmazonSpApiClient {
 
   private readonly clientId: string
   private readonly clientSecret: string
-  private readonly refreshToken: string
   readonly region: string
 
   constructor() {
     this.clientId = process.env.AMAZON_LWA_CLIENT_ID || process.env.AMAZON_CLIENT_ID || ''
     this.clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET || process.env.AMAZON_CLIENT_SECRET || ''
-    this.refreshToken = process.env.AMAZON_REFRESH_TOKEN || ''
     // SP-API endpoint slugs are 'na' | 'eu' | 'fe' — not AWS region names.
     // Map AWS region names → SP-API slugs so AMAZON_REGION=us-east-1 works.
     // Default EU to match the listings-feed path (which uses `?? 'eu'`). Xavia
@@ -139,11 +135,10 @@ export class AmazonSpApiClient {
     // the North America endpoint → 404 on all EU listings → blind read-back.
     this.region = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
 
-    if (!this.clientId || !this.clientSecret || !this.refreshToken) {
-      logger.warn('Amazon SP-API credentials not fully configured', {
+    if (!this.clientId || !this.clientSecret) {
+      logger.warn('Amazon SP-API application credentials not fully configured', {
         hasClientId: !!this.clientId,
         hasClientSecret: !!this.clientSecret,
-        hasRefreshToken: !!this.refreshToken,
       })
     }
   }
@@ -153,55 +148,7 @@ export class AmazonSpApiClient {
    * Caches token for 50 minutes to avoid spamming auth endpoint
    */
   async getAccessToken(): Promise<string> {
-    const now = Date.now()
-
-    // Return cached token if still valid (50 minute cache)
-    if (this.accessToken && now < this.tokenExpiresAt) {
-      logger.debug('Using cached LWA token', {
-        expiresIn: Math.round((this.tokenExpiresAt - now) / 1000),
-      })
-      return this.accessToken
-    }
-
-    logger.info('Requesting new LWA token')
-
-    try {
-      const response = await fetch('https://api.amazon.com/auth/o2/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: this.refreshToken,
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-        }).toString(),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`LWA auth failed: ${response.status} - ${errorText}`)
-      }
-
-      const data = (await response.json()) as LWATokenResponse
-
-      // Cache token for 50 minutes (3000 seconds)
-      this.accessToken = data.access_token
-      this.tokenExpiresAt = now + 50 * 60 * 1000
-
-      logger.info('LWA token obtained successfully', {
-        expiresIn: data.expires_in,
-        cacheUntil: new Date(this.tokenExpiresAt).toISOString(),
-      })
-
-      return this.accessToken
-    } catch (error) {
-      logger.error('Failed to get LWA token', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      throw error
-    }
+    return (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken()
   }
 
   /**

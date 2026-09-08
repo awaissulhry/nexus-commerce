@@ -55,8 +55,9 @@ ${input.ok ? '' : `<p class="small"><a href="${esc(WEB_ORIGIN)}/settings/channel
   var msg=${message}; var origin=${JSON.stringify(WEB_ORIGIN)}; var acked=false;
   function done(){ try{window.close()}catch(e){} setTimeout(function(){ if(!window.closed){ var h=document.getElementById('hint'); if(h) h.innerHTML='You can close this window. <a href="'+origin+'/settings/channels">Back to Channels</a>'; } },600); }
   if(!msg){ return; }
-  var bc=null; try{ bc=new BroadcastChannel('nexus-oauth'); bc.onmessage=function(e){ if(e.data&&e.data.type==='nexus:ack'){acked=true;done();} }; }catch(e){}
-  window.addEventListener('message',function(e){ if(e.origin===origin&&e.data&&e.data.type==='nexus:ack'){acked=true;done();} });
+  function isAck(data){ return data&&data.type==='nexus:ack'&&data.state===msg.state; }
+  var bc=null; try{ bc=new BroadcastChannel('nexus-oauth'); bc.onmessage=function(e){ if(isAck(e.data)){acked=true;done();} }; }catch(e){}
+  window.addEventListener('message',function(e){ if(e.origin===origin&&isAck(e.data)){acked=true;done();} });
   var notified=false;
   try{ if(window.opener&&!window.opener.closed){ window.opener.postMessage(msg,origin); notified=true; } }catch(e){}
   try{ if(bc){ bc.postMessage(msg); notified=true; } }catch(e){}
@@ -126,7 +127,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
             ok: true,
             title: `${spec.displayName} connected`,
             body: `${who ? `Account: ${who}. ` : ''}${result.placement === 'new' ? 'A new account was added.' : result.placement === 'adopt' ? 'The grant was attached to the account you chose.' : 'The existing account was re-authorised.'}${drift ? ` ${drift} permission${drift === 1 ? '' : 's'} could not be granted — see the account card.` : ''}`,
-            payload: { channel: spec.channelType, channelKey: key, connectionId: result.connectionId, sellerName: who, placement: result.placement, scopeDrift: result.scopeDrift },
+            payload: { channel: spec.channelType, channelKey: key, connectionId: result.connectionId, sellerName: who, placement: result.placement, scopeDrift: result.scopeDrift, state: request.query.state },
           }),
         )
       } catch (err) {

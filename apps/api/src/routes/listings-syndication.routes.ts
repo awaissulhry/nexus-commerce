@@ -1,3 +1,4 @@
+import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
@@ -2639,8 +2640,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { probe?: string; stuck?: string } }>('/listings/publish-readiness', async (request, reply) => {
     const probe = request.query?.probe === '1' || request.query?.probe === 'true'
     const wantStuck = request.query?.stuck === '1' || request.query?.stuck === 'true'
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
-    const lwaPresent = !!(process.env.AMAZON_LWA_CLIENT_ID && process.env.AMAZON_LWA_CLIENT_SECRET && process.env.AMAZON_REFRESH_TOKEN)
+    const sellerId = await getAmazonSellerId()
+    const lwaPresent = await amazonCredsConfigured()
     const shopifyConfigured = !!(process.env.SHOPIFY_SHOP_NAME && (process.env.SHOPIFY_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_API_TOKEN))
 
     let pendingTotal = 0

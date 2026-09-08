@@ -28,6 +28,7 @@ export interface ConnectedMessage {
   sellerName?: string
   placement?: 'new' | 'reconsent' | 'adopt' | string
   scopeDrift?: string[]
+  state?: string
 }
 
 export type ConnectIntent = 'connect' | 'reconnect' | 'adopt'
@@ -44,13 +45,14 @@ function isConnected(data: unknown): data is ConnectedMessage {
   return !!data && typeof data === 'object' && (data as { type?: string }).type === 'nexus:channel-connected'
 }
 
-export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onClosedWithoutMessage?: () => void) {
+export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onClosedWithoutMessage?: (channelKey: string) => void) {
   const [connecting, setConnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latest = useRef({ onConnected, onClosedWithoutMessage })
   latest.current = { onConnected, onClosedWithoutMessage }
   const popupRef = useRef<Window | null>(null)
   const heardRef = useRef(false)
+  const attemptRef = useRef<{ channelKey: string; state?: string } | null>(null)
 
   useEffect(() => {
     const apiOrigin = (() => {
@@ -62,7 +64,11 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
     })()
     const handle = (data: unknown): boolean => {
       if (!isConnected(data)) return false
+      const attempt = attemptRef.current
+      if (attempt?.channelKey && data.channelKey && data.channelKey !== attempt.channelKey) return false
+      if (attempt?.state && data.state !== attempt.state) return false
       heardRef.current = true
+      attemptRef.current = null
       setConnecting(null)
       latest.current.onConnected(data)
       return true
@@ -71,7 +77,7 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
       if (e.origin !== window.location.origin && e.origin !== apiOrigin) return
       if (handle(e.data)) {
         try {
-          ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack' }, e.origin)
+          ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack', state: e.data.state }, e.origin)
         } catch {
           /* popup already gone */
         }
@@ -82,7 +88,7 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
     try {
       bc = new BroadcastChannel('nexus-oauth')
       bc.onmessage = (e) => {
-        if (handle(e.data)) bc?.postMessage({ type: 'nexus:ack' })
+        if (handle(e.data)) bc?.postMessage({ type: 'nexus:ack', state: e.data.state })
       }
     } catch {
       /* no BroadcastChannel — the postMessage path above still works */
@@ -97,6 +103,7 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
     const popup = window.open('', '_blank', 'width=1000,height=800')
     popupRef.current = popup
     heardRef.current = false
+    attemptRef.current = { channelKey }
     setError(null)
     setConnecting(channelKey)
     try {
@@ -112,8 +119,9 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
             region: opts.region ?? undefined,
           }),
         })
-        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; error?: string }
+        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; state?: string; error?: string }
         if (!res.ok || !data.authUrl) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
+        attemptRef.current = { channelKey, state: data.state }
         authUrl = data.authUrl
       }
       if (popup && !popup.closed) {
@@ -124,8 +132,10 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
           if (!popup.closed) return
           window.clearInterval(timer)
           if (!heardRef.current) {
+            if (attemptRef.current?.channelKey !== channelKey) return
+            attemptRef.current = null
             setConnecting(null)
-            latest.current.onClosedWithoutMessage?.()
+            latest.current.onClosedWithoutMessage?.(channelKey)
           }
         }, 500)
       } else {
@@ -134,6 +144,7 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
       }
     } catch (err) {
       popup?.close()
+      attemptRef.current = null
       setConnecting(null)
       setError(err instanceof Error ? err.message : 'Connection failed')
     }

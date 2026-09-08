@@ -72,6 +72,7 @@ export interface RecentEvent {
 
 export interface ChannelDetail {
   connection: ChannelConnection
+  permissionModel?: 'oauth_scopes' | 'application_roles'
   /** CX.1 — what the grant actually carries (captured at consent, re-read by the heartbeat). */
   scopes: string[]
   /** CX.1 — what the catalogue wants that this grant lacks; non-empty ⇒ reconnect to grant them. */
@@ -258,8 +259,15 @@ export function timestampText(
 // ─── Permissions ─────────────────────────────────────────────────────────
 
 /** CX.2 §2 — the permissions description. */
-export function permissionsCopy(granted: number, drift: number): string {
-  if (granted === 0 && drift === 0) {
+export function permissionsCopy(
+  granted: number,
+  drift: number,
+  permissionModel: 'oauth_scopes' | 'application_roles' = 'oauth_scopes',
+): string {
+  if (permissionModel === 'application_roles') {
+    return 'Seller Central grants the roles Amazon approved on the Nexus SP-API application.'
+  }
+  if (granted === 0) {
     return 'No permissions recorded for this grant — Reconnect to capture what the channel actually granted.'
   }
   if (drift > 0) {
@@ -269,7 +277,8 @@ export function permissionsCopy(granted: number, drift: number): string {
 }
 
 /** §2 — the Reconnect button is relabelled while there is drift. */
-export function reconnectLabel(drift: number): string {
+export function reconnectLabel(drift: number, granted?: number): string {
+  if (!granted) return 'Reconnect'
   return drift > 0 ? `Reconnect to grant ${drift} permission${drift === 1 ? '' : 's'}` : 'Reconnect'
 }
 
@@ -279,7 +288,7 @@ export type Hold = { held: false } | { held: true; reason: string }
 
 export function reconnectHold(channelType: string, connection: ChannelConnection): Hold {
   const label = channelLabel(channelType)
-  if (connection.channel !== 'EBAY') {
+  if (connection.channel !== 'EBAY' && connection.channel !== 'AMAZON') {
     return { held: true, reason: `Reconnect for ${label} arrives with CX.3` }
   }
   if (connection.isManagedBy === 'pending') {
@@ -398,16 +407,26 @@ export async function runHeartbeat(
   return { tone: 'danger', text: `Failed · ${cls} · ${msg}` }
 }
 
-/** Reconnect — asks the API for the eBay consent URL for THIS connection. */
+const CONNECTOR_KEY: Record<string, string> = { ebay: 'ebay', amazon: 'amazon_sp' }
+
+/** Reconnect — asks the shared OAuth service for consent for THIS connection. */
 export async function startReconnect(
+  channelType: string,
   connectionId: string,
+  region?: string | null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ authUrl: string } | { error: string }> {
-  const res = await fetchImpl(`${getBackendUrl()}/api/cx/connect/ebay/start`, {
+  const connector = CONNECTOR_KEY[channelType.toLowerCase()]
+  if (!connector) return { error: `Reconnect is not available for ${channelLabel(channelType)}.` }
+  const res = await fetchImpl(`${getBackendUrl()}/api/cx/connect/${connector}/start`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ intent: 'reconnect', targetConnectionId: connectionId }),
+    body: JSON.stringify({
+      intent: 'reconnect',
+      targetConnectionId: connectionId,
+      ...(region ? { region } : {}),
+    }),
   })
   const data = (await res.json().catch(() => null)) as
     | { authUrl?: string; error?: string }
@@ -420,13 +439,16 @@ export async function startReconnect(
 export async function disconnectAccount(
   connectionId: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true } | { error: string }> {
+): Promise<{ ok: true; revokedAtChannel: boolean } | { error: string }> {
   const res = await fetchImpl(`${getBackendUrl()}/api/accounts/${connectionId}/disconnect`, {
     method: 'POST',
     credentials: 'include',
   })
-  if (res.ok) return { ok: true }
-  const data = (await res.json().catch(() => null)) as { error?: string } | null
+  const data = (await res.json().catch(() => null)) as {
+    error?: string
+    revokedAtChannel?: boolean
+  } | null
+  if (res.ok) return { ok: true, revokedAtChannel: data?.revokedAtChannel === true }
   return { error: data?.error ?? `HTTP ${res.status}` }
 }
 

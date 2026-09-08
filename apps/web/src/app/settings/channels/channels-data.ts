@@ -19,6 +19,7 @@ export interface CatalogueChannel {
   displayName: string
   available: boolean
   authMode: string
+  permissionModel: 'oauth_scopes' | 'application_roles'
   requiredScopes: string[]
   reviewGatedScopes: string[]
   regions: { key: string; label: string }[]

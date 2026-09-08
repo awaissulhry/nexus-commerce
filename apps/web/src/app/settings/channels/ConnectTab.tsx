@@ -18,8 +18,6 @@ const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY']
 
 /** Why a channel cannot be connected yet — stated on the card, not hidden in a title. */
 const HELD_REASON: Record<string, string> = {
-  AMAZON_SP:
-    'Amazon sign-in arrives with CX.3 — the public-app registration in Seller Central is the Owner’s step. The environment-managed Amazon account is connected under Accounts.',
   SHOPIFY: 'Arrives with CX.4 — needs the custom-distribution Shopify app to exist first.',
   ETSY: 'Arrives with CX.5 — needs the Etsy Seller App registration first.',
 }
@@ -39,7 +37,7 @@ export interface ConnectTabProps {
   accounts: AccountRow[]
   ads: { items: AdsConnection[]; adsMode: string } | null
   connecting: string | null
-  onStart: (channelKey: string, opts: { intent: 'connect'; region?: string | null; url?: string }) => void
+  onStart: (channelKey: string, opts: { intent: 'connect' | 'reconnect'; targetConnectionId?: string; region?: string | null; url?: string }) => void
 }
 
 export function ConnectTab({ catalogue, catalogueError, accounts, ads, connecting, onStart }: ConnectTabProps) {
@@ -75,6 +73,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
           const isAds = c.key === 'AMAZON_ADS'
           const adsItems = isAds ? (ads?.items ?? []) : []
           const have = connectedFor(c.channelType)
+          const envAccount = c.key === 'AMAZON_SP' ? have.find((account) => account.managedBy === 'env') : undefined
           const chosenRegion = region[c.key] ?? c.defaultRegion ?? c.regions[0]?.key ?? null
           const held = !c.available
           const busy = connecting === c.key
@@ -83,7 +82,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
               key={c.key}
               header={c.displayName}
               description={
-                have.length > 0
+                envAccount
+                  ? 'An Amazon account still uses environment credentials. Sign in with Seller Central to replace them with a revocable account grant.'
+                  : have.length > 0
                   ? `${have.length} account${have.length === 1 ? '' : 's'} connected — ${have.map((a) => a.label).join(', ')}`
                   : 'No account connected yet.'
               }
@@ -111,7 +112,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 <div>
                   <dt>Permissions</dt>
                   <dd>
-                    {c.requiredScopes.length > 0 ? (
+                    {c.permissionModel === 'application_roles' ? (
+                      'Every role approved for this app by Amazon'
+                    ) : c.requiredScopes.length > 0 ? (
                       <>
                         {c.requiredScopes.length} requested
                         {c.reviewGatedScopes.length > 0 ? ` · ${c.reviewGatedScopes.length} need channel review` : ''}
@@ -174,7 +177,8 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                       return
                     }
                     onStart(c.key, {
-                      intent: 'connect',
+                      intent: envAccount ? 'reconnect' : 'connect',
+                      targetConnectionId: envAccount?.id,
                       region: chosenRegion,
                       // Amazon Ads signs in through its own live route until the Ads
                       // console's allowed return URL is re-pointed at the shared
@@ -185,9 +189,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 >
                   {busy
                     ? 'Opening sign-in…'
-                    : // "Connect another…" on a HELD button promises a second account the
-                      // channel cannot give yet (Amazon: the env row is connected, OAuth is CX.3).
-                      have.length > 0 && !held
+                    : envAccount
+                      ? 'Sign in with Amazon Seller Central'
+                    : have.length > 0 && !held
                       ? `Connect another ${c.displayName} account`
                       : `Connect ${c.displayName}`}
                 </Button>
@@ -211,9 +215,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
       <Card header="About channel connections">
         <ul className="nds-connect-about">
           <li>Connect opens the channel’s own sign-in in a popup; you sign in there and choose to allow. Nexus never sees your password.</li>
-          <li>The permissions the channel actually granted are recorded at consent. When a channel adds permissions Nexus needs, the account shows how many are missing and Reconnect asks for them.</li>
+          <li>OAuth permissions are recorded at consent. Amazon Seller access follows the roles Amazon approved on the Nexus SP-API application, so Seller Central grants every eligible app role in one sign-in.</li>
           <li>Every connected account is checked with a real call every 15 minutes (heartbeat). Access tokens are refreshed before they expire; you are told 30, 7 and 1 days before a sign-in itself runs out.</li>
-          <li>Disconnect revokes access at the channel, removes the stored credentials, and keeps the account’s history in the ledger.</li>
+          <li>Disconnect removes the stored credentials, revokes at the channel when its API supports that, and keeps the account’s history in the ledger.</li>
         </ul>
       </Card>
     </div>
