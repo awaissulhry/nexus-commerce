@@ -48,6 +48,24 @@ describe('channel sign-in bridge', () => {
     expect(closed).toHaveBeenCalledExactlyOnceWith('AMAZON_SP')
   })
 
+  it('completes a private Amazon import without navigating the blank popup', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({
+      success: true,
+      completed: {
+        type: 'nexus:channel-connected',
+        channel: 'AMAZON',
+        channelKey: 'AMAZON_SP',
+        placement: 'adopt',
+      },
+    }))
+    const connected = vi.fn()
+    const bridge = useConnectPopup(connected)
+    await bridge.start('AMAZON_SP', { targetConnectionId: 'amazon-env', region: 'EU' })
+    expect(popup.close).toHaveBeenCalledOnce()
+    expect(popup.location.href).toBe('')
+    expect(connected).toHaveBeenCalledWith(expect.objectContaining({ channelKey: 'AMAZON_SP' }))
+  })
+
   it('accepts only the callback state for the active channel attempt', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({
       authUrl: 'https://provider.example.test/sign-in',

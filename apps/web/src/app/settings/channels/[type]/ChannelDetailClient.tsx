@@ -208,6 +208,13 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         setNote({ tone: 'danger', text: `Reconnect failed · ${r.error}` })
         return
       }
+      if ('connected' in r) {
+        popup?.close()
+        setNote({ tone: 'success', text: `${label} authorization verified and stored securely.` })
+        await refetch()
+        router.refresh()
+        return
+      }
       if (popup) popup.location.href = r.authUrl
       else window.location.href = r.authUrl
       setNote({

@@ -21,7 +21,7 @@ function apiHost(handle: ConnectionHandle) {
   return handle.environment === 'sandbox' ? REGION_HOSTS[region].sandbox : REGION_HOSTS[region].api
 }
 
-async function participations(handle: ConnectionHandle): Promise<any[]> {
+export async function amazonParticipations(handle: ConnectionHandle): Promise<any[]> {
   const response = await fetch(`${apiHost(handle)}/sellers/v1/marketplaceParticipations`, {
     signal: AbortSignal.timeout(25_000),
     headers: { 'x-amz-access-token': await handle.token() },
@@ -35,7 +35,7 @@ async function participations(handle: ConnectionHandle): Promise<any[]> {
 async function identity(handle: ConnectionHandle) {
   const sellerId = handle.identity?.userId
   if (!sellerId || !/^[A-Z0-9]{6,40}$/.test(sellerId)) throw new Error('Amazon did not return a valid seller identity.')
-  const markets = await participations(handle)
+  const markets = await amazonParticipations(handle)
   if (!markets.some((row) => row.participation?.isParticipating && row.marketplace?.id)) {
     throw new Error('This Amazon seller has no participating marketplaces in the selected region.')
   }
@@ -45,7 +45,7 @@ async function identity(handle: ConnectionHandle) {
 async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   const started = Date.now()
   try {
-    await participations(handle)
+    await amazonParticipations(handle)
     return { ok: true, latencyMs: Date.now() - started, identity: handle.identity ?? undefined }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -55,14 +55,14 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
 }
 
 async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
-  const rows = await participations(handle)
+  const rows = await amazonParticipations(handle)
   return rows.map((row) => ({
     kind: 'marketplace' as const,
-    externalId: row.marketplace.id,
+    externalId: row.marketplace.countryCode ?? row.marketplace.id,
     label: row.marketplace.name,
     region: handle.region ?? undefined,
     isActive: !!row.participation?.isParticipating,
-    metadata: { countryCode: row.marketplace.countryCode, currency: row.marketplace.defaultCurrencyCode },
+    metadata: { marketplaceId: row.marketplace.id, currency: row.marketplace.defaultCurrencyCode },
   }))
 }
 

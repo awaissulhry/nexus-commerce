@@ -17,6 +17,10 @@ import { logger } from '../utils/logger.js'
 import { tryGetChannelSpec, type ChannelKey } from '../services/cx/catalog.js'
 import { complete, OAuthFlowError, start, type Intent } from '../services/cx/oauth.service.js'
 import { recordConnectionEvent } from '../services/cx/events.service.js'
+import {
+  AmazonSelfAuthorizationError,
+  importAmazonEnvironmentAuthorization,
+} from '../services/cx/connectors/amazon-sp/self-authorization.js'
 
 const WEB_ORIGIN = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
 
@@ -77,6 +81,32 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
       const body = request.body ?? {}
       const intent: Intent = body.intent ?? (body.targetConnectionId ? 'adopt' : 'connect')
       try {
+        if (key === 'AMAZON_SP' && process.env.AMAZON_SP_AUTH_MODE === 'self') {
+          if (!body.targetConnectionId) {
+            return reply.code(409).send({
+              success: false,
+              error: 'This private Amazon app can import its existing company authorization; it cannot connect another seller through website OAuth.',
+              code: 'self_authorization_target_required',
+            })
+          }
+          const result = await importAmazonEnvironmentAuthorization({
+            connectionId: body.targetConnectionId,
+            region: body.region,
+            actor: { kind: 'operator', userId },
+          })
+          return reply.send({
+            success: true,
+            completed: {
+              type: 'nexus:channel-connected',
+              channel: 'AMAZON',
+              channelKey: 'AMAZON_SP',
+              connectionId: result.connectionId,
+              sellerName: result.sellerId,
+              placement: result.placement,
+              scopeDrift: [],
+            },
+          })
+        }
         const r = await start({
           channelKey: key,
           intent,
@@ -93,6 +123,9 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
         })
         return reply.send({ success: true, authUrl: r.authorizeUrl, authorizeUrl: r.authorizeUrl, state: r.state, expiresIn: r.expiresInSec })
       } catch (err) {
+        if (err instanceof AmazonSelfAuthorizationError) {
+          return reply.code(err.status).send({ success: false, error: err.message, code: 'self_authorization_failed' })
+        }
         if (err instanceof OAuthFlowError) return reply.code(err.status).send({ success: false, error: err.message, code: err.code })
         const message = err instanceof Error ? err.message : String(err)
         logger.error('[cx-connect] start failed', { channel: key, error: message })

@@ -262,6 +262,13 @@ describe('startReconnect — consent for THIS connection', () => {
       region: 'NA',
     })
   })
+  it('reports a private self-authorization import as completed', async () => {
+    const fetchImpl = fakeFetch({
+      success: true,
+      completed: { type: 'nexus:channel-connected', channel: 'AMAZON' },
+    })
+    expect(await startReconnect('amazon', 'amazon-1', 'EU', fetchImpl)).toEqual({ connected: true })
+  })
   it('surfaces the API error', async () => {
     const fetchImpl = fakeFetch({ success: false, error: 'eBay app credentials missing' }, 500)
     expect(await startReconnect('ebay', 'conn_1', null, fetchImpl)).toEqual({

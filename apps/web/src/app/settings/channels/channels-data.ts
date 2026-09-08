@@ -19,6 +19,7 @@ export interface CatalogueChannel {
   displayName: string
   available: boolean
   authMode: string
+  connectMode: 'website_oauth' | 'self_authorization'
   permissionModel: 'oauth_scopes' | 'application_roles'
   requiredScopes: string[]
   reviewGatedScopes: string[]

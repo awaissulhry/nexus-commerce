@@ -26,6 +26,9 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       displayName: s.displayName,
       available: s.available,
       authMode: s.auth.mode,
+      connectMode: s.key === 'AMAZON_SP' && process.env.AMAZON_SP_AUTH_MODE === 'self'
+        ? 'self_authorization'
+        : 'website_oauth',
       permissionModel: s.auth.permissionModel ?? 'oauth_scopes',
       requiredScopes: s.auth.requiredScopes,
       reviewGatedScopes: s.auth.reviewGatedScopes ?? [],

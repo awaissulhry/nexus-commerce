@@ -70,7 +70,7 @@ export function permissionsLine(
     return {
       tone: null,
       text: managedBy === 'env'
-        ? 'Access uses the app roles approved by Amazon — sign in to replace environment credentials'
+        ? 'Access uses the app roles approved by Amazon — reconnect to replace environment credentials'
         : 'Access granted through the app roles approved by Amazon',
     }
   }

@@ -97,7 +97,7 @@ describe('permissions line + Reconnect label — drift 0 / N, per status, env vs
       tone: null,
       text: 'Access granted through the app roles approved by Amazon',
     })
-    expect(permissionsLine([], [], 'env', 'application_roles')?.text).toContain('sign in to replace environment credentials')
+    expect(permissionsLine([], [], 'env', 'application_roles')?.text).toContain('reconnect to replace environment credentials')
   })
 
   it('offers no Reconnect when the host gave no handler', () => {

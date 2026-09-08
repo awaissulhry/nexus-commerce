@@ -415,7 +415,7 @@ export async function startReconnect(
   connectionId: string,
   region?: string | null,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ authUrl: string } | { error: string }> {
+): Promise<{ authUrl: string } | { connected: true } | { error: string }> {
   const connector = CONNECTOR_KEY[channelType.toLowerCase()]
   if (!connector) return { error: `Reconnect is not available for ${channelLabel(channelType)}.` }
   const res = await fetchImpl(`${getBackendUrl()}/api/cx/connect/${connector}/start`, {
@@ -429,8 +429,9 @@ export async function startReconnect(
     }),
   })
   const data = (await res.json().catch(() => null)) as
-    | { authUrl?: string; error?: string }
+    | { authUrl?: string; completed?: { type?: string }; error?: string }
     | null
+  if (res.ok && data?.completed?.type === 'nexus:channel-connected') return { connected: true }
   if (res.ok && data?.authUrl) return { authUrl: data.authUrl }
   return { error: data?.error ?? `HTTP ${res.status}` }
 }

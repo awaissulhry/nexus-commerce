@@ -119,8 +119,23 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
             region: opts.region ?? undefined,
           }),
         })
-        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; state?: string; error?: string }
-        if (!res.ok || !data.authUrl) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean
+          authUrl?: string
+          state?: string
+          completed?: ConnectedMessage
+          error?: string
+        }
+        if (!res.ok) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
+        if (isConnected(data.completed)) {
+          popup?.close()
+          heardRef.current = true
+          attemptRef.current = null
+          setConnecting(null)
+          latest.current.onConnected(data.completed)
+          return
+        }
+        if (!data.authUrl) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
         attemptRef.current = { channelKey, state: data.state }
         authUrl = data.authUrl
       }
