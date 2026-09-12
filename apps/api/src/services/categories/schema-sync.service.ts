@@ -237,7 +237,7 @@ export class CategorySchemaService {
   private async fetchAndCacheAmazon(query: SchemaQuery) {
     if (!query.accountId && !(await this.amazon.isConfigured())) {
       throw new Error(
-        'Amazon SP-API not configured — set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN',
+        'Connect or verify your Amazon Seller account in Settings → Channels.',
       )
     }
 

@@ -265,7 +265,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         sku: request.params.sku,
         marketplace: mkt,
         clientRegion: amazonSpApiClient.region,
-        envRegion: process.env.AMAZON_REGION ?? '(unset)',
+        envRegion: await (await import('../../lib/amazon-sp-client.js')).getAmazonRegion(),
         sellerIdUsed: sellerId,
         sellerIdLen: sellerId.length,
         success: res.success,

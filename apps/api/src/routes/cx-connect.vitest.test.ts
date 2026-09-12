@@ -17,6 +17,12 @@ vi.mock('../services/cx/catalog.js', () => ({
         ? { channelType: key, displayName: key === 'SHOPIFY' ? 'Shopify' : 'Etsy' }
       : null,
 }))
+vi.mock('../db.js', () => ({ default: { channelConnection: { findUniqueOrThrow: vi.fn(async () => ({ accountLabel: 'Test account', displayName: 'Test account', channelType: 'SHOPIFY' })) } } }))
+vi.mock('../services/connection-resolver.service.js', () => ({ CONNECTION_PUBLIC_SELECT: {} }))
+vi.mock('../services/cx/events.service.js', () => ({ recordConnectionEvent: vi.fn() }))
+vi.mock('../services/cx/connectors/amazon-sp/self-authorization.js', () => ({
+  importAmazonEnvironmentAuthorization: vi.fn(), AmazonSelfAuthorizationError: class extends Error {},
+}))
 import routes from './cx-connect.routes.js'
 
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks() })

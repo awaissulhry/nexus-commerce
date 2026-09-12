@@ -67,8 +67,10 @@ export function marketplaceCode(id: string): string {
 
 // ── SP-API client ────────────────────────────────────────────────────
 
-let cachedClient: unknown = null
-async function getClient(): Promise<{ callAPI: (o: Record<string, unknown>) => Promise<any> }> { return amazonSpClient() }
+async function getClient(): Promise<any> {
+  const client = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(undefined, { auto_request_throttled: false })
+  return client
+}
 
 /** True when the failure is Data Kiosk's create-query quota, which surfaces
  *  with an EMPTY detail field and must NOT be mistaken for a schema error. */

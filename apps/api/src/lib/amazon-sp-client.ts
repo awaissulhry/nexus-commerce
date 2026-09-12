@@ -2,7 +2,8 @@ import { workspaceContext, workspaceIdForQuery, requireWorkspace, LEGACY_WORKSPA
 import type { ConnectionRow } from '../services/connection-resolver.service.js'
 
 type Account = Pick<ConnectionRow, 'id' | 'externalAccountId' | 'region' | 'managedBy' | 'connectionMetadata'>
-export async function amazonAccount(input: { accountId?: string; sellerId?: string } = {}): Promise<Account | null> {
+export async function amazonAccount(input: { accountId?: string; sellerId?: string } | string = {}): Promise<Account> {
+  if (typeof input === 'string') input = { accountId: input }
   const workspaceMode = process.env.NEXUS_WORKSPACES_ENABLED === '1'
   if (workspaceMode) requireWorkspace()
   const { listActiveConnections, chooseConnection, resolveConnection } = await import('../services/connection-resolver.service.js')
@@ -10,11 +11,8 @@ export async function amazonAccount(input: { accountId?: string; sellerId?: stri
   if (input.accountId) account = await resolveConnection({ accountId: input.accountId })
   else {
     const candidates = (await listActiveConnections('AMAZON')).filter(row => !input.sellerId || row.externalAccountId === input.sellerId)
-    // Before the connection core existed, a single-profile deployment could
-    // legitimately have only env credentials and no row. Preserve that narrow
-    // fallback; as soon as an active connection exists, it is authoritative.
-    if (candidates.length === 0 && !workspaceMode && !workspaceContext()) return null
-    const chosen = chooseConnection(candidates, { channel: 'AMAZON', wantPrimary: !input.sellerId })
+    if (candidates.length === 0) throw new WorkspaceError('amazon_account_unavailable', 'Connect an Amazon seller account in Channels before using Amazon.', 409)
+    const chosen = chooseConnection(candidates, { channel: 'AMAZON' })
     account = candidates.find(row => row.id === chosen.id)!
   }
   if (account.channelType !== 'AMAZON' || !account.isActive || !account.externalAccountId || ['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) throw new WorkspaceError('amazon_account_unavailable', 'Reconnect the selected Amazon seller account.', 409)
@@ -25,19 +23,21 @@ export async function amazonAccount(input: { accountId?: string; sellerId?: stri
 
 export async function getAmazonSellerId(accountId?: string): Promise<string> {
   const account = await amazonAccount({ accountId })
-  return account?.externalAccountId ?? process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+  return account.externalAccountId!
 }
 export async function amazonCredsConfigured(): Promise<boolean> {
   try {
     const account = await amazonAccount()
-    if (account && account.managedBy !== 'env') return true
+    if (account.managedBy === 'oauth') return true
+    if (account.managedBy !== 'env') return false
     return Boolean(process.env.AMAZON_LWA_CLIENT_ID && process.env.AMAZON_LWA_CLIENT_SECRET && process.env.AMAZON_REFRESH_TOKEN)
   } catch { return false }
 }
 const legacyTokens = new Map<string, { token: string; expiresAt: number }>()
 export async function getAmazonAccessToken(accountId?: string): Promise<string> {
   const account = await amazonAccount({ accountId })
-  if (account && account.managedBy !== 'env') return (await import('../services/cx/token.service.js')).getAccessToken(account.id)
+  if (account.managedBy === 'oauth') return (await import('../services/cx/token.service.js')).getAccessToken(account.id)
+  if (account.managedBy !== 'env') throw new WorkspaceError('amazon_account_unavailable', 'Reconnect the selected Amazon seller account.', 409)
   const key = account?.id ?? 'legacy'
   const hit = legacyTokens.get(key)
   if (hit && hit.expiresAt > Date.now() + 300_000) return hit.token
@@ -62,8 +62,9 @@ export async function getAmazonRegion(accountId?: string): Promise<'eu' | 'na' |
   throw new WorkspaceError('amazon_region_invalid', 'Choose a supported Amazon region.', 409)
 }
 /** A fresh instance is bound to one verified account; token refresh stays in CX. */
-export async function getAmazonSpClient(accountId?: string): Promise<any> {
+export async function getAmazonSpClient(accountId?: string, options: { auto_request_throttled?: boolean } = {}): Promise<any> {
   const account = await amazonAccount({ accountId })
+  const scope = workspaceContext()
   const id = account?.id
   const environment = (account?.connectionMetadata as { environment?: string } | null)?.environment === 'sandbox' ? 'sandbox' : 'production'
   const token = await getAmazonAccessToken(id)
@@ -76,7 +77,17 @@ export async function getAmazonSpClient(accountId?: string): Promise<any> {
   const { getChannelApp } = await import('../services/cx/apps.service.js')
   const app = await getChannelApp('AMAZON_SP', environment)
   const { SellingPartner } = await import('amazon-sp-api')
-  const client = new SellingPartner({ region: await getAmazonRegion(id), access_token: token, refresh_token: refreshToken, credentials: { SELLING_PARTNER_APP_CLIENT_ID: app.clientId, SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret }, options: { auto_request_tokens: false, auto_request_throttled: true, use_sandbox: environment === 'sandbox' } } as any)
+  const client = new SellingPartner({ region: await getAmazonRegion(id), access_token: token, refresh_token: refreshToken, credentials: { SELLING_PARTNER_APP_CLIENT_ID: app.clientId, SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret }, options: { auto_request_tokens: false, auto_request_throttled: true, ...options, use_sandbox: environment === 'sandbox' } } as any)
+  // Retained SDK instances remain bound to their business and seller. Recheck
+  // authorization and refresh the access token before every API/document call.
+  for (const method of ['callAPI', 'download', 'upload'] as const) {
+    const original = client[method].bind(client)
+    client[method] = async (...args: any[]) => {
+      if (workspaceContext()?.workspaceId !== scope?.workspaceId) throw new WorkspaceError('amazon_context_changed', 'An Amazon operation cannot change business profile.')
+      client.access_token = await getAmazonAccessToken(id)
+      return original(...args)
+    }
+  }
   const { instrumentSellingPartner } = await import('../services/outbound-api-call-log.service.js')
   instrumentSellingPartner(client as never, { channel: 'AMAZON' })
   return client

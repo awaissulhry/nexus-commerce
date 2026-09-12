@@ -163,6 +163,10 @@ describe('last error — shown only while the status says something is wrong', (
 })
 
 describe('identity line', () => {
+  it('never renders a legacy seller ID or the raw provider identity', () => {
+    expect(identityLine(connection({ channel: 'AMAZON', sellerName: 'A1VRHKTGYO1JNU', identity: { userId: 'A1VRHKTGYO1JNU' } }))).toBe('Amazon Seller account')
+    expect(identityLine(connection({ channel: 'AMAZON', sellerName: 'XAVIA RACING', identity: { userId: 'A1VRHKTGYO1JNU' } }))).toBe('XAVIA RACING')
+  })
   it('seller, then store, then what kind of nobody', () => {
     expect(identityLine(connection())).toBe('xaviaracing')
     expect(identityLine(connection({ sellerName: null, storeName: 'Moto Vento' }))).toBe('Moto Vento')
@@ -238,18 +242,38 @@ describe('startReconnect — consent for THIS connection', () => {
     expect(url).toMatch(/\/api\/cx\/connect\/ebay\/start$/)
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
-    expect(JSON.parse(String(init.body))).toEqual({ intent: 'reconnect', targetConnectionId: 'conn_1', region: 'GLOBAL' })
+    expect(JSON.parse(String(init.body))).toEqual({
+      intent: 'reconnect',
+      targetConnectionId: 'conn_1',
+      region: 'GLOBAL',
+    })
   })
   it('maps Amazon details to the Seller Central connector', async () => {
-    const fetchImpl = fakeFetch({ success: true, authUrl: 'https://sellercentral.amazon.com/apps/authorize/consent' })
+    const fetchImpl = fakeFetch({
+      success: true,
+      authUrl: 'https://sellercentral.amazon.com/apps/authorize/consent',
+    })
     await startReconnect('amazon', 'amazon-1', 'NA', fetchImpl)
     const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
     expect(url).toMatch(/\/api\/cx\/connect\/amazon_sp\/start$/)
-    expect(JSON.parse(String(init.body))).toEqual({ intent: 'reconnect', targetConnectionId: 'amazon-1', region: 'NA' })
+    expect(JSON.parse(String(init.body))).toEqual({
+      intent: 'reconnect',
+      targetConnectionId: 'amazon-1',
+      region: 'NA',
+    })
+  })
+  it('reports a private self-authorization import as completed', async () => {
+    const fetchImpl = fakeFetch({
+      success: true,
+      completed: { type: 'nexus:channel-connected', channel: 'AMAZON' },
+    })
+    expect(await startReconnect('amazon', 'amazon-1', 'EU', fetchImpl)).toEqual({ connected: true })
   })
   it('surfaces the API error', async () => {
     const fetchImpl = fakeFetch({ success: false, error: 'eBay app credentials missing' }, 500)
-    expect(await startReconnect('ebay', 'conn_1', null, fetchImpl)).toEqual({ error: 'eBay app credentials missing' })
+    expect(await startReconnect('ebay', 'conn_1', null, fetchImpl)).toEqual({
+      error: 'eBay app credentials missing',
+    })
   })
 })
 

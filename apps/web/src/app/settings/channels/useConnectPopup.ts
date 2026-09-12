@@ -46,6 +46,10 @@ export interface StartOptions {
   url?: string
 }
 
+function isConnected(data: unknown): data is ConnectedMessage {
+  return !!data && typeof data === 'object' && (data as { type?: string }).type === 'nexus:channel-connected'
+}
+
 export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onClosedWithoutMessage?: (attempt: ConnectionAttempt) => void) {
   const [connecting, setConnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -128,10 +132,20 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
             region: opts.region ?? undefined,
           }),
         })
-        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; state?: string; error?: string }
-        if (!res.ok || !data.authUrl) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
-        if (!data.state) throw new Error('The sign-in request could not be verified. Please try again.')
+        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; state?: string; completed?: ConnectedMessage; error?: string }
+        if (!res.ok) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
         if (attemptRef.current !== attempt) { popup?.close(); return false }
+        if (isConnected(data.completed)) {
+          if (data.completed.channelKey !== channelKey || (WORKSPACES_ENABLED && data.completed.workspaceId !== workspaceId)) throw new Error('The connection completed for a different account context. Refresh Channels to review it.')
+          popup?.close()
+          heardRef.current = true
+          attemptRef.current = null
+          setConnecting(null)
+          latest.current.onConnected(data.completed)
+          return true
+        }
+        if (!data.authUrl) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
+        if (!data.state) throw new Error('The sign-in request could not be verified. Please try again.')
         attempt.state = data.state
         authUrl = data.authUrl
       }

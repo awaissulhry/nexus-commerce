@@ -3,6 +3,7 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import type { FastifyPluginAsync } from 'fastify'
+import { amazonCredsConfigured } from '../lib/amazon-sp-client.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
@@ -30,7 +31,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await amazonService.isConfigured())) {
         return reply.code(503).send({
           success: false,
-          error: 'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+          error: 'Connect or verify your Amazon Seller account in Settings → Channels.',
         })
       }
 
@@ -631,7 +632,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       if (!sellerId) {
         return reply
           .code(503)
-          .send({ success: false, error: 'AMAZON_SELLER_ID env var required for Listings API' })
+          .send({ success: false, error: 'Amazon seller identity unavailable — reconnect the account in Channels.' })
       }
       const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
 
@@ -1218,7 +1219,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const marketplaceId = marketplace || process.env.AMAZON_MARKETPLACE_ID || 'APJ6JRA9NG5V4'
-      const region = (process.env.AMAZON_REGION || 'IT').toUpperCase()
+      const region = (await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()).toUpperCase()
       const sp = await (amazonService as any).getClient()
 
       const item: any = await sp.callAPI({
@@ -1413,7 +1414,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/amazon/pim/bulk-link-amazon — link every product with an ASIN
   fastify.post('/pim/bulk-link-amazon', async (_request, reply) => {
     try {
-      const region = (process.env.AMAZON_REGION || 'IT').toUpperCase()
+      const region = (await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()).toUpperCase()
       const channelMarket = `AMAZON_${region}`
 
       const unlinked = await prisma.product.findMany({
@@ -1503,7 +1504,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(503).send({
         success: false,
         error:
-          'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+          'Connect or verify your Amazon Seller account in Settings → Channels.',
       })
     }
 
@@ -1675,7 +1676,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(503).send({
         success: false,
         error:
-          'Amazon SP-API credentials are not configured. Required: AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+          'Connect or verify your Amazon Seller account in Settings → Channels.',
       })
     }
 
@@ -2280,7 +2281,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         checks,
         listingProbe,
         config: {
-          region: process.env.AMAZON_REGION ?? 'eu-west-1',
+          region: await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(),
           marketplaceId: probeMarketplace,
         },
       }

@@ -454,7 +454,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
 
   // ── Type ─────────────────────────────────────────────────────────
   { section: 'Type', name: '--nds-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
-  { name: '--nds-font-mono', value: "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace" },
+  { name: '--nds-font-mono', value: "var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace" },
   { name: '--nds-font-smoothing', value: 'auto' },
 
   // ── Platform-semantic aliases ────────────────────────────────────────

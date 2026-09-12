@@ -30,6 +30,7 @@ import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { accountDisplayName } from '@/design-system/lib'
 
 interface DailyTrendPoint {
   day: string
@@ -66,6 +67,7 @@ interface PublishStatusResponse {
     channel: string
     marketplace: string | null
     sellerId: string | null
+    sellerName?: string | null
     recent_failures: number
     last_failure: string
   }>
@@ -225,7 +227,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                     <tr key={i} className="border-t border-rose-200 dark:border-rose-900">
                       <td className="px-2 py-1 font-mono">{c.channel}</td>
                       <td className="px-2 py-1 font-mono">{c.marketplace ?? '—'}</td>
-                      <td className="px-2 py-1 font-mono text-xs">{c.sellerId ?? '—'}</td>
+                      <td className="px-2 py-1 text-xs">{accountDisplayName({ channel: c.channel, label: c.sellerName ?? '' })}</td>
                       <td className="px-2 py-1 text-right tabular-nums font-semibold text-rose-700 dark:text-rose-300">{c.recent_failures}</td>
                       <td className="px-2 py-1 text-right text-xs text-slate-600 dark:text-slate-400">{new Date(c.last_failure).toLocaleString()}</td>
                     </tr>

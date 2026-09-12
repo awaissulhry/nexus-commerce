@@ -77,3 +77,6 @@ Embedded Drawer header text wraps within the available text column; Close retain
 ### AccountsPanel — business ownership (2026-09-08)
 
 The host supplies only the current business’s accounts. Several accounts may use the same channel. The panel explains account selection for publishing/syncing and uses plain language when connection activity tracking is unavailable. Ownership and credential checks remain server responsibilities.
+### AccountsPanel — Amazon Seller migration (2026-09-08)
+
+When the host supplies `onReconnect`, an ENV-managed row offers **Replace environment credentials**. `permissionModel="application_roles"` describes Amazon’s approved app roles without displaying a false OAuth-scope count. The ENV grant remains visibly active until website authorization or private-app self-authorization import succeeds.

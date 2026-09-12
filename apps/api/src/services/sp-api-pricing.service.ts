@@ -1,3 +1,4 @@
+import type { SellingPartner } from 'amazon-sp-api'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -30,7 +31,6 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * back to manual values when absent.
  */
 
-import { SellingPartner } from 'amazon-sp-api'
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
@@ -99,7 +99,7 @@ export async function refreshFeeEstimates(
     }
   }
 
-  const sp = getClient()
+  const sp = await getClient()
   let feesWritten = 0
   let errors = 0
   for (const listing of listings) {
@@ -224,7 +224,7 @@ export async function refreshCompetitivePricing(
   })
 
   // Batch by 20 ASINs/request — SP-API limit.
-  const sp = getClient()
+  const sp = await getClient()
   let pricesWritten = 0
   let errors = 0
   for (let i = 0; i < listings.length; i += 20) {

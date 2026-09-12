@@ -9,8 +9,8 @@ import { WORKSPACES_ENABLED, browserWorkspaceId } from '@/lib/workspaces/paths'
  *   PATCH /api/settings/channels/:type/marketplaces  the CheckboxCard grid, through the save bar
  * plus the three CX.1 actions the old header only promised:
  *   POST  /api/cx/connections/:id/heartbeat          Test
- *   POST  /api/cx/connect/ebay/start                 Reconnect (eBay only until CX.3)
- *   POST  /api/accounts/:id/disconnect               Disconnect (revokes at the channel)
+ *   POST  /api/cx/connect/:connector/start           Reconnect
+ *   POST  /api/accounts/:id/disconnect               Disconnect
  *
  * Every value traces to a column the detail endpoint returns. "Connected" is `authStatus`,
  * never `isActive`; a null timestamp says "never", and the two columns nothing feeds yet
@@ -33,6 +33,7 @@ import {
   type KeyValueItem,
 } from '@/design-system/components'
 import { Button, CheckboxCard, Pill, Tag } from '@/design-system/primitives'
+import { scopeChipLabel } from '@/design-system/lib/accounts-panel'
 import { PageHeader } from '@/design-system/patterns'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -209,6 +210,13 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         setNote({ tone: 'danger', text: `Reconnect failed · ${r.error}` })
         return
       }
+      if ('connected' in r) {
+        popup?.close()
+        setNote({ tone: 'success', text: `${label} access verified.` })
+        await refetch()
+        router.refresh()
+        return
+      }
       if (popup) popup.location.href = r.authUrl
       else window.location.href = r.authUrl
       setNote({
@@ -307,7 +315,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
               aria-disabled={reconnectH.held || busy === 'reconnect'}
               aria-busy={busy === 'reconnect'}
             >
-              {busy === 'reconnect' ? 'Opening…' : reconnectLabel(drift.length, detail.scopes.length)}
+              {busy === 'reconnect' ? 'Checking…' : connection.connectMode === 'self_authorization' ? connection.isManagedBy === 'env' ? 'Import authorization' : 'Verify access' : reconnectLabel(drift.length, detail.scopes.length)}
             </Button>
             <Button
               size="sm"
@@ -386,9 +394,6 @@ function ConnectionCard({
     now,
   )
   const refreshExpiry = timestampText(connection.refreshTokenExpiresAt, 'expiry', now)
-  const identityEntries = Object.entries(connection.identity ?? {}).filter(
-    ([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
-  )
 
   const items: KeyValueItem[] = [
     {
@@ -399,7 +404,8 @@ function ConnectionCard({
         </Pill>
       ),
     },
-    { label: 'Managed by', value: MANAGED_BY[connection.isManagedBy] },
+    { label: 'Managed by', value: connection.connectMode === 'self_authorization' && connection.isManagedBy === 'oauth' ? 'Private app authorization' : MANAGED_BY[connection.isManagedBy] },
+    { label: 'Account', value: identityLine(connection) },
     {
       label: 'Region',
       value: connection.region ? <Tag>{connection.region}</Tag> : <span style={muted}>—</span>,
@@ -430,7 +436,7 @@ function ConnectionCard({
       label: 'Last sync',
       value: (
         <span style={row('var(--nds-space-6)')}>
-          {connection.lastSyncStatus && (
+          {connection.lastSyncAt && connection.lastSyncStatus && (
             <Pill tone={SYNC_TONE[connection.lastSyncStatus] ?? 'neutral'}>
               {connection.lastSyncStatus}
             </Pill>
@@ -438,7 +444,7 @@ function ConnectionCard({
           <When cell={timestampText(connection.lastSyncAt, 'event', now)} />
         </span>
       ),
-      hint: connection.lastSyncError ?? undefined,
+      hint: connection.lastSyncAt ? connection.lastSyncError ?? undefined : undefined,
     },
     {
       label: 'Connected since',
@@ -457,21 +463,6 @@ function ConnectionCard({
       ) : undefined,
     },
   ]
-  if (identityEntries.length > 0) {
-    items.push({
-      label: 'Identity',
-      value: (
-        <span style={stack('var(--nds-space-2)')}>
-          {identityEntries.map(([k, v]) => (
-            <span key={k}>
-              <span style={muted}>{k}</span> {String(v)}
-            </span>
-          ))}
-        </span>
-      ),
-    })
-  }
-
   return (
     <Card
       header="Connection"
@@ -567,8 +558,7 @@ function MarketplacesCard({
             <div style={row('var(--nds-space-6)')}>
               {participation.map((s) => (
                 <Tag key={`${s.kind}:${s.externalId}`} tone={s.isActive ? 'success' : 'neutral'}>
-                  {s.label ?? s.externalId}
-                  {s.isActive ? '' : ' · inactive'}
+                  {scopeChipLabel(s)}
                 </Tag>
               ))}
             </div>

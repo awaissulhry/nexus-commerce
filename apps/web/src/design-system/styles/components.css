@@ -2015,6 +2015,8 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
    .nds-acct-tag from the AccountSwitcher so a health dot means the same thing
    in the chip and on this page — one concept, one definition. */
 .nds-acctp {
+  container-type: inline-size;
+  min-width: 0;
   background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
@@ -2103,12 +2105,12 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-acctp-test[data-tone='ok'] { color: var(--nds-success-strong); }
 .nds-acctp-test[data-tone='error'] { color: var(--nds-danger-strong); }
 
-/* Account details keep a full reading column when this panel is narrow. */
-.nds-acctp { container-type: inline-size; }
+/* Account controls stack within narrow settings panels, regardless of viewport width. */
 @container (max-width: 640px) {
-  .nds-acctp-row { flex-wrap: wrap; }
-  .nds-acctp-main { flex-basis: calc(100% - 26px); }
-  .nds-acctp-actions { flex-basis: 100%; min-width: 0; max-width: 100%; justify-content: flex-start; }
+  .nds-acctp-row { flex-direction: column; gap: var(--nds-space-10); }
+  .nds-acctp-main { width: 100%; overflow-wrap: anywhere; }
+  .nds-acctp-actions { max-width: 100%; justify-content: flex-start; }
+  .nds-acctp-swatches { flex-wrap: wrap; }
   .nds-acctp-note { max-width: none; text-align: left; }
 }
 

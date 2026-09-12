@@ -196,7 +196,7 @@ export async function setupAllAmazonNotifications(): Promise<{
   // RT.3 — default MUST match the SP-API client's ('eu' for this IT seller;
   // the old `?? 'na'` divergence pointed grantless destination calls at the
   // NA endpoint whenever AMAZON_REGION was unset).
-  const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
+  const slug = mapAwsRegionToSpApiSlug(await (await import('../lib/amazon-sp-client.js')).getAmazonRegion())
 
   const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
 

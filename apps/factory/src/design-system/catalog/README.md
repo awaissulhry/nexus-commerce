@@ -148,3 +148,8 @@ VP.F: `SummaryTable` is a compact read-only comparison for cards/drawers (`label
 2026-09-12: `usePointerReorder` shares captured pointer dragging across vertical OrderedList grips and horizontal AxisChip groups; keyboard reordering stays available through OrderedList.
 
 2026-09-12 VP.F: FilterChip compact/full labels preserve the shared horizontal icon-and-text alignment, including SVG block defaults.
+# Factory design-system catalog notes
+
+Account names (2026-09-08): `accountDisplayName` / `channelDisplayName` are exported from `design-system/lib`. Verify real names, legacy seller-ID placeholders, numeric profile IDs and missing marketplace names. No technical keys should appear as account text, tooltips, dialogs or accessible labels. Mirrored from Web.
+
+Amazon Seller migration (2026-09-08): verify an ENV-managed Amazon row, its primary **Replace environment credentials** action, the application-role permission copy, and the preserved ENV fallback note. Exercise both website authorization and private-app self-authorization import. Repeat after conversion to confirm the row reads as connected and no longer offers ENV replacement. Check narrow and desktop layouts in light and dark themes.

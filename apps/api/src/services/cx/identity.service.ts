@@ -38,22 +38,33 @@ export async function placeGrant(input: {
   channelLabel: string
   identity: ConnectionIdentity | null
   targetConnectionId?: string | null
+  region?: string | null
 }): Promise<GrantPlacement> {
   const { channelType, channelLabel, identity, targetConnectionId } = input
 
   if (targetConnectionId) {
     const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })
+    if (channelType === 'AMAZON' && target && ((target.externalAccountId && target.externalAccountId !== identity?.userId) ||
+        (target.region && input.region && target.region !== input.region))) {
+      throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'Reconnect the same Amazon seller account in its existing region.')
+    }
     if (!target || target.managedBy === 'transferred' || target.channelType !== channelType || (target.externalAccountId && target.externalAccountId !== identity?.userId)) {
       throw new IdentityRefusal('ADOPT_TARGET_INVALID', `Reconnect using the same verified ${channelLabel} account. The returned seller identity does not match this connection.`)
     }
     const existing = identity?.userId ? await findAccountByExternalId(channelType, identity.userId) : null
-    if (existing && existing.id !== target.id) throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'This seller is already connected as another account. Reconnect that account instead.')
-    return { kind: 'adopt', connectionId: target.id }
+    if (existing && existing.id !== target.id) throw new IdentityRefusal('ADOPT_TARGET_INVALID', channelType === 'AMAZON' ? 'This Amazon authorization belongs to another account or region.' : 'This seller is already connected as another account. Reconnect that account instead.')
+    return { kind: target.externalAccountId && target.externalAccountId === identity?.userId ? 'reconsent' : 'adopt', connectionId: target.id }
   }
 
   if (identity?.userId) {
     const already = await findAccountByExternalId(channelType, identity.userId)
-    if (already) return { kind: 'reconsent', connectionId: already.id }
+    if (already) {
+      if (channelType === 'AMAZON' && ((targetConnectionId && already.id !== targetConnectionId) ||
+          (already.region && input.region && already.region !== input.region))) {
+        throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'This Amazon authorization belongs to another account or region.')
+      }
+      return { kind: 'reconsent', connectionId: already.id }
+    }
 
     if (targetConnectionId) {
       const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })

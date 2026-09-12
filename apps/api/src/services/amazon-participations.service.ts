@@ -63,7 +63,7 @@ function deriveStatus(p: SpapiParticipation): ParticipationStatus {
 export async function refreshAmazonParticipations(): Promise<ParticipationRefreshResult> {
   const t0 = Date.now()
   const warnings: string[] = []
-  const region = process.env.AMAZON_REGION ?? 'eu'
+  const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
   const host = `sellingpartnerapi-${region}.amazon.com`
 
   const accessToken = await getLwaAccessToken()

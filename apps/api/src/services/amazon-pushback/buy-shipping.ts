@@ -153,7 +153,7 @@ export async function getEligibleShippingServices(
     ]
   }
 
-  const sp = await getSpClient()
+  const sp = await getSpClient(details.amazonOrderId)
   const res: any = await sp.callAPI({
     operation: 'getEligibleShipmentServices',
     endpoint: 'merchantFulfillment',
@@ -188,7 +188,7 @@ export async function createShipment(
     }
   }
 
-  const sp = await getSpClient()
+  const sp = await getSpClient(details.amazonOrderId)
   const res: any = await sp.callAPI({
     operation: 'createShipment',
     endpoint: 'merchantFulfillment',
@@ -238,7 +238,13 @@ export async function cancelBuyShippingShipment(amazonShipmentId: string):
 }
 
 // ── Internals ──────────────────────────────────────────────────────────
-async function getSpClient(): Promise<any> { return amazonSpClient() }
+async function getSpClient(amazonOrderId?: string): Promise<any> {
+  const account = amazonOrderId
+    ? await (await import('../connection-resolver.service.js')).resolveConnection({ channel: 'AMAZON', channelOrderId: amazonOrderId })
+    : null
+  const client = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(account?.id)
+  return client
+}
 
 function toAmazonShape(d: ShipmentRequestDetails): any {
   const out: any = {

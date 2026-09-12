@@ -8,6 +8,7 @@
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { WORKSPACES_ENABLED, browserWorkspaceId } from '@/lib/workspaces/paths'
+import { accountDisplayName } from '@/design-system/lib'
 
 // ─── Contract ────────────────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ export type AuthStatus =
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
 export interface ChannelConnection {
+  connectMode?: 'website_oauth' | 'self_authorization'
   id: string
   channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
   isActive: boolean
@@ -191,9 +193,9 @@ export function showLastError(connection: ChannelConnection): boolean {
 
 /** The line under the title: who this grant is, or why there is nobody. */
 export function identityLine(connection: ChannelConnection): string {
+  const label = connection.sellerName ?? connection.storeName
+  if (label) return accountDisplayName({ channel: connection.channel, label, id: connection.id })
   return (
-    connection.sellerName ??
-    connection.storeName ??
     (connection.isManagedBy === 'env'
       ? 'Set by environment'
       : connection.isManagedBy === 'pending'
@@ -416,7 +418,7 @@ export async function startReconnect(
   connectionId: string,
   region?: string | null,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ authUrl: string } | { error: string }> {
+): Promise<{ authUrl: string } | { connected: true } | { error: string }> {
   const connector = CONNECTOR_KEY[channelType.toLowerCase()]
   if (!connector) return { error: `Reconnect is not available for ${channelLabel(channelType)}.` }
   const workspaceId = browserWorkspaceId()
@@ -427,8 +429,9 @@ export async function startReconnect(
     body: JSON.stringify({ intent: 'reconnect', targetConnectionId: connectionId, ...(region ? { region } : {}) }),
   })
   const data = (await res.json().catch(() => null)) as
-    | { authUrl?: string; error?: string }
+    | { authUrl?: string; completed?: { type?: string }; error?: string }
     | null
+  if (res.ok && data?.completed?.type === 'nexus:channel-connected') return { connected: true }
   if (res.ok && data?.authUrl) return { authUrl: data.authUrl }
   return { error: data?.error ?? `HTTP ${res.status}` }
 }

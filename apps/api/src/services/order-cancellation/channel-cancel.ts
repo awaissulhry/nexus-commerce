@@ -84,11 +84,9 @@ export async function cancelOnAmazon(
     }
   }
   try {
-    const { SellingPartner } = await import('amazon-sp-api')
-    const merchantToken = (await getAmazonSellerId())
-    if (!merchantToken) throw new Error('AMAZON_MERCHANT_TOKEN missing')
-
-    const sp: any = amazonSpClient()
+    const account = await (await import('../connection-resolver.service.js')).resolveConnection({ channel: 'AMAZON', channelOrderId: amazonOrderId })
+    const merchantToken = await (await import('../../lib/amazon-sp-client.js')).getAmazonSellerId(account.id)
+    const sp: any = await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(account.id)
 
     const reasonCode = mapReasonToAmazon(reason)
     const xml = `<?xml version="1.0" encoding="UTF-8"?>

@@ -548,7 +548,9 @@ export async function syncFinancialTransactions(
 ): Promise<FinancialSyncSummary> {
   const t0 = Date.now()
   const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-  const region = (process.env.AMAZON_REGION ?? 'eu') as string
+  const authorization = await import('../lib/amazon-sp-client.js')
+  const account = await authorization.amazonAccount()
+  const region = await authorization.getAmazonRegion(account.id)
   const host = `sellingpartnerapi-${region}.amazon.com`
 
   // Clamp upper bound to "now - 3min" — same SP-API data-propagation guard
@@ -556,8 +558,6 @@ export async function syncFinancialTransactions(
   const SP_API_CLOCK_SKEW_MS = 180_000
   const minAgo = new Date(Date.now() - SP_API_CLOCK_SKEW_MS)
   const upperBound = windowEnd.getTime() > minAgo.getTime() ? minAgo : windowEnd
-
-  const accessToken = await getLwaAccessToken()
 
   const collected: NewTransaction[] = []
   let nextToken: string | undefined
@@ -572,7 +572,7 @@ export async function syncFinancialTransactions(
         }
     const qs = new URLSearchParams(params).toString()
     const res = await fetch(`https://${host}/finances/2024-06-19/transactions?${qs}`, {
-      headers: { 'x-amz-access-token': accessToken, 'Content-Type': 'application/json' },
+      headers: { 'x-amz-access-token': await authorization.getAmazonAccessToken(account.id), 'Content-Type': 'application/json' },
     })
     if (!res.ok) {
       const body = await res.text()

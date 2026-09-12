@@ -33,15 +33,12 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import { logger } from '../utils/logger.js'
 import prisma from '../db.js'
 
-const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
 const REGION_ENDPOINTS: Record<string, string> = {
   na: 'https://sellingpartnerapi-na.amazon.com',
   eu: 'https://sellingpartnerapi-eu.amazon.com',
   fe: 'https://sellingpartnerapi-fe.amazon.com',
 }
-const SP_REGION = (process.env.AMAZON_SP_REGION ?? 'eu') as keyof typeof REGION_ENDPOINTS
 
-let cachedToken: { value: string; expiresAt: number } | null = null
 
 async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 

@@ -47,6 +47,7 @@ import {
 import '../styles/tokens.css'
 import '../styles/components.css'
 import { ACCOUNT_COLORS, channelDisplayName, type AccountRow, type AccountsPayload } from './AccountSwitcher'
+import { accountDisplayName } from '../lib/account-identity'
 
 export interface AccountsPanelProps {
   /** Absolute base URL of the API, e.g. `getBackendUrl()`. */
@@ -66,6 +67,8 @@ export interface AccountsPanelProps {
   includeDisconnected?: boolean
   /** Refresh host counts after a successful account mutation. */
   onChanged?: () => void
+  /** Host-supplied action wording; null holds unavailable connectors without a dead button. */
+  reconnectLabelForAccount?: (account: AccountRow) => string | null
   /**
    * Change this to force a refetch. The host owns the events that mean "an
    * account changed outside this panel" — an OAuth popup reporting back, say —
@@ -147,6 +150,7 @@ export function AccountsPanel({
   onAssignProfile,
   includeDisconnected = false,
   onChanged,
+  reconnectLabelForAccount,
   confirm,
   className,
   reloadSignal,
@@ -292,7 +296,8 @@ export function AccountsPanel({
     )
   }
 
-  const accounts = data?.accounts ?? []
+  // Normalize older API responses too, including dialog copy and accessible names.
+  const accounts = (data?.accounts ?? []).map((a) => ({ ...a, label: accountDisplayName(a) }))
   const byChannel = new Map<string, AccountRow[]>()
   for (const a of accounts) byChannel.set(a.channel, [...(byChannel.get(a.channel) ?? []), a])
   // A channel with a connect handler but no accounts still gets a section, so the
@@ -334,7 +339,7 @@ export function AccountsPanel({
             const chips = visibleScopes(a.scopes ?? [], scopesOpen)
             const permissions = permissionsLine(a.grantedScopes, a.scopeDrift, a.managedBy, a.permissionModel)
             const showError = errorLineVisible(a.authStatus, a.lastError)
-            const actions = rowActions(a, Boolean(onReconnect))
+            const actions = rowActions(a, Boolean(onReconnect), reconnectLabelForAccount?.(a))
             const result = testResult[a.id]
             // The sub line: health text only for a pre-CX.1 row (the pill carries it
             // otherwise), then whatever the row still needs to say about itself.

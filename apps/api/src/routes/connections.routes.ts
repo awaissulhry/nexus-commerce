@@ -21,6 +21,7 @@ import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
 import { writeSettingsAudit } from "../utils/settings-audit.js";
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
+import { connectionLabel } from "../services/connection-label.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 type IsManagedBy = "oauth" | "env" | "pending";
@@ -30,6 +31,7 @@ interface ConnectionRow {
   channel: Channel;
   isActive: boolean;
   isManagedBy: IsManagedBy;
+  connectMode?: 'website_oauth' | 'self_authorization';
   sellerName: string | null;
   storeName: string | null;
   storeFrontUrl: string | null;
@@ -79,7 +81,8 @@ function toConnectionRow(r: ChannelConnection): ConnectionRow {
     channel,
     isActive: r.isActive,
     isManagedBy: managed,
-    sellerName: r.displayName ?? r.ebaySignInName ?? null,
+    connectMode: channel === 'AMAZON' && process.env.AMAZON_SP_AUTH_MODE === 'self' ? 'self_authorization' : 'website_oauth',
+    sellerName: connectionLabel(r).label,
     storeName: r.ebayStoreName ?? null,
     storeFrontUrl: r.ebayStoreFrontUrl ?? null,
     tokenExpiresAt:

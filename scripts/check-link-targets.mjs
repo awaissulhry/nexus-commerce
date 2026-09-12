@@ -47,6 +47,9 @@ for (const p of findPages(appDir)) {
     .replace(/\/route\.ts$/, '')
   if (r === '') r = '/'
   routes.push(r)
+  // proxy.ts rewrites /w/:workspaceId/<route> onto this same page tree.
+  // Index the destination shape too, so missing destinations still fail.
+  routes.push(`/w/[workspaceId]${r === '/' ? '' : r}`)
 }
 const routeSet = new Set(routes)
 const routePatterns = routes.map(

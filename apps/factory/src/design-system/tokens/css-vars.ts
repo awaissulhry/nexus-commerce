@@ -40,6 +40,7 @@ const spacingVars: ReadonlyArray<CssVar> = Object.entries(space).map(([k, v], i)
  * does it, so the scale is defined once per fork and the two cannot drift apart.
  */
 const typeVars: ReadonlyArray<CssVar> = [
+  { name: '--nds-font-mono', value: "var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace" },
   ...Object.entries(fontSize).map(([k, v], i) => ({
     ...(i === 0 ? { section: 'Dimension: type scale (tokens/typography.ts)' } : {}),
     name: `--nds-font-size-${kebab(k)}`,

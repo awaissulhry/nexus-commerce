@@ -184,3 +184,14 @@ FilterChip compactLabel keeps docked sheet actions in one row at 1280px; the tri
 2026-09-12: `usePointerReorder` shares captured pointer dragging across vertical OrderedList grips and horizontal AxisChip groups; keyboard reordering stays available through OrderedList.
 
 2026-09-12 VP.F: FilterChip compact/full labels preserve the shared horizontal icon-and-text alignment, including SVG block defaults.
+# Changelog — Nexus Design System (Factory mirror)
+
+## Account names — 2026-09-08
+
+Mirrored the complete account-style block, previously absent in Factory, including 390px-tested container-responsive layout. Hosts can supply accurate verification wording or hold unavailable actions through `reconnectLabelForAccount`.
+
+Mirrored the shared account/channel display-name helpers and name-only switcher, panel, and scope chips from Web. Opaque keys remain internal, including in accessible labels and dialogs; missing names are explicit and can be renamed. Regression tests cover legacy IDs and real names.
+
+## Amazon Seller migration — 2026-09-08
+
+Mirrors Web’s `AccountsPanel`, account model, tests, application-role permission copy, and explicit ENV-credential replacement action. The copy covers both public website authorization and private-app self-authorization import.

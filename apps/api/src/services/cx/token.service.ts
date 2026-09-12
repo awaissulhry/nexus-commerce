@@ -137,7 +137,7 @@ async function readCredentials(row: ConnRow): Promise<Credentials | null> {
 }
 
 /** Write credentials as an envelope and null every plaintext column in the same UPDATE. */
-async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}, expected?: ConnRow) {
+async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}, expected?: ConnRow, persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>) {
   const { blob, keyId } = await encryptCredentials(creds as unknown as Record<string, unknown>)
   const data = {
     credentialsEnc: blob,
@@ -156,6 +156,11 @@ async function writeCredentials(connectionId: string, creds: Credentials, extraD
   if (expected) {
     const saved = await prisma.channelConnection.updateMany({ where: refreshSnapshot(expected), data })
     if (saved.count !== 1) throw new RefreshContended(connectionId)
+  } else if (persistRelated) {
+    await prisma.$transaction(async (tx) => {
+      await tx.channelConnection.update({ where: { id: connectionId }, data })
+      await persistRelated(tx)
+    })
   } else {
     await prisma.channelConnection.update({ where: { id: connectionId }, data })
   }
@@ -355,7 +360,11 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
       await failRefresh(row, 'auth_expired', 'No refresh token stored — the grant must be renewed by the operator.')
       throw new RefreshFailed(connectionId, 'auth_expired', 'No refresh token stored')
     }
-    if (creds.refreshTokenExpiresAt && Date.parse(creds.refreshTokenExpiresAt) < Date.now()) {
+    // Earlier private imports assigned the public-app annual consent lifetime
+    // to an existing token. That local estimate is not an Amazon expiry.
+    const privateAmazon = key === 'AMAZON_SP' && creds.extra?.authorizationMode === 'self'
+    const refreshTokenExpiresAt = privateAmazon ? null : creds.refreshTokenExpiresAt
+    if (refreshTokenExpiresAt && Date.parse(refreshTokenExpiresAt) < Date.now()) {
       await failRefresh(row, 'auth_expired', 'The refresh token has expired — the operator must reconnect.')
       throw new RefreshFailed(connectionId, 'auth_expired', 'Refresh token expired')
     }
@@ -414,7 +423,7 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
       refreshToken: rotated ? String(json.refresh_token) : creds.refreshToken,
       accessTokenExpiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
       refreshTokenExpiresAt:
-        rotated && refreshLife
+        privateAmazon ? null : rotated && refreshLife
           ? new Date(Date.now() + refreshLife * 1000).toISOString()
           : creds.refreshTokenExpiresAt ?? null,
       extra: creds.extra,
@@ -504,12 +513,18 @@ export async function storeGrant(
   grant: GrantResult,
   actor: Actor,
   event: 'grant' | 'reconsent' | 'adopt',
+  persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>,
 ): Promise<void> {
   const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
   if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
   const { key, spec } = specFor(row)
+  if (key === 'AMAZON_SP' && row.region && grant.region && row.region !== grant.region) {
+    throw new Error('Reconnect Amazon in the existing account region.')
+  }
   const now = Date.now()
-  const refreshLife = grant.refreshExpiresInSec ?? spec.auth.refreshTokenLifetimeSec ?? null
+  const refreshLife = key === 'AMAZON_SP' && grant.tokenResponseMetadata?.authorizationMode === 'self'
+    ? null
+    : grant.refreshExpiresInSec ?? spec.auth.refreshTokenLifetimeSec ?? null
   const creds: Credentials = {
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken ?? null,
@@ -537,7 +552,7 @@ export async function storeGrant(
     lastRefreshAt: new Date(),
     refreshLeaseUntil: null,
     refreshLeaseOwner: null,
-  })
+  }, undefined, persistRelated)
   lastFailureAt.delete(connectionId)
   await recordConnectionEvent({
     connectionId,

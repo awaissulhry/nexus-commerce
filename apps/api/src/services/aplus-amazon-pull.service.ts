@@ -60,10 +60,10 @@ export async function pullAPlusContentMetadata(opts: {
 } = {}): Promise<AplusPullSummary> {
   const t0 = Date.now()
   const marketplaceId = opts.marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-  const region = (process.env.AMAZON_REGION ?? 'eu') as string
+  const authorization = await import('../lib/amazon-sp-client.js')
+  const account = await authorization.amazonAccount()
+  const region = await authorization.getAmazonRegion(account.id)
   const host = `sellingpartnerapi-${region}.amazon.com`
-
-  const accessToken = await getLwaAccessToken()
 
   const collected: AmazonContentMetadataRecord[] = []
   let nextPageToken: string | undefined
@@ -76,7 +76,7 @@ export async function pullAPlusContentMetadata(opts: {
     })
     const res = await fetch(
       `https://${host}/aplus/2020-11-01/contentDocuments?${params.toString()}`,
-      { headers: { 'x-amz-access-token': accessToken, 'Content-Type': 'application/json' } },
+      { headers: { 'x-amz-access-token': await authorization.getAmazonAccessToken(account.id), 'Content-Type': 'application/json' } },
     )
     if (!res.ok) {
       const body = await res.text()

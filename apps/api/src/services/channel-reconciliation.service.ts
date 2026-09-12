@@ -74,7 +74,7 @@ async function fetchChannelOrderTotals(
   to: Date,
 ): Promise<{ orderCount: number; revenue: number; pages: number }> {
   const accessToken = await getLwaAccessToken()
-  const region = (process.env.AMAZON_REGION ?? 'eu') as string
+  const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
   const host = `sellingpartnerapi-${region}.amazon.com`
 
   // SP-API: 2-min skew window

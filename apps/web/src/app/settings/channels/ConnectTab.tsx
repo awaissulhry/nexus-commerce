@@ -13,10 +13,12 @@ import { Card, Banner, Listbox } from '@/design-system/components'
 import { Button, Tag, Pill, Skeleton } from '@/design-system/primitives'
 import { type AccountRow, type AdsConnection, type CatalogueChannel } from './channels-data'
 import { getBackendUrl } from '@/lib/backend-url'
+import { accountDisplayName } from '@/design-system/lib'
 
 const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY']
 
 function lifetimeLine(c: CatalogueChannel): string | null {
+  if (c.connectMode === 'self_authorization') return 'Amazon does not report an expiry for this private authorization.'
   if (c.rotatesRefreshToken) return 'Sign-in renews itself on every refresh.'
   if (c.refreshTokenLifetimeSec) {
     const months = Math.round(c.refreshTokenLifetimeSec / (30 * 86_400))
@@ -65,11 +67,12 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
       <div style={{ display: 'grid', gap: 'var(--nds-space-12)', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))' }}>
         {sorted.map((c) => {
           const isAds = c.key === 'AMAZON_ADS'
+          const isSelfAuthorizedAmazon = c.key === 'AMAZON_SP' && c.connectMode === 'self_authorization'
           const adsItems = isAds ? (ads?.items ?? []) : []
           const have = connectedFor(c.channelType)
           const envAccount = c.key === 'AMAZON_SP' ? have.find((account) => account.managedBy === 'env') : undefined
           const chosenRegion = region[c.key] ?? c.defaultRegion ?? c.regions[0]?.key ?? null
-          const held = !c.available
+          const held = !c.available || (isSelfAuthorizedAmazon && !envAccount)
           const busy = connecting === c.key
           return (
             <Card
@@ -77,7 +80,11 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
               header={c.displayName}
               description={
                 envAccount
-                  ? 'An Amazon account still uses environment credentials. Sign in with Seller Central to replace them with a revocable account grant.'
+                  ? isSelfAuthorizedAmazon
+                    ? 'An existing private Seller Central authorization is ready to be verified and moved into Nexus’s encrypted account store.'
+                    : 'An Amazon account still uses environment credentials. Sign in with Seller Central to replace them with a revocable account grant.'
+                  : isSelfAuthorizedAmazon && have.length > 0
+                    ? 'This private Seller Central application is authorized for the connected company account.'
                   : have.length > 0
                   ? `${have.length} account${have.length === 1 ? '' : 's'} connected — ${have.map((a) => a.label).join(', ')}`
                   : 'No account connected yet.'
@@ -101,7 +108,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
               <dl className="nds-connect-facts">
                 <div>
                   <dt>Signs in with</dt>
-                  <dd>{c.authMode.replace(/_/g, ' ')}</dd>
+                  <dd>{isSelfAuthorizedAmazon ? 'Private app authorization' : c.authMode.replace(/_/g, ' ')}</dd>
                 </div>
                 <div>
                   <dt>Permissions</dt>
@@ -138,7 +145,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 <div className="nds-connect-chips">
                   {adsItems.map((i) => (
                     <Tag key={i.id} tone={i.tokenExpiryStatus === 'expired' ? 'danger' : i.mode === 'live' || i.mode === 'production' ? 'success' : 'neutral'}>
-                      {i.accountLabel ?? 'Profile'} · {i.marketplace} · {i.mode}
+                      {accountDisplayName({ channel: 'AMAZON_ADS', label: i.accountLabel ?? '' })} · {i.marketplace} · {i.mode}
                     </Tag>
                   ))}
                 </div>
@@ -184,7 +191,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                   {busy
                     ? 'Opening sign-in…'
                     : envAccount
-                      ? 'Sign in with Amazon Seller Central'
+                      ? isSelfAuthorizedAmazon
+                        ? 'Import Seller Central authorization'
+                        : 'Sign in with Amazon Seller Central'
                     : have.length > 0 && !held
                       ? `Connect another ${c.displayName} account`
                       : `Connect ${c.displayName}`}
@@ -197,7 +206,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
               </div>
               {held && reasonShown === c.key && (
                 <p id={`held-${c.key}`} className="nds-connect-reason" role="status">
-                  This channel cannot be connected yet.
+                  {isSelfAuthorizedAmazon
+                    ? 'Amazon registered this as a private app for personal use. Additional seller accounts must be self-authorized in the Solution Provider Portal.'
+                    : 'This channel cannot be connected yet.'}
                 </p>
               )}
             </Card>
@@ -208,7 +219,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
 
       <Card header="About channel connections">
         <ul className="nds-connect-about">
-          <li>Connect opens the channel’s own sign-in in a new tab; you sign in there and choose to allow. Nexus never sees your password.</li>
+          <li>Public channel connections open the channel’s own sign-in in a popup; Nexus never sees your password. Amazon private apps import the company authorization created in the Solution Provider Portal.</li>
           <li>OAuth permissions are recorded at consent. Amazon Seller access follows the roles Amazon approved on the Nexus SP-API application, so Seller Central grants every eligible app role in one sign-in.</li>
           <li>Every connected account is checked with a real call every 15 minutes (heartbeat). Access tokens are refreshed before they expire; you are told 30, 7 and 1 days before a sign-in itself runs out.</li>
           <li>Disconnect removes the stored credentials, revokes at the channel when its API supports that, and keeps the account’s history in the ledger.</li>

@@ -5209,7 +5209,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!(await isFbaInboundConfigured())) {
         return reply.code(503).send({
-          error: 'SP-API not configured. Set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_MARKETPLACE_ID.',
+          error: 'Connect or verify your Amazon Seller account in Settings → Channels.',
         })
       }
 
@@ -5346,7 +5346,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (!(await isFbaInboundConfigured())) {
         return reply.code(503).send({
-          error: 'SP-API not configured. Set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_MARKETPLACE_ID.',
+          error: 'Connect or verify your Amazon Seller account in Settings → Channels.',
         })
       }
       // Resolve to the Amazon-issued shipmentId. Local FBAShipment.id
@@ -5405,7 +5405,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       if (!(await isFbaInboundConfigured())) {
         return reply.code(503).send({
-          error: 'SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)',
+          error: 'Connect or verify your Amazon Seller account in Settings → Channels.',
         })
       }
       const result = await runFbaStatusPoll()

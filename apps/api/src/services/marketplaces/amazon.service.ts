@@ -271,22 +271,17 @@ function sleep(ms: number): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export class AmazonService {
-  private sp: SellingPartner | null = null;
-
   constructor() {
     // Constructor does nothing — validation is deferred to getClient()
   }
 
   /**
-   * Lazy-initialize the SellingPartner client.
-   * Validates env vars only when actually needed (first API call).
-   * Throws if credentials are missing.
+   * Obtain a client pinned to the managed connection; each request rechecks access.
    */
   private async getClient(): Promise<SellingPartner> { return amazonSpClient() }
 
   /**
-   * Check if Amazon credentials are configured.
-   * Returns true if all required env vars are present.
+   * Check whether an unambiguous, usable Amazon account is configured.
    */
   async isConfigured(): Promise<boolean> { return amazonCredsConfigured() }
 

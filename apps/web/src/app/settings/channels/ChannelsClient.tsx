@@ -60,9 +60,11 @@ export function ChannelsClient() {
       const destination = connectionProfile?.id === m.workspaceId ? connectionProfile : profiles.find(profile => profile.id === m.workspaceId)
       if (!WORKSPACES_ENABLED || m.workspaceId === activeProfile?.id) bump()
       const drift = m.scopeDrift?.length ?? 0
+      const displayName = catalogue.data?.find((entry) => entry.channelType === m.channel)?.displayName
+        ?? (m.channel === 'EBAY' ? 'eBay' : m.channel)
       setNotice({
         tone: drift ? 'info' : 'success',
-        title: `${channelName(m.channel)} account ${m.placement === 'reconsent' ? 'reconnected' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
+        title: `${displayName} account ${m.placement === 'verified' ? 'verified' : m.placement === 'reconsent' ? 'reconnected' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
         text: [destination ? `Connected to ${destination.name}.` : '', drift ? `${drift} permission${drift === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${drift === 1 ? 'it' : 'them'}.` : ''].filter(Boolean).join(' ') || undefined,
         workspaceId: WORKSPACES_ENABLED && destination && destination.id !== activeProfile?.id ? destination.id : undefined,
       })

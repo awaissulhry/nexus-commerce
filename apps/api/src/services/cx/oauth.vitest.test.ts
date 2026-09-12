@@ -145,7 +145,9 @@ const getChannelApp = vi.fn(async (key: string) => ({
   clientId: 'test-client-id',
   clientSecret: 'test-client-secret',
   redirectUris: key === 'EBAY' ? ['Nexus-Test-RuName'] : [],
-  extra: key === 'AMAZON_SP' ? { applicationId: 'amzn1.sellerapps.app.fixture', authorizationVersion: 'beta' } : {},
+  extra: key === 'AMAZON_SP'
+    ? { applicationId: 'amzn1.sp.solution.fixture', authorizationVersion: 'beta' }
+    : {},
   signingKey: null,
 }))
 vi.mock('./apps.service.js', () => ({ getChannelApp }))
@@ -162,6 +164,7 @@ const { start, complete, sweepSessions, callbackUrlFor, OAuthFlowError, SESSION_
 
 const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token'
 const AMAZON_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
+const AMAZON_PARTICIPATIONS_URL = 'https://sellingpartnerapi-eu.amazon.com/sellers/v1/marketplaceParticipations'
 const EBAY_IDENTITY_URL = 'https://apiz.ebay.com/commerce/identity/v1/user/'
 const FAKE_TOKEN_URL = 'https://token.fake.test/oauth/token'
 const FAKE_AUTHORIZE_URL = 'https://auth.fake.test/oauth/authorize'
@@ -239,6 +242,9 @@ const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit)
   const u = String(url)
   if (u === EBAY_TOKEN_URL || u === AMAZON_TOKEN_URL || u === FAKE_TOKEN_URL) return tokenResponse()
   if (u === EBAY_IDENTITY_URL) return identityResponse()
+  if (u === AMAZON_PARTICIPATIONS_URL) {
+    return json({ payload: [{ marketplace: { id: 'APJ6JRA9NG5V4', name: 'Amazon.it', countryCode: 'IT', defaultCurrencyCode: 'EUR' }, participation: { isParticipating: true } }] })
+  }
   throw new Error(`unexpected fetch ${u}`)
 })
 const exchangeCalls = () => fetchMock.mock.calls.filter((c) => [EBAY_TOKEN_URL, AMAZON_TOKEN_URL, FAKE_TOKEN_URL].includes(String(c[0])))
@@ -519,7 +525,7 @@ describe('start', () => {
     const s = await start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'NA', actor: ACTOR })
     const url = new URL(s.authorizeUrl)
     expect(`${url.origin}${url.pathname}`).toBe('https://sellercentral.amazon.com/apps/authorize/consent')
-    expect(url.searchParams.get('application_id')).toBe('amzn1.sellerapps.app.fixture')
+    expect(url.searchParams.get('application_id')).toBe('amzn1.sp.solution.fixture')
     expect(url.searchParams.get('state')).toBe(s.state)
     expect(url.searchParams.get('version')).toBe('beta')
     expect(url.searchParams.has('client_id')).toBe(false)
@@ -536,7 +542,13 @@ describe('start', () => {
 
   it('refuses missing Amazon application metadata before creating a session', async () => {
     getChannelApp.mockResolvedValueOnce({
-      channelKey: 'AMAZON_SP', environment: 'production', clientId: 'test-client-id', clientSecret: 'test-client-secret', redirectUris: [], extra: {}, signingKey: null,
+      channelKey: 'AMAZON_SP',
+      environment: 'production',
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+      redirectUris: [],
+      extra: {},
+      signingKey: null,
     })
     const err = await flowError(start({ channelKey: 'AMAZON_SP', intent: 'connect', actor: ACTOR }))
     expect(err.code).toBe('channel_unavailable')
@@ -744,6 +756,34 @@ describe('complete — exchange', () => {
 })
 
 describe('complete — placement and storage', () => {
+  it('replaces an ENV-managed Amazon row only after verified Seller Central authorization', async () => {
+    const accountId = seedConnection({
+      id: 'amazon-env',
+      channelType: 'AMAZON',
+      managedBy: 'env',
+      region: 'EU',
+      externalAccountId: 'SELLERONE',
+    })
+    const s = await start({ channelKey: 'AMAZON_SP', intent: 'reconnect', targetConnectionId: accountId, region: 'EU', actor: ACTOR })
+    const result = await complete({
+      channelKey: 'AMAZON_SP',
+      query: { state: s.state, spapi_oauth_code: 'amazon-code', selling_partner_id: 'SELLERONE' },
+      cookies: cookiesFor(s),
+    })
+
+    expect(result).toMatchObject({ connectionId: accountId, placement: 'reconsent', identity: { userId: 'SELLERONE' } })
+    expect(connections.get(accountId)).toMatchObject({
+      managedBy: 'oauth',
+      isActive: true,
+      authStatus: 'connected',
+      externalAccountId: 'SELLERONE',
+      accessToken: null,
+      refreshToken: null,
+    })
+    expect(connections.get(accountId)?.credentialsEnc).toEqual(expect.any(String))
+    expect(scopeUpserts).toHaveLength(1)
+  })
+
   it('new account: creates the row, stores the grant, records grant + status_change, returns the result shape', async () => {
     const s = await startEbay()
     const r = await completeEbay(s)

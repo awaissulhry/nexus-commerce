@@ -1,3 +1,4 @@
+import type { SellingPartner } from 'amazon-sp-api'
 import { amazonSpClient } from '../lib/amazon-sp-client.js'
 /**
  * Phase 6.B — Amazon SP-API settlement reports ingester.
@@ -19,14 +20,12 @@ import { amazonSpClient } from '../lib/amazon-sp-client.js'
  * the full body in `rawBody` for future per-line reconciliation features.
  */
 
-import { SellingPartner } from 'amazon-sp-api'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const SETTLEMENT_REPORT_TYPE = 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2'
 
-let cachedClient: SellingPartner | null = null
 
 function getClient(): SellingPartner { return amazonSpClient() }
 
@@ -52,7 +51,7 @@ export async function listSettlementReports(opts: {
   to: Date
   maxReports?: number
 }): Promise<ReportListItem[]> {
-  const sp = getClient()
+  const sp = await getClient()
   const max = opts.maxReports ?? 500
   const results: ReportListItem[] = []
   let nextToken: string | undefined
@@ -90,7 +89,7 @@ export async function listSettlementReports(opts: {
  * both gzip + plain responses transparently.
  */
 export async function downloadReportBody(reportDocumentId: string): Promise<string> {
-  const sp = getClient()
+  const sp = await getClient()
   const docRes: any = await (sp as any).callAPI({
     operation: 'getReportDocument',
     endpoint: 'reports',

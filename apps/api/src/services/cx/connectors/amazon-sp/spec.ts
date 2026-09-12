@@ -20,32 +20,50 @@ function apiHost(handle: ConnectionHandle) {
   if (!REGION_HOSTS[region]) throw new Error('Choose a supported Amazon region.')
   return handle.environment === 'sandbox' ? REGION_HOSTS[region].sandbox : REGION_HOSTS[region].api
 }
-async function participations(handle: ConnectionHandle): Promise<any[]> {
-  const response = await fetch(`${apiHost(handle)}/sellers/v1/marketplaceParticipations`, { signal: AbortSignal.timeout(25_000), headers: { 'x-amz-access-token': await handle.token() } })
+
+export async function amazonParticipations(handle: ConnectionHandle): Promise<any[]> {
+  const response = await fetch(`${apiHost(handle)}/sellers/v1/marketplaceParticipations`, {
+    signal: AbortSignal.timeout(25_000),
+    headers: { 'x-amz-access-token': await handle.token() },
+  })
   if (!response.ok) throw new Error(`Amazon seller verification failed (${response.status}).`)
   const data = await response.json() as { payload?: any[] }
   if (!Array.isArray(data.payload)) throw new Error('Amazon returned an invalid seller verification response.')
   return data.payload
 }
+
 async function identity(handle: ConnectionHandle) {
   const sellerId = handle.identity?.userId
   if (!sellerId || !/^[A-Z0-9]{6,40}$/.test(sellerId)) throw new Error('Amazon did not return a valid seller identity.')
-  const markets = await participations(handle)
-  const market = markets.find(row => row.participation?.isParticipating && row.marketplace?.id)
-  if (!market) throw new Error('This Amazon seller has no participating marketplaces in the selected region.')
-  // Amazon signs `selling_partner_id` into the callback associated with this
-  // one-time state. Participations proves the exchanged token is a working seller
-  // grant without requiring an unrelated Listings role merely to save it.
+  const markets = await amazonParticipations(handle)
+  if (!markets.some((row) => row.participation?.isParticipating && row.marketplace?.id)) {
+    throw new Error('This Amazon seller has no participating marketplaces in the selected region.')
+  }
   return { userId: sellerId }
 }
+
 async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   const started = Date.now()
-  try { await participations(handle); return { ok: true, latencyMs: Date.now() - started, identity: handle.identity ?? undefined } }
-  catch (error) { const message = error instanceof Error ? error.message : String(error); return { ok: false, latencyMs: Date.now() - started, errorClass: classifyAuthError(Number(message.match(/\((\d{3})\)/)?.[1]) || undefined, message), message } }
+  try {
+    await amazonParticipations(handle)
+    return { ok: true, latencyMs: Date.now() - started, identity: handle.identity ?? undefined }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const status = Number(message.match(/\((\d{3})\)/)?.[1]) || undefined
+    return { ok: false, latencyMs: Date.now() - started, errorClass: classifyAuthError(status, message), message }
+  }
 }
+
 async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
-  const rows = await participations(handle)
-  return rows.map(row => ({ kind: 'marketplace', externalId: row.marketplace.id, label: row.marketplace.name, region: handle.region ?? undefined, isActive: !!row.participation?.isParticipating, metadata: { countryCode: row.marketplace.countryCode, currency: row.marketplace.defaultCurrencyCode } }))
+  const rows = await amazonParticipations(handle)
+  return rows.map((row) => ({
+    kind: 'marketplace' as const,
+    externalId: row.marketplace.id,
+    label: row.marketplace.name,
+    region: handle.region ?? undefined,
+    isActive: !!row.participation?.isParticipating,
+    metadata: { countryCode: row.marketplace.countryCode, currency: row.marketplace.defaultCurrencyCode },
+  }))
 }
 
 function parseRateLimit(headers: Headers, status: number): RateLimitReading | null {
