@@ -571,15 +571,13 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   let clientId: string
   let token: string
   if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
-    const { default: db } = await import('../../db.js')
     const { requireWorkspace, WorkspaceError } = await import('../../lib/workspace-context.js')
+    const { resolveConnectionForProfile, NoConnectionError, AmbiguousConnectionError } = await import('../connection-resolver.service.js')
     requireWorkspace()
-    const candidates = await db.channelConnection.findMany({ where: {
-      channelType: 'AMAZON_ADS', isActive: true, authStatus: { notIn: ['disconnected', 'revoked', 'needs_reauth'] },
-      ...(opts.profileId !== 'n/a' ? { scopes: { some: { kind: 'profile', externalId: opts.profileId, isActive: true, region: opts.region } } } : {}),
-    }, select: { id: true, connectionMetadata: true }, take: 2 })
-    if (candidates.length !== 1) throw new WorkspaceError('ads_account_ambiguous', 'Select one connected advertising account for this profile and region.', 409)
-    const account = candidates[0]
+    const account = await resolveConnectionForProfile('AMAZON_ADS', opts.profileId !== 'n/a' ? opts.profileId : null, opts.region).catch(error => {
+      if (error instanceof NoConnectionError || error instanceof AmbiguousConnectionError) throw new WorkspaceError('ads_account_ambiguous', 'Select one connected advertising account for this profile and region.', 409)
+      throw error
+    })
     const environment = (account.connectionMetadata as { environment?: string } | null)?.environment === 'sandbox' ? 'sandbox' : 'production'
     const { getChannelApp } = await import('../cx/apps.service.js')
     clientId = (await getChannelApp('AMAZON_ADS', environment)).clientId

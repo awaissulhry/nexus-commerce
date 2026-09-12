@@ -1,3 +1,4 @@
+import { changeUserPassword } from '../services/change-password.service.js'
 /**
  * Phase S1 (auth core) — human authentication endpoints.
  *
@@ -258,14 +259,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: { currentPassword?: unknown; newPassword?: unknown; confirmPassword?: unknown } }>('/api/auth/password/change', { preHandler: [requireAuth, requireCsrf], config: { rateLimit: { max: 8, timeWindow: '15 minutes' } } }, async (req, reply) => {
     const { currentPassword, newPassword, confirmPassword } = req.body ?? {}
-    const user = await prisma.userProfile.findUnique({ where: { id: req.authUser!.id } })
-    if (!user?.passwordHash || typeof currentPassword !== 'string' || currentPassword.length > 512 || !(await verifyPassword(currentPassword, user.passwordHash)).ok) return reply.code(400).send({ error: 'Current password is incorrect.' })
-    if (typeof newPassword !== 'string' || newPassword !== confirmPassword) return reply.code(400).send({ error: 'Passwords do not match.' })
-    const strength = checkPasswordStrength(newPassword, [user.email, user.displayName])
-    if (!strength.ok) return reply.code(400).send({ error: strength.message })
-    if ((await verifyPassword(newPassword, user.passwordHash)).ok) return reply.code(400).send({ error: 'Choose a different password.' })
-    const changed = await prisma.userProfile.updateMany({ where: { id: user.id, passwordHash: user.passwordHash, status: 'active' }, data: { passwordHash: await hashPassword(newPassword) } })
-    if (changed.count !== 1) return reply.code(409).send({ error: 'Your login changed. Sign in again before changing the password.' })
+    const result = await changeUserPassword(req.authUser!.id, currentPassword, newPassword, confirmPassword)
+    if ('error' in result) return reply.code(result.status).send({ error: result.error })
+    const user = { id: result.userId }
     await revokeAllSessions(user.id, req.authSessionId)
     await writeAuthAudit({ actorUserId: user.id, ip: truncateIp(req.ip), userAgent: ua(req), entityType: 'User', entityId: user.id, action: 'password.changed' })
     return { success: true }

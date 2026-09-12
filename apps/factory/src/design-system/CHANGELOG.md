@@ -195,3 +195,7 @@ Mirrored the shared account/channel display-name helpers and name-only switcher,
 ## Amazon Seller migration — 2026-09-08
 
 Mirrors Web’s `AccountsPanel`, account model, tests, application-role permission copy, and explicit ENV-credential replacement action. The copy covers both public website authorization and private-app self-authorization import.
+
+## Monospace token parity — 2026-09-12
+
+Factory now defines `--nds-font-mono` for its grid editor styles. Both apps use a monospace fallback when the host does not supply `--font-mono`; generated stylesheets are refreshed.

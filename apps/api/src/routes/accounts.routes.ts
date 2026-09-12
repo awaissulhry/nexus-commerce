@@ -1,3 +1,4 @@
+import { listManagedConnections } from '../services/connection-resolver.service.js';
 /**
  * MAP.0 / MAP.1 — accounts.
  *
@@ -221,10 +222,7 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       // revoked eBay grants from the reconnect history. Those are not accounts
       // the operator is "using", and listing them would make the panel unreadable.
       // /accounts/diagnostics reports the full population.
-      const rows = await prisma.channelConnection.findMany({
-        where: { ...(process.env.NEXUS_WORKSPACES_ENABLED === '1' && request.query.includeDisconnected === '1' ? {} : { isActive: true }), OR: [{ managedBy: "oauth" }, { managedBy: "env" }] },
-        orderBy: [{ channelType: "asc" }, { isPrimary: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
-      });
+      const rows = await listManagedConnections(process.env.NEXUS_WORKSPACES_ENABLED === '1' && request.query.includeDisconnected === '1');
 
       // MAP.2a made isPrimary a real column, backfilled and constrained to one
       // true row per channelType by a partial unique index — so it is read, not

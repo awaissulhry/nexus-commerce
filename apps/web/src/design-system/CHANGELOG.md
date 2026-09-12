@@ -1072,3 +1072,7 @@ FilterChip compactLabel keeps docked sheet actions in one row at 1280px; the tri
 2026-09-12: `usePointerReorder` shares captured pointer dragging across vertical OrderedList grips and horizontal AxisChip groups; keyboard reordering stays available through OrderedList.
 
 2026-09-12 VP.F: FilterChip compact/full labels preserve the shared horizontal icon-and-text alignment, including SVG block defaults.
+
+## Monospace token parity — 2026-09-12
+
+Factory now defines `--nds-font-mono` for its grid editor styles. Both apps use a monospace fallback when the host does not supply `--font-mono`; generated stylesheets are refreshed.

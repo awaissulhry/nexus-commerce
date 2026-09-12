@@ -47,12 +47,12 @@ describe('projection vocabulary', () => {
   })
 
   it('maps each state to the dot §3.3 draws', () => {
-    // success solid · neutral hollow · nothing · nothing · danger solid
+    // success solid · neutral hollow · nothing · nothing · warning solid
     expect(projectionMeta('listed')).toMatchObject({ tone: 'success', dot: 'solid', muted: false })
     expect(projectionMeta('draft')).toMatchObject({ tone: 'neutral', dot: 'hollow', muted: false })
     expect(projectionMeta('excluded')).toMatchObject({ dot: 'none', muted: true })
     expect(projectionMeta('not-set-up')).toMatchObject({ dot: 'none', muted: true })
-    expect(projectionMeta('needs-value')).toMatchObject({ tone: 'danger', dot: 'solid', muted: false })
+    expect(projectionMeta('needs-value')).toMatchObject({ tone: 'warning', dot: 'solid', muted: false })
   })
 
   it('holds the include checkbox on "Not set up" only, and gives it a reason', () => {

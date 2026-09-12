@@ -368,6 +368,7 @@
   --nds-space-32: 32px;
   --nds-space-40: 40px;
   --nds-space-48: 48px;
+  --nds-font-mono: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
 
   /* ── Dimension: type scale (tokens/typography.ts) ── */
   --nds-font-size-nano: 9px;

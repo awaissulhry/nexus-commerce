@@ -22,8 +22,7 @@ import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-mast
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 import { tryResolveConnection } from '../services/connection-resolver.service.js'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
-import { CONNECTION_PUBLIC_SELECT } from '../services/connection-resolver.service.js'
-import { connectionLabel } from '../services/connection-label.js'
+import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -2898,7 +2897,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         })
       }
 
-      const circuitAccounts = trippedCircuits.length ? await prisma.channelConnection.findMany({ select: CONNECTION_PUBLIC_SELECT }) : []
+      const circuitAccounts = trippedCircuits.length ? await connectionLabelDirectory() : []
       return {
         last24h,
         last7d,

@@ -33,3 +33,13 @@ export function connectionLabel(row: LabelledConnection) {
   }
   return { label: `${CHANNEL_NAMES[row.channelType] ?? 'Channel'} account`, labelSource: 'channel' as const, labelIsPlaceholder: true }
 }
+
+export async function connectionLabelById(connectionId: string) {
+  const [{ default: prisma }, { CONNECTION_PUBLIC_SELECT }] = await Promise.all([import('../db.js'), import('./connection-resolver.service.js')])
+  return connectionLabel(await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionId }, select: CONNECTION_PUBLIC_SELECT }))
+}
+
+export async function connectionLabelDirectory() {
+  const [{ default: prisma }, { CONNECTION_PUBLIC_SELECT }] = await Promise.all([import('../db.js'), import('./connection-resolver.service.js')])
+  return prisma.channelConnection.findMany({ select: CONNECTION_PUBLIC_SELECT })
+}

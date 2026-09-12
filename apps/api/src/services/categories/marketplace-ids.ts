@@ -1,3 +1,4 @@
+import prisma from '../../db.js'
 import { marketLanguages, languageTag } from '../pim/market-languages.js'
 // Map internal 2-letter marketplace codes to Amazon's marketplaceId.
 // Existing call-sites use raw IDs from env; this lookup centralises
@@ -30,4 +31,9 @@ export function amazonMarketplaceId(code: string | null | undefined): string {
   // If the value already looks like an Amazon ID, pass through.
   if (upper.length > 6) return upper
   return CODE_TO_AMAZON_ID[upper] ?? upper
+}
+
+export async function configuredAmazonMarketplaceId(code: string): Promise<string | undefined> {
+  const row = await prisma.marketplace.findFirst({ where: { channel: 'AMAZON', code }, select: { marketplaceId: true } })
+  return row?.marketplaceId ?? undefined
 }

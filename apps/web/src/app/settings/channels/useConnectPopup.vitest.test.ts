@@ -109,4 +109,23 @@ describe('profile-aware sign-in bridge', () => {
     expect(await bridge.start('ETSY')).toBe(true)
     expect(window.location.href).toBe('https://provider.example.test/sign-in')
   })
+  it('completes private Amazon imports only in the selected profile', async () => {
+    const completed = { type: 'nexus:channel-connected', channel: 'AMAZON', channelKey: 'AMAZON_SP', workspaceId: 'chosen-business', placement: 'verified' }
+    fetchMock.mockResolvedValueOnce(Response.json({ success: true, completed }))
+    const connected = vi.fn()
+    const bridge = useConnectPopup(connected)
+    expect(await bridge.start('AMAZON_SP', { workspaceId: 'chosen-business', targetConnectionId: 'amazon-env' })).toBe(true)
+    expect(popup.close).toHaveBeenCalledOnce()
+    expect(popup.location.href).toBe('')
+    expect(connected).toHaveBeenCalledExactlyOnceWith(completed)
+  })
+
+  it('rejects a private import completion for another profile', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ success: true, completed: { type: 'nexus:channel-connected', channel: 'AMAZON', channelKey: 'AMAZON_SP', workspaceId: 'other-business' } }))
+    const connected = vi.fn()
+    const bridge = useConnectPopup(connected)
+    expect(await bridge.start('AMAZON_SP', { workspaceId: 'chosen-business' })).toBe(false)
+    expect(connected).not.toHaveBeenCalled()
+  })
+
 })

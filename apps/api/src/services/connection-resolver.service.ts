@@ -155,10 +155,10 @@ export function chooseConnection(
   throw new AmbiguousConnectionError(opts.channel, active.map((c) => c.id), opts.hint);
 }
 
-/** Every active connection for a channel, in the operator's own order. */
-export async function listActiveConnections(channel: string): Promise<ConnectionRow[]> {
+/** Every active connection, optionally restricted to a channel, in the operator's own order. */
+export async function listActiveConnections(channel?: string): Promise<ConnectionRow[]> {
   return prisma.channelConnection.findMany({
-    where: { channelType: channel, isActive: true },
+    where: { ...(channel ? { channelType: channel } : {}), isActive: true },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
     select: CONNECTION_PUBLIC_SELECT,
   });
@@ -390,4 +390,27 @@ export async function countUnidentifiedAccounts(channel: string): Promise<number
 /** Convenience for the many callers that only need the id to pass downstream. */
 export async function resolveConnectionId(scope: ConnectionScope): Promise<string> {
   return (await resolveConnection(scope)).id;
+}
+
+/** The account switcher may include disconnected grants for an explicit reconnect action. */
+export async function listManagedConnections(includeDisconnected = false): Promise<ConnectionRow[]> {
+  return prisma.channelConnection.findMany({
+    select: CONNECTION_PUBLIC_SELECT,
+    where: { ...(includeDisconnected ? {} : { isActive: true }), OR: [{ managedBy: 'oauth' }, { managedBy: 'env' }] },
+    orderBy: [{ channelType: 'asc' }, { isPrimary: 'desc' }, { sortOrder: 'asc' }, { updatedAt: 'desc' }],
+  });
+}
+
+/** Resolve an active profile grant in the current workspace, rejecting ambiguous matches. */
+export async function resolveConnectionForProfile(channel: string, profileId: string | null, region: string): Promise<ConnectionRow> {
+  const candidates = await prisma.channelConnection.findMany({
+    where: {
+      channelType: channel, isActive: true, authStatus: { notIn: ['disconnected', 'revoked', 'needs_reauth'] },
+      ...(profileId ? { scopes: { some: { kind: 'profile', externalId: profileId, isActive: true, region } } } : {}),
+    },
+    select: CONNECTION_PUBLIC_SELECT,
+    take: 2,
+  });
+  const chosen = chooseConnection(candidates, { channel });
+  return candidates.find(candidate => candidate.id === chosen.id)!;
 }

@@ -315,3 +315,8 @@ export const __adsResolverTest = {
   /** Tests and the reseed job need a clean slate; nothing in production clears it. */
   clearConnectionCache: () => { connectionCache.clear() },
 }
+
+export async function adsProfileAccountLabel(profileId: string): Promise<string | null> {
+  const profile = await prisma.amazonAdsConnection.findFirst({ where: { profileId }, select: { accountLabel: true } })
+  return profile?.accountLabel ?? null
+}

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn() }))
 vi.mock('../../../db.js', () => ({ default: {
+  marketplace: { findFirst: async ({ where }: any) => ({ languages: [{ IT: 'it', DE: 'de', FR: 'fr', ES: 'es', GLOBAL: 'en' }[where.code as string]] }) },
   product: { findMany: db.products }, channelListing: { findMany: db.listings }, fieldLinkGroup: { findMany: async () => [] }, productCategory: { findMany: async () => [] },
 } }))
 vi.mock('../../connection-resolver.service.js', () => ({ primaryConnectionIds: async () => new Map([['EBAY', 'primary']]) }))

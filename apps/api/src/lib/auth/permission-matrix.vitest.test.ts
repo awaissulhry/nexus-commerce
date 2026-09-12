@@ -28,6 +28,8 @@ function roleAllows(role: SystemRoleKey, method: string, path: string): boolean 
 
 // [method, path, roles that MUST be allowed (besides OWNER)]
 const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
+  // Self-service credentials remain available to every signed-in role.
+  ['POST', '/api/auth/password/change', NON_OWNER],
   // Products
   ['GET', '/api/products/123', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['POST', '/api/products', ['ADMIN', 'OPS_MANAGER']],
@@ -124,4 +126,10 @@ describe('AMS.1 marketing-stream ingest is PUBLIC, and only that', () => {
   it('advertising reads still require ads.view', () => {
     expect(permissionForRoute('GET', '/api/advertising/campaigns')).not.toBe('PUBLIC')
   })
+})
+
+it('password changes require a session permission and do not open adjacent auth routes', () => {
+  expect(permissionForRoute('POST', '/api/auth/password/change')).toBe('pages.dashboard')
+  expect(permissionForRoute('GET', '/api/auth/password/change')).toBeNull()
+  expect(permissionForRoute('POST', '/api/auth/password/change-other')).toBeNull()
 })

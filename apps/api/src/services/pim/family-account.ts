@@ -1,4 +1,5 @@
 import prisma from '../../db.js'
+import { listActiveConnections } from '../connection-resolver.service.js'
 
 /** Attribution wins over account defaults. Ambiguous families remain unresolved. */
 export function familyAccountId(active: readonly string[], attributed: readonly (string | null)[]): string | null {
@@ -11,7 +12,7 @@ export async function readFamilyAccountId(productId: string, channel: string, ma
   if (!root) throw new Error('This product is unavailable.')
   const familyId = root.parentId ?? root.id
   const [connections, listings] = await Promise.all([
-    prisma.channelConnection.findMany({ where: { channelType: channel, isActive: true }, select: { id: true } }),
+    listActiveConnections(channel),
     prisma.channelListing.findMany({ where: { channel, marketplace, product: { OR: [{ id: familyId }, { parentId: familyId }], deletedAt: null } }, select: { channelConnectionId: true } }),
   ])
   const accountId = familyAccountId(connections.map(c => c.id), listings.map(l => l.channelConnectionId))

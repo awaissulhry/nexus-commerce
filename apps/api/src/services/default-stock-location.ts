@@ -10,3 +10,7 @@ export async function defaultStockLocation(db: Pick<Prisma.TransactionClient, 's
   const locations = await db.stockLocation.findMany({ where: { isActive: true, type: 'WAREHOUSE' }, select: { id: true, code: true }, take: 2 })
   return locations.length === 1 ? locations[0] : null
 }
+
+export async function isProtectedStockLocation(location: { code: string; warehouseId: string | null }): Promise<boolean> {
+  return ['AMAZON-EU-FBA', 'IT-MAIN'].includes(location.code) || !!(location.warehouseId && await prisma.warehouse.findFirst({ where: { id: location.warehouseId, isDefault: true } }))
+}

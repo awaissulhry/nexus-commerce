@@ -19,9 +19,7 @@ import { complete, connectionReadiness, OAuthFlowError, start, type Intent } fro
 import { WorkspaceError, workspaceContext } from '../lib/workspace-context.js'
 import { oauthCallbackNonce } from '../lib/api-content-security-policy.js'
 import { recordConnectionEvent } from '../services/cx/events.service.js'
-import prisma from '../db.js'
-import { connectionLabel } from '../services/connection-label.js'
-import { CONNECTION_PUBLIC_SELECT } from '../services/connection-resolver.service.js'
+import { connectionLabelById } from '../services/connection-label.js'
 import {
   AmazonSelfAuthorizationError,
   importAmazonEnvironmentAuthorization,
@@ -127,7 +125,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
               channelKey: 'AMAZON_SP',
               workspaceId: workspaceContext()?.workspaceId,
               connectionId: result.connectionId,
-              sellerName: connectionLabel(await prisma.channelConnection.findUniqueOrThrow({ where: { id: result.connectionId }, select: CONNECTION_PUBLIC_SELECT })).label,
+              sellerName: (await connectionLabelById(result.connectionId)).label,
               placement: result.placement,
               scopeDrift: [],
             },
@@ -192,7 +190,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
         })
         // The cookie has done its job.
         reply.clearCookie(`nexus_oauth_${request.query.state ?? ''}`, { path: '/api/cx/callback' })
-        const who = connectionLabel(await prisma.channelConnection.findUniqueOrThrow({ where: { id: result.connectionId }, select: CONNECTION_PUBLIC_SELECT })).label
+        const who = (await connectionLabelById(result.connectionId)).label
         const drift = result.scopeDrift.length
         return reply.type('text/html').send(
           callbackPage({

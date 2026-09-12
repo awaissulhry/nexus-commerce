@@ -43,3 +43,8 @@ export async function marketplaceForLanguage(language: string): Promise<string> 
   if (!row) throw new Error(`No Amazon marketplace is configured for ${language}.`)
   return row.code
 }
+
+export async function availableContentLanguages(): Promise<string[]> {
+  const markets = await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, languages: true, language: true } })
+  return [...new Set(markets.flatMap(row => marketLanguages(row.channel, row.code, [row])))]
+}

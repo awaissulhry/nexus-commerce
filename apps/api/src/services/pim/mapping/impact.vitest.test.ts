@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { db, resolve, inputToken } = vi.hoisted(() => ({
   db: { product: { findMany: vi.fn(), count: vi.fn() }, mappingRevision: { findUnique: vi.fn() }, channelListing: { findMany: vi.fn() },
-    marketplace: { findUnique: vi.fn() }, bulkOperation: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn(), create: vi.fn(), createMany: vi.fn() }, $transaction: vi.fn() },
+    marketplace: { findUnique: vi.fn(), findFirst: vi.fn() }, bulkOperation: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn(), create: vi.fn(), createMany: vi.fn() }, $transaction: vi.fn() },
   resolve: vi.fn(), inputToken: vi.fn(),
 }))
 vi.mock('./review-inputs.js', () => ({ mappingInputToken: inputToken }))
@@ -29,6 +29,7 @@ beforeEach(() => {
       cutoff: '2026-09-06T00:00:00Z', inputToken: 'inputs-v1', changes: [{ fieldKey: 'title', rule: { source: 'name' } }],
       counts: { scanned: 0, matchedProducts: 0, affectedListings: 0, changed: 0, preservedOverrides: 0, invalid: 0, introducedInvalid: 0, excluded: 0 } } }
   db.marketplace.findUnique.mockResolvedValue({ schemaMapping: original })
+  db.marketplace.findFirst.mockResolvedValue({ languages: ['it'] })
   db.bulkOperation.findUnique.mockImplementation(async () => structuredClone(job))
   db.bulkOperation.findFirst.mockImplementation(async ({ where }) => where.userId === job.userId ? structuredClone(job) : null)
   db.bulkOperation.updateMany.mockImplementation(async ({ where, data }) => {

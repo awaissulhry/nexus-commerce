@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { listTaxonomySources, readTaxonomyRequirements, requestTaxonomyRefresh, searchTaxonomy } from '../services/taxonomy/repository.js'
+import { taxonomyHistory, listTaxonomySources, readTaxonomyRequirements, requestTaxonomyRefresh, searchTaxonomy } from '../services/taxonomy/repository.js'
 import { TaxonomyError } from '../services/taxonomy/model.js'
-import prisma from '../db.js'
 import { categoryDirectory, categoryAssignments, categoryChangeImpact, applyCategoryCommand, CategoryTreeError, type CategoryCommand } from '../services/taxonomy/category-workspace.js'
 import { workspaceContext } from '@nexus/database/workspace-context'
 
@@ -50,8 +49,7 @@ const routes: FastifyPluginAsync = async app => {
   })
   app.get<{ Params: { sourceId: string } }>('/pim/taxonomies/:sourceId/history', async (request, reply) => {
     try {
-      return { runs: await prisma.marketplaceTaxonomySnapshot.findMany({ where: { sourceId: request.params.sourceId }, orderBy: { createdAt: 'desc' }, take: 25,
-        select: { id: true, status: true, providerVersion: true, nodeCount: true, addedCount: true, removedCount: true, changedCount: true, error: true, createdAt: true, completedAt: true } }) }
+      return { runs: await taxonomyHistory(request.params.sourceId) }
     } catch (caught) { return error(reply, caught) }
   })
 }

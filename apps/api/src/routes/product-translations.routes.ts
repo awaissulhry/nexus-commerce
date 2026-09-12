@@ -1,4 +1,4 @@
-import { marketLanguages } from '../services/pim/market-languages.js'
+import { availableContentLanguages } from '../services/pim/market-languages.js'
 import { contentSlots, CONTENT_COLUMNS, contentReviewState } from '../services/pim/content-locale.js'
 import { writeTranslation } from '../services/pim/translation-write.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -74,9 +74,8 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { language: 'asc' },
       })
       const slots = contentSlots(product)
-      const markets = await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, languages: true, language: true } })
       return {
-        availableLanguages: [...new Set(markets.flatMap(row => marketLanguages(row.channel, row.code, [row])))],
+        availableLanguages: await availableContentLanguages(),
         primaryLanguage: getPrimaryLanguage(),
         translations: Object.keys(slots).filter(language => !language.startsWith('_') && language === language.toLowerCase()).sort().map(language => {
           const legacy = rows.find(row => row.language.toLowerCase() === language)

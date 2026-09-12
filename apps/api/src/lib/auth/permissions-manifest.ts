@@ -103,6 +103,8 @@ export const ENTRIES: Entry[] = [
   // Self-service 2FA (S5): any authenticated user manages their own — the
   // handler operates on req.authUser, so pages.dashboard = "signed in".
   P(PG.dashboard, pfx('/api/auth/2fa')),
+  // Password changes are self-service; the handler verifies the current password and session.
+  P(PG.dashboard, (m, p) => m.toUpperCase() === 'POST' && p === '/api/auth/password/change'),
 
   // ── Team & Access (S4 console) ──────────────────────────────────
   RW(F.usersManage, F.usersManage, pfx('/api/team/users')),

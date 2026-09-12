@@ -1,3 +1,4 @@
+import { configuredAmazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
 import { assertInformationLocale } from '../services/pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
@@ -1043,8 +1044,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (channel.toUpperCase() === 'AMAZON' && (await amazonService.isConfigured())) {
-          const marketRow = await prisma.marketplace.findFirst({ where: { channel: 'AMAZON', code: marketplace }, select: { marketplaceId: true } })
-          const mpId = marketRow?.marketplaceId
+          const mpId = await configuredAmazonMarketplaceId(marketplace)
 
           if (!mpId) {
             return reply.code(400).send({ error: `No marketplaceId for AMAZON/${marketplace}` })

@@ -1,3 +1,4 @@
+import { listActiveConnections } from '../connection-resolver.service.js'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -15,7 +16,7 @@ export async function listTaxonomySources() {
   const [markets, sources, accounts] = await Promise.all([
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, name: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }] }),
     prisma.marketplaceTaxonomy.findMany(),
-    prisma.channelConnection.findMany({ where: { isActive: true, channelType: { not: 'AMAZON_ADS' } }, select: { id: true, channelType: true, displayName: true, accountLabel: true } }),
+    listActiveConnections().then(rows => rows.filter(row => row.channelType !== 'AMAZON_ADS')),
   ])
   const snapshots = await prisma.marketplaceTaxonomySnapshot.findMany({ where: { id: { in: sources.flatMap(s => s.activeSnapshotId ? [s.activeSnapshotId] : []) } }, select: { id: true, nodeCount: true, addedCount: true, removedCount: true, changedCount: true, providerVersion: true } })
   // Selling connections appear before marketplace configuration. Advertising grants do
@@ -139,4 +140,9 @@ export async function pruneTaxonomyNodes(sourceId: string, leaseToken: string) {
   for (let i = 0, ids = [...old, ...failed.map(s => s.id)]; i < ids.length; i += 10) {
     await prisma.marketplaceTaxonomyNode.deleteMany({ where: { snapshotId: { in: ids.slice(i, i + 10) } } })
   }
+}
+
+export async function taxonomyHistory(sourceId: string) {
+  return prisma.marketplaceTaxonomySnapshot.findMany({ where: { sourceId }, orderBy: { createdAt: 'desc' }, take: 25,
+    select: { id: true, status: true, providerVersion: true, nodeCount: true, addedCount: true, removedCount: true, changedCount: true, error: true, createdAt: true, completedAt: true } })
 }

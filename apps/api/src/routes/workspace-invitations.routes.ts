@@ -19,18 +19,14 @@ const workspaceInvitationsRoutes: FastifyPluginAsync = async app => {
     throw error
   })
   app.post<{ Body: { token?: unknown } }>('/api/auth/workspace-invitations/preview', async request => {
-    const invitation = await service.previewInvitation(request.body?.token)
-    const roles = await prisma.role.findMany({ where: { id: { in: invitation.roleIds } }, select: { name: true } })
-    const existing = await prisma.userProfile.findUnique({ where: { email: invitation.email }, select: { id: true } })
-    return { email: invitation.email, name: invitation.workspace.name, roleNames: roles.map(role => role.name), expiresAt: invitation.expiresAt, signInRequired: !!existing }
+    return service.invitationPreview(request.body?.token)
   })
   app.post<{ Body: { token?: unknown; displayName?: unknown; password?: unknown } }>('/api/auth/workspace-invitations/accept', { preHandler: [loadSession, requireCsrf], config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     if (request.authUser && (request.authUser.mfaRequired || request.authUser.twoFactorEnabledAt) && !request.authMfaSatisfied) throw new WorkspaceError('mfa_required', 'Complete two-factor authentication before accepting the invitation.', 403)
     let registration: { displayName: string; passwordHash: string } | undefined
     if (!request.authUser) {
-      const invitation = await service.previewInvitation(request.body?.token)
-      const exists = await prisma.userProfile.findUnique({ where: { email: invitation.email }, select: { id: true } })
-      if (exists) throw new WorkspaceError('sign_in_required', 'Sign in with the invited email address to accept this invitation.', 401)
+      const invitation = await service.invitationPreview(request.body?.token)
+      if (invitation.signInRequired) throw new WorkspaceError('sign_in_required', 'Sign in with the invited email address to accept this invitation.', 401)
       const displayName = typeof request.body.displayName === 'string' ? request.body.displayName.trim() : ''
       const password = typeof request.body.password === 'string' ? request.body.password : ''
       if (displayName.length < 2 || displayName.length > 100) throw new WorkspaceError('invalid_name', 'Enter your name (2–100 characters).', 400)

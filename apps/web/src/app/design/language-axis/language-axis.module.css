@@ -85,7 +85,7 @@
 /* A framed stage: the studio's surface, its border, no gutter — the sheet is the page. */
 .stage {
   border: 1px solid var(--nds-border);
-  border-radius: 8px;
+  border-radius: var(--nds-radius-lg);
   background: var(--nds-surface);
   overflow: hidden;
   display: grid;
@@ -131,7 +131,7 @@
   align-items: start;
   padding: 10px 12px;
   border: 1px solid var(--nds-border);
-  border-radius: 8px;
+  border-radius: var(--nds-radius-lg);
   background: var(--nds-surface);
 }
 

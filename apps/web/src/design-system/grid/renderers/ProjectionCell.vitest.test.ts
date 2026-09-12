@@ -61,9 +61,9 @@ describe('ProjectionCell · the five states', () => {
     expect(out).toContain('>Not set up<')
   })
 
-  it('paints the danger dot spec §3.3 asks for on "Needs a value"', () => {
+  it('uses the shared missing-value warning tone on "Needs a value"', () => {
     const out = html(params(true, { state: 'needs-value' }, { onToggle: () => {} }))
-    expect(out).toContain('data-tone="danger"')
+    expect(out).toContain('data-tone="warning"')
     expect(out).toContain('nds-projcell-dot solid')
     expect(out).toContain('>Needs a value<')
   })

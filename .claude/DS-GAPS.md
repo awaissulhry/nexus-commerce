@@ -4167,3 +4167,7 @@ On the live Categories page, Tab from Products skipped directly to Listings: `.h
 2026-09-12 VP.F — Closed: native dragging on the AxisChip grip failed on screen. Extracted usePointerReorder from OrderedList and reused it for the horizontal axis group; Web/Factory mirrored.
 
 2026-09-12 VP.F — Closed: FilterChip compactLabel wrapped full-label icons outside the flex row. Shared full-label wrapper now aligns icon/text horizontally; Web/Factory mirrored.
+
+## Factory grid monospace token — 2026-09-12 · RESOLVED
+
+The token-resolution guard found five Factory grid stylesheet references to undefined `--nds-font-mono`. Added the shared token to Factory and a host-font fallback in both token sources; regenerated both apps' stylesheets. Formula/editor text now has a defined monospace family in either host.

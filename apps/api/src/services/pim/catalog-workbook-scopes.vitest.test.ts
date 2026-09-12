@@ -15,7 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(prisma.productFamily.findUnique).mockResolvedValue({ code: 'jackets' } as never)
   vi.mocked(prisma.channelConnection.findUnique).mockResolvedValue({ channelType: 'AMAZON', marketplace: null, isActive: true } as never)
-  vi.mocked(prisma.marketplace.findFirst).mockResolvedValue({ language: 'en' } as never)
+  vi.mocked(prisma.marketplace.findFirst).mockImplementation(async ({ where }: any) => ({ languages: [where.code === 'DE' ? 'de' : 'it'], language: 'en' }) as never)
 })
 describe('workbook template destination safety', () => {
   it('retains strict and suggested choice rules, character limits and units from field contracts', () => {

@@ -1,3 +1,4 @@
+import { adsProfileAccountLabel } from '../services/advertising/ads-profile-resolver.js'
 // UM-series (P3) — Unified Marketing OS cockpit API.
 //
 // Read-only in P3 (shadow): serves the cross-channel campaign roster +
@@ -151,10 +152,8 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
       reply.status(404)
       return { error: 'Campaign not found' }
     }
-    const profile = c.amazonAds?.profileId ? await prisma.amazonAdsConnection.findFirst({
-      where: { profileId: c.amazonAds.profileId }, select: { accountLabel: true },
-    }) : null
-    return { ...c, amazonAds: c.amazonAds ? { ...c.amazonAds, accountLabel: profile?.accountLabel ?? null } : null }
+    const accountLabel = c.amazonAds?.profileId ? await adsProfileAccountLabel(c.amazonAds.profileId) : null
+    return { ...c, amazonAds: c.amazonAds ? { ...c.amazonAds, accountLabel } : null }
   })
 
   // ── Unified analytics (P14) ───────────────────────────────────────────

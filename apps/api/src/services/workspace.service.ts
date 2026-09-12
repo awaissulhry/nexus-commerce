@@ -239,6 +239,13 @@ export function createWorkspaceService(db: PrismaClient) {
     return row
   }
 
+  async function invitationPreview(token: unknown) {
+    const invitation = await previewInvitation(token)
+    const roles = await db.role.findMany({ where: { id: { in: invitation.roleIds } }, select: { name: true } })
+    const existing = await db.userProfile.findUnique({ where: { email: invitation.email }, select: { id: true } })
+    return { email: invitation.email, name: invitation.workspace.name, roleNames: roles.map(role => role.name), expiresAt: invitation.expiresAt, signInRequired: !!existing }
+  }
+
   async function acceptInvitation(userId: string | null, token: unknown, registration?: { displayName: string; passwordHash: string }) {
     const invitation = await previewInvitation(token)
     return db.$transaction(async tx => {
@@ -358,5 +365,5 @@ export function createWorkspaceService(db: PrismaClient) {
     return result
   }
 
-  return { list, listPage, profileSummary, membership, requireOwner, create, rename, changeMember, listMembers, invite, previewInvitation, acceptInvitation, revokeInvitation, archive, restore, archived, saveRole, assignAccount }
+  return { list, listPage, profileSummary, membership, requireOwner, create, rename, changeMember, listMembers, invite, previewInvitation, invitationPreview, acceptInvitation, revokeInvitation, archive, restore, archived, saveRole, assignAccount }
 }

@@ -88,7 +88,7 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     for (const model of Object.values(data)) model.clear(); queries.length = 0; queryCount = 0
     data.productFamily.set('f1', { id: 'f1', code: 'coats', label: 'Coats' })
     for (const a of ['account-a', 'account-b']) data.channelConnection.set(a, { id: a, channelType: 'AMAZON', marketplace: null, displayName: a, isActive: true })
-    for (const market of ['IT', 'FR']) data.marketplace.set(market, { id: market, channel: 'AMAZON', code: market, name: market, isActive: true })
+    for (const market of ['IT', 'FR']) data.marketplace.set(market, { id: market, channel: 'AMAZON', code: market, name: market, languages: [market === 'IT' ? 'it' : 'fr'], isActive: true })
     for (let i = 0; i < count; i++) {
       const id = `p${i}`, sku = String(i).padStart(6, '0')
       data.product.set(id, { id, sku, name: `Original ${i}`, description: null, familyId: 'f1', parentId: i % 20 ? `p${i - i % 20}` : null, isParent: i % 20 === 0, version: 3, basePrice: 25, totalStock: 17, categories: [], categoryAttributes: {}, localizedContent: {}, deletedAt: null, updatedAt: new Date('2026-01-01') })

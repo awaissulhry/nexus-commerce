@@ -6,7 +6,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { complete, start } = vi.hoisted(() => ({ complete: vi.fn(), start: vi.fn() }))
+const { complete, start, findConnection } = vi.hoisted(() => ({ complete: vi.fn(), start: vi.fn(), findConnection: vi.fn(async () => ({ accountLabel: 'Test account', displayName: 'Test account', channelType: 'SHOPIFY' })) }))
 vi.mock('../services/cx/oauth.service.js', () => ({ complete, start, OAuthFlowError: class extends Error {} }))
 vi.mock('../services/cx/catalog.js', () => ({
   tryGetChannelSpec: (key: string) => key === 'EBAY'
@@ -17,7 +17,7 @@ vi.mock('../services/cx/catalog.js', () => ({
         ? { channelType: key, displayName: key === 'SHOPIFY' ? 'Shopify' : 'Etsy' }
       : null,
 }))
-vi.mock('../db.js', () => ({ default: { channelConnection: { findUniqueOrThrow: vi.fn(async () => ({ accountLabel: 'Test account', displayName: 'Test account', channelType: 'SHOPIFY' })) } } }))
+vi.mock('../db.js', () => ({ default: { channelConnection: { findUniqueOrThrow: findConnection } } }))
 vi.mock('../services/connection-resolver.service.js', () => ({ CONNECTION_PUBLIC_SELECT: {} }))
 vi.mock('../services/cx/events.service.js', () => ({ recordConnectionEvent: vi.fn() }))
 vi.mock('../services/cx/connectors/amazon-sp/self-authorization.js', () => ({
@@ -82,6 +82,7 @@ describe('connection callback page', () => {
   it('preserves the verified destination and state, escapes provider labels, and correlates acknowledgements', async () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
     const sellerName = '</script><script>throw new Error("injected")</script>'
+    findConnection.mockResolvedValueOnce({ accountLabel: sellerName, displayName: sellerName, channelType: 'EBAY' })
     complete.mockResolvedValue({ workspaceId: 'chosen-business', connectionId: 'seller-1', identity: { username: sellerName }, placement: 'new', scopeDrift: [] })
     const app = Fastify()
     await app.register(cookie)

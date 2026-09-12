@@ -77,7 +77,7 @@ export async function getAmazonSpClient(accountId?: string, options: { auto_requ
   const { getChannelApp } = await import('../services/cx/apps.service.js')
   const app = await getChannelApp('AMAZON_SP', environment)
   const { SellingPartner } = await import('amazon-sp-api')
-  const client = new SellingPartner({ region: await getAmazonRegion(id), access_token: token, refresh_token: refreshToken, credentials: { SELLING_PARTNER_APP_CLIENT_ID: app.clientId, SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret }, options: { auto_request_tokens: false, auto_request_throttled: true, ...options, use_sandbox: environment === 'sandbox' } } as any)
+  const client: any = new SellingPartner({ region: await getAmazonRegion(id), access_token: token, refresh_token: refreshToken, credentials: { SELLING_PARTNER_APP_CLIENT_ID: app.clientId, SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret }, options: { auto_request_tokens: false, auto_request_throttled: true, ...options, use_sandbox: environment === 'sandbox' } } as any)
   // Retained SDK instances remain bound to their business and seller. Recheck
   // authorization and refresh the access token before every API/document call.
   for (const method of ['callAPI', 'download', 'upload'] as const) {

@@ -1,3 +1,4 @@
+import { isProtectedStockLocation } from '../services/default-stock-location.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
@@ -1023,7 +1024,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const loc = await prisma.stockLocation.findUnique({ where: { id } })
       if (!loc) return reply.code(404).send({ error: 'Location not found' })
 
-      if (isActive === false && (['AMAZON-EU-FBA', 'IT-MAIN'].includes(loc.code) || (loc.warehouseId && await prisma.warehouse.findFirst({ where: { id: loc.warehouseId, isDefault: true } })))) {
+      if (isActive === false && (await isProtectedStockLocation(loc))) {
         return reply.code(409).send({ error: 'Choose another default warehouse before deactivating this location.' })
       }
 
@@ -1053,7 +1054,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         const { id } = request.params
         const loc = await prisma.stockLocation.findUnique({ where: { id } })
         if (!loc) return reply.code(404).send({ error: 'Location not found' })
-        if (['AMAZON-EU-FBA', 'IT-MAIN'].includes(loc.code) || (loc.warehouseId && await prisma.warehouse.findFirst({ where: { id: loc.warehouseId, isDefault: true } }))) {
+        if (await isProtectedStockLocation(loc)) {
           return reply.code(409).send({ error: `Built-in location ${loc.code} cannot be deactivated here` })
         }
         await prisma.stockLocation.update({ where: { id }, data: { isActive: false } })

@@ -1,3 +1,4 @@
+import { saveMediaFingerprint } from '../services/images/media-fingerprint.service.js'
 import { cleanUpUnreferencedMedia } from '../services/images/media-file-cleanup.service.js'
 import type {} from '@fastify/multipart'
 import type {} from '@fastify/rate-limit'
@@ -307,7 +308,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         if (accountId) {
           const { asset } = await uploadReadyShopifyAsset(accountId, buf, data.filename)
           const result = await attachShopifyImage(id, asset, type, alt)
-          const image = await prisma.productImage.update({ where: { id: result.image.id }, data: { contentHash, perceptualHash, dhash256 } })
+          const image = await saveMediaFingerprint(result.image.id, { contentHash, perceptualHash, dhash256 })
           emitImagesUpdated(id, 'upload-shopify', { imageId: image.id, type })
           return reply.code(result.reused ? 200 : 201).send({ ...image, ...(result.reused ? { reused: 'exact' } : {}) })
         }
@@ -389,7 +390,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         if (accountId) {
           const { asset } = await uploadReadyShopifyAsset(accountId, buf, filename)
           const result = await attachShopifyMedia(id, asset, 'VIDEO', req.query.alt ?? filename, 'video')
-          const image = await prisma.productImage.update({ where: { id: result.image.id }, data: { contentHash } })
+          const image = await saveMediaFingerprint(result.image.id, { contentHash })
           emitImagesUpdated(id, 'upload-shopify-video', { imageId: image.id })
           return reply.code(result.reused ? 200 : 201).send({ ...image, ...(result.reused ? { reused: 'exact' } : {}) })
         }

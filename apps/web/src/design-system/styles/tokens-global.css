@@ -231,7 +231,7 @@
 
   /* ── Type ── */
   --nds-font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --nds-font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --nds-font-mono: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
   --nds-font-smoothing: auto;
 
   /* ── Tier 3: grid (tokens/grid.ts — every colour a semantic role; each alias is re-declared in .dark) ── */

@@ -1,3 +1,4 @@
+import { recordManagedContentChange } from '../services/shopify/content-webhook.service.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { registerShopifySchemaWebhook } from '../services/shopify/schema-sync.service.js'
 /**
@@ -61,20 +62,7 @@ async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void
 
     console.log(`[ShopifyWebhooks] Processing product update: ${shopifyProductId}`);
 
-    const managed = await prisma.channelListing.findMany({ where: { channel: 'SHOPIFY',
-      externalListingId: shopifyProductId, platformAttributes: { path: ['_nexusContent', 'version'], equals: 1 },
-    }, select: { id: true, version: true, platformAttributes: true } });
-    if (managed.length) {
-      for (const listing of managed) {
-        const attributes = (listing.platformAttributes ?? {}) as Record<string, any>;
-        const publication = attributes._nexusContentPublish ?? {};
-        if (publication.status === 'PUBLISHING' || (publication.remoteUpdatedAt && Date.parse(product.updated_at) <= Date.parse(publication.remoteUpdatedAt))) continue;
-        await prisma.channelListing.updateMany({ where: { id: listing.id, version: listing.version }, data: {
-          version: { increment: 1 }, platformAttributes: { ...attributes, _nexusContentPublish: { ...publication, status: 'REMOTE_CHANGED', observedAt: product.updated_at, error: 'Shopify reported a product change. Refresh the remote review before synchronising.' } },
-        } });
-      }
-      return;
-    }
+    if (await recordManagedContentChange(shopifyProductId, product.updated_at)) return;
 
     // Find product in database
     const dbProduct = await (prisma as any).product.findFirst({

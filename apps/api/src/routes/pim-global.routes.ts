@@ -1,4 +1,4 @@
-import { marketLanguages } from '../services/pim/market-languages.js'
+import { availableContentLanguages } from '../services/pim/market-languages.js'
 import { currentFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
 import { inDatabaseTransaction } from '../lib/database-context.js'
 /**
@@ -131,8 +131,7 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         ? await prisma.product.findUnique({ where: { id: product.parentId }, include: { translations: true } })
         : null
 
-      const markets = await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, languages: true, language: true } })
-      const languages = [...new Set(markets.flatMap(row => marketLanguages(row.channel, row.code, [row])))]
+      const languages = await availableContentLanguages()
       const view: GlobalView = {
         productId: product.id,
         isVariant: product.parentId !== null,
